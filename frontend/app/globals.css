@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 0 0% 100%;
+    --primary: 262 83% 58%;
+    --primary-hover: 262 83% 48%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 60%;
+    --border: 0 0% 18%;
+    --ring: 262 83% 58%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10;
+  }
+  .glow {
+    box-shadow: 0 0 60px rgba(139, 92, 246, 0.15), 0 0 120px rgba(139, 92, 246, 0.05);
+  }
+  .gradient-text {
+    @apply bg-gradient-to-r from-violet-400 via-purple-400 to-fuchsia-400 bg-clip-text text-transparent;
+  }
+  .input-glow:focus {
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.3), 0 0 20px rgba(139, 92, 246, 0.1);
+  }
+  .btn-glow {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.3), 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  .btn-glow:hover {
+    box-shadow: 0 0 30px rgba(139, 92, 246, 0.5), 0 6px 16px rgba(0, 0, 0, 0.4);
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-20px); }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 0.5; }
+  50% { transform: scale(1); opacity: 0.3; }
+  100% { transform: scale(0.8); opacity: 0.5; }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 3s ease-in-out infinite;
+}

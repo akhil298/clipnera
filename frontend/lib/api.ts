@@ -1,0 +1,214 @@
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface RegisterPayload {
+  email: string;
+  password: string;
+  username?: string;
+  full_name?: string;
+}
+
+export interface ForgotPayload {
+  email: string;
+}
+
+export interface ResetPayload {
+  token: string;
+  new_password: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+}
+
+export interface UserProfileResponse {
+  id: string;
+  name: string;
+  email: string;
+  avatar_url: string | null;
+  avatar_initials: string;
+  plan: string;
+  ai_credits_minutes_remaining: number;
+  ai_credits_total: number;
+  active_workspace_id: string | null;
+  providers: string[];
+}
+
+export interface WorkspaceResponse {
+  id: string;
+  name: string;
+  slug: string;
+  owner_id: string;
+  role: string;
+  member_count: number;
+  created_at: string;
+}
+
+export interface WorkspaceMemberResponse {
+  id: string;
+  workspace_id: string;
+  user_id: string | null;
+  email: string;
+  name: string | null;
+  avatar_url: string | null;
+  role: string;
+  status: string;
+  created_at: string;
+}
+
+export interface DownloadProgress {
+  status: 'pending' | 'downloading' | 'uploading' | 'done' | 'error';
+  percent: number;
+  total: string | null;
+  speed: string | null;
+  eta: string | null;
+  message?: string;
+}
+
+async function request<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}/api/v1${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as { message?: string })?.message ?? 'Something went wrong');
+  }
+  return data as T;
+}
+
+export interface YouTubeMetadataResponse {
+  title: string;
+  thumbnail_url: string;
+  channel_title: string;
+  duration_seconds: number;
+  duration_formatted: string;
+  resolution: string;
+  aspect_ratio: string | number;
+  original_url: string;
+}
+
+async function authedRequest<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const res = await fetch(`${API_BASE}/api/v1${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options?.headers || {}),
+    },
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as { message?: string })?.message ?? 'Something went wrong');
+  }
+  return data as T;
+}
+
+export const authApi = {
+  login: (payload: LoginPayload) => request<TokenResponse>('/auth/login', payload),
+  register: (payload: RegisterPayload) => request('/auth/register', payload),
+  forgotPassword: (payload: ForgotPayload) => request('/auth/forgot-password', payload),
+  resetPassword: (payload: ResetPayload) => request('/auth/reset-password', payload),
+  logout: () => authedRequest<void>('/auth/logout', { method: 'POST' }),
+};
+
+export const userApi = {
+  getMe: () => authedRequest<UserProfileResponse>('/me'),
+};
+
+export const workspaceApi = {
+  list: () => authedRequest<WorkspaceResponse[]>('/workspaces'),
+  create: (name: string) => authedRequest<WorkspaceResponse>('/workspaces', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  }),
+  get: (id: string) => authedRequest<WorkspaceResponse>(`/workspaces/${id}`),
+  listMembers: (workspaceId: string) => authedRequest<WorkspaceMemberResponse[]>(`/workspaces/${workspaceId}/members`),
+  inviteMember: (workspaceId: string, email: string, role: string) => authedRequest<WorkspaceMemberResponse>(`/workspaces/${workspaceId}/members`, {
+    method: 'POST',
+    body: JSON.stringify({ email, role }),
+  }),
+  createAndAddMember: (workspaceId: string, email: string, password: string, fullName: string, role: string) => authedRequest<WorkspaceMemberResponse>(`/workspaces/${workspaceId}/members/create`, {
+    method: 'POST',
+    body: JSON.stringify({ email, password, full_name: fullName, role }),
+  }),
+  updateMemberRole: (workspaceId: string, memberId: string, role: string) => authedRequest<WorkspaceMemberResponse>(`/workspaces/${workspaceId}/members/${memberId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ role }),
+  }),
+  removeMember: (workspaceId: string, memberId: string) => authedRequest<void>(`/workspaces/${workspaceId}/members/${memberId}`, {
+    method: 'DELETE',
+  }),
+};
+
+export const clipApi = {
+  fetchYoutubeMetadata: (url: string) => authedRequest<YouTubeMetadataResponse>('/clips/youtube/metadata', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  }),
+  downloadYoutube: (url: string) => authedRequest<Record<string, any>>('/clips/download', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  }),
+  subscribeDownloadProgress: (
+    videoId: string,
+    onProgress: (progress: DownloadProgress) => void,
+    onError?: (err: Error) => void,
+  ): (() => void) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const ctrl = new AbortController();
+    const base = API_BASE;
+    (async () => {
+      try {
+        const res = await fetch(`${base}/api/v1/clips/download/progress/${videoId}`, {
+          headers: {
+            Accept: 'text/event-stream',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          signal: ctrl.signal,
+        });
+        if (!res.ok || !res.body) {
+          onError?.(new Error(`Failed to subscribe: ${res.status}`));
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop() || '';
+          for (const part of parts) {
+            const line = part.split('\n').find((l) => l.startsWith('data:'));
+            if (!line) continue;
+            try {
+              const data = JSON.parse(line.slice(5).trim()) as DownloadProgress;
+              onProgress(data);
+              if (data.status === 'done' || data.status === 'error') {
+                ctrl.abort();
+                return;
+              }
+            } catch {
+              // skip malformed
+            }
+          }
+        }
+      } catch (err: unknown) {
+        if ((err as Error).name !== 'AbortError') {
+          onError?.(err as Error);
+        }
+      }
+    })();
+    return () => ctrl.abort();
+  },
+};

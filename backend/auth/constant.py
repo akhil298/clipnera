@@ -1,0 +1,3 @@
+AUTH_TAGS = ["auth"]
+AUTH_PREFIX = "/auth"
+TOKEN_EXPIRES_MINUTES = 10080

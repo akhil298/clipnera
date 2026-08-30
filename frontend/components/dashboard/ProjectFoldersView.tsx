@@ -1,0 +1,791 @@
+﻿"use client";
+import React, { useState, useEffect } from 'react';
+import {
+  Folder,
+  FolderPlus,
+  FolderOpen,
+  Youtube,
+  Sparkles,
+  Search,
+  Filter,
+  Film,
+  Flame,
+  Clock,
+  ArrowRight,
+  ExternalLink,
+  MoreVertical,
+  Download,
+  Edit2,
+  Trash2,
+  CheckCircle2,
+  Calendar,
+  Layers,
+  Plus,
+  Scissors,
+  Share2
+} from 'lucide-react';
+import { VideoProject, ViralClip } from '@/lib/types';
+import { analyzeVideoSource, generateClipsForProject } from '@/lib/utils/urlParser';
+import { clipApi, YouTubeMetadataResponse } from '@/lib/api';
+import confetti from 'canvas-confetti';
+
+interface ProjectFoldersViewProps {
+  projects: VideoProject[];
+  activeProject?: VideoProject;
+  onSelectProject: (project: VideoProject) => void;
+  onOpenFolder: (project: VideoProject) => void;
+  onCreateFolder: (newProject: VideoProject) => void;
+  onRenameFolder: (projectId: string, newName: string) => void;
+  onDeleteFolder: (projectId: string) => void;
+  onOpenUploadModal: () => void;
+}
+
+export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
+  projects,
+  activeProject,
+  onSelectProject,
+  onOpenFolder,
+  onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
+  onOpenUploadModal,
+}) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [quickYtUrl, setQuickYtUrl] = useState('');
+  const [ytMeta, setYtMeta] = useState<YouTubeMetadataResponse | null>(null);
+  const [metaLoading, setMetaLoading] = useState(false);
+  const [isIngesting, setIsIngesting] = useState(false);
+  const [renamingProjectId, setRenamingProjectId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [newFolderCategory, setNewFolderCategory] = useState<'YouTube Ingest' | 'Podcast' | 'Keynote' | 'Webinar' | 'Interview' | 'Masterclass' | 'Upload' | 'Custom'>('YouTube Ingest');
+  const [newFolderColor, setNewFolderColor] = useState<'amber' | 'sky' | 'emerald' | 'rose' | 'purple' | 'indigo'>('amber');
+
+  // Quick Ingest from YouTube URL to create a project folder
+  useEffect(() => {
+    const trimmed = quickYtUrl.trim();
+    if (!trimmed || trimmed.length < 8) return;
+    const isYoutube = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)/.test(trimmed);
+    if (!isYoutube) return;
+
+    let cancelled = false;
+    setMetaLoading(true);
+    const timeoutId = setTimeout(async () => {
+      try {
+        const meta = await clipApi.fetchYoutubeMetadata(trimmed);
+        if (!cancelled) {
+          setYtMeta(meta);
+        }
+      } catch {
+        // silent
+      } finally {
+        if (!cancelled) {
+          setMetaLoading(false);
+        }
+      }
+    }, 800);
+
+    return () => {
+      clearTimeout(timeoutId);
+      cancelled = true;
+    };
+  }, [quickYtUrl]);
+
+  const handleQuickIngest = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickYtUrl.trim()) return;
+
+    setIsIngesting(true);
+    const meta = ytMeta
+      ? analyzeVideoSource(quickYtUrl, { title: ytMeta.title, channelTitle: ytMeta.channel_title })
+      : analyzeVideoSource(quickYtUrl);
+
+    setTimeout(() => {
+      const newProjectId = `proj-${Date.now()}`;
+      const clips = generateClipsForProject(meta, newProjectId);
+
+      const newProj: VideoProject = {
+        id: newProjectId,
+        title: meta.cleanTitle,
+        folderName: meta.folderName,
+        folderCategory: meta.folderCategory,
+        folderColor: meta.folderColor,
+        sourceUrl: meta.sourceUrl,
+        sourceChannel: meta.sourceChannel,
+        description: `Imported from ${meta.sourceChannel} with ${clips.length} AI-extracted viral shorts ready.`,
+        tags: meta.tags,
+        genre: meta.genre,
+        duration: meta.duration,
+        sourceType: 'youtube_url',
+        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        posterUrl: meta.posterUrl,
+        uploadedAt: new Date().toISOString(),
+        syncStatus: 'synced',
+        offlineAvailable: true,
+        clips: clips,
+        transcript: [],
+      };
+
+      onCreateFolder(newProj);
+      setIsIngesting(false);
+      setQuickYtUrl('');
+      setYtMeta(null);
+      setMetaLoading(false);
+      confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
+      onOpenFolder(newProj);
+    }, 1200);
+  };
+
+  const handleCreateCustomFolder = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFolderName.trim()) return;
+
+    const newProjectId = `proj-custom-${Date.now()}`;
+    const meta = analyzeVideoSource(newFolderName);
+
+    const newProj: VideoProject = {
+      id: newProjectId,
+      title: newFolderName,
+      folderName: newFolderName,
+      folderCategory: newFolderCategory,
+      folderColor: newFolderColor,
+      sourceUrl: '',
+      sourceChannel: 'Custom Workspace',
+      description: `Project folder for ${newFolderName}. Ready for video uploads & repurposing.`,
+      tags: ['Custom', 'Repurposing', 'Clips'],
+      genre: newFolderCategory,
+      duration: 600,
+      sourceType: 'upload',
+      videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+      posterUrl: 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=800&auto=format&fit=crop&q=80',
+      uploadedAt: new Date().toISOString(),
+      syncStatus: 'synced',
+      offlineAvailable: true,
+      clips: generateClipsForProject(meta, newProjectId),
+      transcript: [],
+    };
+
+    onCreateFolder(newProj);
+    setIsNewFolderModalOpen(false);
+    setNewFolderName('');
+    confetti({ particleCount: 70, spread: 50 });
+    onOpenFolder(newProj);
+  };
+
+  const handleSaveRename = (projectId: string) => {
+    if (renameValue.trim()) {
+      onRenameFolder(projectId, renameValue.trim());
+    }
+    setRenamingProjectId(null);
+  };
+
+  // Filter projects/folders
+  const filteredProjects = projects.filter((p) => {
+    const matchesSearch =
+      (p.folderName || p.title).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.sourceChannel || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (p.tags || []).some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesCategory =
+      categoryFilter === 'all' ||
+      (p.folderCategory || '').toLowerCase() === categoryFilter.toLowerCase() ||
+      p.genre.toLowerCase().includes(categoryFilter.toLowerCase());
+
+    return matchesSearch && matchesCategory;
+  });
+
+  // Calculate folder stats
+  const totalClips = projects.reduce((acc, p) => acc + (p.clips?.length || 0), 0);
+  const avgVirality = Math.round(
+    projects.flatMap((p) => p.clips || []).reduce((acc, c) => acc + (c?.viralityScore || 0), 0) /
+      (totalClips || 1)
+  );
+
+  const getFolderColorClass = (color?: string) => {
+    switch (color) {
+      case 'sky':
+        return 'text-sky-400 bg-sky-500/10 border-sky-500/30';
+      case 'emerald':
+        return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
+      case 'rose':
+        return 'text-rose-400 bg-rose-500/10 border-rose-500/30';
+      case 'purple':
+        return 'text-purple-400 bg-purple-500/10 border-purple-500/30';
+      case 'indigo':
+        return 'text-indigo-400 bg-indigo-500/10 border-indigo-500/30';
+      case 'amber':
+      default:
+        return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+    }
+  };
+
+  return (
+    <div className="space-y-7 animate-in fade-in duration-300">
+      {/* 1. TOP HERO: Project Folders Hub & YouTube Ingestion Bar */}
+      <div className="relative overflow-hidden rounded-2xl bg-neutral-900/90 border border-neutral-800 p-6 lg:p-7 shadow-xl">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-amber-500/5 blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 space-y-5">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/25 flex items-center gap-1.5">
+                  <Folder className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Project-Based Organization</span>
+                </span>
+                <span className="text-xs text-neutral-400">
+                  {projects.length} Dedicated Project Folders
+                </span>
+              </div>
+              <h1 className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
+                Project Folders & <span className="text-amber-400">Video Workspaces</span>
+              </h1>
+              <p className="text-neutral-300 text-xs sm:text-sm mt-1 max-w-2xl leading-relaxed">
+                Paste any YouTube link or upload a long video. Clipnera automatically generates a named project folder containing all respected viral clips, kinetic subtitles, and repurposing assets.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0">
+              <button
+                onClick={() => setIsNewFolderModalOpen(true)}
+                className="px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-xs border border-neutral-700 shadow-sm transition-all flex items-center gap-2 active:scale-95"
+              >
+                <FolderPlus className="w-4 h-4 text-amber-400" />
+                <span>New Project Folder</span>
+              </button>
+
+              <button
+                onClick={onOpenUploadModal}
+                className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs shadow-md shadow-amber-500/15 active:scale-95 transition-all flex items-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Upload Long Video</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick YouTube Ingestion Form */}
+          <form onSubmit={handleQuickIngest} className="p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <Youtube className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-amber-400" />
+              <input
+                type="text"
+                placeholder="Paste YouTube link (e.g., https://youtube.com/watch?v=...) to auto-create a project folder..."
+                value={quickYtUrl}
+                onChange={(e) => setQuickYtUrl(e.target.value)}
+                disabled={isIngesting}
+                className="w-full pl-10 pr-4 py-2.5 rounded-lg bg-neutral-900 border border-neutral-700 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 transition-colors"
+              />
+              {metaLoading && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-amber-400 font-semibold animate-pulse">
+                  Fetching metadata...
+                </span>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              disabled={isIngesting || !quickYtUrl.trim()}
+              className="px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-neutral-950 font-bold text-xs shadow-md shadow-amber-500/15 active:scale-95 transition-all flex items-center justify-center gap-1.5 shrink-0"
+            >
+              {isIngesting ? (
+                <>
+                  <Sparkles className="w-4 h-4 animate-spin text-neutral-950" />
+                  <span>Ingesting & Creating Folder...</span>
+                </>
+              ) : (
+                <>
+                  <FolderPlus className="w-4 h-4" />
+                  <span>Create Folder from URL</span>
+                </>
+              )}
+            </button>
+          </form>
+
+            {/* YouTube URL Preview: verify image & URL before creating the folder */}
+            {ytMeta && !metaLoading && (
+              <div className="mt-3 p-3 rounded-xl bg-neutral-950/80 border border-amber-500/30 flex gap-3 items-start">
+                <div className="relative w-32 sm:w-40 aspect-video rounded-lg overflow-hidden bg-neutral-900 border border-neutral-800 shrink-0">
+                  {ytMeta.thumbnail_url ? (
+                    <img
+                      src={ytMeta.thumbnail_url}
+                      alt={ytMeta.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-neutral-600">
+                      <Youtube className="w-6 h-6" />
+                    </div>
+                  )}
+                  {ytMeta.duration_formatted && (
+                    <span className="absolute bottom-1 right-1 text-[9px] font-mono text-neutral-200 px-1 rounded bg-black/70">
+                      {ytMeta.duration_formatted}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span className="text-[11px] font-semibold text-emerald-400">
+                      Link verified &mdash; confirm it&apos;s correct
+                    </span>
+                  </div>
+
+                  <h4 className="text-sm font-bold text-white line-clamp-2 leading-snug">
+                    {ytMeta.title}
+                  </h4>
+
+                  {ytMeta.channel_title && (
+                    <p className="text-[11px] text-amber-300 font-medium mt-0.5 line-clamp-1">
+                      {ytMeta.channel_title}
+                    </p>
+                  )}
+
+                  <a
+                    href={ytMeta.original_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1.5 flex items-center gap-1.5 text-[11px] text-neutral-400 hover:text-amber-400 transition-colors break-all"
+                    title="Open original YouTube link"
+                  >
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                    <span className="line-clamp-1">{ytMeta.original_url}</span>
+                  </a>
+
+                  {ytMeta.resolution && (
+                    <span className="inline-block mt-1.5 px-2 py-0.5 rounded text-[10px] font-medium bg-neutral-900 border border-neutral-800 text-neutral-400">
+                      {ytMeta.resolution}
+                      {ytMeta.aspect_ratio ? ` · ${ytMeta.aspect_ratio}` : ''}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+        </div>
+      </div>
+
+      {/* 2. STATS ROW */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
+          <div className="flex items-center justify-between text-neutral-400">
+            <span className="text-xs font-medium">Active Folders</span>
+            <Folder className="w-4 h-4 text-amber-400" />
+          </div>
+          <div className="text-2xl font-bold text-white font-mono">{projects.length}</div>
+          <p className="text-[11px] text-neutral-400 font-medium">All organized</p>
+        </div>
+
+        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
+          <div className="flex items-center justify-between text-neutral-400">
+            <span className="text-xs font-medium">Total Respected Videos</span>
+            <Film className="w-4 h-4 text-amber-400" />
+          </div>
+          <div className="text-2xl font-bold text-white font-mono">{totalClips}</div>
+          <p className="text-[11px] text-neutral-400 font-medium">Inside folders</p>
+        </div>
+
+        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
+          <div className="flex items-center justify-between text-neutral-400">
+            <span className="text-xs font-medium">Avg Folder Virality</span>
+            <Flame className="w-4 h-4 text-amber-400" />
+          </div>
+          <div className="text-2xl font-bold text-white font-mono">{avgVirality} / 100</div>
+          <p className="text-[11px] text-amber-400 font-medium">Top tier ranking</p>
+        </div>
+
+        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
+          <div className="flex items-center justify-between text-neutral-400">
+            <span className="text-xs font-medium">Original Watchtime</span>
+            <Clock className="w-4 h-4 text-amber-400" />
+          </div>
+          <div className="text-2xl font-bold text-white font-mono">
+            {Math.round(projects.reduce((acc, p) => acc + (p.duration || 0), 0) / 60)} mins
+          </div>
+          <p className="text-[11px] text-neutral-400 font-medium">Repurposed into shorts</p>
+        </div>
+      </div>
+
+      {/* 3. SEARCH & FILTER TOOLBAR */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Search */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+          <input
+            type="text"
+            placeholder="Search folders by title, channel, or tags..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 rounded-xl bg-neutral-900 border border-neutral-800 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 transition-colors"
+          />
+        </div>
+
+        {/* Category Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+          {[
+            { id: 'all', label: 'All Folders' },
+            { id: 'youtube ingest', label: 'YouTube Ingests' },
+            { id: 'ai story', label: 'AI Prompt Stories' },
+            { id: 'upload', label: 'Uploads' },
+            { id: 'podcast', label: 'Podcasts' },
+            { id: 'keynote', label: 'Keynotes' },
+            { id: 'masterclass', label: 'Masterclasses' },
+          ].map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setCategoryFilter(cat.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                categoryFilter === cat.id
+                  ? 'bg-amber-500 text-neutral-950 font-bold'
+                  : 'bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 4. FOLDERS GRID */}
+      {filteredProjects.length === 0 ? (
+        <div className="p-12 text-center rounded-2xl bg-neutral-900/40 border border-neutral-800/80 space-y-4">
+          <Folder className="w-12 h-12 text-neutral-600 mx-auto" />
+          <h3 className="text-base font-bold text-white">No Project Folders Found</h3>
+          <p className="text-xs text-neutral-400 max-w-sm mx-auto">
+            Try adjusting your search filters, paste a YouTube link above, or create a brand new project folder.
+          </p>
+          <button
+            onClick={() => {
+              setSearchQuery('');
+              setCategoryFilter('all');
+            }}
+            className="px-4 py-2 rounded-lg bg-neutral-800 text-xs text-amber-400 font-semibold hover:bg-neutral-700"
+          >
+            Clear Filters
+          </button>
+        </div>
+      ) : (
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredProjects.map((project) => {
+            const isSelected = project.id === activeProject?.id;
+            const displayName = project.folderName || project.title;
+            const isEditing = renamingProjectId === project.id;
+            const colorClass = getFolderColorClass(project.folderColor);
+
+            return (
+              <div
+                key={project.id}
+                className={`group rounded-2xl border transition-all flex flex-col justify-between overflow-hidden shadow-lg ${
+                  isSelected
+                    ? 'bg-neutral-900 border-amber-500/60 ring-1 ring-amber-500/30'
+                    : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900'
+                }`}
+              >
+                {/* Folder Top Tab Header */}
+                <div className="p-4 pb-3 border-b border-neutral-800/80">
+                  <div className="flex items-start justify-between gap-2">
+                    {/* Folder Icon & Category */}
+                    <div className="flex items-center gap-2.5">
+                      <div className={`p-2.5 rounded-xl border ${colorClass} shadow-sm`}>
+                        <Folder className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-400 block">
+                          {project.folderCategory || project.genre}
+                        </span>
+                        {project.sourceChannel && (
+                          <span className="text-[11px] font-semibold text-neutral-300 line-clamp-1">
+                            {project.sourceChannel}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Source Badge & Link */}
+                    <div className="flex items-center gap-1.5">
+                      {project.sourceType === 'prompt_story' && (
+                        <span className="px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/20 text-[10px] font-semibold text-purple-300 flex items-center gap-1">
+                          <Sparkles className="w-3 h-3 text-purple-400" />
+                          <span>AI Story</span>
+                        </span>
+                      )}
+
+                      {project.audioEnhancement?.removeBackgroundNoise && (
+                        <span className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-[10px] font-semibold text-amber-300 flex items-center gap-1" title="AI Background Noise Removed">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          <span>Denoised</span>
+                        </span>
+                      )}
+
+                      {project.sourceUrl && (
+                        <a
+                          href={project.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2 py-1 rounded-md bg-neutral-950 border border-neutral-800 text-[10px] font-medium text-neutral-400 hover:text-amber-400 hover:border-neutral-700 flex items-center gap-1 transition-colors"
+                          title="Open Source Video"
+                        >
+                          <Youtube className="w-3 h-3 text-red-400" />
+                          <span>Source</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Folder Title (Editable) */}
+                  <div className="mt-3">
+                    {isEditing ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          className="flex-1 px-2.5 py-1 rounded bg-neutral-950 border border-amber-400 text-xs text-white focus:outline-none"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleSaveRename(project.id)}
+                          className="px-2.5 py-1 rounded bg-amber-500 text-neutral-950 text-xs font-bold"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between group/title">
+                        <h3 className="text-sm font-bold text-white line-clamp-2 leading-snug">
+                          {displayName}
+                        </h3>
+                        <button
+                          onClick={() => {
+                            setRenamingProjectId(project.id);
+                            setRenameValue(displayName);
+                          }}
+                          className="opacity-0 group-hover/title:opacity-100 p-1 hover:text-amber-400 text-neutral-400 transition-opacity ml-1 shrink-0"
+                          title="Rename Folder"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+
+                    <p className="text-[11px] text-neutral-400 mt-1 line-clamp-2 leading-relaxed">
+                      {project.description || 'AI analysis completed. Clips generated with kinetic captions.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Folder Body: Mini Thumbnails of Respected Videos Inside */}
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center justify-between text-[11px] text-neutral-400">
+                    <span className="font-semibold text-neutral-300 flex items-center gap-1">
+                      <Film className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{project.clips.length} Respected Videos Inside:</span>
+                    </span>
+                    <span className="font-mono text-neutral-400">
+                      {Math.floor(project.duration / 60)}m {project.duration % 60}s raw
+                    </span>
+                  </div>
+
+                  {/* Visual Clips Preview Strip */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {project.clips.slice(0, 3).map((clip) => (
+                      <div
+                        key={clip.id}
+                        onClick={() => {
+                          onSelectProject(project);
+                          onOpenFolder(project);
+                        }}
+                        className="group/clip relative aspect-[9/14] rounded-lg bg-neutral-950 overflow-hidden border border-neutral-800/80 cursor-pointer hover:border-amber-400/60 transition-all shadow-sm"
+                      >
+                        <img
+                          src={clip.posterUrl || project.posterUrl}
+                          alt={clip.title}
+                          className="w-full h-full object-cover group-hover/clip:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
+                        
+                        {/* Virality badge */}
+                        <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/80 text-[9px] font-mono font-bold text-amber-300 border border-amber-500/30">
+                          {clip.viralityScore}
+                        </div>
+
+                        {/* Duration */}
+                        <div className="absolute bottom-1 right-1 text-[8px] font-mono text-neutral-300 px-1 rounded bg-black/70">
+                          {clip.duration}s
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Tags */}
+                  {project.tags && project.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {project.tags.slice(0, 3).map((tag, i) => (
+                        <span
+                          key={i}
+                          className="px-2 py-0.5 rounded text-[10px] bg-neutral-950 border border-neutral-800 text-neutral-400 font-medium"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Folder Footer & Open Action */}
+                <div className="p-3.5 bg-neutral-950/60 border-t border-neutral-800/80 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                      Avg {Math.round(project.clips.reduce((acc, c) => acc + c.viralityScore, 0) / (project.clips.length || 1))}/100
+                    </span>
+                    {isSelected && (
+                      <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Active
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        confetti({ particleCount: 60, spread: 50 });
+                      }}
+                      className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors"
+                      title="Batch Export Videos in this Folder"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        onSelectProject(project);
+                        onOpenFolder(project);
+                      }}
+                      className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5" />
+                      <span>Open Folder</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 5. NEW FOLDER MODAL */}
+      {isNewFolderModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="w-full max-w-lg rounded-2xl bg-neutral-900 border border-neutral-800 p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                  <FolderPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Create New Project Folder</h3>
+                  <p className="text-xs text-neutral-400">Organize clips by show, topic, or YouTube series</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsNewFolderModalOpen(false)}
+                className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCustomFolder} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-neutral-300 block mb-1.5">
+                  Folder / Project Name:
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Alex Hormozi — $100M Leads Masterclass"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-neutral-950 border border-neutral-700 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-neutral-300 block mb-1.5">
+                    Category:
+                  </label>
+                  <select
+                    value={newFolderCategory}
+                    onChange={(e) => setNewFolderCategory(e.target.value as any)}
+                    className="w-full px-3 py-2.5 rounded-xl bg-neutral-950 border border-neutral-700 text-xs text-white focus:outline-none focus:border-amber-400"
+                  >
+                    <option value="YouTube Ingest">YouTube Ingest</option>
+                    <option value="Podcast">Podcast</option>
+                    <option value="Keynote">Keynote Speech</option>
+                    <option value="Webinar">Webinar</option>
+                    <option value="Interview">Interview</option>
+                    <option value="Masterclass">Masterclass</option>
+                    <option value="Upload">Custom Upload</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-neutral-300 block mb-1.5">
+                    Folder Theme Color:
+                  </label>
+                  <div className="flex items-center gap-2 pt-1">
+                    {(['amber', 'sky', 'emerald', 'rose', 'purple', 'indigo'] as const).map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setNewFolderColor(color)}
+                        className={`w-6 h-6 rounded-full border-2 transition-all ${
+                          newFolderColor === color ? 'border-white scale-110' : 'border-transparent opacity-70'
+                        } ${
+                          color === 'amber'
+                            ? 'bg-amber-400'
+                            : color === 'sky'
+                            ? 'bg-sky-400'
+                            : color === 'emerald'
+                            ? 'bg-emerald-400'
+                            : color === 'rose'
+                            ? 'bg-rose-400'
+                            : color === 'purple'
+                            ? 'bg-purple-400'
+                            : 'bg-indigo-400'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-neutral-800 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsNewFolderModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-neutral-800 text-xs font-medium text-neutral-300 hover:bg-neutral-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newFolderName.trim()}
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-neutral-950 font-bold text-xs shadow-md shadow-amber-500/15"
+                >
+                  Create & Open Folder
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
