@@ -63,6 +63,7 @@ class ClipService:
             title=metadata["title"],
             source_type="youtube",
             source_url=data.url,
+            status=ProjectStatus.PROCESSING,
         )
 
         asyncio.create_task(self._background_download(data.url, user_id, project.id))
@@ -78,7 +79,7 @@ class ClipService:
             "file_size": 0,
             "presigned_url": "",
             "original_url": data.url,
-            "status": "downloading",
+            "status": "processing",
             "created_at": project.created_at.isoformat(),
         }
 
@@ -93,6 +94,7 @@ class ClipService:
                 file_size=result["file_size"],
                 duration=result["duration_seconds"],
                 status=ProjectStatus.UPLOADED,
+                local_path=result.get("local_path"),
             )
             log.info(f"Video downloaded: project={project_id} user={user_id}")
         except ValueError as e:

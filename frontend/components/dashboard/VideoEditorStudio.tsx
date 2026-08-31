@@ -48,6 +48,7 @@ import {
 import { getCaptionConfig, getAllCaptionStyles } from '@/lib/utils/captionStyles';
 import { sfxEngine } from '@/lib/utils/audioSynth';
 import confetti from 'canvas-confetti';
+import { AudioEnhancerPanel } from './AudioEnhancerPanel';
 
 interface VideoEditorStudioProps {
   clip: ViralClip;
@@ -89,12 +90,11 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
   const [transcriptSegments, setTranscriptSegments] = useState(clip.transcriptSegments || []);
   const [audioEnhanceConfig, setAudioEnhanceConfig] = useState<AudioEnhancementConfig>(
     clip.audioEnhancement || {
-      removeBackgroundNoise: true,
-      noiseReductionLevel: 85,
-      roomEchoSuppression: true,
-      studioVoiceClarity: true,
-      voiceLeveling: true,
-      hissFilter: true,
+      aiDenoise: true,
+      noiseSuppressionStrength: 90,
+      deReverb: true,
+      vocalClarityEq: true,
+      humFilter: true,
     }
   );
 
@@ -295,13 +295,13 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
             onClick={() => {
               const updated = {
                 ...audioEnhanceConfig,
-                removeBackgroundNoise: !audioEnhanceConfig.removeBackgroundNoise,
+                aiDenoise: !audioEnhanceConfig.aiDenoise,
               };
               setAudioEnhanceConfig(updated);
               onUpdateClip({ ...clip, audioEnhancement: updated });
             }}
             className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              audioEnhanceConfig.removeBackgroundNoise
+              audioEnhanceConfig.aiDenoise
                 ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
                 : 'bg-neutral-950 border-neutral-800 text-neutral-500 hover:text-neutral-300'
             }`}
@@ -309,7 +309,7 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
           >
             <Headphones className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Denoise:</span>
-            <span className="font-bold">{audioEnhanceConfig.removeBackgroundNoise ? 'ON' : 'OFF'}</span>
+            <span className="font-bold">{audioEnhanceConfig.aiDenoise ? 'ON' : 'OFF'}</span>
           </button>
 
           {/* Social Platform UI Overlay Toggle */}
@@ -697,7 +697,7 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
             >
               <Headphones className="w-3.5 h-3.5 text-amber-400" />
               <span>AI Denoise</span>
-              {audioEnhanceConfig.removeBackgroundNoise && (
+              {audioEnhanceConfig.aiDenoise && (
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               )}
             </button>
@@ -1144,221 +1144,18 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
 
           {/* PANEL 5: AI BACKGROUND NOISE REMOVAL & AUDIO ENHANCEMENT */}
           {activeStudioTab === 'audio' && (
-            <div className="p-5 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
-                    <Headphones className="w-4 h-4 text-amber-400" />
-                    <span>AI Background Noise Removal</span>
-                  </h3>
-                  <p className="text-[11px] text-neutral-400">
-                    Neural dialogue isolation, room de-reverb, and studio acoustic mastering
-                  </p>
-                </div>
-                <span className={`text-[9px] font-mono px-2 py-0.5 rounded border font-bold ${
-                  audioEnhanceConfig.removeBackgroundNoise
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                    : 'bg-neutral-800 text-neutral-400 border-neutral-700'
-                }`}>
-                  {audioEnhanceConfig.removeBackgroundNoise ? 'DENOISE ACTIVE' : 'BYPASS'}
-                </span>
-              </div>
-
-              {/* Master AI Noise Switch */}
-              <div className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-xl border ${
-                    audioEnhanceConfig.removeBackgroundNoise 
-                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' 
-                      : 'bg-neutral-900 border-neutral-800 text-neutral-500'
-                  }`}>
-                    <ShieldCheck className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-white block">
-                      Active Background Noise Cancellation
-                    </span>
-                    <span className="text-[10px] text-neutral-400">
-                      Auto-detects air conditioner hum, traffic, street noise & room echo
-                    </span>
-                  </div>
-                </div>
-
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={audioEnhanceConfig.removeBackgroundNoise}
-                    onChange={(e) => {
-                      const updated = {
-                        ...audioEnhanceConfig,
-                        removeBackgroundNoise: e.target.checked,
-                      };
-                      setAudioEnhanceConfig(updated);
-                      onUpdateClip({ ...clip, audioEnhancement: updated });
-                    }}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-neutral-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
-                </label>
-              </div>
-
-              {/* Noise Reduction Slider */}
-              <div className="p-4 rounded-xl bg-neutral-950/80 border border-neutral-800 space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-[11px] text-neutral-300 flex items-center gap-1.5">
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Denoise Intensity (Neural Isolation)</span>
-                  </span>
-                  <span className="font-mono text-amber-400 font-bold text-xs">
-                    {audioEnhanceConfig.noiseReductionLevel}%
-                  </span>
-                </div>
-
-                <input
-                  type="range"
-                  min={30}
-                  max={100}
-                  step={5}
-                  value={audioEnhanceConfig.noiseReductionLevel}
-                  onChange={(e) => {
-                    const updated = {
-                      ...audioEnhanceConfig,
-                      noiseReductionLevel: Number(e.target.value),
-                    };
-                    setAudioEnhanceConfig(updated);
-                    onUpdateClip({ ...clip, audioEnhancement: updated });
-                  }}
-                  className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
-                />
-
-                <div className="flex justify-between text-[9px] text-neutral-500 font-mono">
-                  <span>30% Mild Hum</span>
-                  <span>85% Studio Broadcast</span>
-                  <span>100% Maximum Isolation</span>
-                </div>
-              </div>
-
-              {/* Acoustic Enhancements Checklist */}
-              <div className="space-y-2">
-                <span className="text-[11px] font-bold text-neutral-400 block">
-                  Studio Vocal Mastering Modules:
-                </span>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 cursor-pointer hover:border-neutral-700">
-                    <div className="flex items-center gap-2">
-                      <Mic2 className="w-3.5 h-3.5 text-sky-400" />
-                      <div>
-                        <span className="text-[11px] font-bold text-white block">Vocal Clarity EQ</span>
-                        <span className="text-[9px] text-neutral-400">+4dB speech presence boost</span>
-                      </div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={audioEnhanceConfig.studioVoiceClarity}
-                      onChange={(e) => {
-                        const updated = { ...audioEnhanceConfig, studioVoiceClarity: e.target.checked };
-                        setAudioEnhanceConfig(updated);
-                        onUpdateClip({ ...clip, audioEnhancement: updated });
-                      }}
-                      className="w-3.5 h-3.5 rounded accent-amber-400"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 cursor-pointer hover:border-neutral-700">
-                    <div className="flex items-center gap-2">
-                      <Volume1 className="w-3.5 h-3.5 text-emerald-400" />
-                      <div>
-                        <span className="text-[11px] font-bold text-white block">De-Reverb / Echo</span>
-                        <span className="text-[9px] text-neutral-400">Eliminate hollow room reverb</span>
-                      </div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={audioEnhanceConfig.roomEchoSuppression}
-                      onChange={(e) => {
-                        const updated = { ...audioEnhanceConfig, roomEchoSuppression: e.target.checked };
-                        setAudioEnhanceConfig(updated);
-                        onUpdateClip({ ...clip, audioEnhancement: updated });
-                      }}
-                      className="w-3.5 h-3.5 rounded accent-amber-400"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 cursor-pointer hover:border-neutral-700">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                      <div>
-                        <span className="text-[11px] font-bold text-white block">50/60Hz Hum Filter</span>
-                        <span className="text-[9px] text-neutral-400">Remove electric line noise</span>
-                      </div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={audioEnhanceConfig.hissFilter}
-                      onChange={(e) => {
-                        const updated = { ...audioEnhanceConfig, hissFilter: e.target.checked };
-                        setAudioEnhanceConfig(updated);
-                        onUpdateClip({ ...clip, audioEnhancement: updated });
-                      }}
-                      className="w-3.5 h-3.5 rounded accent-amber-400"
-                    />
-                  </label>
-
-                  <label className="flex items-center justify-between p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 cursor-pointer hover:border-neutral-700">
-                    <div className="flex items-center gap-2">
-                      <Zap className="w-3.5 h-3.5 text-purple-400" />
-                      <div>
-                        <span className="text-[11px] font-bold text-white block">Auto Leveling</span>
-                        <span className="text-[9px] text-neutral-400">Normalize quiet & loud words</span>
-                      </div>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={audioEnhanceConfig.voiceLeveling}
-                      onChange={(e) => {
-                        const updated = { ...audioEnhanceConfig, voiceLeveling: e.target.checked };
-                        setAudioEnhanceConfig(updated);
-                        onUpdateClip({ ...clip, audioEnhancement: updated });
-                      }}
-                      className="w-3.5 h-3.5 rounded accent-amber-400"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              {/* Real-time Visual Audio Equalizer Spectrum */}
-              <div className="p-3.5 rounded-xl bg-black border border-neutral-800 space-y-2">
-                <div className="flex items-center justify-between text-[10px]">
-                  <span className="text-neutral-400 font-mono">Live Spectral Analysis:</span>
-                  <span className="text-emerald-400 font-bold flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                    Clean Speech Waveform
-                  </span>
-                </div>
-
-                <div className="flex items-end gap-1 h-12 pt-2 px-1">
-                  {[45, 80, 65, 90, 75, 40, 85, 95, 70, 60, 88, 52, 92, 68, 78, 48, 86, 90, 72, 60, 82, 95, 70, 50].map((h, i) => (
-                    <div
-                      key={i}
-                      className="flex-1 rounded-t transition-all duration-150"
-                      style={{
-                        height: isPlaying ? `${Math.max(15, (h * (isPlaying ? 0.7 + Math.sin(i + currentTime * 8) * 0.3 : 0.2)))}%` : `${h * 0.3}%`,
-                        backgroundColor: audioEnhanceConfig.removeBackgroundNoise ? '#f59e0b' : '#737373',
-                        opacity: audioEnhanceConfig.removeBackgroundNoise ? 0.9 : 0.4,
-                      }}
-                    />
-                  ))}
-                </div>
-
-                <div className="flex items-center justify-between text-[9px] text-neutral-500 font-mono pt-1">
-                  <span>20Hz Sub</span>
-                  <span>1kHz Vocal Body</span>
-                  <span>4kHz Presence</span>
-                  <span>16kHz Air</span>
-                </div>
-              </div>
-            </div>
+            <AudioEnhancerPanel
+              config={audioEnhanceConfig}
+              onConfigChange={(updated) => {
+                setAudioEnhanceConfig(updated);
+                onUpdateClip({ ...clip, audioEnhancement: updated });
+              }}
+              onProcessed={(result) => {
+                if (result.processedUrl) {
+                  sfxEngine.playEffect('ding', 0.5);
+                }
+              }}
+            />
           )}
 
           {/* PANEL 6: AUTO-CROP & AUTO-ZOOM */}

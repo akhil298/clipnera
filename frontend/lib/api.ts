@@ -69,6 +69,33 @@ export interface DownloadProgress {
   message?: string;
 }
 
+export interface AudioProcessingResult {
+  success: boolean;
+  processedUrl?: string;
+  processingTimeSeconds: number;
+  sampleRate: number;
+  durationSeconds: number;
+  appliedSettings: Record<string, any>;
+  error?: string;
+}
+
+export interface AudioPresetZone {
+  key: string;
+  label: string;
+  strengthRange: string;
+}
+
+export interface AudioProcessRequest {
+  audioUrl: string;
+  config: Record<string, any>;
+}
+
+export interface AudioPreviewRequest {
+  frequencyHz: number;
+  durationSeconds: number;
+  config: Record<string, any>;
+}
+
 async function request<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${API_BASE}/api/v1${path}`, {
     method: 'POST',
@@ -211,4 +238,118 @@ export const clipApi = {
     })();
     return () => ctrl.abort();
   },
+};
+
+export interface AudioProcessRequest {
+  audioUrl: string;
+  config: Record<string, any>;
+}
+
+export interface AudioPreviewRequest {
+  frequencyHz: number;
+  durationSeconds: number;
+  config: Record<string, any>;
+}
+
+export const audioApi = {
+  process: (payload: AudioProcessRequest) =>
+    authedRequest<AudioProcessingResult>('/audio/process', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  preview: (payload: AudioPreviewRequest) =>
+    authedRequest<AudioProcessingResult>('/audio/preview', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getPresets: () =>
+    authedRequest<{ zones: AudioPresetZone[] }>('/audio/presets'),
+};
+
+export interface PipelineStatus {
+  project_id: string;
+  current_step: string;
+  is_completed: boolean;
+  error: string | null;
+  steps: Array<{
+    step: string;
+    status: string;
+    progress_percent: number;
+    message: string | null;
+    artifact_path: string | null;
+    started_at: string | null;
+    finished_at: string | null;
+  }>;
+}
+
+export const pipelineApi = {
+  start: (projectId: string, steps: string[] = ['download', 'audio_extraction', 'ai_noise_cancellation'], audioConfig: Record<string, any> = {}) =>
+    authedRequest<{ project_id: string; status: string; selected_steps: string[] }>(`/pipeline/start/${projectId}`, {
+      method: 'POST',
+      body: JSON.stringify({ steps, audio_config: audioConfig }),
+    }),
+  subscribeProgress: (
+    projectId: string,
+    onProgress: (data: { message: string; percent: number; status: string }) => void,
+    onError?: (err: Error) => void,
+  ): (() => void) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const ctrl = new AbortController();
+    const base = API_BASE;
+    (async () => {
+      try {
+        const res = await fetch(`${base}/api/v1/pipeline/progress/${projectId}`, {
+          headers: {
+            Accept: 'text/event-stream',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          signal: ctrl.signal,
+        });
+        if (!res.ok || !res.body) {
+          onError?.(new Error(`Failed to subscribe: ${res.status}`));
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop() || '';
+          for (const part of parts) {
+            const line = part.split('\n').find((l) => l.startsWith('data:'));
+            if (!line) continue;
+            try {
+              const data = JSON.parse(line.slice(5).trim());
+              onProgress(data);
+              if (data.status === 'completed' || data.status === 'error') {
+                ctrl.abort();
+                return;
+              }
+            } catch {
+              // skip malformed
+            }
+          }
+        }
+      } catch (err: unknown) {
+        if ((err as Error).name !== 'AbortError') {
+          onError?.(err as Error);
+        }
+      }
+    })();
+    return () => ctrl.abort();
+  },
+  getStatus: (projectId: string) =>
+    authedRequest<PipelineStatus>(`/pipeline/status/${projectId}`),
+  revertStep: (projectId: string, step: string) =>
+    authedRequest<{ project_id: string; step: string; status: string }>(`/pipeline/revert/${projectId}/${step}`, {
+      method: 'POST',
+    }),
+  resume: (projectId: string, steps: string[] = ['download', 'audio_extraction', 'ai_noise_cancellation'], audioConfig: Record<string, any> = {}) =>
+    authedRequest<{ project_id: string; status: string; selected_steps: string[] }>(`/pipeline/resume/${projectId}`, {
+      method: 'POST',
+      body: JSON.stringify({ steps, audio_config: audioConfig }),
+    }),
 };

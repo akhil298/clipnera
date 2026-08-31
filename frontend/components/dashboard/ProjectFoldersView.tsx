@@ -38,6 +38,7 @@ interface ProjectFoldersViewProps {
   onRenameFolder: (projectId: string, newName: string) => void;
   onDeleteFolder: (projectId: string) => void;
   onOpenUploadModal: () => void;
+  onUpdateProject?: (projectId: string, updates: Partial<VideoProject>) => void;
 }
 
 export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
@@ -49,6 +50,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
   onRenameFolder,
   onDeleteFolder,
   onOpenUploadModal,
+  onUpdateProject,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -60,8 +62,9 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
   const [renameValue, setRenameValue] = useState('');
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  const [newFolderCategory, setNewFolderCategory] = useState<'YouTube Ingest' | 'Podcast' | 'Keynote' | 'Webinar' | 'Interview' | 'Masterclass' | 'Upload' | 'Custom'>('YouTube Ingest');
+  const [newFolderCategory, setNewFolderCategory] = useState<'YouTube Ingest' | 'Podcast' | 'Keynote' | 'Webinar' | 'Interview' | 'Masterclass' | 'Upload' | 'AI Story' | 'Custom'>('YouTube Ingest');
   const [newFolderColor, setNewFolderColor] = useState<'amber' | 'sky' | 'emerald' | 'rose' | 'purple' | 'indigo'>('amber');
+  const [localProcessingProgress, setLocalProcessingProgress] = useState<Record<string, number>>({});
 
   // Quick Ingest from YouTube URL to create a project folder
   useEffect(() => {
@@ -93,7 +96,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
     };
   }, [quickYtUrl]);
 
-  const handleQuickIngest = (e: React.FormEvent) => {
+  const handleQuickIngest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!quickYtUrl.trim()) return;
 
@@ -102,8 +105,11 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
       ? analyzeVideoSource(quickYtUrl, { title: ytMeta.title, channelTitle: ytMeta.channel_title })
       : analyzeVideoSource(quickYtUrl);
 
-    setTimeout(() => {
-      const newProjectId = `proj-${Date.now()}`;
+    try {
+      const result = await clipApi.downloadYoutube(quickYtUrl);
+      const videoId = result?.id;
+
+      const newProjectId = videoId || `proj-${Date.now()}`;
       const clips = generateClipsForProject(meta, newProjectId);
 
       const newProj: VideoProject = {
@@ -119,23 +125,71 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
         genre: meta.genre,
         duration: meta.duration,
         sourceType: 'youtube_url',
-        videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+        videoUrl: '',
         posterUrl: meta.posterUrl,
         uploadedAt: new Date().toISOString(),
-        syncStatus: 'synced',
-        offlineAvailable: true,
+        syncStatus: 'syncing',
+        offlineAvailable: false,
         clips: clips,
         transcript: [],
+        processingProgress: 0,
+        processingStatus: 'processing',
       };
 
       onCreateFolder(newProj);
+
+      if (videoId) {
+        const unsubscribe = clipApi.subscribeDownloadProgress(
+          videoId,
+          (progress) => {
+            const percent = Math.min(100, Math.round(progress.percent || 0));
+            setLocalProcessingProgress((prev) => ({ ...prev, [newProjectId]: percent }));
+            if (onUpdateProject) {
+              onUpdateProject(newProjectId, {
+                processingProgress: percent,
+                processingStatus: progress.status === 'error' ? 'failed' : 'processing',
+              });
+            }
+            if (progress.status === 'done' || progress.status === 'error') {
+              unsubscribe();
+              setLocalProcessingProgress((prev) => {
+                const next = { ...prev };
+                delete next[newProjectId];
+                return next;
+              });
+              if (onUpdateProject) {
+                onUpdateProject(newProjectId, {
+                  processingProgress: 100,
+                  processingStatus: progress.status === 'error' ? 'failed' : 'completed',
+                  syncStatus: 'synced',
+                  offlineAvailable: true,
+                });
+              }
+            }
+          },
+          (err) => {
+            console.error('Progress subscription error:', err);
+            setLocalProcessingProgress((prev) => {
+              const next = { ...prev };
+              delete next[newProjectId];
+              return next;
+            });
+            if (onUpdateProject) {
+              onUpdateProject(newProjectId, {
+                processingStatus: 'failed',
+              });
+            }
+          }
+        );
+      }
+    } catch (err) {
+      console.error('Download initiation failed:', err);
+    } finally {
       setIsIngesting(false);
       setQuickYtUrl('');
       setYtMeta(null);
       setMetaLoading(false);
-      confetti({ particleCount: 80, spread: 60, origin: { y: 0.6 } });
-      onOpenFolder(newProj);
-    }, 1200);
+    }
   };
 
   const handleCreateCustomFolder = (e: React.FormEvent) => {
@@ -475,15 +529,25 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
             const colorClass = getFolderColorClass(project.folderColor);
 
             return (
+        <div
+          key={project.id}
+          className={`group rounded-2xl border transition-all flex flex-col justify-between overflow-hidden shadow-lg ${
+            isSelected
+              ? 'bg-neutral-900 border-amber-500/60 ring-1 ring-amber-500/30'
+              : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900'
+          } ${(project.processingStatus === 'processing') ? 'opacity-90' : ''}`}
+        >
+          {/* Processing Progress Bar */}
+          {(project.processingStatus === 'processing' || (localProcessingProgress[project.id] !== undefined && project.processingStatus !== 'failed')) && (
+            <div className="w-full h-1 bg-neutral-800">
               <div
-                key={project.id}
-                className={`group rounded-2xl border transition-all flex flex-col justify-between overflow-hidden shadow-lg ${
-                  isSelected
-                    ? 'bg-neutral-900 border-amber-500/60 ring-1 ring-amber-500/30'
-                    : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900'
-                }`}
-              >
-                {/* Folder Top Tab Header */}
+                className="h-full bg-amber-500 transition-all duration-300 ease-out"
+                style={{ width: `${localProcessingProgress[project.id] ?? project.processingProgress ?? 0}%` }}
+              />
+            </div>
+          )}
+
+          {/* Folder Top Tab Header */}
                 <div className="p-4 pb-3 border-b border-neutral-800/80">
                   <div className="flex items-start justify-between gap-2">
                     {/* Folder Icon & Category */}
@@ -505,14 +569,27 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
 
                     {/* Source Badge & Link */}
                     <div className="flex items-center gap-1.5">
-                      {project.sourceType === 'prompt_story' && (
+                      {project.processingStatus === 'processing' && (
+                        <span className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-[10px] font-semibold text-amber-300 flex items-center gap-1 animate-pulse">
+                          <Sparkles className="w-3 h-3 text-amber-400" />
+                          <span>Processing {localProcessingProgress[project.id] ?? project.processingProgress ?? 0}%</span>
+                        </span>
+                      )}
+                      {project.processingStatus === 'failed' && (
+                        <span className="px-2 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/20 text-[10px] font-semibold text-rose-300 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                          <span>Failed</span>
+                        </span>
+                      )}
+
+                      {project.sourceType === 'prompt_story' && !project.processingStatus && (
                         <span className="px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/20 text-[10px] font-semibold text-purple-300 flex items-center gap-1">
                           <Sparkles className="w-3 h-3 text-purple-400" />
                           <span>AI Story</span>
                         </span>
                       )}
 
-                      {project.audioEnhancement?.removeBackgroundNoise && (
+                      {project.audioEnhancement?.aiDenoise && (
                         <span className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-[10px] font-semibold text-amber-300 flex items-center gap-1" title="AI Background Noise Removed">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                           <span>Denoised</span>
@@ -595,16 +672,27 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                       <div
                         key={clip.id}
                         onClick={() => {
+                          if (project.processingStatus === 'processing') return;
                           onSelectProject(project);
                           onOpenFolder(project);
                         }}
-                        className="group/clip relative aspect-[9/14] rounded-lg bg-neutral-950 overflow-hidden border border-neutral-800/80 cursor-pointer hover:border-amber-400/60 transition-all shadow-sm"
+                        className={`group/clip relative aspect-[9/14] rounded-lg bg-neutral-950 overflow-hidden border border-neutral-800/80 transition-all shadow-sm ${
+                          project.processingStatus === 'processing'
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'cursor-pointer hover:border-amber-400/60'
+                        }`}
                       >
-                        <img
-                          src={clip.posterUrl || project.posterUrl}
-                          alt={clip.title}
-                          className="w-full h-full object-cover group-hover/clip:scale-105 transition-transform duration-300"
-                        />
+                        {(clip.posterUrl || project.posterUrl) ? (
+                          <img
+                            src={clip.posterUrl || project.posterUrl}
+                            alt={clip.title}
+                            className="w-full h-full object-cover group-hover/clip:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-neutral-800 flex items-center justify-center">
+                            <span className="text-neutral-600 text-xs">No preview</span>
+                          </div>
+                        )}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
                         
                         {/* Virality badge */}
@@ -639,9 +727,11 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                 <div className="p-3.5 bg-neutral-950/60 border-t border-neutral-800/80 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                      Avg {Math.round(project.clips.reduce((acc, c) => acc + c.viralityScore, 0) / (project.clips.length || 1))}/100
+                      {project.processingStatus === 'processing'
+                        ? `Processing ${localProcessingProgress[project.id] ?? project.processingProgress ?? 0}%`
+                        : `Avg ${Math.round(project.clips.reduce((acc, c) => acc + c.viralityScore, 0) / (project.clips.length || 1))}/100`}
                     </span>
-                    {isSelected && (
+                    {isSelected && project.processingStatus !== 'processing' && (
                       <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3" /> Active
                       </span>
@@ -651,6 +741,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => {
+                        if (project.processingStatus === 'processing') return;
                         confetti({ particleCount: 60, spread: 50 });
                       }}
                       className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors"
@@ -661,14 +752,29 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
 
                     <button
                       onClick={() => {
+                        if (project.processingStatus === 'processing') return;
                         onSelectProject(project);
                         onOpenFolder(project);
                       }}
-                      className="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
+                      disabled={project.processingStatus === 'processing'}
+                      className={`px-3.5 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm active:scale-95 ${
+                        project.processingStatus === 'processing'
+                          ? 'bg-neutral-700 text-neutral-500 cursor-not-allowed'
+                          : 'bg-amber-500 hover:bg-amber-400 text-neutral-950'
+                      }`}
                     >
-                      <FolderOpen className="w-3.5 h-3.5" />
-                      <span>Open Folder</span>
-                      <ArrowRight className="w-3 h-3" />
+                      {project.processingStatus === 'processing' ? (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FolderOpen className="w-3.5 h-3.5" />
+                          <span>Open Folder</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>

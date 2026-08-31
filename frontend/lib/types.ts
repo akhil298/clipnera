@@ -3,12 +3,27 @@ export type CaptionPreset = 'hormozi' | 'mrbeast' | 'neon' | 'cyberpunk' | 'mini
 export type LayoutMode = 'single_speaker' | 'split_screen' | 'screen_share_focus';
 
 export interface AudioEnhancementConfig {
-  removeBackgroundNoise: boolean;
-  noiseReductionLevel: number; // 0 to 100 (e.g. 85%)
-  roomEchoSuppression: boolean;
-  studioVoiceClarity: boolean;
-  voiceLeveling: boolean;
-  hissFilter: boolean;
+  aiDenoise: boolean;
+  noiseSuppressionStrength: number; // 0 to 100
+  deReverb: boolean;
+  vocalClarityEq: boolean;
+  humFilter: boolean;
+}
+
+export interface AudioProcessingResult {
+  success: boolean;
+  processedUrl?: string;
+  processingTimeSeconds: number;
+  sampleRate: number;
+  durationSeconds: number;
+  appliedSettings: Record<string, any>;
+  error?: string;
+}
+
+export interface AudioPresetZone {
+  key: string;
+  label: string;
+  strengthRange: string;
 }
 
 export interface StoryPromptConfig {
@@ -159,7 +174,12 @@ export interface VideoProject {
   clips: ViralClip[];
   transcript: TranscriptSegment[];
   audioEnhancement?: AudioEnhancementConfig;
+  audioOriginalUrl?: string;
+  audioProcessedUrl?: string;
+  audioReverted?: boolean;
   storyConfig?: StoryPromptConfig;
+  processingProgress?: number; // 0-100
+  processingStatus?: 'idle' | 'processing' | 'completed' | 'failed';
 }
 
 export interface ScheduledPost {
@@ -254,4 +274,22 @@ export interface DownloadProgress {
   speed: string | null;
   eta: string | null;
   message?: string;
+}
+
+export interface PipelineStep {
+  step: string;
+  status: string;
+  progress_percent: number;
+  message: string | null;
+  artifact_path: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface PipelineStatus {
+  project_id: string;
+  current_step: string;
+  is_completed: boolean;
+  error: string | null;
+  steps: PipelineStep[];
 }

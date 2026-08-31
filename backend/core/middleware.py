@@ -3,6 +3,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi import FastAPI
 
 from core.config import get_settings
+from core.api_log_middleware import APILogMiddleware
 
 settings = get_settings()
 
@@ -16,3 +17,4 @@ def register_middlewares(app: FastAPI) -> None:
         allow_headers=["*"],
     )
     app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
+    app.add_middleware(APILogMiddleware)

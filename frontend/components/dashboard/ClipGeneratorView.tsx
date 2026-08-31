@@ -26,9 +26,13 @@ import {
   Edit2,
   Youtube,
   ArrowLeft,
-  Headphones
+  Headphones,
+  AlertCircle,
+  RotateCcw
 } from 'lucide-react';
-import { VideoProject, ViralClip, TabType } from '@/lib/types';
+import { VideoProject, ViralClip, TabType, PipelineStep } from '@/lib/types';
+import { PipelineStepIndicator } from './PipelineStepIndicator';
+import { AudioBeforeAfter } from './AudioBeforeAfter';
 import confetti from 'canvas-confetti';
 
 interface ClipGeneratorViewProps {
@@ -38,6 +42,13 @@ interface ClipGeneratorViewProps {
   onOpenUpload: () => void;
   onRenameFolder?: (projectId: string, newName: string) => void;
   onNavigateTab?: (tab: TabType) => void;
+  pipelineSteps?: PipelineStep[];
+  onRevertPipelineStep?: (step: string) => void;
+  audioBeforeUrl?: string;
+  audioAfterUrl?: string;
+  isAudioReverted?: boolean;
+  onRevertAudio?: () => void;
+  onApplyAudio?: () => void;
 }
 
 export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
@@ -47,6 +58,13 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
   onOpenUpload,
   onRenameFolder,
   onNavigateTab,
+  pipelineSteps,
+  onRevertPipelineStep,
+  audioBeforeUrl,
+  audioAfterUrl,
+  isAudioReverted,
+  onRevertAudio,
+  onApplyAudio,
 }) => {
   const [selectedClip, setSelectedClip] = useState<ViralClip>(project.clips[0] || null);
   const [isPlayingRaw, setIsPlayingRaw] = useState(false);
@@ -99,6 +117,46 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
           <span className="text-neutral-500 font-mono">Folder ID: {project.id}</span>
         </div>
       </div>
+
+      {/* Processing Overlay */}
+      {project.processingStatus === 'processing' && (
+        <div className="rounded-2xl bg-neutral-900/90 border border-amber-500/30 p-6 flex items-center justify-center gap-4">
+          <div className="relative w-12 h-12 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full border-4 border-amber-400/20 border-t-amber-400 animate-spin" />
+            <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-white">Processing Video...</h2>
+            <p className="text-xs text-neutral-400">
+              Downloading and preparing your project folder. Please wait {project.processingProgress ?? 0}%
+            </p>
+          </div>
+        </div>
+      )}
+
+      {project.processingStatus === 'failed' && (
+        <div className="rounded-2xl bg-neutral-900/90 border border-rose-500/30 p-6 flex items-center justify-center gap-4">
+          <AlertCircle className="w-6 h-6 text-rose-400" />
+          <div>
+            <h2 className="text-sm font-bold text-white">Processing Failed</h2>
+            <p className="text-xs text-neutral-400">There was an error processing this video. Please try again.</p>
+          </div>
+        </div>
+      )}
+
+      {pipelineSteps && pipelineSteps.length > 0 && (
+        <PipelineStepIndicator steps={pipelineSteps} onRevert={onRevertPipelineStep} />
+      )}
+
+      {(audioBeforeUrl || audioAfterUrl) && (
+        <AudioBeforeAfter
+          beforeUrl={audioBeforeUrl}
+          afterUrl={audioAfterUrl}
+          isReverted={isAudioReverted}
+          onRevert={onRevertAudio}
+          onApply={onApplyAudio}
+        />
+      )}
 
       {/* Project Folder Banner & Virality Spikes Timeline */}
       <div className="rounded-2xl bg-neutral-900/90 border border-neutral-800 p-5 lg:p-6 relative overflow-hidden shadow-xl">

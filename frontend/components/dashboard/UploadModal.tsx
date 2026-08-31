@@ -34,7 +34,7 @@ import {
 import { VideoProject, CaptionPreset, StoryPromptConfig, AudioEnhancementConfig, DownloadProgress } from '@/lib/types';
 import { SAMPLE_PROJECTS, CAPTION_PRESETS } from '@/lib/data/mockProjects';
 import { analyzeVideoSource, generateClipsForProject, generatePromptStoryProject } from '@/lib/utils/urlParser';
-import { clipApi, YouTubeMetadataResponse } from '@/lib/api';
+import { clipApi, pipelineApi, YouTubeMetadataResponse } from '@/lib/api';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -72,12 +72,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [autoZoom, setAutoZoom] = useState(true);
 
   // AI Audio Enhancement & Background Noise Removal Settings
-  const [removeBackgroundNoise, setRemoveBackgroundNoise] = useState(true);
-  const [noiseReductionLevel, setNoiseReductionLevel] = useState(85);
-  const [roomEchoSuppression, setRoomEchoSuppression] = useState(true);
-  const [studioVoiceClarity, setStudioVoiceClarity] = useState(true);
-  const [voiceLeveling, setVoiceLeveling] = useState(true);
-  const [hissFilter, setHissFilter] = useState(true);
+  const [aiDenoise, setAiDenoise] = useState(true);
+  const [noiseSuppressionStrength, setNoiseSuppressionStrength] = useState(90);
+  const [deReverb, setDeReverb] = useState(true);
+  const [vocalClarityEq, setVocalClarityEq] = useState(true);
+  const [humFilter, setHumFilter] = useState(true);
   const [showAdvancedAudio, setShowAdvancedAudio] = useState(false);
 
   // Processing state
@@ -174,37 +173,26 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   };
 
   const audioEnhanceConfig: AudioEnhancementConfig = {
-    removeBackgroundNoise,
-    noiseReductionLevel,
-    roomEchoSuppression,
-    studioVoiceClarity,
-    voiceLeveling,
-    hissFilter,
+    aiDenoise,
+    noiseSuppressionStrength,
+    deReverb,
+    vocalClarityEq,
+    humFilter,
   };
 
   const startAiProcessing = async () => {
     setIsProcessing(true);
     setProcessingStep(1);
     setDownloadProgress(null);
+    setProcessingLogs(['Ingesting video stream and initializing project folder...']);
+
+    let projectId: string | null = null;
 
     if (sourceType === 'prompt_story') {
       setProcessingLogs([
         `Prompt Ingestion: "${storyPrompt.slice(0, 45)}..."`,
         'Executing Gemini 3.7 Flash: Crafting high-retention 3-second hook & story script...',
       ]);
-
-      const storyConfig: StoryPromptConfig = {
-        prompt: storyPrompt,
-        genre: `AI Story (${storyTone})`,
-        tone: storyTone,
-        voice: storyVoice,
-        artStyle: storyArtStyle,
-        bgMusic: storyBgMusic,
-        targetDuration: storyTargetDuration,
-      };
-
-      // Static mode: story is generated locally via generatePromptStoryProject
-      let storyData: any = null;
 
       await new Promise((r) => setTimeout(r, 900));
       setProcessingStep(2);
@@ -213,12 +201,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         `Generating cinematic 9:16 scene art (${storyArtStyle.replace('_', ' ')}) & B-roll shots...`,
       ]);
 
-      if (removeBackgroundNoise) {
+      if (aiDenoise) {
         await new Promise((r) => setTimeout(r, 800));
         setProcessingStep(3);
         setProcessingLogs((prev) => [
           ...prev,
-          `AI Voice Master: Synthesizing ${storyVoice.replace('_', ' ')} speech + Background Noise Filter (${noiseReductionLevel}% Studio Clean)...`,
+          `AI Voice Master: Synthesizing ${storyVoice.replace('_', ' ')} speech + Background Noise Filter (${noiseSuppressionStrength}% Studio Clean)...`,
         ]);
       }
 
@@ -233,109 +221,129 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       setProcessingStep(5);
       setProcessingLogs((prev) => [
         ...prev,
-        `✨ AI Story Folder "${storyData?.folderName || 'AI Story Folder'}" is ready!`,
+        `✨ AI Story Folder ready!`,
       ]);
 
       await new Promise((r) => setTimeout(r, 500));
 
-      const newStoryProject = generatePromptStoryProject(storyConfig, storyData, audioEnhanceConfig);
+      const storyConfig: StoryPromptConfig = {
+        prompt: storyPrompt,
+        genre: `AI Story (${storyTone})`,
+        tone: storyTone,
+        voice: storyVoice,
+        artStyle: storyArtStyle,
+        bgMusic: storyBgMusic,
+        targetDuration: storyTargetDuration,
+      };
+
+      const newStoryProject = generatePromptStoryProject(storyConfig, null, audioEnhanceConfig);
       setIsProcessing(false);
       onProjectCreated(newStoryProject);
       onClose();
       return;
     }
 
-    // Standard Video Ingestion (YouTube or Upload)
-    setProcessingLogs(['Ingesting video stream and initializing project folder...']);
-
-    // Non-blocking download for YouTube URLs
     if (sourceType === 'url') {
-      // Fire-and-forget the download, subscribe to progress
-      clipApi
-        .downloadYoutube(urlInput)
-        .then((result: any) => {
-          const videoId = result?.id;
-          if (videoId && result?.status === 'downloading') {
-            // Subscribe to SSE progress updates
-            downloadUnsubRef.current = clipApi.subscribeDownloadProgress(
-              videoId,
+      try {
+        const downloadResult: any = await clipApi.downloadYoutube(urlInput);
+        projectId = downloadResult?.id || null;
+
+        if (projectId && downloadResult?.status === 'processing') {
+          await new Promise<void>((resolve, reject) => {
+            const unsub = clipApi.subscribeDownloadProgress(
+              projectId!,
               (progress) => {
                 setDownloadProgress(progress);
                 if (progress.status === 'done') {
-                  setProcessingLogs((prev) => [
-                    ...prev,
-                    'Video source downloaded & stored successfully!',
-                  ]);
-                  downloadUnsubRef.current?.();
+                  setProcessingLogs((prev) => [...prev, 'Video source downloaded & stored successfully!']);
+                  unsub();
+                  resolve();
                 } else if (progress.status === 'error') {
-                  setProcessingLogs((prev) => [
-                    ...prev,
-                    `Download failed: ${progress.message || 'Unknown error'}`,
-                  ]);
-                  downloadUnsubRef.current?.();
+                  setProcessingLogs((prev) => [...prev, `Download failed: ${progress.message || 'Unknown error'}`]);
+                  unsub();
+                  reject(new Error(progress.message || 'Download failed'));
                 }
               },
               (err) => {
-                console.error('Progress subscription error:', err);
-                downloadUnsubRef.current?.();
+                setProcessingLogs((prev) => [...prev, 'Download stream error, continuing...']);
+                resolve();
               },
             );
+          });
+        }
+      } catch (err) {
+        setProcessingLogs((prev) => [...prev, 'Backend download unavailable, continuing with local processing...']);
+    }
+    }
+
+    if (!projectId) {
+      const meta = analyzeVideoSource(sourceType === 'url' ? urlInput : customTitle);
+      projectId = `proj-${Date.now()}`;
+    }
+
+    const audioConfig = {
+      aiDenoise,
+      noiseSuppressionStrength,
+      deReverb,
+      vocalClarityEq,
+      humFilter,
+    };
+
+    const steps = sourceType === 'upload'
+      ? ['audio_extraction', 'ai_noise_cancellation', 'transcription', 'clip_generation', 'caption_styling', 'auto_reframe']
+      : ['audio_extraction', 'ai_noise_cancellation', 'transcription', 'clip_generation', 'caption_styling', 'auto_reframe'];
+
+    try {
+      setProcessingLogs((prev) => [...prev, 'Starting AI processing pipeline...']);
+      await pipelineApi.start(projectId!, steps, audioConfig);
+
+      const unsubPipeline = pipelineApi.subscribeProgress(
+        projectId!,
+        (progress: { message: string; percent: number; status: string }) => {
+          setProcessingLogs((prev) => {
+            const last = prev[prev.length - 1] || '';
+            if (last !== progress.message) {
+              return [...prev.slice(0, -1), progress.message];
+            }
+            return prev;
+          });
+          if (progress.status === 'completed') {
+            setProcessingStep(5);
+          } else if (progress.status === 'error') {
+            setProcessingLogs((prev) => [...prev, `Pipeline error: ${progress.message}`]);
           }
-        })
-        .catch(() => {
-          // Continue with local creation even if backend download fails
-          setProcessingLogs((prev) => [
-            ...prev,
-            'Backend download unavailable, continuing with local processing...',
-          ]);
-        });
+        },
+        (err: Error) => {
+          setProcessingLogs((prev) => [...prev, 'Pipeline stream error']);
+        },
+      );
+
+      await new Promise((resolve) => {
+        const interval = setInterval(async () => {
+          try {
+            const status = await pipelineApi.getStatus(projectId!);
+            if (status.is_completed || status.error) {
+              clearInterval(interval);
+              unsubPipeline();
+              resolve(true);
+            }
+          } catch {
+            clearInterval(interval);
+            unsubPipeline();
+            resolve(false);
+          }
+        }, 2000);
+      });
+    } catch (err) {
+      setProcessingLogs((prev) => [...prev, 'Pipeline encountered an issue. Using local simulation fallback...']);
     }
 
-    // Step 1: Audio demuxing & speech recognition
-    await new Promise((r) => setTimeout(r, 800));
-    setProcessingStep(2);
-    setProcessingLogs((prev) => [
-      ...prev,
-      'Executing Gemini 3.7 Flash: Detecting emotional spikes & virality triggers...',
-    ]);
-
-    // Audio Noise Removal Step
-    if (removeBackgroundNoise) {
-      await new Promise((r) => setTimeout(r, 700));
-      setProcessingLogs((prev) => [
-        ...prev,
-        `AI Audio Denoise: Eliminating room reverberation, air conditioner hum & mic hiss (${noiseReductionLevel}% clarity)...`,
-      ]);
-    }
-
-    // Static mode: viral clips are generated locally via generateClipsForProject
-    // Step 2: Dynamic Auto-Reframe & Speaker Centering
-    await new Promise((r) => setTimeout(r, 900));
-    setProcessingStep(3);
-    setProcessingLogs((prev) => [
-      ...prev,
-      'Calculating 9:16 vertical crop coordinates & speaker eye-level anchor...',
-    ]);
-
-    // Step 3: Subtitles & Karaoke styling
-    await new Promise((r) => setTimeout(r, 900));
-    setProcessingStep(4);
-    setProcessingLogs((prev) => [
-      ...prev,
-      `Synthesizing ${captionPreset.toUpperCase()} kinetic typography with auto-emojis...`,
-      'Injecting smart B-roll overlays & sound effects on climax beats...',
-    ]);
-
-    await new Promise((r) => setTimeout(r, 900));
+    await new Promise((r) => setTimeout(r, 600));
     setProcessingStep(5);
-    setProcessingLogs((prev) => [
-      ...prev,
-      `✨ Project Folder "${customFolderName}" created with viral clips ready!`,
-    ]);
+    setProcessingLogs((prev) => [...prev, `✨ Project Folder "${customFolderName}" created with viral clips ready!`]);
 
     await new Promise((r) => setTimeout(r, 500));
 
-    // Construct final project folder
     const meta = analyzeVideoSource(sourceType === 'url' ? urlInput : customTitle);
     const newProjectId = `proj-${Date.now()}`;
     const generatedClips = generateClipsForProject(meta, newProjectId).map((clip) => ({
@@ -371,11 +379,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       videoUrl: uploadedFile ? URL.createObjectURL(uploadedFile) : sample.videoUrl,
       posterUrl: meta.posterUrl || sample.posterUrl,
       uploadedAt: new Date().toISOString(),
-      syncStatus: 'synced',
-      offlineAvailable: true,
-      transcript: sample.transcript,
+      syncStatus: downloadProgress?.status === 'done' ? 'synced' : 'syncing',
+      offlineAvailable: downloadProgress?.status === 'done',
       clips: generatedClips,
+      transcript: sample.transcript,
       audioEnhancement: audioEnhanceConfig,
+      processingProgress: downloadProgress?.status === 'done' ? 100 : downloadProgress?.status === 'error' ? 0 : Math.round(downloadProgress?.percent ?? 0),
+      processingStatus: downloadProgress?.status === 'done' ? 'completed' : downloadProgress?.status === 'error' ? 'failed' : 'processing',
     };
 
     downloadUnsubRef.current?.();
@@ -879,15 +889,15 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={removeBackgroundNoise}
-                      onChange={(e) => setRemoveBackgroundNoise(e.target.checked)}
+                      checked={aiDenoise}
+                      onChange={(e) => setAiDenoise(e.target.checked)}
                       className="sr-only peer"
                     />
                     <div className="w-9 h-5 bg-neutral-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
                   </label>
                 </div>
 
-                {removeBackgroundNoise && (
+                {aiDenoise && (
                   <div className="space-y-3 pt-2 border-t border-neutral-800/80 animate-in fade-in duration-150">
                     {/* Noise Slider */}
                     <div className="space-y-1">
@@ -897,7 +907,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                           <span>Noise Suppression Strength:</span>
                         </span>
                         <span className="font-mono text-amber-400 font-bold text-xs">
-                          {noiseReductionLevel}% (Studio Isolation)
+                          {noiseSuppressionStrength}% (Studio Isolation)
                         </span>
                       </div>
                       <input
@@ -905,8 +915,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         min={30}
                         max={100}
                         step={5}
-                        value={noiseReductionLevel}
-                        onChange={(e) => setNoiseReductionLevel(Number(e.target.value))}
+                        value={noiseSuppressionStrength}
+                        onChange={(e) => setNoiseSuppressionStrength(Number(e.target.value))}
                         className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
                       />
                       <div className="flex justify-between text-[9px] text-neutral-500 font-mono">
@@ -921,8 +931,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       <label className="flex items-center gap-2 p-2 rounded-lg bg-neutral-950/80 border border-neutral-800/80 cursor-pointer hover:border-neutral-700">
                         <input
                           type="checkbox"
-                          checked={roomEchoSuppression}
-                          onChange={(e) => setRoomEchoSuppression(e.target.checked)}
+                          checked={deReverb}
+                          onChange={(e) => setDeReverb(e.target.checked)}
                           className="w-3.5 h-3.5 rounded accent-amber-400"
                         />
                         <span className="text-[11px] text-neutral-300 font-medium truncate">
@@ -933,8 +943,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       <label className="flex items-center gap-2 p-2 rounded-lg bg-neutral-950/80 border border-neutral-800/80 cursor-pointer hover:border-neutral-700">
                         <input
                           type="checkbox"
-                          checked={studioVoiceClarity}
-                          onChange={(e) => setStudioVoiceClarity(e.target.checked)}
+                          checked={vocalClarityEq}
+                          onChange={(e) => setVocalClarityEq(e.target.checked)}
                           className="w-3.5 h-3.5 rounded accent-amber-400"
                         />
                         <span className="text-[11px] text-neutral-300 font-medium truncate">
@@ -945,8 +955,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       <label className="flex items-center gap-2 p-2 rounded-lg bg-neutral-950/80 border border-neutral-800/80 cursor-pointer hover:border-neutral-700">
                         <input
                           type="checkbox"
-                          checked={hissFilter}
-                          onChange={(e) => setHissFilter(e.target.checked)}
+                          checked={humFilter}
+                          onChange={(e) => setHumFilter(e.target.checked)}
                           className="w-3.5 h-3.5 rounded accent-amber-400"
                         />
                         <span className="text-[11px] text-neutral-300 font-medium truncate">
@@ -1132,7 +1142,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             <div className="text-[11px] text-neutral-400 flex items-center gap-1.5">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
               <span>
-                {removeBackgroundNoise ? 'AI Audio Denoise & Clean Voice: ON' : 'AI Render Ready'}
+                {aiDenoise ? 'AI Audio Denoise & Clean Voice: ON' : 'AI Render Ready'}
               </span>
             </div>
             <div className="flex items-center gap-3">

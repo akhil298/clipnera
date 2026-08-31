@@ -15,13 +15,12 @@ import { BrandKitView } from './BrandKitView';
 import { SettingsView } from './SettingsView';
 import { NotificationsDrawer } from './NotificationsDrawer';
 import { AuthModal } from './AuthModal';
-import { VideoProject, ViralClip, TabType, UserProfile, Workspace, BrandKit, AppNotification } from '@/lib/types';
+import { VideoProject, ViralClip, TabType, UserProfile, Workspace, AppNotification, PipelineStep } from '@/lib/types';
 import {
   SAMPLE_PROJECTS,
-  BRAND_KITS_MOCK,
   NOTIFICATIONS_MOCK,
 } from '@/lib/data/mockProjects';
-import { userApi, workspaceApi, authApi } from '@/lib/api';
+import { userApi, workspaceApi, authApi, pipelineApi } from '@/lib/api';
 
 export default function DashboardApp() {
   const router = useRouter();
@@ -45,10 +44,9 @@ export default function DashboardApp() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // User, Workspaces & Brand Kits
+  // User, Workspaces & Notifications
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [activeBrandKit, setActiveBrandKit] = useState<BrandKit>(BRAND_KITS_MOCK[0]);
 
   // Notifications State
   const [notifications, setNotifications] = useState<AppNotification[]>(NOTIFICATIONS_MOCK);
@@ -61,6 +59,8 @@ export default function DashboardApp() {
   const [projects, setProjects] = useState<VideoProject[]>(SAMPLE_PROJECTS);
   const [activeProject, setActiveProject] = useState<VideoProject>(SAMPLE_PROJECTS[0]);
   const [selectedClip, setSelectedClip] = useState<ViralClip>(SAMPLE_PROJECTS[0].clips[0]);
+  const [pipelineSteps, setPipelineSteps] = useState<PipelineStep[]>([]);
+  const [isAudioReverted, setIsAudioReverted] = useState(false);
 
   // Upload modal state
   const [isUploadOpen, setIsUploadOpen] = useState(false);
@@ -109,6 +109,34 @@ export default function DashboardApp() {
     };
   }, [isAuthed]);
 
+  useEffect(() => {
+    if (!activeProject?.id) return;
+    let cancelled = false;
+    pipelineApi.getStatus(activeProject.id).then((status) => {
+      if (!cancelled) {
+        setPipelineSteps(status.steps || []);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setPipelineSteps([]);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProject?.id]);
+
+  const handleRevertPipelineStep = async (step: string) => {
+    if (!activeProject?.id) return;
+    try {
+      await pipelineApi.revertStep(activeProject.id, step);
+      const status = await pipelineApi.getStatus(activeProject.id);
+      setPipelineSteps(status.steps || []);
+    } catch (err) {
+      console.error('Failed to revert step:', err);
+    }
+  };
+
   // Handle project creation from UploadModal or ProjectFoldersView
   const handleProjectCreated = (newProject: VideoProject) => {
     setProjects([newProject, ...projects]);
@@ -127,6 +155,15 @@ export default function DashboardApp() {
     };
     setNotifications([newNotif, ...notifications]);
     setActiveTab('generator');
+  };
+
+  const handleUpdateProject = (projectId: string, updates: Partial<VideoProject>) => {
+    setProjects((prev) =>
+      prev.map((p) => (p.id === projectId ? { ...p, ...updates } : p))
+    );
+    setActiveProject((prev) =>
+      prev && prev.id === projectId ? { ...prev, ...updates } : prev
+    );
   };
 
   // Handle opening a folder
@@ -277,9 +314,9 @@ export default function DashboardApp() {
           {activeTab === 'dashboard' && (
             <DashboardHomeView
               user={currentUser}
-              activeProject={activeProject}
               projects={projects}
-              activeBrandKit={activeBrandKit}
+              workspaces={workspaces}
+              activeProject={activeProject}
               onOpenUpload={() => setIsUploadOpen(true)}
               onSelectProject={handleSelectProject}
               onSelectClipForEdit={handleSelectClipForEdit}
@@ -299,6 +336,7 @@ export default function DashboardApp() {
               onDeleteFolder={handleDeleteFolder}
               onRenameFolder={handleRenameFolder}
               onOpenUploadModal={() => setIsUploadOpen(true)}
+              onUpdateProject={handleUpdateProject}
             />
           )}
 
@@ -311,6 +349,26 @@ export default function DashboardApp() {
               onOpenUpload={() => setIsUploadOpen(true)}
               onRenameFolder={handleRenameFolder}
               onNavigateTab={setActiveTab}
+              pipelineSteps={pipelineSteps}
+              onRevertPipelineStep={handleRevertPipelineStep}
+              audioBeforeUrl={activeProject?.audioOriginalUrl}
+              audioAfterUrl={activeProject?.audioProcessedUrl}
+              isAudioReverted={isAudioReverted}
+              onRevertAudio={() => {
+                if (activeProject?.id) {
+                  pipelineApi.revertStep(activeProject.id, 'ai_noise_cancellation').then(() => {
+                    setIsAudioReverted(true);
+                    handleRevertPipelineStep('ai_noise_cancellation');
+                  });
+                }
+              }}
+              onApplyAudio={() => {
+                if (activeProject?.id) {
+                  pipelineApi.resume(activeProject.id, ['audio_extraction', 'ai_noise_cancellation']).then(() => {
+                    setIsAudioReverted(false);
+                  });
+                }
+              }}
             />
           )}
 

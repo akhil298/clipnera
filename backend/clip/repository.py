@@ -13,13 +13,20 @@ class ClipRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def create_project(self, user_id: str, title: str, source_type: str, source_url: str | None = None) -> VideoProject:
+    async def create_project(
+        self,
+        user_id: str,
+        title: str,
+        source_type: str,
+        source_url: str | None = None,
+        status: ProjectStatus = ProjectStatus.PENDING,
+    ) -> VideoProject:
         project = VideoProject(
             user_id=user_id,
             title=title,
             source_type=source_type,
             source_url=source_url,
-            status=ProjectStatus.PENDING,
+            status=status,
         )
         self._session.add(project)
         await self._session.commit()
@@ -36,7 +43,7 @@ class ClipRepository:
 
     async def update_project_s3(
         self, project_id: str, s3_key: str, s3_bucket: str, presigned_url: str,
-        file_size: int, duration: int, status: ProjectStatus
+        file_size: int, duration: int, status: ProjectStatus, local_path: str | None = None
     ) -> None:
         stmt = select(VideoProject).where(VideoProject.id == project_id)
         result = await self._session.execute(stmt)
@@ -48,6 +55,8 @@ class ClipRepository:
             project.file_size = file_size
             project.duration_seconds = duration
             project.status = status
+            if local_path is not None:
+                project.local_path = local_path
             await self._session.commit()
 
     async def list_projects(self, user_id: str) -> list[VideoProject]:

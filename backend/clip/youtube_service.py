@@ -245,6 +245,7 @@ class YouTubeService:
             "thumbnail_url": metadata.get("thumbnail", f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg"),
             "channel_title": metadata.get("uploader", metadata.get("channel", "Unknown")),
             "original_url": url,
+            "local_path": downloaded_file,
         }
 
     @staticmethod

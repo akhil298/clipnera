@@ -56,6 +56,9 @@ class BaseConfig(BaseSettings):
     TWILIO_AUTH_TOKEN: str = ""
     TWILIO_PHONE_NUMBER: str = ""
 
+    TRANSCRIPTION_OUTPUT_DIR: str = "./transcription_outputs"
+    HF_TOKEN: str = ""
+
 
 class DevelopmentConfig(BaseConfig):
     model_config = SettingsConfigDict(
