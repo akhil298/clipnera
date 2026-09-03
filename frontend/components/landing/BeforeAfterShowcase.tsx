@@ -2,6 +2,7 @@
 
 import { Play, Flame, ArrowRight, ChevronDown, Headphones } from 'lucide-react';
 import { SAMPLE_PROJECTS } from '@/lib/data/mockProjects';
+import { getCaptionStyle } from '@/lib/utils/captionStyles';
 
 interface BeforeAfterShowcaseProps {
   previewCaptionPreset: 'hormozi' | 'mrbeast' | 'cyberpunk' | 'neon';
@@ -27,17 +28,20 @@ export function BeforeAfterShowcase({
 
           <div className="flex items-center gap-1.5 bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-xs">
             <span className="text-[10px] font-semibold text-neutral-400 px-2">Preset:</span>
-            {(['hormozi', 'mrbeast', 'cyberpunk', 'neon'] as const).map((preset) => (
-              <button
-                key={preset}
-                onClick={() => setPreviewCaptionPreset(preset)}
-                className={`px-2 py-1 rounded-lg text-[11px] font-bold capitalize transition-all ${
-                  previewCaptionPreset === preset ? 'bg-neutral-800 text-amber-400 shadow' : 'text-neutral-400 hover:text-neutral-200'
-                }`}
-              >
-                {preset}
-              </button>
-            ))}
+            {(['hormozi', 'mrbeast', 'cyberpunk', 'neon'] as const).map((preset) => {
+              const style = getCaptionStyle(preset);
+              return (
+                <button
+                  key={preset}
+                  onClick={() => setPreviewCaptionPreset(preset)}
+                  className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                    previewCaptionPreset === preset ? 'bg-neutral-800 text-amber-400 shadow' : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  {style.brandName}
+                </button>
+              );
+            })}
           </div>
         </div>
 

@@ -3,6 +3,7 @@ import { CaptionPreset, CaptionConfig, WordTimestamp, TranscriptSegment } from '
 export interface CaptionStyle {
   id: CaptionPreset;
   name: string;
+  brandName: string;
   description: string;
   badge: string;
   config: CaptionConfig;
@@ -12,6 +13,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
   hormozi: {
     id: 'hormozi',
     name: 'Hormozi Viral',
+    brandName: 'Hormozi VIRAL',
     description: 'Bold uppercase, yellow/green highlights with dark backdrop',
     badge: 'Popular',
     config: {
@@ -34,6 +36,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
   mrbeast: {
     id: 'mrbeast',
     name: 'MrBeast Pop',
+    brandName: 'MrBeast VIRAL',
     description: 'High energy electric blue + bright red punch text',
     badge: 'High CTR',
     config: {
@@ -56,6 +59,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
   karaoke_yellow: {
     id: 'karaoke_yellow',
     name: 'Karaoke Beat',
+    brandName: 'Karaoke VIRAL',
     description: 'Word-by-word active bouncing fill sync',
     badge: 'Top Watchtime',
     config: {
@@ -78,6 +82,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
   cyberpunk: {
     id: 'cyberpunk',
     name: 'Cyber Neon',
+    brandName: 'Cyber VIRAL',
     description: 'Neon cyan with purple ambient glow',
     badge: 'Tech / Gaming',
     config: {
@@ -100,6 +105,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
   minimal: {
     id: 'minimal',
     name: 'Clean Minimal',
+    brandName: 'Clean VIRAL',
     description: 'Understated elegant typography for luxury & podcasts',
     badge: 'Aesthetic',
     config: {
@@ -122,6 +128,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
   neon: {
     id: 'neon',
     name: 'Neon Glow',
+    brandName: 'Neon VIRAL',
     description: 'Vibrant pink and green neon effect',
     badge: 'Trending',
     config: {
@@ -144,6 +151,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
   sunset: {
     id: 'sunset',
     name: 'Sunset Warm',
+    brandName: 'Sunset VIRAL',
     description: 'Warm orange and red gradient highlights',
     badge: 'Lifestyle',
     config: {

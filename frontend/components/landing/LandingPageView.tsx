@@ -10,6 +10,7 @@ import { HeroSection } from './HeroSection';
 import { BeforeAfterShowcase } from './BeforeAfterShowcase';
 import { SocialProof } from './SocialProof';
 import { FeaturesGrid } from './FeaturesGrid';
+import { CaptionTypographyShowcase } from './CaptionTypographyShowcase';
 import { SamplesSection } from './SamplesSection';
 import { HowItWorks } from './HowItWorks';
 import { RoiCalculator } from './RoiCalculator';
@@ -98,6 +99,7 @@ export default function LandingPageView() {
             <p className="text-xs sm:text-sm text-neutral-400">No manual timeline scrubbing. No complex video editing software. Clipnera automates the entire end-to-end viral clipping workflow.</p>
           </div>
           <FeaturesGrid />
+          <CaptionTypographyShowcase />
         </div>
       </section>
 

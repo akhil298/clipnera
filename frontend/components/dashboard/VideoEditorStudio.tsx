@@ -739,12 +739,15 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-white">{style.name}</span>
+                          <span className="text-xs font-bold text-white">{style.brandName}</span>
                           <span className="text-[9px] px-1 py-0.2 rounded bg-amber-400/10 text-amber-300">
                             {style.badge}
                           </span>
                         </div>
-                        <p className="text-[10px] text-neutral-400 mt-1 line-clamp-1">
+                        <p className="text-[10px] text-neutral-500 mt-1 line-clamp-1">
+                          {style.name}
+                        </p>
+                        <p className="text-[10px] text-neutral-400 mt-0.5 line-clamp-1">
                           {style.description}
                         </p>
                       </button>
