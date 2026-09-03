@@ -115,8 +115,20 @@ class PipelineOrchestrator:
     async def _step_audio_extraction(self, context: dict) -> dict:
         download_result = context.get(PipelineStepType.DOWNLOAD.value, {})
         video_path = download_result.get("local_path") or self._local_path
-        if not video_path:
-            raise ValueError("Missing downloaded video path for audio extraction")
+
+        if not video_path or not Path(video_path).exists():
+            async with AsyncSessionLocal() as session:
+                repo = ClipRepository(session)
+                project = await repo.get_project(self.project_id, self.user_id)
+                if project and project.local_path and Path(project.local_path).exists():
+                    video_path = project.local_path
+                    self._local_path = video_path
+
+        if not video_path or not Path(video_path).exists():
+            raise ValueError(
+                "Missing downloaded video path for audio extraction. "
+                "Run the 'download' step first or ensure the local file still exists."
+            )
 
         self._notify("Extracting audio track...", 10)
         from audio.extraction.schema import ExtractionRequest, OutputFormat, AudioChannel
@@ -200,7 +212,12 @@ class PipelineOrchestrator:
 
     def _notify(self, message: str, percent: int) -> None:
         if self.progress_callback:
-            self.progress_callback(message, percent, None)
+            try:
+                result = self.progress_callback(message, percent, None)
+                if asyncio.iscoroutine(result):
+                    asyncio.create_task(result)
+            except Exception as e:
+                log.debug(f"Progress notify failed: {e}")
 
     async def _fetch_processed_bytes(self, url: str) -> bytes:
         if url.startswith("processed://") or url.startswith("preview://"):

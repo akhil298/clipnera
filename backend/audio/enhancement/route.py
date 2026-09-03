@@ -1,12 +1,9 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Form
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException
 
 from auth.dependencies import CurrentUserDep
 from audio.enhancement.schema import AudioEnhanceRequest, AudioEnhanceResponse, AudioPreviewRequest
 from audio.enhancement.service import AudioService
 from core.logging_config import get_logger
-
-import json
 
 log = get_logger(__name__)
 
@@ -23,13 +20,6 @@ async def process_audio(request: AudioEnhanceRequest, user: CurrentUserDep):
             raise HTTPException(status_code=400, detail="Failed to fetch audio from provided URL")
         audio_bytes = resp.content
     return await _service.process_audio(request, audio_bytes)
-
-
-@audio.post("/process/upload", response_model=AudioEnhanceResponse)
-async def process_audio_upload(config: str = Form(...), file: UploadFile = File(...), user: CurrentUserDep = None):
-    config_obj = AudioEnhanceRequest(config=json.loads(config), audio_url="")
-    audio_bytes = await file.read()
-    return await _service.process_audio(config_obj, audio_bytes)
 
 
 @audio.post("/preview", response_model=AudioEnhanceResponse)

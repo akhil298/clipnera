@@ -18,19 +18,10 @@ import { FaqSection } from './FaqSection';
 import { BottomCta } from './BottomCta';
 import { Footer } from './Footer';
 
-type HeroInputMode = 'url' | 'prompt' | 'upload';
-
-export interface LandingPageViewProps {
-  onLaunchApp?: () => void;
-  onOpenAuthModal?: () => void;
-}
-
 export default function LandingPageView() {
   const router = useRouter();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [heroInputMode, setHeroInputMode] = useState<HeroInputMode>('url');
   const [heroUrl, setHeroUrl] = useState('https://www.youtube.com/watch?v=100m-leads-masterclass');
-  const [heroPrompt, setHeroPrompt] = useState('A mind-bending psychological mystery about ancient civilizations discovering lost technology');
   const [previewCaptionPreset, setPreviewCaptionPreset] = useState<'hormozi' | 'mrbeast' | 'cyberpunk' | 'neon'>('hormozi');
 
   const faqs = [
@@ -41,10 +32,6 @@ export default function LandingPageView() {
     {
       q: 'What is the AI Background Noise Removal (Studio Denoise) feature?',
       a: 'Studio Denoise uses neural speech isolation to strip away air conditioning hum, room reverb, microphone hiss, and background noise from recorded audio, outputting broadcast-grade podcast clarity without needing expensive studio microphones.',
-    },
-    {
-      q: 'Can I generate complete 9:16 video stories directly from text prompts?',
-      a: 'Yes! The Prompt-to-Video Story generator crafts full multi-scene narrative scripts, generates cinematic 9:16 scene art and B-roll cutaways, synthesizes custom voiceovers, and injects kinetic captions automatically from a simple text prompt.',
     },
     {
       q: 'Can I customize font styles, colors, and auto-emojis for captions?',
@@ -90,12 +77,8 @@ export default function LandingPageView() {
       <Navbar onOpenAuthModal={() => setIsAuthModalOpen(true)} onLaunchStudio={handleLaunchStudio} />
 
       <HeroSection
-        heroInputMode={heroInputMode}
-        setHeroInputMode={setHeroInputMode}
         heroUrl={heroUrl}
         setHeroUrl={setHeroUrl}
-        heroPrompt={heroPrompt}
-        setHeroPrompt={setHeroPrompt}
         onLaunchStudio={handleLaunchStudio}
       />
 

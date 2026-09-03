@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from auth.dependencies import CurrentUserDep
-from clip.schema import YouTubeURLRequest, VideoMetadataResponse, AvailableFormatsResponse, YouTubeMetadataResponse
+from clip.schema import YouTubeURLRequest, VideoMetadataResponse, AvailableFormatsResponse, YouTubeMetadataResponse, YouTubeDownloadRequest
 from core.logging_config import get_logger
 
 import asyncio
@@ -22,17 +22,34 @@ async def get_formats(data: YouTubeURLRequest, user: CurrentUserDep):
 @clip.post("/youtube/metadata", response_model=YouTubeMetadataResponse)
 async def fetch_youtube_metadata(data: YouTubeURLRequest, user: CurrentUserDep):
     from clip.youtube_service import YouTubeService
+    from core.exceptions import CustomException
 
     service = YouTubeService()
-    metadata = await service.fetch_metadata(data.url)
-    if not metadata:
-        from core.exceptions import CustomException
+    prefetch = await service.fetch_metadata(data.url)
+    if not prefetch:
         raise CustomException(
             message="Invalid YouTube URL or video not found",
             code="INVALID_YOUTUBE_URL",
             status_code=400,
         )
-    return metadata
+    
+    # Format resolution from quality options
+    resolution = "1920x1080"
+    if prefetch.qualities and prefetch.qualities[0].height:
+        first_video_quality = next((q for q in prefetch.qualities if q.height), None)
+        if first_video_quality:
+            resolution = f"?x{first_video_quality.height}"
+    
+    return YouTubeMetadataResponse(
+        title=prefetch.title,
+        thumbnail_url=prefetch.thumbnail or "",
+        channel_title=prefetch.uploader or "Unknown",
+        duration_seconds=int(prefetch.duration or 0),
+        duration_formatted=YouTubeService._format_duration(prefetch.duration or 0),
+        resolution=resolution,
+        aspect_ratio="16:9",
+        original_url=data.url,
+    )
 
 
 @clip.post("/youtube", response_model=VideoMetadataResponse)
@@ -48,7 +65,7 @@ async def fetch_youtube(data: YouTubeURLRequest, user: CurrentUserDep):
 
 
 @clip.post("/download", response_model=VideoMetadataResponse)
-async def download_youtube(data: YouTubeURLRequest, user: CurrentUserDep):
+async def download_youtube(data: YouTubeDownloadRequest, user: CurrentUserDep):
     from clip.repository import ClipRepository
     from clip.service import ClipService
     from core.database import AsyncSessionLocal
@@ -59,18 +76,10 @@ async def download_youtube(data: YouTubeURLRequest, user: CurrentUserDep):
         return await service.download_video(user["user_id"], data)
 
 
-@clip.get("/download/progress/{video_id}")
-async def download_progress(video_id: str, user: CurrentUserDep):
+@clip.get("/progress/{project_id}")
+async def get_download_progress(project_id: str, user: CurrentUserDep):
+    """Get download progress for a specific project."""
     from clip.youtube_service import YouTubeService
-    from fastapi.responses import StreamingResponse
 
-    async def event_stream():
-        import json
-        while True:
-            progress = await YouTubeService.get_progress(video_id)
-            yield f"data: {json.dumps(progress)}\n\n"
-            if not progress or progress.get("status") in ("done", "error", "uploading"):
-                break
-            await asyncio.sleep(1)
-
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    progress = await YouTubeService.get_progress(project_id)
+    return progress or {"status": "idle", "percent": 0.0, "total": None, "speed": None, "eta": None}

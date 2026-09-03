@@ -7,6 +7,11 @@ class YouTubeURLRequest(BaseModel):
     url: str = Field(..., description="YouTube video URL")
 
 
+class YouTubeDownloadRequest(BaseModel):
+    url: str = Field(..., description="YouTube video URL")
+    format_id: Optional[str] = Field(None, description="yt-dlp format selector string")
+
+
 class YouTubeMetadataResponse(BaseModel):
     title: str
     thumbnail_url: str

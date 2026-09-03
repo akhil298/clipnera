@@ -26,16 +26,6 @@ export interface AudioPresetZone {
   strengthRange: string;
 }
 
-export interface StoryPromptConfig {
-  prompt: string;
-  genre: string;
-  tone: 'suspenseful' | 'motivational' | 'mind_blowing' | 'dark_mystery' | 'cinematic_epic' | 'fast_comedy';
-  voice: 'american_baritone' | 'british_docu' | 'energetic_creator' | 'deep_mystic' | 'female_calm';
-  artStyle: 'cinematic_photoreal' | 'dark_cyberpunk' | 'historical_oil' | 'anime_comic' | 'unreal_3d';
-  bgMusic: 'dark_synth' | 'hans_zimmer_epic' | 'lofi_mystery' | 'dramatic_drums' | 'none';
-  targetDuration: number;
-}
-
 export interface WordTimestamp {
   id: string;
   text: string;
@@ -165,7 +155,7 @@ export interface VideoProject {
   tags?: string[];
   genre: string;
   duration: number; // in seconds
-  sourceType: 'sample' | 'upload' | 'youtube_url' | 'prompt_story';
+  sourceType: 'youtube_url';
   videoUrl: string;
   posterUrl: string;
   uploadedAt: string;
@@ -177,7 +167,6 @@ export interface VideoProject {
   audioOriginalUrl?: string;
   audioProcessedUrl?: string;
   audioReverted?: boolean;
-  storyConfig?: StoryPromptConfig;
   processingProgress?: number; // 0-100
   processingStatus?: 'idle' | 'processing' | 'completed' | 'failed';
 }
@@ -268,7 +257,7 @@ export interface RetentionPoint {
 }
 
 export interface DownloadProgress {
-  status: 'pending' | 'downloading' | 'uploading' | 'done' | 'error';
+  status: 'idle' | 'pending' | 'downloading' | 'uploading' | 'done' | 'error';
   percent: number;
   total: string | null;
   speed: string | null;

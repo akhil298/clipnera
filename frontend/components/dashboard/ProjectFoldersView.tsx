@@ -211,7 +211,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
       tags: ['Custom', 'Repurposing', 'Clips'],
       genre: newFolderCategory,
       duration: 600,
-      sourceType: 'upload',
+      sourceType: 'youtube_url',
       videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
       posterUrl: 'https://images.unsplash.com/photo-1574717024653-61fd2cf4d44d?w=800&auto=format&fit=crop&q=80',
       uploadedAt: new Date().toISOString(),
@@ -582,10 +582,10 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                         </span>
                       )}
 
-                      {project.sourceType === 'prompt_story' && !project.processingStatus && (
-                        <span className="px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/20 text-[10px] font-semibold text-purple-300 flex items-center gap-1">
-                          <Sparkles className="w-3 h-3 text-purple-400" />
-                          <span>AI Story</span>
+                      {project.sourceType === 'youtube_url' && !project.processingStatus && (
+                        <span className="px-2 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/20 text-[10px] font-semibold text-rose-300 flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                          <span>YouTube</span>
                         </span>
                       )}
 

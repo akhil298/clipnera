@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { VideoProject, ViralClip, UserProfile, TabType, Workspace } from '@/lib/types';
 import { SAMPLE_PROJECTS } from '@/lib/data/mockProjects';
+import { ReactGrabTool } from './ReactGrabTool';
 
 interface DashboardHomeViewProps {
   user: UserProfile;
@@ -180,6 +181,27 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Quick Video Grab Tool */}
+      <div className="space-y-3.5">
+        <div className="flex items-center gap-2">
+          <Youtube className="w-4 h-4 text-red-400" />
+          <h2 className="text-base lg:text-lg font-bold text-white">
+            Quick Video Grab Tool
+          </h2>
+        </div>
+        <p className="text-xs text-neutral-500 -mt-1">
+          Paste any YouTube URL to grab and download a video with selectable quality. The grabbed video will appear as a new project folder.
+        </p>
+        <div className="rounded-2xl bg-neutral-900/50 border border-neutral-800 p-1">
+          <ReactGrabTool
+            onVideoGrabbed={() => {
+              onOpenUpload();
+            }}
+            maxW="max-w-2xl"
+          />
         </div>
       </div>
 
