@@ -26,14 +26,15 @@ import {
   Folder,
   FolderOpen
 } from 'lucide-react';
-import { VideoProject, ViralClip, UserProfile, TabType } from '@/lib/types';
+import { VideoProject, ViralClip, UserProfile, TabType, Workspace } from '@/lib/types';
 import { SAMPLE_PROJECTS } from '@/lib/data/mockProjects';
+import { ReactGrabTool } from './ReactGrabTool';
 
 interface DashboardHomeViewProps {
   user: UserProfile;
-  activeProject?: VideoProject;
   projects: VideoProject[];
-  activeBrandKit?: any;
+  workspaces: Workspace[];
+  activeProject?: VideoProject;
   onSelectProject: (project: VideoProject) => void;
   onSelectClipForEdit: (clip: ViralClip) => void;
   onScheduleClip: (clip: ViralClip) => void;
@@ -43,9 +44,9 @@ interface DashboardHomeViewProps {
 
 export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   user,
-  activeProject,
   projects,
-  activeBrandKit,
+  workspaces,
+  activeProject,
   onSelectProject,
   onSelectClipForEdit,
   onScheduleClip,
@@ -56,6 +57,8 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   const [selectedGenreFilter, setSelectedGenreFilter] = useState<string>('all');
 
   const currentProject = activeProject || projects[0] || SAMPLE_PROJECTS[0];
+  const activeWorkspace = workspaces.find((ws) => ws.id === user.activeWorkspaceId) || workspaces[0];
+  const workspaceName = activeWorkspace?.name || user.name || 'My Workspace';
 
   // Quick stats calculation
   const totalClipsCount = projects.reduce((acc, p) => acc + (p.clips?.length || 0), 0);
@@ -91,7 +94,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
                 <span>AI Repurposing Engine Active</span>
               </span>
               <span className="text-xs text-neutral-400">
-                Workspace: <strong className="text-neutral-200">Akhil's Creative Studio</strong>
+                Workspace: <strong className="text-neutral-200">{workspaceName}</strong>
               </span>
             </div>
 
@@ -181,6 +184,27 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
         </div>
       </div>
 
+      {/* Quick Video Grab Tool */}
+      <div className="space-y-3.5">
+        <div className="flex items-center gap-2">
+          <Youtube className="w-4 h-4 text-red-400" />
+          <h2 className="text-base lg:text-lg font-bold text-white">
+            Quick Video Grab Tool
+          </h2>
+        </div>
+        <p className="text-xs text-neutral-500 -mt-1">
+          Paste any YouTube URL to grab and download a video with selectable quality. The grabbed video will appear as a new project folder.
+        </p>
+        <div className="rounded-2xl bg-neutral-900/50 border border-neutral-800 p-1">
+          <ReactGrabTool
+            onVideoGrabbed={() => {
+              onOpenUpload();
+            }}
+            maxW="max-w-2xl"
+          />
+        </div>
+      </div>
+
       {/* 2. STATS KPI BAR */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
         <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
@@ -249,11 +273,17 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
             >
               {/* Top Video Preview / Thumbnail */}
               <div className="relative aspect-[9/16] bg-neutral-950 overflow-hidden max-h-56">
-                <img
-                  src={clip.posterUrl || currentProject?.posterUrl}
-                  alt={clip.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
+                {(clip.posterUrl || currentProject?.posterUrl) ? (
+                  <img
+                    src={clip.posterUrl || currentProject!.posterUrl!}
+                    alt={clip.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-neutral-800 flex items-center justify-center">
+                    <Flame className="w-8 h-8 text-neutral-700" />
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-transparent to-black/30" />
 
                 {/* Virality Badge */}

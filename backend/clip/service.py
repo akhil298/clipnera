@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from clip.repository import ClipRepository
-from clip.schema import YouTubeURLRequest, VideoMetadataResponse
+from clip.schema import YouTubeURLRequest, VideoMetadataResponse, YouTubeDownloadRequest
 from clip.youtube_service import YouTubeService
 from clip.model import ProjectStatus
 from core.exceptions import CustomException
@@ -19,8 +19,8 @@ class ClipService:
         self._youtube = YouTubeService()
 
     async def fetch_metadata(self, user_id: str, data: YouTubeURLRequest) -> VideoMetadataResponse:
-        metadata = await self._youtube.fetch_metadata(data.url)
-        if not metadata:
+        prefetch = await self._youtube.fetch_metadata(data.url)
+        if not prefetch:
             raise CustomException(
                 message="Invalid YouTube URL or video not found",
                 code="INVALID_YOUTUBE_URL",
@@ -29,19 +29,26 @@ class ClipService:
 
         project = await self._repo.create_project(
             user_id=user_id,
-            title=metadata["title"],
+            title=prefetch.title,
             source_type="youtube",
             source_url=data.url,
         )
 
+        # Format resolution from quality options
+        resolution = "1920x1080"
+        if prefetch.qualities and prefetch.qualities[0].height:
+            first_video_quality = next((q for q in prefetch.qualities if q.height), None)
+            if first_video_quality:
+                resolution = f"?x{first_video_quality.height}"
+
         return VideoMetadataResponse(
             id=project.id,
-            title=metadata["title"],
-            thumbnail_url=metadata["thumbnail_url"],
-            channel_title=metadata["channel_title"],
-            duration_formatted=metadata.get("duration_formatted", "--:--"),
-            resolution=metadata.get("resolution", "1920x1080"),
-            aspect_ratio=metadata.get("aspect_ratio", "16:9"),
+            title=prefetch.title,
+            thumbnail_url=prefetch.thumbnail or "",
+            channel_title=prefetch.uploader or "Unknown",
+            duration_formatted=self._youtube._format_duration(prefetch.duration or 0),
+            resolution=resolution,
+            aspect_ratio="16:9",
             file_size=0,
             presigned_url="",
             original_url=data.url,
@@ -49,9 +56,9 @@ class ClipService:
             created_at=project.created_at,
         )
 
-    async def download_video(self, user_id: str, data: YouTubeURLRequest) -> dict:
-        metadata = await self._youtube.fetch_metadata(data.url)
-        if not metadata:
+    async def download_video(self, user_id: str, data: YouTubeDownloadRequest) -> dict:
+        prefetch = await self._youtube.fetch_metadata(data.url)
+        if not prefetch:
             raise CustomException(
                 message="Invalid YouTube URL or video not found",
                 code="INVALID_YOUTUBE_URL",
@@ -60,31 +67,40 @@ class ClipService:
 
         project = await self._repo.create_project(
             user_id=user_id,
-            title=metadata["title"],
+            title=prefetch.title,
             source_type="youtube",
             source_url=data.url,
+            status=ProjectStatus.PROCESSING,
         )
 
-        asyncio.create_task(self._background_download(data.url, user_id, project.id))
+        asyncio.create_task(self._background_download(data.url, user_id, project.id, data.format_id))
+
+        # Format resolution from quality options
+        resolution = "Unknown"
+        if prefetch.qualities and prefetch.qualities[0].height:
+            first_video_quality = next((q for q in prefetch.qualities if q.height), None)
+            if first_video_quality:
+                resolution = f"?x{first_video_quality.height}"
 
         return {
             "id": project.id,
-            "title": metadata["title"],
-            "thumbnail_url": metadata.get("thumbnail_url", ""),
-            "channel_title": metadata.get("channel_title", ""),
-            "duration_formatted": metadata.get("duration_formatted", "--:--"),
-            "resolution": metadata.get("resolution", "Unknown"),
-            "aspect_ratio": metadata.get("aspect_ratio", "16:9"),
+            "title": prefetch.title,
+            "thumbnail_url": prefetch.thumbnail or "",
+            "channel_title": prefetch.uploader or "Unknown",
+            "duration_formatted": self._youtube._format_duration(prefetch.duration or 0),
+            "resolution": resolution,
+            "aspect_ratio": "16:9",
             "file_size": 0,
             "presigned_url": "",
             "original_url": data.url,
-            "status": "downloading",
+            "status": "processing",
             "created_at": project.created_at.isoformat(),
         }
 
-    async def _background_download(self, url: str, user_id: str, project_id: str) -> None:
+
+    async def _background_download(self, url: str, user_id: str, project_id: str, format_id: str | None = None) -> None:
         try:
-            result = await self._youtube.download_and_store(url, user_id, project_id)
+            result = await self._youtube.download_and_store(url, user_id, project_id, format_id)
             await self._repo.update_project_s3(
                 project_id=project_id,
                 s3_key=result["s3_key"],
@@ -93,6 +109,7 @@ class ClipService:
                 file_size=result["file_size"],
                 duration=result["duration_seconds"],
                 status=ProjectStatus.UPLOADED,
+                local_path=result.get("local_path"),
             )
             log.info(f"Video downloaded: project={project_id} user={user_id}")
         except ValueError as e:

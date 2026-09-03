@@ -3,22 +3,27 @@ export type CaptionPreset = 'hormozi' | 'mrbeast' | 'neon' | 'cyberpunk' | 'mini
 export type LayoutMode = 'single_speaker' | 'split_screen' | 'screen_share_focus';
 
 export interface AudioEnhancementConfig {
-  removeBackgroundNoise: boolean;
-  noiseReductionLevel: number; // 0 to 100 (e.g. 85%)
-  roomEchoSuppression: boolean;
-  studioVoiceClarity: boolean;
-  voiceLeveling: boolean;
-  hissFilter: boolean;
+  aiDenoise: boolean;
+  noiseSuppressionStrength: number; // 0 to 100
+  deReverb: boolean;
+  vocalClarityEq: boolean;
+  humFilter: boolean;
 }
 
-export interface StoryPromptConfig {
-  prompt: string;
-  genre: string;
-  tone: 'suspenseful' | 'motivational' | 'mind_blowing' | 'dark_mystery' | 'cinematic_epic' | 'fast_comedy';
-  voice: 'american_baritone' | 'british_docu' | 'energetic_creator' | 'deep_mystic' | 'female_calm';
-  artStyle: 'cinematic_photoreal' | 'dark_cyberpunk' | 'historical_oil' | 'anime_comic' | 'unreal_3d';
-  bgMusic: 'dark_synth' | 'hans_zimmer_epic' | 'lofi_mystery' | 'dramatic_drums' | 'none';
-  targetDuration: number;
+export interface AudioProcessingResult {
+  success: boolean;
+  processedUrl?: string;
+  processingTimeSeconds: number;
+  sampleRate: number;
+  durationSeconds: number;
+  appliedSettings: Record<string, any>;
+  error?: string;
+}
+
+export interface AudioPresetZone {
+  key: string;
+  label: string;
+  strengthRange: string;
 }
 
 export interface WordTimestamp {
@@ -150,7 +155,7 @@ export interface VideoProject {
   tags?: string[];
   genre: string;
   duration: number; // in seconds
-  sourceType: 'sample' | 'upload' | 'youtube_url' | 'prompt_story';
+  sourceType: 'youtube_url';
   videoUrl: string;
   posterUrl: string;
   uploadedAt: string;
@@ -159,7 +164,11 @@ export interface VideoProject {
   clips: ViralClip[];
   transcript: TranscriptSegment[];
   audioEnhancement?: AudioEnhancementConfig;
-  storyConfig?: StoryPromptConfig;
+  audioOriginalUrl?: string;
+  audioProcessedUrl?: string;
+  audioReverted?: boolean;
+  processingProgress?: number; // 0-100
+  processingStatus?: 'idle' | 'processing' | 'completed' | 'failed';
 }
 
 export interface ScheduledPost {
@@ -248,10 +257,28 @@ export interface RetentionPoint {
 }
 
 export interface DownloadProgress {
-  status: 'pending' | 'downloading' | 'uploading' | 'done' | 'error';
+  status: 'idle' | 'pending' | 'downloading' | 'uploading' | 'done' | 'error';
   percent: number;
   total: string | null;
   speed: string | null;
   eta: string | null;
   message?: string;
+}
+
+export interface PipelineStep {
+  step: string;
+  status: string;
+  progress_percent: number;
+  message: string | null;
+  artifact_path: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface PipelineStatus {
+  project_id: string;
+  current_step: string;
+  is_completed: boolean;
+  error: string | null;
+  steps: PipelineStep[];
 }

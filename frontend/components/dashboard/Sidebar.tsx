@@ -215,7 +215,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Center: Navigation Links */}
-      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-6">
+      <div className="flex-1 overflow-y-auto px-3 py-2 pb-6 space-y-6">
         {/* Main Creation Group */}
         <div className="space-y-1">
           {!isCollapsed && (
@@ -285,23 +285,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {projects.slice(0, 4).map((p) => {
                 const isCurrent = p.id === activeProject?.id;
                 const displayName = p.folderName || p.title;
+                const isProcessing = p.processingStatus === 'processing';
 
                 return (
                   <button
                     key={p.id}
                     onClick={() => {
-                      if (onSelectProject) onSelectProject(p);
+                      if (isProcessing || !onSelectProject) return;
+                      onSelectProject(p);
                       handleNavClick('generator');
                     }}
                     className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all text-left group ${
                       isCurrent
                         ? 'bg-neutral-900 text-amber-300 font-semibold border border-neutral-800'
+                        : isProcessing
+                        ? 'text-neutral-600 cursor-not-allowed'
                         : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/40'
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
-                      <FolderOpen className={`w-3.5 h-3.5 shrink-0 ${isCurrent ? 'text-amber-400' : 'text-neutral-500'}`} />
+                      <FolderOpen className={`w-3.5 h-3.5 shrink-0 ${isCurrent ? 'text-amber-400' : isProcessing ? 'text-neutral-600' : 'text-neutral-500'}`} />
                       <span className="truncate text-[11px]">{displayName}</span>
+                      {isProcessing && (
+                        <span className="text-[9px] text-amber-400 animate-pulse">Processing...</span>
+                      )}
                     </div>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-400 font-mono shrink-0 ml-1">
                       {p.clips.length}
@@ -350,7 +357,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Customization & Settings Group */}
-        <div className="space-y-1">
+        <div className="space-y-1 mb-4">
           {!isCollapsed && (
             <div className="px-3 text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
               Settings & Brand
@@ -436,11 +443,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
           title={`Signed in as ${user.name}`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
-            <img
-              src={user.avatarUrl}
-              alt={user.name}
-              className="w-8 h-8 rounded-lg object-cover border border-neutral-700 shrink-0"
-            />
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={user.name}
+                className="w-8 h-8 rounded-lg object-cover border border-neutral-700 shrink-0"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-lg bg-neutral-800 border border-neutral-700 shrink-0 flex items-center justify-center text-neutral-400 text-xs font-bold">
+                {user.name?.charAt(0)?.toUpperCase()}
+              </div>
+            )}
             {!isCollapsed && (
               <div className="truncate">
                 <div className="font-bold text-white text-xs truncate">{user.name}</div>

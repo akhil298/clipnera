@@ -61,12 +61,39 @@ export interface WorkspaceMemberResponse {
 }
 
 export interface DownloadProgress {
-  status: 'pending' | 'downloading' | 'uploading' | 'done' | 'error';
+  status: 'idle' | 'pending' | 'downloading' | 'uploading' | 'done' | 'error';
   percent: number;
   total: string | null;
   speed: string | null;
   eta: string | null;
   message?: string;
+}
+
+export interface AudioProcessingResult {
+  success: boolean;
+  processedUrl?: string;
+  processingTimeSeconds: number;
+  sampleRate: number;
+  durationSeconds: number;
+  appliedSettings: Record<string, any>;
+  error?: string;
+}
+
+export interface AudioPresetZone {
+  key: string;
+  label: string;
+  strengthRange: string;
+}
+
+export interface AudioProcessRequest {
+  audioUrl: string;
+  config: Record<string, any>;
+}
+
+export interface AudioPreviewRequest {
+  frequencyHz: number;
+  durationSeconds: number;
+  config: Record<string, any>;
 }
 
 async function request<T>(path: string, body: unknown): Promise<T> {
@@ -92,6 +119,28 @@ export interface YouTubeMetadataResponse {
   resolution: string;
   aspect_ratio: string | number;
   original_url: string;
+}
+
+export interface FormatInfo {
+  format_id: string;
+  ext: string;
+  resolution: string;
+  width: number;
+  height: number;
+  filesize: number;
+  vcodec: string;
+  acodec: string;
+  abr: number;
+  type: string;
+}
+
+export interface AvailableFormatsResponse {
+  title: string;
+  duration: number;
+  thumbnail: string;
+  channel: string;
+  video: FormatInfo[];
+  audio: FormatInfo[];
 }
 
 async function authedRequest<T>(path: string, options?: RequestInit): Promise<T> {
@@ -154,13 +203,119 @@ export const clipApi = {
     method: 'POST',
     body: JSON.stringify({ url }),
   }),
-  downloadYoutube: (url: string) => authedRequest<Record<string, any>>('/clips/download', {
+  fetchFormats: (url: string) => authedRequest<AvailableFormatsResponse>('/clips/formats', {
     method: 'POST',
     body: JSON.stringify({ url }),
   }),
+  downloadYoutube: (url: string, formatId?: string) => authedRequest<Record<string, any>>('/clips/download', {
+    method: 'POST',
+    body: JSON.stringify({ url, format_id: formatId }),
+  }),
   subscribeDownloadProgress: (
-    videoId: string,
+    projectId: string,
     onProgress: (progress: DownloadProgress) => void,
+    onError?: (err: Error) => void,
+  ): (() => void) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    let isCancelled = false;
+
+    const pollProgress = async () => {
+      try {
+        while (!isCancelled) {
+          try {
+            const res = await fetch(`${API_BASE}/api/v1/clips/progress/${projectId}`, {
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+            });
+
+            if (!res.ok) {
+              onError?.(new Error(`Failed to fetch progress: ${res.status}`));
+              break;
+            }
+
+            const data = (await res.json()) as DownloadProgress;
+            onProgress(data);
+
+            // Stop polling when done or error
+            if (data.status === 'done' || data.status === 'error') {
+              break;
+            }
+
+            // Wait 500ms before next poll
+            await new Promise((r) => setTimeout(r, 500));
+          } catch (err) {
+            onError?.(err as Error);
+            break;
+          }
+        }
+      } catch (err) {
+        onError?.(err as Error);
+      }
+    };
+
+    // Start polling in background
+    pollProgress();
+
+    // Return unsubscribe function
+    return () => {
+      isCancelled = true;
+    };
+  },
+};
+
+export interface AudioProcessRequest {
+  audioUrl: string;
+  config: Record<string, any>;
+}
+
+export interface AudioPreviewRequest {
+  frequencyHz: number;
+  durationSeconds: number;
+  config: Record<string, any>;
+}
+
+export const audioApi = {
+  process: (payload: AudioProcessRequest) =>
+    authedRequest<AudioProcessingResult>('/audio/process', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  preview: (payload: AudioPreviewRequest) =>
+    authedRequest<AudioProcessingResult>('/audio/preview', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  getPresets: () =>
+    authedRequest<{ zones: AudioPresetZone[] }>('/audio/presets'),
+};
+
+export interface PipelineStatus {
+  project_id: string;
+  current_step: string;
+  is_completed: boolean;
+  error: string | null;
+  steps: Array<{
+    step: string;
+    status: string;
+    progress_percent: number;
+    message: string | null;
+    artifact_path: string | null;
+    started_at: string | null;
+    finished_at: string | null;
+  }>;
+}
+
+export const pipelineApi = {
+  start: (projectId: string, steps: string[] = ['download', 'audio_extraction', 'ai_noise_cancellation'], audioConfig: Record<string, any> = {}) =>
+    authedRequest<{ project_id: string; status: string; selected_steps: string[] }>(`/pipeline/start/${projectId}`, {
+      method: 'POST',
+      body: JSON.stringify({ steps, audio_config: audioConfig }),
+    }),
+  subscribeProgress: (
+    projectId: string,
+    onProgress: (data: { message: string; percent: number; status: string }) => void,
     onError?: (err: Error) => void,
   ): (() => void) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -168,7 +323,7 @@ export const clipApi = {
     const base = API_BASE;
     (async () => {
       try {
-        const res = await fetch(`${base}/api/v1/clips/download/progress/${videoId}`, {
+        const res = await fetch(`${base}/api/v1/pipeline/progress/${projectId}`, {
           headers: {
             Accept: 'text/event-stream',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -192,9 +347,9 @@ export const clipApi = {
             const line = part.split('\n').find((l) => l.startsWith('data:'));
             if (!line) continue;
             try {
-              const data = JSON.parse(line.slice(5).trim()) as DownloadProgress;
+              const data = JSON.parse(line.slice(5).trim());
               onProgress(data);
-              if (data.status === 'done' || data.status === 'error') {
+              if (data.status === 'completed' || data.status === 'error') {
                 ctrl.abort();
                 return;
               }
@@ -211,4 +366,15 @@ export const clipApi = {
     })();
     return () => ctrl.abort();
   },
+  getStatus: (projectId: string) =>
+    authedRequest<PipelineStatus>(`/pipeline/status/${projectId}`),
+  revertStep: (projectId: string, step: string) =>
+    authedRequest<{ project_id: string; step: string; status: string }>(`/pipeline/revert/${projectId}/${step}`, {
+      method: 'POST',
+    }),
+  resume: (projectId: string, steps: string[] = ['download', 'audio_extraction', 'ai_noise_cancellation'], audioConfig: Record<string, any> = {}) =>
+    authedRequest<{ project_id: string; status: string; selected_steps: string[] }>(`/pipeline/resume/${projectId}`, {
+      method: 'POST',
+      body: JSON.stringify({ steps, audio_config: audioConfig }),
+    }),
 };

@@ -31,7 +31,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-      <div className="relative w-full max-w-md rounded-3xl bg-neutral-900 border border-neutral-800 p-6 shadow-2xl space-y-6">
+      <div className="relative w-full max-w-md rounded-2xl bg-neutral-900/90 border border-neutral-800 p-6 shadow-xl space-y-6">
         {/* Close Button */}
         <button
           onClick={onClose}
@@ -42,7 +42,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Modal Header */}
         <div className="text-center space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 mx-auto flex items-center justify-center text-neutral-950 font-black text-xl shadow-lg shadow-rose-500/25">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500 flex items-center justify-center text-neutral-950 font-black text-xl shadow-md shadow-amber-500/15 mx-auto">
             C
           </div>
           <h2 className="text-xl font-bold text-white font-['Syne',sans-serif]">
@@ -112,7 +112,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Sign Out */}
         <button
           onClick={handleSignOut}
-          className="w-full py-3 rounded-xl bg-neutral-950 border border-neutral-800 hover:border-rose-500/50 text-rose-400 hover:text-rose-300 font-bold text-xs transition-all flex items-center justify-center gap-2"
+          className="w-full py-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-amber-400 hover:text-amber-300 font-bold text-xs transition-all flex items-center justify-center gap-2 active:scale-95"
         >
           <LogOut className="w-4 h-4" />
           <span>Sign Out</span>

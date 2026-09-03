@@ -4,7 +4,7 @@ import enum
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import String, ForeignKey, Enum, DateTime, Integer, Text
+from sqlalchemy import String, ForeignKey, Enum, DateTime, Integer, Text, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.database import Base
@@ -34,6 +34,10 @@ class VideoProject(Base):
     presigned_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    local_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    audio_processed_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    audio_original_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    audio_reverted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
