@@ -209,7 +209,7 @@ export interface UserProfile {
   email: string;
   avatarUrl: string;
   avatarInitials: string;
-  plan: 'free' | 'pro' | 'enterprise';
+  plan: 'free' | 'pro' | 'pro_plus';
   aiCreditsMinutesRemaining: number;
   aiCreditsTotal: number;
   activeWorkspaceId: string;
@@ -227,7 +227,7 @@ export interface BrandKit {
   id: string;
   brandName: string;
   logoUrl?: string;
-  logoPosition: 'top_left' | 'top_right' | 'bottom_left' | 'bottom_right';
+  logoPosition: string;
   logoOpacity: number;
   logoSize: number;
   primaryColor: string;
@@ -236,6 +236,8 @@ export interface BrandKit {
   defaultPreset: CaptionPreset;
   autoEmojis: boolean;
   outroCtaText: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AppNotification {

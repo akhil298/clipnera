@@ -29,7 +29,16 @@ import {
   Legend,
   CartesianGrid,
 } from 'recharts';
-import { RETENTION_CURVE_DATA } from '@/lib/data/mockProjects';
+
+const EMPTY_RETENTION_DATA = [
+  { second: 0, rawRetention: 100, clipneraAiRetention: 100, eventAnnotation: 'Start' },
+  { second: 5, rawRetention: 65, clipneraAiRetention: 70, eventAnnotation: 'Initial Drop-off' },
+  { second: 10, rawRetention: 50, clipneraAiRetention: 60, eventAnnotation: 'Stabilizing' },
+  { second: 15, rawRetention: 40, clipneraAiRetention: 50, eventAnnotation: 'Mid-point' },
+  { second: 20, rawRetention: 32, clipneraAiRetention: 42, eventAnnotation: ' retention' },
+  { second: 25, rawRetention: 26, clipneraAiRetention: 35, eventAnnotation: 'Sustained Interest' },
+  { second: 30, rawRetention: 22, clipneraAiRetention: 30, eventAnnotation: 'End' },
+];
 
 export const ViralAnalyticsView: React.FC = () => {
   const [activePlatformFilter, setActivePlatformFilter] = useState<'all' | 'tiktok' | 'reels' | 'shorts'>('all');
@@ -204,7 +213,7 @@ export const ViralAnalyticsView: React.FC = () => {
         {isMounted ? (
           <div className="h-72 w-full pt-4">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={RETENTION_CURVE_DATA}>
+              <AreaChart data={EMPTY_RETENTION_DATA}>
                 <defs>
                   <linearGradient id="clipneraGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.4} />

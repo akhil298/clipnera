@@ -1,4 +1,11 @@
+import { BrandKit } from '@/lib/types';
+import { getToken, clearAuth, setAuth } from '@/lib/auth';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+
+function handleUnauthorized(): void {
+  clearAuth();
+}
 
 export interface LoginPayload {
   email: string;
@@ -23,6 +30,8 @@ export interface ResetPayload {
 
 export interface TokenResponse {
   access_token: string;
+  token_type: string;
+  expires_in: number;
 }
 
 export interface UserProfileResponse {
@@ -144,7 +153,7 @@ export interface AvailableFormatsResponse {
 }
 
 async function authedRequest<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const token = getToken();
   const res = await fetch(`${API_BASE}/api/v1${path}`, {
     ...options,
     headers: {
@@ -154,15 +163,27 @@ async function authedRequest<T>(path: string, options?: RequestInit): Promise<T>
     },
   });
 
+  if (res.status === 401) {
+    handleUnauthorized();
+  }
+
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((data as { message?: string })?.message ?? 'Something went wrong');
+    const message = (data as { message?: string })?.message ?? 'Something went wrong';
+    if (res.status === 401) {
+      throw new Error(`Unauthorized: ${message}`);
+    }
+    throw new Error(message);
   }
   return data as T;
 }
 
 export const authApi = {
-  login: (payload: LoginPayload) => request<TokenResponse>('/auth/login', payload),
+  login: (payload: LoginPayload) =>
+    request<TokenResponse>('/auth/login', payload).then((data) => {
+      setAuth(data.access_token, data.expires_in);
+      return data;
+    }),
   register: (payload: RegisterPayload) => request('/auth/register', payload),
   forgotPassword: (payload: ForgotPayload) => request('/auth/forgot-password', payload),
   resetPassword: (payload: ResetPayload) => request('/auth/reset-password', payload),
@@ -216,19 +237,30 @@ export const clipApi = {
     onProgress: (progress: DownloadProgress) => void,
     onError?: (err: Error) => void,
   ): (() => void) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     let isCancelled = false;
 
     const pollProgress = async () => {
       try {
         while (!isCancelled) {
           try {
+            const token = getToken();
+            if (!token) {
+              onError?.(new Error('Not authenticated'));
+              break;
+            }
+
             const res = await fetch(`${API_BASE}/api/v1/clips/progress/${projectId}`, {
               headers: {
                 'Content-Type': 'application/json',
-                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                Authorization: `Bearer ${token}`,
               },
             });
+
+            if (res.status === 401) {
+              handleUnauthorized();
+              onError?.(new Error('Session expired'));
+              break;
+            }
 
             if (!res.ok) {
               onError?.(new Error(`Failed to fetch progress: ${res.status}`));
@@ -238,12 +270,10 @@ export const clipApi = {
             const data = (await res.json()) as DownloadProgress;
             onProgress(data);
 
-            // Stop polling when done or error
             if (data.status === 'done' || data.status === 'error') {
               break;
             }
 
-            // Wait 500ms before next poll
             await new Promise((r) => setTimeout(r, 500));
           } catch (err) {
             onError?.(err as Error);
@@ -255,10 +285,8 @@ export const clipApi = {
       }
     };
 
-    // Start polling in background
     pollProgress();
 
-    // Return unsubscribe function
     return () => {
       isCancelled = true;
     };
@@ -318,18 +346,30 @@ export const pipelineApi = {
     onProgress: (data: { message: string; percent: number; status: string }) => void,
     onError?: (err: Error) => void,
   ): (() => void) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     const ctrl = new AbortController();
     const base = API_BASE;
     (async () => {
       try {
+        const token = getToken();
+        if (!token) {
+          onError?.(new Error('Not authenticated'));
+          return;
+        }
+
         const res = await fetch(`${base}/api/v1/pipeline/progress/${projectId}`, {
           headers: {
             Accept: 'text/event-stream',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            Authorization: `Bearer ${token}`,
           },
           signal: ctrl.signal,
         });
+
+        if (res.status === 401) {
+          handleUnauthorized();
+          onError?.(new Error('Session expired'));
+          return;
+        }
+
         if (!res.ok || !res.body) {
           onError?.(new Error(`Failed to subscribe: ${res.status}`));
           return;
@@ -377,4 +417,106 @@ export const pipelineApi = {
       method: 'POST',
       body: JSON.stringify({ steps, audio_config: audioConfig }),
     }),
+};
+
+export interface CreateBrandKitPayload {
+  brand_name: string;
+  logo_url?: string;
+  logo_position: string;
+  logo_opacity: number;
+  logo_size: number;
+  primary_color: string;
+  secondary_color: string;
+  preferred_font: string;
+  default_preset: string;
+  auto_emojis: boolean;
+  outro_cta_text: string;
+}
+
+export const brandKitApi = {
+  getMe: () => authedRequest<BrandKit>('/brand-kits/me'),
+  list: () => authedRequest<BrandKit[]>('/brand-kits'),
+  create: (payload: CreateBrandKitPayload) =>
+    authedRequest<BrandKit>('/brand-kits', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  delete: (id: string) =>
+    authedRequest<void>(`/brand-kits/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+export interface PlanResponse {
+  id: string;
+  name: string;
+  slug: string;
+  credit_minutes: number;
+  price_monthly: number;
+  currency: string;
+  is_active: boolean;
+  features: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaymentTransactionResponse {
+  id: string;
+  user_id: string;
+  plan_id: string;
+  plan: PlanResponse;
+  amount: number;
+  currency: string;
+  status: string;
+  payment_uuid: string;
+  payment_method: string | null;
+  notes: string | null;
+  verified_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreditLedgerResponse {
+  id: string;
+  user_id: string;
+  amount: number;
+  balance_after: number;
+  reason: string;
+  reference_id: string | null;
+  reference_type: string | null;
+  created_at: string;
+}
+
+export const subscriptionApi = {
+  listPlans: () => authedRequest<PlanResponse[]>('/subscription/plans'),
+  getMySubscription: () => authedRequest<{ plan: string; credit_minutes_total: number; credit_minutes_remaining: number; subscription_status: string; current_period_end: string | null }>('/subscription/me'),
+  activateFreePlan: () => authedRequest<{ plan: string; credit_minutes_total: number; credit_minutes_remaining: number; subscription_status: string; current_period_end: string | null }>('/subscription/activate-free', { method: 'POST' }),
+  topupCredits: (amount: number, notes?: string) =>
+    authedRequest<{ plan: string; credit_minutes_total: number; credit_minutes_remaining: number; subscription_status: string; current_period_end: string | null }>('/subscription/topup', {
+      method: 'POST',
+      body: JSON.stringify({ amount, notes }),
+    }),
+  getMyTransactions: () => authedRequest<PaymentTransactionResponse[]>('/subscription/transactions'),
+  getCreditLedger: (limit?: number) => authedRequest<CreditLedgerResponse[]>(`/subscription/ledger${limit ? `?limit=${limit}` : ''}`),
+  initiatePayment: (planSlug: string, paymentMethod?: string, notes?: string) =>
+    authedRequest<PaymentTransactionResponse>('/subscription/payment/initiate', {
+      method: 'POST',
+      body: JSON.stringify({ plan_slug: planSlug, payment_method: paymentMethod, notes }),
+    }),
+  verifyPayment: (paymentUuid: string, status: string, notes?: string) =>
+    authedRequest<PaymentTransactionResponse>('/subscription/payment/verify', {
+      method: 'POST',
+      body: JSON.stringify({ payment_uuid: paymentUuid, status, notes }),
+    }),
+};
+
+export interface DashboardStatsResponse {
+  total_viral_shorts: number;
+  manual_hours_saved: number;
+  avg_virality_score: number;
+  best_post_window: string;
+}
+
+export const analyticsApi = {
+  getDashboardStats: () => authedRequest<DashboardStatsResponse>('/analytics/dashboard'),
 };

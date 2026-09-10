@@ -51,7 +51,7 @@ import confetti from 'canvas-confetti';
 import { AudioEnhancerPanel } from './AudioEnhancerPanel';
 
 interface VideoEditorStudioProps {
-  clip: ViralClip;
+  clip?: ViralClip;
   onUpdateClip: (updatedClip: ViralClip) => void;
   onBackToGenerator: () => void;
   onScheduleClip: (clip: ViralClip) => void;
@@ -63,10 +63,20 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
   onBackToGenerator,
   onScheduleClip,
 }) => {
+  if (!clip) {
+    return (
+      <div className="flex items-center justify-center h-[60vh] text-neutral-400 text-sm">
+        No clip selected. Select a clip from the generator to open the editor.
+      </div>
+    );
+  }
+
+  const safeClip = clip;
+
   // Playback & Timing state
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(clip.duration || 30);
+  const [duration, setDuration] = useState(safeClip.duration || 30);
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.8);
@@ -80,16 +90,16 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
   const [exportProgress, setExportProgress] = useState(0);
   const [exportComplete, setExportComplete] = useState(false);
 
-  // Editable clip properties
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>(clip.aspectRatio || '9:16');
-  const [captionConfig, setCaptionConfig] = useState(clip.captionConfig);
-  const [autoZoomConfig, setAutoZoomConfig] = useState(clip.autoZoom);
-  const [autoReframeConfig, setAutoReframeConfig] = useState(clip.autoReframe);
-  const [bRollOverlays, setBRollOverlays] = useState<BRollOverlay[]>(clip.bRollOverlays || []);
-  const [soundEffects, setSoundEffects] = useState<SoundEffect[]>(clip.soundEffects || []);
-  const [transcriptSegments, setTranscriptSegments] = useState(clip.transcriptSegments || []);
+  // Editable safeClip properties
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>(safeClip.aspectRatio || '9:16');
+  const [captionConfig, setCaptionConfig] = useState(safeClip.captionConfig);
+  const [autoZoomConfig, setAutoZoomConfig] = useState(safeClip.autoZoom);
+  const [autoReframeConfig, setAutoReframeConfig] = useState(safeClip.autoReframe);
+  const [bRollOverlays, setBRollOverlays] = useState<BRollOverlay[]>(safeClip.bRollOverlays || []);
+  const [soundEffects, setSoundEffects] = useState<SoundEffect[]>(safeClip.soundEffects || []);
+  const [transcriptSegments, setTranscriptSegments] = useState(safeClip.transcriptSegments || []);
   const [audioEnhanceConfig, setAudioEnhanceConfig] = useState<AudioEnhancementConfig>(
-    clip.audioEnhancement || {
+    safeClip.audioEnhancement || {
       aiDenoise: true,
       noiseSuppressionStrength: 90,
       deReverb: true,
@@ -109,10 +119,10 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
   // Flattened words list for text-based editor & sync
   const allWords: WordTimestamp[] = transcriptSegments.flatMap((s) => s.words || []);
 
-  // Update parent when clip settings change
+  // Update parent when safeClip settings change
   const syncChangesToParent = () => {
     onUpdateClip({
-      ...clip,
+      ...safeClip,
       aspectRatio,
       captionConfig,
       autoZoom: autoZoomConfig,
@@ -277,14 +287,14 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/20">
-                Score {clip.viralityScore}/100
+                Score {safeClip.viralityScore}/100
               </span>
               <span className="text-xs text-neutral-400 font-mono">
                 {duration.toFixed(1)}s • {aspectRatio}
               </span>
             </div>
             <h2 className="text-sm lg:text-base font-bold text-white font-['Syne',sans-serif] truncate max-w-md">
-              {clip.title}
+              {safeClip.title}
             </h2>
           </div>
         </div>
@@ -298,7 +308,7 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                 aiDenoise: !audioEnhanceConfig.aiDenoise,
               };
               setAudioEnhanceConfig(updated);
-              onUpdateClip({ ...clip, audioEnhancement: updated });
+              onUpdateClip({ ...safeClip, audioEnhancement: updated });
             }}
             className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
               audioEnhanceConfig.aiDenoise
@@ -349,7 +359,7 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
           </div>
 
           <button
-            onClick={() => onScheduleClip(clip)}
+            onClick={() => onScheduleClip(safeClip)}
             className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-sky-400 text-xs font-semibold border border-neutral-700 transition-colors flex items-center gap-1.5"
           >
             <span>Schedule</span>
@@ -505,7 +515,7 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                   <div className="space-y-1 max-w-[180px]">
                     <p className="text-xs font-bold">@opuscreator</p>
                     <p className="text-[10px] opacity-90 line-clamp-2">
-                      {clip.title} {clip.socialOptimization.hashtags.slice(0, 3).join(' ')}
+                      {safeClip.title} {safeClip.socialOptimization.hashtags.slice(0, 3).join(' ')}
                     </p>
                   </div>
                   <div className="flex flex-col items-center gap-2.5 text-center text-[10px]">
@@ -532,7 +542,7 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                       <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-amber-400 to-rose-500" />
                       <p className="text-xs font-bold">opus.official</p>
                     </div>
-                    <p className="text-[10px] opacity-90">{clip.title}</p>
+                    <p className="text-[10px] opacity-90">{safeClip.title}</p>
                   </div>
                   <div className="flex flex-col items-center gap-2 text-[10px]">
                     <span>❤️ 24K</span>
@@ -1151,7 +1161,7 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
               config={audioEnhanceConfig}
               onConfigChange={(updated) => {
                 setAudioEnhanceConfig(updated);
-                onUpdateClip({ ...clip, audioEnhancement: updated });
+                onUpdateClip({ ...safeClip, audioEnhancement: updated });
               }}
               onProcessed={(result) => {
                 if (result.processedUrl) {
@@ -1282,8 +1292,8 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                     setIsExporting(false);
                     // trigger direct fake download link
                     const link = document.createElement('a');
-                    link.href = clip.transcriptSegments[0]?.text || '#';
-                    link.download = `${clip.title.replace(/\s+/g, '_')}_Clipnera.mp4`;
+                    link.href = safeClip.transcriptSegments[0]?.text || '#';
+                    link.download = `${safeClip.title.replace(/\s+/g, '_')}_Clipnera.mp4`;
                   }}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-neutral-950 font-bold text-xs shadow-lg shadow-rose-500/25 active:scale-95 transition-all"
                 >

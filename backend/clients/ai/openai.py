@@ -34,12 +34,12 @@ class OpenAI(BaseAI):
 
     async def chat(self, messages: list[dict[str, Any]], **kwargs: Any) -> str:
         payload = self._build_payload(messages, stream=False, **kwargs)
-        response = await self._request("/chat/completions", payload)
+        response = await self._request("chat/completions", payload)
         return response["choices"][0]["message"]["content"]
 
     async def stream_chat(self, messages: list[dict[str, Any]], **kwargs: Any) -> AsyncIterator[str]:
         payload = self._build_payload(messages, stream=True, **kwargs)
-        async with self._client.stream("POST", "/chat/completions", json=payload) as response:
+        async with self._client.stream("POST", "chat/completions", json=payload) as response:
             async for line in response.aiter_lines():
                 if line.startswith("data: ") and line.strip() != "data: [DONE]":
                     yield line[6:]

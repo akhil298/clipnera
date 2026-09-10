@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import os
-import time
 import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
+import httpx
+import time
 from clients.services.s3 import S3
+from core.config import get_settings
 from core.logging_config import get_logger
 
+settings = get_settings()
 log = get_logger(__name__)
 
 
@@ -57,7 +60,7 @@ class YouTubeService:
 
     def __init__(self) -> None:
         self._s3 = S3()
-        self._bucket = "clipnera-videos"
+        self._bucket = settings.S3_BUCKET_NAME
         self._progress_hooks: Dict[str, callable] = {}
 
     @classmethod
@@ -79,6 +82,42 @@ class YouTubeService:
     def set_progress_sync(cls, key: str, data: Dict[str, Any]) -> None:
         """Sync progress writer safe to call from executor threads."""
         cls._progress_store[key] = data
+
+    USER_AGENT = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/127.0.0.0 Safari/537.36"
+    )
+
+    def _yt_dlp_base_options(self) -> dict:
+        """Base yt-dlp options shared across all extraction/download calls.
+
+        Includes a browser-like User-Agent to reduce bot-detection and
+        cookie support via two methods:
+        1. YOUTUBE_COOKIES_BROWSER: yt-dlp reads cookies directly from browser (recommended).
+           Set to browser name, e.g. "chrome", "firefox", "edge".
+        2. YOUTUBE_COOKIES_PATH: path to a manually exported cookies.txt file.
+        """
+        options: dict = {
+            "quiet": True,
+            "no_warnings": True,
+            "noplaylist": True,
+            "http_headers": {
+                "User-Agent": self.USER_AGENT,
+            },
+        }
+
+        cookie_browser = os.environ.get("YOUTUBE_COOKIES_BROWSER")
+        if cookie_browser:
+            options["cookiesfrombrowser"] = (cookie_browser,)
+            log.info(f"YouTube cookies will be read from browser: {cookie_browser}")
+        else:
+            cookie_path = os.environ.get("YOUTUBE_COOKIES_PATH")
+            if cookie_path and os.path.exists(cookie_path):
+                options["cookiefile"] = cookie_path
+                log.info(f"YouTube cookies file loaded from {cookie_path}")
+
+        return options
 
     def _content_type_from_path(self, path: str) -> str:
         """Determine content type from file extension."""
@@ -165,11 +204,7 @@ class YouTubeService:
             return None
 
         def _extract():
-            options = {
-                "quiet": True,
-                "no_warnings": True,
-                "noplaylist": True,
-            }
+            options = self._yt_dlp_base_options()
             with yt_dlp.YoutubeDL(options) as ydl:
                 return ydl.extract_info(url, download=False)
 
@@ -201,11 +236,7 @@ class YouTubeService:
             return {"title": "", "duration": 0, "thumbnail": "", "channel": "", "video": [], "audio": []}
 
         def _extract():
-            options = {
-                "quiet": True,
-                "no_warnings": True,
-                "noplaylist": True,
-            }
+            options = self._yt_dlp_base_options()
             with yt_dlp.YoutubeDL(options) as ydl:
                 return ydl.extract_info(url, download=False)
 
@@ -351,13 +382,11 @@ class YouTubeService:
 
         loop = asyncio.get_event_loop()
         ydl_opts = {
+            **self._yt_dlp_base_options(),
             'format': format_id or 'bv*+ba/b',
-            'noplaylist': True,
             'merge_output_format': 'mp4',
             'outtmpl': output_template,
             'noprogress': True,
-            'quiet': True,
-            'no_warnings': True,
             'progress_hooks': [make_progress_hook(project_id)],
         }
 
@@ -392,7 +421,7 @@ class YouTubeService:
         duration = prefetch.duration or 0
 
         log.info(f"[{project_id}] ✓ Video file ready: {os.path.basename(downloaded_file)} ({self._format_bytes(file_size)})")
-        log.info(f"[{project_id}] Starting S3 upload to clipnera-videos...")
+        log.info(f"[{project_id}] Starting S3 upload to {self._bucket}...")
         log.info(f"[{project_id}] File: {os.path.basename(downloaded_file)} | Size: {self._format_bytes(file_size)}")
         await self.set_progress(project_id, {"status": "uploading", "percent": 5.0, "total": self._format_bytes(file_size), "speed": None, "eta": "Uploading to cloud..."})
 
@@ -411,107 +440,68 @@ class YouTubeService:
             return f"{h}h {m}m"
 
         def _upload_to_s3():
-            """Upload file to S3 with multipart upload and progress tracking."""
-            try:
-                log.info(f"[{project_id}] Creating S3 bucket if needed...")
-                try:
-                    self._s3.create_bucket(self._bucket)
-                    log.info(f"[{project_id}] ✓ S3 bucket 'clipnera-videos' created")
-                except Exception as e:
-                    log.info(f"[{project_id}] S3 bucket 'clipnera-videos' already exists")
+            """Upload file to S3 using fast parallel multipart upload (10 workers, 50MB chunks)."""
+            import time as _time
 
-                log.info(f"[{project_id}] [UPLOAD_START] Starting multipart upload: {self._format_bytes(file_size)}")
+            log.info(f"[{project_id}] Using existing S3 bucket: {self._bucket}")
+            log.info(f"[{project_id}] [UPLOAD_START] Starting fast upload: {self._format_bytes(file_size)}")
 
-                chunk_size = 5 * 1024 * 1024  # 5MB chunks
-                chunks = (file_size + chunk_size - 1) // chunk_size
+            uploaded_bytes = 0
+            start_time = _time.monotonic()
+            last_log_time = start_time
+            last_log_bytes = 0
 
-                multipart_upload = self._s3._client.create_multipart_upload(
-                    Bucket=self._bucket,
-                    Key=s3_key,
-                    ContentType="video/mp4",
-                )
-                upload_id = multipart_upload['UploadId']
-                log.info(f"[{project_id}] Multipart upload initiated: upload_id={upload_id}, chunks={chunks}")
+            def _callback(bytes_amount: int) -> None:
+                nonlocal uploaded_bytes, last_log_time, last_log_bytes
+                uploaded_bytes += bytes_amount
+                now = _time.monotonic()
+                elapsed = now - start_time
+                overall_speed = uploaded_bytes / elapsed if elapsed > 0 else 0
+                remaining = max(0, file_size - uploaded_bytes)
+                eta_seconds = (remaining / overall_speed) if overall_speed > 0 else None
 
-                parts = []
-                uploaded_bytes = 0
-                start_time = time.monotonic()
-                last_log_time = start_time
-                last_log_bytes = 0
-                # Upload phase maps to overall 5% -> 75%
-                UPLOAD_PHASE_START = 5.0
-                UPLOAD_PHASE_END = 75.0
+                if (now - last_log_time) >= 0.5 or uploaded_bytes >= file_size:
+                    window_bytes = uploaded_bytes - last_log_bytes
+                    window_time = now - last_log_time if now > last_log_time else 0.001
+                    window_speed = window_bytes / window_time if window_time > 0 else 0
+                    last_log_time = now
+                    last_log_bytes = uploaded_bytes
 
-                with open(downloaded_file, "rb") as f:
-                    for part_num in range(1, chunks + 1):
-                        chunk_data = f.read(chunk_size)
-                        if not chunk_data:
-                            break
+                    upload_percent = (uploaded_bytes / file_size) * 100 if file_size else 0
+                    overall_percent = 5.0 + (upload_percent / 100.0) * 70.0
 
-                        part_response = self._s3._client.upload_part(
-                            Bucket=self._bucket,
-                            Key=s3_key,
-                            PartNumber=part_num,
-                            UploadId=upload_id,
-                            Body=chunk_data,
-                        )
+                    log.info(
+                        f"[{project_id}] Uploaded {self._format_bytes(uploaded_bytes)}/{self._format_bytes(file_size)} "
+                        f"({(uploaded_bytes / file_size * 100):.1f}%) | {self._format_bytes(int(window_speed))}/s"
+                    )
 
-                        parts.append({
-                            'PartNumber': part_num,
-                            'ETag': part_response['ETag'],
-                        })
+                    self.set_progress_sync(project_id, {
+                        "status": "uploading",
+                        "percent": round(overall_percent, 1),
+                        "upload_percent": round(upload_percent, 1),
+                        "total": self._format_bytes(file_size),
+                        "uploaded": self._format_bytes(uploaded_bytes),
+                        "speed": self._format_bytes(int(window_speed)) + "/s" if window_speed else None,
+                        "avg_speed": self._format_bytes(int(overall_speed)) + "/s" if overall_speed else None,
+                        "eta": _format_eta(eta_seconds) if eta_seconds is not None else "Calculating...",
+                        "elapsed": _format_eta(int(elapsed)),
+                        "phase": "uploading",
+                        "message": f"Uploading {self._format_bytes(uploaded_bytes)} of {self._format_bytes(file_size)}",
+                    })
 
-                        uploaded_bytes += len(chunk_data)
-                        now = time.monotonic()
-                        elapsed = now - start_time
-                        overall_speed = uploaded_bytes / elapsed if elapsed > 0 else 0
-                        remaining_bytes = max(0, file_size - uploaded_bytes)
-                        eta_seconds = (remaining_bytes / overall_speed) if overall_speed > 0 else None
+            self._s3.upload_file(
+                bucket=self._bucket,
+                key=s3_key,
+                file_path=downloaded_file,
+                content_type="video/mp4",
+                callback=_callback,
+            )
 
-                        # Throttle progress writes: every ~0.5s or last chunk
-                        if (now - last_log_time) >= 0.5 or part_num == chunks:
-                            window_bytes = uploaded_bytes - last_log_bytes
-                            window_time = now - last_log_time if now > last_log_time else 0.001
-                            window_speed = window_bytes / window_time if window_time > 0 else 0
-                            last_log_time = now
-                            last_log_bytes = uploaded_bytes
-
-                            upload_percent = (uploaded_bytes / file_size) * 100 if file_size else 0
-                            overall_percent = UPLOAD_PHASE_START + (upload_percent / 100.0) * (UPLOAD_PHASE_END - UPLOAD_PHASE_START)
-
-                            self.set_progress_sync(project_id, {
-                                "status": "uploading",
-                                "percent": round(overall_percent, 1),
-                                "upload_percent": round(upload_percent, 1),
-                                "total": self._format_bytes(file_size),
-                                "uploaded": self._format_bytes(uploaded_bytes),
-                                "speed": self._format_bytes(int(window_speed)) + "/s" if window_speed else None,
-                                "avg_speed": self._format_bytes(int(overall_speed)) + "/s" if overall_speed else None,
-                                "eta": _format_eta(eta_seconds) if eta_seconds is not None else "Calculating...",
-                                "elapsed": _format_eta(elapsed),
-                                "phase": "uploading",
-                                "message": f"Uploading {self._format_bytes(uploaded_bytes)} of {self._format_bytes(file_size)}",
-                            })
-
-                        log.info(f"[{project_id}] Uploaded chunk {part_num}/{chunks}: {self._format_bytes(len(chunk_data))} | Total: {self._format_bytes(uploaded_bytes)}/{self._format_bytes(file_size)} ({(uploaded_bytes/file_size*100):.1f}%)")
-
-                log.info(f"[{project_id}] Completing multipart upload with {len(parts)} parts...")
-                self._s3._client.complete_multipart_upload(
-                    Bucket=self._bucket,
-                    Key=s3_key,
-                    UploadId=upload_id,
-                    MultipartUpload={'Parts': parts},
-                )
-
-                log.info(f"[{project_id}] [UPLOAD_DONE] ✓ File successfully uploaded to S3 ({self._format_bytes(file_size)})")
-                return True
-
-            except Exception as e:
-                log.error(f"[{project_id}] [UPLOAD_ERROR] S3 upload failed: {type(e).__name__}: {str(e)}")
-                raise
+            log.info(f"[{project_id}] [UPLOAD_DONE] ✓ File successfully uploaded to S3 ({self._format_bytes(file_size)})")
+            return True
 
         # Run upload in executor to avoid blocking
-        log.info(f"[{project_id}] Queuing S3 upload task (multipart, 5MB chunks)...")
+        log.info(f"[{project_id}] Queuing S3 upload task (parallel, 50MB chunks)...")
         try:
             await loop.run_in_executor(None, _upload_to_s3)
         except Exception as e:

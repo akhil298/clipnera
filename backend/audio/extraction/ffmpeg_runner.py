@@ -155,26 +155,22 @@ class FFmpegRunner:
                 status_code=500,
             ) from exc
 
-    async def probe_duration(self, input_path: str) -> float:
+    def probe_duration(self, input_path: str) -> float:
         cmd = [
-            self.ffmpeg_binary,
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-i",
+            "ffprobe",
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
             input_path,
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True)
-        stderr = proc.stderr or ""
-        match = re.search(r"Duration: (\d+):(\d+):(\d+\.\d+)", stderr)
-        if match:
-            hours = int(match.group(1))
-            minutes = int(match.group(2))
-            seconds = float(match.group(3))
-            return hours * 3600 + minutes * 60 + seconds
-        return 0.0
+        stdout = proc.stdout or ""
+        try:
+            return float(stdout.strip())
+        except ValueError:
+            return 0.0
 
-    async def probe_streams(self, input_path: str) -> list[dict]:
+    def probe_streams(self, input_path: str) -> list[dict]:
         cmd = [
             self.ffmpeg_binary,
             "-hide_banner",
@@ -196,21 +192,17 @@ class FFmpegRunner:
         except json.JSONDecodeError:
             return []
 
-    async def get_output_duration(self, output_path: str) -> float:
+    def get_output_duration(self, output_path: str) -> float:
         cmd = [
-            self.ffmpeg_binary,
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-i",
+            "ffprobe",
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
             output_path,
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True)
-        stderr = proc.stderr or ""
-        match = re.search(r"Duration: (\d+):(\d+):(\d+\.\d+)", stderr)
-        if match:
-            hours = int(match.group(1))
-            minutes = int(match.group(2))
-            seconds = float(match.group(3))
-            return hours * 3600 + minutes * 60 + seconds
-        return 0.0
+        stdout = proc.stdout or ""
+        try:
+            return float(stdout.strip())
+        except ValueError:
+            return 0.0

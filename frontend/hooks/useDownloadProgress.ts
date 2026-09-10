@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, RefObject } from 'react';
 import { DownloadProgress } from '@/lib/types';
+import { getToken } from '@/lib/auth';
 
 export interface UseDownloadProgressResult {
   progress: DownloadProgress;
@@ -22,12 +23,11 @@ export function useDownloadProgress(): UseDownloadProgressResult {
 
   const pollProgress = async (projectId: string) => {
     try {
+      const token = getToken();
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'}/api/v1/clips/progress/${projectId}`, {
         headers: {
           'Content-Type': 'application/json',
-          ...(typeof window !== 'undefined' && localStorage.getItem('token')
-            ? { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       });
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { SAMPLE_PROJECTS } from '@/lib/data/mockProjects';
+import { LANDING_SAMPLE_PROJECTS } from '@/lib/data/mockProjects';
 import { ArrowRight, Clock } from 'lucide-react';
 
 interface SamplesSectionProps {
@@ -34,7 +34,7 @@ export function SamplesSection({ onLaunchApp, onOpenSample }: SamplesSectionProp
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {SAMPLE_PROJECTS.map((sample) => (
+          {LANDING_SAMPLE_PROJECTS.map((sample) => (
             <div
               key={sample.id}
               onClick={() => onOpenSample(sample.id)}

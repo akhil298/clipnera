@@ -36,13 +36,13 @@ class Anthropic(BaseAI):
     async def chat(self, messages: list[dict[str, Any]], **kwargs: Any) -> str:
         system, parsed_messages = self._parse_messages(messages)
         payload = self._build_payload(parsed_messages, system=system, stream=False, **kwargs)
-        response = await self._request("/messages", payload)
+        response = await self._request("messages", payload)
         return response["content"][0]["text"]
 
     async def stream_chat(self, messages: list[dict[str, Any]], **kwargs: Any) -> AsyncIterator[str]:
         system, parsed_messages = self._parse_messages(messages)
         payload = self._build_payload(parsed_messages, system=system, stream=True, **kwargs)
-        async with self._client.stream("POST", "/messages", json=payload) as response:
+        async with self._client.stream("POST", "messages", json=payload) as response:
             async for line in response.aiter_lines():
                 if line.startswith("data: "):
                     yield line[6:]

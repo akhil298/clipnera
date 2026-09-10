@@ -86,6 +86,8 @@ class WhisperXTranscriptionService(TranscriptionService):
         duration = TranscriptionChunker.estimate_duration(audio_path)
         chunks = TranscriptionChunker.estimate_chunks(duration, request.chunk_duration, request.chunk_overlap)
 
+        log.info(f"Transcription input: audio_path={audio_path}, duration={duration:.2f}s, chunks={len(chunks)}, model={request.model_size}")
+
         diarize_fn = None
         if request.diarization:
             diarize_fn = self._try_load_diarizer()
@@ -108,17 +110,33 @@ class WhisperXTranscriptionService(TranscriptionService):
                     chunk["end"] - chunk["start"],
                 )
 
+                if not os.path.exists(chunk_audio) or os.path.getsize(chunk_audio) == 0:
+                    log.warning(f"Chunk audio file missing or empty: {chunk_audio}")
+                    continue
+
                 segments_iter, info = await asyncio.to_thread(
                     model.transcribe,
                     chunk_audio,
                     language=language,
                     beam_size=5,
                     vad_filter=True,
-                    vad_parameters=dict(min_silence_duration_ms=500, speech_pad_ms=200),
+                    vad_parameters=dict(min_silence_duration_ms=1000, speech_pad_ms=400),
                     word_timestamps=True,
                 )
 
                 segments_list = list(segments_iter)
+
+                if not segments_list:
+                    log.warning(f"No segments found for chunk {idx} with VAD, retrying without VAD...")
+                    segments_iter, info = await asyncio.to_thread(
+                        model.transcribe,
+                        chunk_audio,
+                        language=language,
+                        beam_size=3,
+                        vad_filter=False,
+                        word_timestamps=True,
+                    )
+                    segments_list = list(segments_iter)
 
                 if not language and info.language:
                     language = info.language
@@ -143,6 +161,11 @@ class WhisperXTranscriptionService(TranscriptionService):
                         ]
                     chunk_segments.append(seg_data)
 
+                log.info(f"Chunk {idx} produced {len(chunk_segments)} segments")
+
+                if not language and info.language:
+                    language = info.language
+
                 if diarize_fn and chunk_segments:
                     try:
                         await asyncio.to_thread(diarize_fn, chunk_audio, chunk_segments)
@@ -161,6 +184,39 @@ class WhisperXTranscriptionService(TranscriptionService):
             except Exception as exc:
                 log.error(f"Chunk {idx} transcription failed: {exc}")
                 raise CustomException(message=f"Transcription failed at chunk {idx+1}: {exc}", code="TRANSCRIPTION_CHUNK_FAILED", status_code=500) from exc
+
+        if not all_segments and os.path.exists(audio_path):
+            log.warning("All chunks returned 0 segments, attempting full-file transcription without chunking...")
+            try:
+                segments_iter, info = await asyncio.to_thread(
+                    model.transcribe,
+                    audio_path,
+                    language=language,
+                    beam_size=3,
+                    vad_filter=False,
+                    word_timestamps=True,
+                )
+                for seg in segments_iter:
+                    all_segments.append({
+                        "start": seg.start,
+                        "end": seg.end,
+                        "text": seg.text.strip(),
+                        "confidence": round(getattr(seg, "avg_logprob", 0.0), 3),
+                        "words": [
+                            {
+                                "start": w.start,
+                                "end": w.end,
+                                "word": w.word,
+                                "probability": round(getattr(w, "probability", 1.0), 3),
+                            }
+                            for w in seg.words
+                        ] if request.word_timestamps and seg.words else None,
+                    })
+                if not language and info.language:
+                    language = info.language
+                log.info(f"Full-file fallback produced {len(all_segments)} segments")
+            except Exception as exc:
+                log.error(f"Full-file fallback transcription failed: {exc}")
 
         if progress_callback:
             progress_callback(90.0, "Writing outputs...")

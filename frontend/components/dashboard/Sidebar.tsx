@@ -89,18 +89,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const distributionNavItems = [
-    {
-      id: 'scheduler' as TabType,
-      label: 'Social Scheduler',
-      icon: CalendarDays,
-      description: 'TikTok, IG & Shorts auto-post',
-    },
-    {
-      id: 'analytics' as TabType,
-      label: 'Virality Analytics',
-      icon: BarChart3,
-      description: 'Retention curves & virality scores',
-    },
+    // {
+    //   id: 'scheduler' as TabType,
+    //   label: 'Social Scheduler',
+    //   icon: CalendarDays,
+    //   description: 'TikTok, IG & Shorts auto-post',
+    // },
+    // {
+    //   id: 'analytics' as TabType,
+    //   label: 'Virality Analytics',
+    //   icon: BarChart3,
+    //   description: 'Retention curves & virality scores',
+    // },
   ];
 
   const settingsNavItems = [
@@ -322,7 +322,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Distribution Group */}
         <div className="space-y-1">
-          {!isCollapsed && (
+          {distributionNavItems.length > 0 && !isCollapsed && (
             <div className="px-3 text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
               Distribution & Analytics
             </div>

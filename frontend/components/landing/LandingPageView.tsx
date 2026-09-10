@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import { AuthForm } from '@/components/auth/AuthForm';
-import { SAMPLE_PROJECTS } from '@/lib/data/mockProjects';
+import { LANDING_SAMPLE_PROJECTS } from '@/lib/data/mockProjects';
 import { Navbar } from './Navbar';
 import { HeroSection } from './HeroSection';
 import { BeforeAfterShowcase } from './BeforeAfterShowcase';
@@ -18,6 +18,7 @@ import { PricingSection } from './PricingSection';
 import { FaqSection } from './FaqSection';
 import { BottomCta } from './BottomCta';
 import { Footer } from './Footer';
+import { isAuthenticated } from '@/lib/auth';
 
 export default function LandingPageView() {
   const router = useRouter();
@@ -45,7 +46,7 @@ export default function LandingPageView() {
   ];
 
   useEffect(() => {
-    if (localStorage.getItem('token')) {
+    if (isAuthenticated()) {
       router.replace('/dashboard');
     }
   }, [router]);

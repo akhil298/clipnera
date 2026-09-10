@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Script from "next/script";
 
 export const metadata: Metadata = {
   title: "Clipnera — AI Video Editing & Shorts Creator",
@@ -16,8 +17,36 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Syne:wght@700;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
           rel="stylesheet"
         />
+        <Script
+          id="hydration-fix"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                const ATTRS = ['data-new-gr-c-s-check-loaded', 'data-gr-ext-installed'];
+                const removeAttrs = () => {
+                  document.querySelectorAll('[' + ATTRS.join('],[') + ']').forEach(el => {
+                    ATTRS.forEach(attr => el.removeAttribute(attr));
+                  });
+                };
+                let observer;
+                const startObserver = () => {
+                  if (observer) return;
+                  removeAttrs();
+                  observer = new MutationObserver(() => removeAttrs());
+                  observer.observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ATTRS });
+                };
+                if (document.readyState === 'loading') {
+                  document.addEventListener('DOMContentLoaded', startObserver);
+                } else {
+                  startObserver();
+                }
+              })();
+            `,
+          }}
+        />
       </head>
-      <body className="bg-neutral-950 text-neutral-100 font-['Plus_Jakarta_Sans',sans-serif] selection:bg-amber-400 selection:text-neutral-950 overflow-x-hidden antialiased">
+      <body className="bg-neutral-950 text-neutral-100 font-['Plus_Jakarta_Sans',sans-serif] selection:bg-amber-400 selection:text-neutral-950 overflow-x-hidden antialiased" suppressHydrationWarning={true}>
         {children}
       </body>
     </html>

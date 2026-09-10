@@ -15,12 +15,11 @@ import { BrandKitView } from './BrandKitView';
 import { SettingsView } from './SettingsView';
 import { NotificationsDrawer } from './NotificationsDrawer';
 import { AuthModal } from './AuthModal';
+import { PlanSelectionModal } from './PlanSelectionModal';
+import { PaymentModal } from './PaymentModal';
 import { VideoProject, ViralClip, TabType, UserProfile, Workspace, AppNotification, PipelineStep } from '@/lib/types';
-import {
-  SAMPLE_PROJECTS,
-  NOTIFICATIONS_MOCK,
-} from '@/lib/data/mockProjects';
-import { userApi, workspaceApi, authApi, pipelineApi } from '@/lib/api';
+import { userApi, workspaceApi, authApi, pipelineApi, subscriptionApi } from '@/lib/api';
+import { isAuthenticated, clearAuth } from '@/lib/auth';
 
 export default function DashboardApp() {
   const router = useRouter();
@@ -29,8 +28,7 @@ export default function DashboardApp() {
   const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
+    if (!isAuthenticated()) {
       router.replace('/');
     } else {
       setIsAuthed(true);
@@ -39,6 +37,7 @@ export default function DashboardApp() {
 
   // Navigation State
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [activeSettingsTab, setActiveSettingsTab] = useState<'account' | 'billing' | 'social' | 'team'>('account');
 
   // Sidebar Layout State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -49,21 +48,26 @@ export default function DashboardApp() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
 
   // Notifications State
-  const [notifications, setNotifications] = useState<AppNotification[]>(NOTIFICATIONS_MOCK);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
   // Auth / Workspace Modal
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
   // Projects State
-  const [projects, setProjects] = useState<VideoProject[]>(SAMPLE_PROJECTS);
-  const [activeProject, setActiveProject] = useState<VideoProject>(SAMPLE_PROJECTS[0]);
-  const [selectedClip, setSelectedClip] = useState<ViralClip>(SAMPLE_PROJECTS[0].clips[0]);
+  const [projects, setProjects] = useState<VideoProject[]>([]);
+  const [activeProject, setActiveProject] = useState<VideoProject | undefined>(undefined);
+  const [selectedClip, setSelectedClip] = useState<ViralClip | undefined>(undefined);
   const [pipelineSteps, setPipelineSteps] = useState<PipelineStep[]>([]);
   const [isAudioReverted, setIsAudioReverted] = useState(false);
 
   // Upload modal state
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+
+  // Plan & Payment modals state
+  const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<{ id: string; name: string; slug: string; credit_minutes: number; price_monthly: number; currency: string } | null>(null);
 
   // Fetch real user profile and workspaces on mount
   useEffect(() => {
@@ -98,8 +102,11 @@ export default function DashboardApp() {
             membersCount: ws.member_count,
           }))
         );
-      } catch {
-        // keep previous state on failure
+      } catch (err) {
+        if (err instanceof Error && err.message.startsWith('Unauthorized:')) {
+          clearAuth();
+          router.replace('/');
+        }
       }
     }
 
@@ -195,7 +202,10 @@ export default function DashboardApp() {
       prev.map((p) => (p.id === projectId ? { ...p, folderName: newName, title: newName } : p))
     );
     if (activeProject?.id === projectId) {
-      setActiveProject((prev) => ({ ...prev, folderName: newName, title: newName }));
+      setActiveProject((prev) => {
+        if (!prev) return prev;
+        return { ...prev, folderName: newName, title: newName };
+      });
     }
   };
 
@@ -223,13 +233,16 @@ export default function DashboardApp() {
   // Update clip after studio edit
   const handleUpdateClip = (updatedClip: ViralClip) => {
     setSelectedClip(updatedClip);
-    setActiveProject((prev) => ({
-      ...prev,
-      clips: prev.clips.map((c) => (c.id === updatedClip.id ? updatedClip : c)),
-    }));
+    setActiveProject((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        clips: prev.clips.map((c) => (c.id === updatedClip.id ? updatedClip : c)),
+      };
+    });
     setProjects((prev) =>
       prev.map((p) =>
-        p.id === activeProject.id
+        p.id === activeProject?.id
           ? { ...p, clips: p.clips.map((c) => (c.id === updatedClip.id ? updatedClip : c)) }
           : p
       )
@@ -239,6 +252,11 @@ export default function DashboardApp() {
   // Switch active workspace
   const handleSelectWorkspace = (workspaceId: string) => {
     setCurrentUser((prev) => prev ? { ...prev, activeWorkspaceId: workspaceId } : prev);
+  };
+
+  const navigateToBilling = () => {
+    setActiveTab('settings');
+    setActiveSettingsTab('billing');
   };
 
   // Sign out and return to the auth landing page
@@ -259,6 +277,53 @@ export default function DashboardApp() {
   };
   const handleClearNotifications = () => {
     setNotifications([]);
+  };
+
+  const handlePaymentComplete = async () => {
+    setIsPaymentModalOpen(false);
+    setIsPlanModalOpen(false);
+    setSelectedPlan(null);
+    let cancelled = false;
+    try {
+      const profile = await userApi.getMe();
+      if (!cancelled) {
+        const mappedUser: UserProfile = {
+          id: profile.id,
+          name: profile.name,
+          email: profile.email,
+          avatarUrl: profile.avatar_url || '',
+          avatarInitials: profile.avatar_initials,
+          plan: profile.plan as UserProfile['plan'],
+          aiCreditsMinutesRemaining: profile.ai_credits_minutes_remaining,
+          aiCreditsTotal: profile.ai_credits_total,
+          activeWorkspaceId: profile.active_workspace_id || currentUser?.activeWorkspaceId || '',
+          providers: profile.providers,
+        };
+        setCurrentUser(mappedUser);
+      }
+    } catch {
+      // ignore
+    }
+    return () => { cancelled = true; };
+  };
+
+  const handleActivateFree = async () => {
+    setIsPlanModalOpen(false);
+    let cancelled = false;
+    try {
+      await subscriptionApi.activateFreePlan();
+      if (!cancelled) {
+        await handlePaymentComplete();
+      }
+    } catch {
+      // ignore
+    }
+    return () => { cancelled = true; };
+  };
+
+  const handlePlanSelected = (plan: { id: string; name: string; slug: string; credit_minutes: number; price_monthly: number; currency: string }) => {
+    setSelectedPlan(plan);
+    setIsPaymentModalOpen(true);
   };
 
 
@@ -303,10 +368,11 @@ export default function DashboardApp() {
           activeProject={activeProject}
           selectedClip={selectedClip}
           unreadNotificationsCount={unreadCount}
-          onOpenNotifications={() => setIsNotificationsOpen(true)}
-          onOpenAuthModal={() => setIsAuthModalOpen(true)}
-          onNavigateTab={setActiveTab}
-        />
+        onOpenNotifications={() => setIsNotificationsOpen(true)}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onNavigateTab={setActiveTab}
+        onUpgradePlan={navigateToBilling}
+      />
 
         {/* Main View Area */}
         <main className="flex-1 min-h-0 w-full p-4 sm:p-6 lg:p-8">
@@ -322,6 +388,7 @@ export default function DashboardApp() {
               onSelectClipForEdit={handleSelectClipForEdit}
               onScheduleClip={handleScheduleClip}
               onNavigateTab={setActiveTab}
+              onUpgradePlan={navigateToBilling}
             />
           )}
 
@@ -343,7 +410,7 @@ export default function DashboardApp() {
           {/* TAB 3: AI CLIPS GENERATOR / FOLDER DETAIL VIEW */}
           {activeTab === 'generator' && (
             <ClipGeneratorView
-              project={activeProject || projects[0] || SAMPLE_PROJECTS[0]}
+              project={activeProject || projects[0]}
               onSelectClipForEdit={handleSelectClipForEdit}
               onScheduleClip={handleScheduleClip}
               onOpenUpload={() => setIsUploadOpen(true)}
@@ -375,15 +442,15 @@ export default function DashboardApp() {
           {/* TAB 4: FULL VIDEO EDITOR STUDIO */}
           {activeTab === 'editor' && (
             <VideoEditorStudio
-              clip={selectedClip || activeProject?.clips?.[0] || projects[0]?.clips?.[0] || SAMPLE_PROJECTS[0].clips[0]}
+              clip={selectedClip || activeProject?.clips?.[0] || projects[0]?.clips?.[0]}
               onUpdateClip={handleUpdateClip}
               onBackToGenerator={() => setActiveTab('generator')}
               onScheduleClip={handleScheduleClip}
             />
           )}
 
-          {/* TAB 5: POST TIMING & AI SCHEDULER */}
-          {activeTab === 'scheduler' && (
+          {/* TAB 5: POST TIMING & AI SCHEDULER (HIDDEN — preserved for later) */}
+          {false && activeTab === 'scheduler' && (
             <SocialSchedulerView
               clips={activeProject?.clips || projects[0]?.clips || []}
               selectedClip={selectedClip || activeProject?.clips?.[0] || projects[0]?.clips?.[0]}
@@ -403,6 +470,8 @@ export default function DashboardApp() {
               user={currentUser}
               workspaces={workspaces}
               onUpdateUser={setCurrentUser}
+              activeSettingsTab={activeSettingsTab}
+              onSettingsTabChange={setActiveSettingsTab}
             />
           )}
         </main>
@@ -432,6 +501,28 @@ export default function DashboardApp() {
         isOpen={isUploadOpen}
         onClose={() => setIsUploadOpen(false)}
         onProjectCreated={handleProjectCreated}
+      />
+
+      {/* Plan Selection Modal */}
+      <PlanSelectionModal
+        isOpen={isPlanModalOpen}
+        onClose={() => {
+          setIsPlanModalOpen(false);
+          setSelectedPlan(null);
+        }}
+        onPlanSelected={handlePlanSelected}
+        onActivateFree={handleActivateFree}
+      />
+
+      {/* Payment Modal */}
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedPlan(null);
+        }}
+        plan={selectedPlan}
+        onPaymentComplete={handlePaymentComplete}
       />
     </div>
   );

@@ -14,6 +14,9 @@ from core.config import get_settings
 from core.exceptions import CustomException
 from core.logging_config import get_logger
 from core.security import create_access_token, verify_password
+from subscription.model import PlanSlug
+from subscription.repository import PlanRepository, UserSubscriptionRepository, PaymentTransactionRepository, CreditLedgerRepository
+from subscription.service import SubscriptionService
 
 settings = get_settings()
 log = get_logger(__name__)
@@ -30,6 +33,19 @@ class AuthService:
         self._repo = repository
         self._oauth = oauth_service
 
+    async def _activate_free_plan(self, user_id: str) -> None:
+        from core.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            plan_repo = PlanRepository(session)
+            sub_repo = UserSubscriptionRepository(session)
+            tx_repo = PaymentTransactionRepository(session)
+            ledger_repo = CreditLedgerRepository(session)
+            service = SubscriptionService(plan_repo, sub_repo, tx_repo, ledger_repo)
+            try:
+                await service.activate_free_plan(user_id)
+            except Exception as exc:
+                log.error(f"Failed to activate free plan for user {user_id}: {exc}")
+
     async def register(self, data: RegisterRequest) -> UserResponse:
         existing = await self._repo.get_user_by_email(data.email)
         if existing:
@@ -42,6 +58,7 @@ class AuthService:
 
         user = await self._repo.create_user_with_password(data)
         log.info(f"User registered: user_id={user.id} email={user.email}")
+        asyncio.create_task(self._activate_free_plan(user.id))
         return self._to_user_response(user)
 
     async def login(self, email: str, password: str) -> TokenResponse:
@@ -123,6 +140,7 @@ class AuthService:
             provider_user_id=provider_user_id,
         )
         log.info(f"OAuth login: new user created user_id={user.id}")
+        asyncio.create_task(self._activate_free_plan(user.id))
         return self._create_token(user.id)
 
     async def forgot_password(self, email: str) -> None:

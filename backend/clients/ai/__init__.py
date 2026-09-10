@@ -3,6 +3,7 @@ from .openai import OpenAI
 from .anthropic import Anthropic
 from .xai import XAI
 from .gemini import Gemini
+from .groq import Groq
 
 Registry = dict[str, type[BaseAI]]
 
@@ -11,6 +12,7 @@ _REGISTRY: Registry = {
     "anthropic": Anthropic,
     "xai": XAI,
     "gemini": Gemini,
+    "groq": Groq,
 }
 
 
@@ -28,5 +30,6 @@ __all__ = [
     "Anthropic",
     "XAI",
     "Gemini",
+    "Groq",
     "get_ai",
 ]

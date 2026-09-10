@@ -24,6 +24,8 @@ from auth import model as auth_model
 from clip import model as clip_model
 from workspace import model as workspace_model
 from pipeline import model as pipeline_model
+from brand_kit import model as brand_kit_model
+from subscription import model as subscription_model
 
 target_metadata = Base.metadata
 
@@ -56,7 +58,7 @@ def run_migrations_online() -> None:
         import concurrent.futures
 
         with concurrent.futures.ThreadPoolExecutor() as pool:
-            future = pool.submit(asyncio.run, do_run_migrations_async())
+            future = pool.submit(asyncio.run, do_run_migrations_async)
             future.result()
     except RuntimeError:
         asyncio.run(do_run_migrations_async())

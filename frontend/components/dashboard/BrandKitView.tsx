@@ -1,5 +1,5 @@
 ﻿"use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Palette,
   Sparkles,
@@ -14,17 +14,116 @@ import {
   Smile,
   MessageSquare
 } from 'lucide-react';
-import { BrandKit, CaptionPreset } from '@/lib/types';
-import { BRAND_KIT_MOCK, CAPTION_PRESETS } from '@/lib/data/mockProjects';
+import { BrandKit } from '@/lib/types';
+import { brandKitApi } from '@/lib/api';
+import { CAPTION_PRESETS } from '@/lib/data/captionPresets';
+
+const DEFAULT_BRAND_KIT: BrandKit = {
+  id: '',
+  brandName: '',
+  logoUrl: '',
+  logoPosition: 'top_right',
+  logoOpacity: 0.85,
+  logoSize: 28,
+  primaryColor: '#f59e0b',
+  secondaryColor: '#f43f5e',
+  preferredFont: 'Syne',
+  defaultPreset: 'hormozi',
+  autoEmojis: true,
+  outroCtaText: '',
+  createdAt: '',
+  updatedAt: '',
+};
 
 export const BrandKitView: React.FC = () => {
-  const [brandKit, setBrandKit] = useState<BrandKit>(BRAND_KIT_MOCK);
+  const [brandKit, setBrandKit] = useState<BrandKit>(DEFAULT_BRAND_KIT);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSave = () => {
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
+  const fetchBrandKit = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await brandKitApi.getMe();
+      setBrandKit({
+        id: data.id,
+        brandName: data.brandName,
+        logoUrl: data.logoUrl || '',
+        logoPosition: data.logoPosition as BrandKit['logoPosition'],
+        logoOpacity: data.logoOpacity / 100,
+        logoSize: data.logoSize,
+        primaryColor: data.primaryColor,
+        secondaryColor: data.secondaryColor,
+        preferredFont: data.preferredFont,
+        defaultPreset: data.defaultPreset as BrandKit['defaultPreset'],
+        autoEmojis: data.autoEmojis,
+        outroCtaText: data.outroCtaText,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load brand kit');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBrandKit();
+  }, [fetchBrandKit]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const payload = {
+        brand_name: brandKit.brandName,
+        logo_url: brandKit.logoUrl || undefined,
+        logo_position: brandKit.logoPosition,
+        logo_opacity: Math.round(brandKit.logoOpacity * 100),
+        logo_size: brandKit.logoSize,
+        primary_color: brandKit.primaryColor,
+        secondary_color: brandKit.secondaryColor,
+        preferred_font: brandKit.preferredFont,
+        default_preset: brandKit.defaultPreset,
+        auto_emojis: brandKit.autoEmojis,
+        outro_cta_text: brandKit.outroCtaText,
+      };
+      const data = await brandKitApi.create(payload);
+      setBrandKit({
+        id: data.id,
+        brandName: data.brandName,
+        logoUrl: data.logoUrl || '',
+        logoPosition: data.logoPosition as BrandKit['logoPosition'],
+        logoOpacity: data.logoOpacity / 100,
+        logoSize: data.logoSize,
+        primaryColor: data.primaryColor,
+        secondaryColor: data.secondaryColor,
+        preferredFont: data.preferredFont,
+        defaultPreset: data.defaultPreset as BrandKit['defaultPreset'],
+        autoEmojis: data.autoEmojis,
+        outroCtaText: data.outroCtaText,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+      });
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 2500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save brand kit');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="text-xs text-neutral-400">Loading brand kit...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -49,12 +148,19 @@ export const BrandKitView: React.FC = () => {
 
         <button
           onClick={handleSave}
-          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-neutral-950 font-bold text-xs shadow-lg shadow-rose-500/25 active:scale-95 transition-all flex items-center gap-2 shrink-0"
+          disabled={saving}
+          className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-neutral-950 font-bold text-xs shadow-lg shadow-rose-500/25 active:scale-95 transition-all flex items-center gap-2 shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {savedSuccess ? <Check className="w-4 h-4 text-neutral-950" /> : <Save className="w-4 h-4" />}
-          <span>{savedSuccess ? 'Brand Kit Saved!' : 'Save Brand Settings'}</span>
+          <span>{saving ? 'Saving...' : savedSuccess ? 'Brand Kit Saved!' : 'Save Brand Settings'}</span>
         </button>
       </div>
+
+      {error && (
+        <div className="rounded-xl bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-400">
+          {error}
+        </div>
+      )}
 
       {/* Main 2-Column Split: Controls (Left) + 9:16 Live Phone Preview (Right) */}
       <div className="grid lg:grid-cols-12 gap-6 items-start">
@@ -85,7 +191,7 @@ export const BrandKitView: React.FC = () => {
                   onChange={(e) =>
                     setBrandKit({
                       ...brandKit,
-                      logoPosition: e.target.value as any,
+                      logoPosition: e.target.value as BrandKit['logoPosition'],
                     })
                   }
                   className="w-full p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-white focus:outline-none focus:border-amber-400 font-semibold cursor-pointer"
@@ -327,7 +433,7 @@ export const BrandKitView: React.FC = () => {
                     style={{ width: `${brandKit.logoSize - 8}px`, height: `${brandKit.logoSize - 8}px` }}
                   />
                   <span className="text-[10px] font-black text-white font-['Syne',sans-serif]">
-                    {brandKit.brandName}
+                    {brandKit.brandName || 'Your Brand'}
                   </span>
                 </div>
               </div>
@@ -361,7 +467,7 @@ export const BrandKitView: React.FC = () => {
               {/* Outro CTA Bottom Banner */}
               <div className="relative z-20 text-center pb-2">
                 <span className="text-[10px] font-semibold text-neutral-300 bg-neutral-900/90 px-3 py-1 rounded-full border border-neutral-700 inline-block shadow-md">
-                  {brandKit.outroCtaText}
+                  {brandKit.outroCtaText || 'Follow @yourbrand for daily viral breakdowns!'}
                 </span>
               </div>
             </div>

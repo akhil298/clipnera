@@ -71,7 +71,7 @@ class AudioExtractionService:
         codec = request.codec.value if request.codec else CODEC_MAP.get(request.output_format, AudioCodec.PCM.value)
         channels = request.channels.value
 
-        source_duration = await self._runner.probe_duration(input_path)
+        source_duration = self._runner.probe_duration(input_path)
         estimated_bytes = int(source_duration * request.sample_rate * 2 * (1 if channels == "mono" else 2) * 1.2)
         self._check_disk_space(output_path, estimated_bytes)
 
@@ -116,7 +116,7 @@ class AudioExtractionService:
         if not os.path.exists(output_path):
             raise CustomException(message="Output file was not created", code="OUTPUT_MISSING", status_code=500)
 
-        output_duration = await self._runner.get_output_duration(output_path)
+        output_duration = self._runner.get_output_duration(output_path)
         sync_warning = ManifestGenerator.validate_sync(source_duration, output_duration)
         if sync_warning:
             warnings.append(sync_warning)

@@ -2,6 +2,11 @@
 import React, { useState } from 'react';
 import { RotateCcw, Play, Pause, Volume2, VolumeX, Headphones, Check } from 'lucide-react';
 
+const pseudoRandom = (i: number) => {
+  const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
+};
+
 interface AudioBeforeAfterProps {
   beforeUrl?: string;
   afterUrl?: string;
@@ -65,7 +70,7 @@ export const AudioBeforeAfter: React.FC<AudioBeforeAfterProps> = ({
                 key={i}
                 className="w-1 bg-neutral-600 rounded-full"
                 style={{
-                  height: `${20 + Math.sin(i * 0.5) * 15 + Math.random() * 10}%`,
+                  height: `${20 + Math.sin(i * 0.5) * 15 + pseudoRandom(i) * 10}%`,
                 }}
               />
             ))}
@@ -97,7 +102,7 @@ export const AudioBeforeAfter: React.FC<AudioBeforeAfterProps> = ({
                 key={i}
                 className={`w-1 rounded-full ${!isReverted && afterUrl ? 'bg-amber-500/60' : 'bg-neutral-600'}`}
                 style={{
-                  height: `${15 + Math.sin(i * 0.7) * 12 + Math.random() * 8}%`,
+                  height: `${15 + Math.sin(i * 0.7) * 12 + pseudoRandom(i + 100) * 8}%`,
                 }}
               />
             ))}

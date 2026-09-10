@@ -1,5 +1,5 @@
 ﻿"use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   Scissors,
@@ -27,8 +27,7 @@ import {
   FolderOpen
 } from 'lucide-react';
 import { VideoProject, ViralClip, UserProfile, TabType, Workspace } from '@/lib/types';
-import { SAMPLE_PROJECTS } from '@/lib/data/mockProjects';
-import { ReactGrabTool } from './ReactGrabTool';
+import { clipApi, pipelineApi, analyticsApi } from '@/lib/api';
 
 interface DashboardHomeViewProps {
   user: UserProfile;
@@ -40,6 +39,7 @@ interface DashboardHomeViewProps {
   onScheduleClip: (clip: ViralClip) => void;
   onOpenUpload: () => void;
   onNavigateTab: (tab: TabType) => void;
+  onUpgradePlan?: () => void;
 }
 
 export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
@@ -52,11 +52,39 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   onScheduleClip,
   onOpenUpload,
   onNavigateTab,
+  onUpgradePlan,
 }) => {
   const [quickUrl, setQuickUrl] = useState('');
   const [selectedGenreFilter, setSelectedGenreFilter] = useState<string>('all');
+  const [isQuickProcessing, setIsQuickProcessing] = useState(false);
+  const [quickStatus, setQuickStatus] = useState('');
+  const [stats, setStats] = useState<{
+    total_viral_shorts: number;
+    manual_hours_saved: number;
+    avg_virality_score: number;
+    best_post_window: string;
+  } | null>(null);
 
-  const currentProject = activeProject || projects[0] || SAMPLE_PROJECTS[0];
+  useEffect(() => {
+    let cancelled = false;
+    analyticsApi.getDashboardStats().then((data) => {
+      if (!cancelled) {
+        setStats(data);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setStats({
+          total_viral_shorts: 0,
+          manual_hours_saved: 0,
+          avg_virality_score: 0,
+          best_post_window: '7:00 PM',
+        });
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const currentProject = activeProject || projects[0];
   const activeWorkspace = workspaces.find((ws) => ws.id === user.activeWorkspaceId) || workspaces[0];
   const workspaceName = activeWorkspace?.name || user.name || 'My Workspace';
 
@@ -72,14 +100,106 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
       ? projects
       : projects.filter((p) => p.genre.toLowerCase().includes(selectedGenreFilter.toLowerCase()));
 
-  const handleQuickIngest = (e: React.FormEvent) => {
+  const handleQuickIngest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!quickUrl.trim()) return;
-    onOpenUpload();
+    if (!quickUrl.trim() || isQuickProcessing) return;
+
+    setIsQuickProcessing(true);
+    setQuickStatus('Fetching video metadata...');
+
+    try {
+      const downloadResult: any = await clipApi.downloadYoutube(quickUrl);
+      const projectId = downloadResult?.id;
+
+      if (!projectId) {
+        setQuickStatus('Failed to create project.');
+        setIsQuickProcessing(false);
+        return;
+      }
+
+      setQuickStatus('Downloading video...');
+
+      const newProject: VideoProject = {
+        id: projectId,
+        title: downloadResult.title || 'Untitled Project',
+        folderName: downloadResult.title || 'Untitled Project',
+        folderCategory: 'YouTube Ingest',
+        folderColor: 'amber',
+        sourceUrl: quickUrl,
+        sourceChannel: downloadResult.channel_title || 'YouTube',
+        description: `Project for ${downloadResult.title}`,
+        tags: ['Viral', 'Shorts', 'AI'],
+        genre: 'YouTube',
+        duration: 0,
+        sourceType: 'youtube_url',
+        videoUrl: downloadResult.presigned_url || '',
+        posterUrl: downloadResult.thumbnail_url || '',
+        uploadedAt: downloadResult.created_at || new Date().toISOString(),
+        syncStatus: 'syncing',
+        offlineAvailable: false,
+        clips: [],
+        transcript: [],
+        processingProgress: 0,
+        processingStatus: 'processing',
+      };
+
+      onSelectProject(newProject);
+
+      const unsubDownload = clipApi.subscribeDownloadProgress(
+        projectId,
+        (progress) => {
+          if (progress.status === 'done') {
+            setQuickStatus('Download complete! Starting AI pipeline...');
+          } else if (progress.status === 'error') {
+            setQuickStatus(`Download failed: ${progress.message || 'Unknown error'}`);
+            setIsQuickProcessing(false);
+          }
+        },
+        () => {
+          setQuickStatus('Download stream error, continuing...');
+        }
+      );
+
+      const steps = ['audio_extraction', 'ai_noise_cancellation', 'transcription', 'clip_generation'];
+      await pipelineApi.start(projectId, steps, {
+        aiDenoise: true,
+        noiseSuppressionStrength: 90,
+        deReverb: true,
+        vocalClarityEq: true,
+        humFilter: true,
+      });
+
+      setQuickStatus('AI pipeline running...');
+      onNavigateTab('generator');
+
+      const unsubPipeline = pipelineApi.subscribeProgress(
+        projectId,
+        (progress) => {
+          if (progress.status === 'completed') {
+            setQuickStatus('Pipeline complete! Clips ready.');
+            setIsQuickProcessing(false);
+            unsubPipeline();
+            unsubDownload?.();
+          } else if (progress.status === 'error') {
+            setQuickStatus(`Pipeline error: ${progress.message}`);
+            setIsQuickProcessing(false);
+            unsubPipeline();
+            unsubDownload?.();
+          }
+        },
+        () => {
+          setQuickStatus('Pipeline stream error');
+          setIsQuickProcessing(false);
+        }
+      );
+    } catch (err) {
+      setQuickStatus('Failed to start processing. Please try again.');
+      setIsQuickProcessing(false);
+    }
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-8 animate-in fade-in duration-300 pb-8">
       {/* 1. HERO BANNER: Welcome, AI Credit Quota & Ingest Hub */}
       <div className="relative overflow-hidden rounded-2xl bg-neutral-900/90 border border-neutral-800 p-6 lg:p-8 shadow-xl">
         {/* Glow ambient background accents */}
@@ -96,6 +216,11 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
               <span className="text-xs text-neutral-400">
                 Workspace: <strong className="text-neutral-200">{workspaceName}</strong>
               </span>
+              {user.plan === 'free' && (
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-neutral-800 text-neutral-300 border border-neutral-700 flex items-center gap-1.5">
+                  Free Plan
+                </span>
+              )}
             </div>
 
             <h1 className="text-2xl lg:text-3xl font-extrabold text-white tracking-tight">
@@ -120,12 +245,40 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
               </div>
               <button
                 type="submit"
-                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs shadow-md shadow-amber-500/15 active:scale-95 transition-all flex items-center justify-center gap-1.5 shrink-0"
+                disabled={isQuickProcessing}
+                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs shadow-md shadow-amber-500/15 active:scale-95 transition-all flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Sparkles className="w-4 h-4" />
-                <span>Get Clips</span>
+                {isQuickProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-neutral-950/30 border-t-neutral-950 rounded-full animate-spin" />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Get Clips</span>
+                  </>
+                )}
               </button>
             </form>
+            {quickStatus && (
+              <p className="text-[11px] text-neutral-400 mt-1.5">{quickStatus}</p>
+            )}
+
+            {/* Free Plan Upgrade CTA */}
+            {user.plan === 'free' && (
+              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
+                <p className="text-xs text-amber-300">
+                  You're on the Free plan. Upgrade to get more credits and unlock all features.
+                </p>
+                <button
+                  onClick={onUpgradePlan || (() => onNavigateTab('settings'))}
+                  className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs shadow-md shadow-amber-500/15 active:scale-95 transition-all whitespace-nowrap"
+                >
+                  Upgrade Now
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Right Column: Key Metrics & AI Render Quota Card */}
@@ -158,50 +311,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
                 </button>
               </div>
             </div>
-
-            {/* Live Studio Quick Jump */}
-            <div className="p-4 rounded-xl bg-neutral-950/90 border border-neutral-800 flex items-center justify-between">
-              <div>
-                <span className="text-[10px] text-amber-400 uppercase font-bold tracking-wider block">
-                  Active Project Loaded
-                </span>
-                <h4 className="text-xs font-bold text-white line-clamp-1 mt-0.5">
-                  {currentProject?.title || 'No Project Selected'}
-                </h4>
-                <p className="text-[11px] text-neutral-400 font-mono">
-                  {currentProject?.clips?.length || 0} Viral Shorts Ready
-                </p>
-              </div>
-              <button
-                onClick={() => onNavigateTab('generator')}
-                className="p-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-amber-400 border border-neutral-700 shadow-sm transition-all active:scale-95"
-                title="Open Clip Generator"
-              >
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </div>
           </div>
-        </div>
-      </div>
-
-      {/* Quick Video Grab Tool */}
-      <div className="space-y-3.5">
-        <div className="flex items-center gap-2">
-          <Youtube className="w-4 h-4 text-red-400" />
-          <h2 className="text-base lg:text-lg font-bold text-white">
-            Quick Video Grab Tool
-          </h2>
-        </div>
-        <p className="text-xs text-neutral-500 -mt-1">
-          Paste any YouTube URL to grab and download a video with selectable quality. The grabbed video will appear as a new project folder.
-        </p>
-        <div className="rounded-2xl bg-neutral-900/50 border border-neutral-800 p-1">
-          <ReactGrabTool
-            onVideoGrabbed={() => {
-              onOpenUpload();
-            }}
-            maxW="max-w-2xl"
-          />
         </div>
       </div>
 
@@ -212,7 +322,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
             <span className="text-xs font-medium">Total Viral Shorts</span>
             <Film className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="text-2xl font-bold text-white font-mono">{totalClipsCount}</div>
+          <div className="text-2xl font-bold text-white font-mono">{stats?.total_viral_shorts ?? totalClipsCount}</div>
           <p className="text-[11px] text-neutral-400 font-medium">Ready to distribute</p>
         </div>
 
@@ -221,7 +331,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
             <span className="text-xs font-medium">Manual Hours Saved</span>
             <Clock className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="text-2xl font-bold text-white font-mono">38.5 hrs</div>
+          <div className="text-2xl font-bold text-white font-mono">{stats ? `${stats.manual_hours_saved} hrs` : '-- hrs'}</div>
           <p className="text-[11px] text-neutral-400 font-medium">10x faster workflow</p>
         </div>
 
@@ -230,7 +340,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
             <span className="text-xs font-medium">Avg Virality Score</span>
             <Flame className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="text-2xl font-bold text-white font-mono">{avgVirality} / 100</div>
+          <div className="text-2xl font-bold text-white font-mono">{stats ? `${stats.avg_virality_score} / 100` : '-- / 100'}</div>
           <p className="text-[11px] text-amber-400 font-medium">Top 2% AI benchmark</p>
         </div>
 
@@ -239,106 +349,116 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
             <span className="text-xs font-medium">Best Post Window</span>
             <CalendarDays className="w-4 h-4 text-amber-400" />
           </div>
-          <div className="text-2xl font-bold text-white font-mono">7:15 PM</div>
+          <div className="text-2xl font-bold text-white font-mono">{stats?.best_post_window ?? '--:--'}</div>
           <p className="text-[11px] text-neutral-400 font-medium">TikTok & IG Peak</p>
         </div>
       </div>
 
       {/* 3. FEATURED VIRAL SHORTS */}
-      <div className="space-y-3.5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base lg:text-lg font-bold text-white">
-              Top AI-Ranked Viral Clips
-            </h2>
-            <p className="text-xs text-neutral-400">
-              Highest hook score clips extracted from your current long video projects
-            </p>
+      {currentProject && currentProject.clips.length > 0 ? (
+        <div className="space-y-3.5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base lg:text-lg font-bold text-white">
+                Top AI-Ranked Viral Clips
+              </h2>
+              <p className="text-xs text-neutral-400">
+                Highest hook score clips extracted from your current long video projects
+              </p>
+            </div>
+
+            <button
+              onClick={() => onNavigateTab('generator')}
+              className="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
+            >
+              <span>View All ({currentProject?.clips?.length || 0})</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
 
-          <button
-            onClick={() => onNavigateTab('generator')}
-            className="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1"
-          >
-            <span>View All ({currentProject?.clips?.length || 0})</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {(currentProject?.clips || []).slice(0, 4).map((clip) => (
+              <div
+                key={clip.id}
+                className="group rounded-xl bg-neutral-900 border border-neutral-800 overflow-hidden hover:border-neutral-700 transition-all shadow-md flex flex-col"
+              >
+                {/* Top Video Preview / Thumbnail */}
+                <div className="relative aspect-[9/16] bg-neutral-950 overflow-hidden max-h-56">
+                  {(clip.posterUrl || currentProject?.posterUrl) ? (
+                    <img
+                      src={clip.posterUrl || currentProject!.posterUrl!}
+                      alt={clip.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-neutral-800 flex items-center justify-center">
+                      <Flame className="w-8 h-8 text-neutral-700" />
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-transparent to-black/30" />
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {(currentProject?.clips || []).slice(0, 4).map((clip) => (
-            <div
-              key={clip.id}
-              className="group rounded-xl bg-neutral-900 border border-neutral-800 overflow-hidden hover:border-neutral-700 transition-all shadow-md flex flex-col"
-            >
-              {/* Top Video Preview / Thumbnail */}
-              <div className="relative aspect-[9/16] bg-neutral-950 overflow-hidden max-h-56">
-                {(clip.posterUrl || currentProject?.posterUrl) ? (
-                  <img
-                    src={clip.posterUrl || currentProject!.posterUrl!}
-                    alt={clip.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-neutral-800 flex items-center justify-center">
-                    <Flame className="w-8 h-8 text-neutral-700" />
+                  {/* Virality Badge */}
+                  <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-neutral-950/85 backdrop-blur-md border border-amber-500/40 text-amber-300 text-xs font-mono font-bold flex items-center gap-1">
+                    <Flame className="w-3 h-3 text-amber-400" />
+                    <span>{clip.viralityScore}/100</span>
                   </div>
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-transparent to-black/30" />
 
-                {/* Virality Badge */}
-                <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg bg-neutral-950/85 backdrop-blur-md border border-amber-500/40 text-amber-300 text-xs font-mono font-bold flex items-center gap-1">
-                  <Flame className="w-3 h-3 text-amber-400" />
-                  <span>{clip.viralityScore}/100</span>
+                  {/* Duration Badge */}
+                  <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-lg bg-black/70 backdrop-blur-md text-[10px] font-mono text-neutral-300">
+                    {clip.duration}s
+                  </div>
+
+                  {/* Subtitle Style Overlay Preview */}
+                  <div className="absolute bottom-3 left-3 right-3 text-center">
+                    <span className="inline-block px-2.5 py-1 rounded-md bg-black/85 backdrop-blur-sm text-[11px] font-black text-amber-400 uppercase tracking-tight shadow-md">
+                      "{clip.hook ? clip.hook.slice(0, 45) : ''}..."
+                    </span>
+                  </div>
                 </div>
 
-                {/* Duration Badge */}
-                <div className="absolute top-2.5 right-2.5 px-2 py-0.5 rounded-lg bg-black/70 backdrop-blur-md text-[10px] font-mono text-neutral-300">
-                  {clip.duration}s
-                </div>
+                {/* Clip Details */}
+                <div className="p-3.5 flex-1 flex flex-col justify-between space-y-3">
+                  <div>
+                    <h3 className="text-xs font-bold text-white line-clamp-2 group-hover:text-amber-300 transition-colors">
+                      {clip.title}
+                    </h3>
+                    <p className="text-[11px] text-neutral-400 line-clamp-2 mt-1">
+                      {clip.rationale}
+                    </p>
+                  </div>
 
-                {/* Subtitle Style Overlay Preview */}
-                <div className="absolute bottom-3 left-3 right-3 text-center">
-                  <span className="inline-block px-2.5 py-1 rounded-md bg-black/85 backdrop-blur-sm text-[11px] font-black text-amber-400 uppercase tracking-tight shadow-md">
-                    "{clip.hook ? clip.hook.slice(0, 45) : ''}..."
-                  </span>
-                </div>
-              </div>
+                  {/* Action Buttons */}
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-neutral-800/80">
+                    <button
+                      onClick={() => onSelectClipForEdit(clip)}
+                      className="py-2 px-2.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white font-medium text-xs transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <Scissors className="w-3.5 h-3.5 text-neutral-300" />
+                      <span>Edit</span>
+                    </button>
 
-              {/* Clip Details */}
-              <div className="p-3.5 flex-1 flex flex-col justify-between space-y-3">
-                <div>
-                  <h3 className="text-xs font-bold text-white line-clamp-2 group-hover:text-amber-300 transition-colors">
-                    {clip.title}
-                  </h3>
-                  <p className="text-[11px] text-neutral-400 line-clamp-2 mt-1">
-                    {clip.rationale}
-                  </p>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-neutral-800/80">
-                  <button
-                    onClick={() => onSelectClipForEdit(clip)}
-                    className="py-2 px-2.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white font-medium text-xs transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <Scissors className="w-3.5 h-3.5 text-neutral-300" />
-                    <span>Edit</span>
-                  </button>
-
-                  <button
-                    onClick={() => onScheduleClip(clip)}
-                    className="py-2 px-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/25 font-medium text-xs transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <CalendarDays className="w-3.5 h-3.5" />
-                    <span>Schedule</span>
-                  </button>
+                    <button
+                      onClick={() => onScheduleClip(clip)}
+                      className="py-2 px-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/25 font-medium text-xs transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <CalendarDays className="w-3.5 h-3.5" />
+                      <span>Schedule</span>
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="p-8 text-center rounded-2xl bg-neutral-900/40 border border-neutral-800/80 space-y-3">
+          <Film className="w-10 h-10 text-neutral-600 mx-auto" />
+          <h3 className="text-sm font-bold text-neutral-300">No Clips Yet</h3>
+          <p className="text-xs text-neutral-500 max-w-sm mx-auto">
+            Paste a YouTube link above or upload a long video to generate your first AI-ranked viral clips.
+          </p>
+        </div>
+      )}
 
       {/* 4. ALL PROJECTS & REPURPOSING PIPELINE */}
       <div className="space-y-3.5">
@@ -375,65 +495,81 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
         </div>
 
         {/* Projects Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredProjects.map((p) => {
-            const isSelected = p.id === currentProject?.id;
-            const folderDisplayName = p.folderName || p.title;
+        {filteredProjects.length === 0 ? (
+          <div className="p-10 text-center rounded-2xl bg-neutral-900/40 border border-neutral-800/80 space-y-3">
+            <FolderOpen className="w-10 h-10 text-neutral-600 mx-auto" />
+            <h3 className="text-sm font-bold text-neutral-300">No Project Folders Yet</h3>
+            <p className="text-xs text-neutral-500 max-w-sm mx-auto">
+              Paste a YouTube link above or click "New Video Folder" to create your first project and start generating viral clips.
+            </p>
+            <button
+              onClick={onOpenUpload}
+              className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/15 active:scale-95 transition-all"
+            >
+              Create Your First Project
+            </button>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredProjects.map((p) => {
+              const isSelected = p.id === currentProject?.id;
+              const folderDisplayName = p.folderName || p.title;
 
-            return (
-              <div
-                key={p.id}
-                onClick={() => {
-                  onSelectProject(p);
-                  onNavigateTab('generator');
-                }}
-                className={`cursor-pointer rounded-xl p-4 border transition-all relative overflow-hidden flex flex-col justify-between group ${
-                  isSelected
-                    ? 'bg-neutral-900 border-amber-500/60 ring-1 ring-amber-500/30 shadow-lg'
-                    : 'bg-neutral-900/70 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900'
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-neutral-800 text-amber-400 flex items-center gap-1">
-                      <Folder className="w-3 h-3" />
-                      <span>{p.folderCategory || p.genre}</span>
-                    </span>
-                    <span className="text-[11px] font-mono text-neutral-400">
-                      {Math.floor(p.duration / 60)}m {p.duration % 60}s
-                    </span>
-                  </div>
-
-                  <h3 className="text-sm font-bold text-white mt-2.5 line-clamp-1 group-hover:text-amber-300 transition-colors">
-                    {folderDisplayName}
-                  </h3>
-
-                  <p className="text-xs text-neutral-400 mt-1 line-clamp-2">
-                    {p.clips[0]?.hook ? `"${p.clips[0].hook}"` : (p.description || 'AI virality analysis completed with multi-speaker detection.')}
-                  </p>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-neutral-800 flex items-center justify-between text-xs">
-                  <span className="font-mono text-amber-400 font-semibold flex items-center gap-1">
-                    <span>{p.clips.length} Short Videos</span>
-                  </span>
-
-                  <div className="flex items-center gap-2">
-                    {isSelected && (
-                      <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Active
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => {
+                    onSelectProject(p);
+                    onNavigateTab('generator');
+                  }}
+                  className={`cursor-pointer rounded-xl p-4 border transition-all relative overflow-hidden flex flex-col justify-between group ${
+                    isSelected
+                      ? 'bg-neutral-900 border-amber-500/60 ring-1 ring-amber-500/30 shadow-lg'
+                      : 'bg-neutral-900/70 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-neutral-800 text-amber-400 flex items-center gap-1">
+                        <Folder className="w-3 h-3" />
+                        <span>{p.folderCategory || p.genre}</span>
                       </span>
-                    )}
-                    <span className="text-neutral-300 group-hover:text-white font-medium flex items-center gap-1 text-[11px]">
-                      <span>Open Folder</span>
-                      <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                      <span className="text-[11px] font-mono text-neutral-400">
+                        {Math.floor(p.duration / 60)}m {p.duration % 60}s
+                      </span>
+                    </div>
+
+                    <h3 className="text-sm font-bold text-white mt-2.5 line-clamp-1 group-hover:text-amber-300 transition-colors">
+                      {folderDisplayName}
+                    </h3>
+
+                    <p className="text-xs text-neutral-400 mt-1 line-clamp-2">
+                      {p.clips[0]?.hook ? `"${p.clips[0].hook}"` : (p.description || 'AI virality analysis completed with multi-speaker detection.')}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-neutral-800 flex items-center justify-between text-xs">
+                    <span className="font-mono text-amber-400 font-semibold flex items-center gap-1">
+                      <span>{p.clips.length} Short Videos</span>
                     </span>
+
+                    <div className="flex items-center gap-2">
+                      {isSelected && (
+                        <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Active
+                        </span>
+                      )}
+                      <span className="text-neutral-300 group-hover:text-white font-medium flex items-center gap-1 text-[11px]">
+                        <span>Open Folder</span>
+                        <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* 5. FAST SHORTCUTS FOOTER */}
@@ -451,6 +587,8 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
           </div>
         </div>
 
+        {/* Social Scheduler - hidden for now, kept for later use */}
+        {/* 
         <div
           onClick={() => onNavigateTab('scheduler')}
           className="cursor-pointer p-4 rounded-xl bg-neutral-900/60 border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900 transition-all flex items-center gap-3.5"
@@ -463,6 +601,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
             <p className="text-[11px] text-neutral-400">TikTok, IG Reels & YouTube Shorts queue</p>
           </div>
         </div>
+        */}
 
         <div
           onClick={() => onNavigateTab('analytics')}

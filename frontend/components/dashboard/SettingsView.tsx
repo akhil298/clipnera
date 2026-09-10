@@ -19,12 +19,16 @@ import {
 } from 'lucide-react';
 import { UserProfile, Workspace } from '@/lib/types';
 import { Avatar } from './Avatar';
-import { workspaceApi } from '@/lib/api';
+import { workspaceApi, subscriptionApi } from '@/lib/api';
+import { PlanSelectionModal } from './PlanSelectionModal';
+import { PaymentModal } from './PaymentModal';
 
 interface SettingsViewProps {
   user: UserProfile;
   workspaces: Workspace[];
   onUpdateUser: (user: UserProfile) => void;
+  activeSettingsTab: 'account' | 'billing' | 'social' | 'team';
+  onSettingsTabChange: (tab: 'account' | 'billing' | 'social' | 'team') => void;
 }
 
 interface TeamMember {
@@ -39,8 +43,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   user,
   workspaces,
   onUpdateUser,
+  activeSettingsTab,
+  onSettingsTabChange,
 }) => {
-  const [activeSettingsTab, setActiveSettingsTab] = useState<'account' | 'billing' | 'social' | 'team'>('account');
+  const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<{ id: string; name: string; slug: string; credit_minutes: number; price_monthly: number; currency: string } | null>(null);
+  const [subscription, setSubscription] = useState<{ plan: string; credit_minutes_total: number; credit_minutes_remaining: number; subscription_status: string; current_period_end: string | null } | null>(null);
+  const [loadingSub, setLoadingSub] = useState(false);
+
+  const loadSubscription = async () => {
+    setLoadingSub(true);
+    try {
+      const data = await subscriptionApi.getMySubscription();
+      setSubscription(data);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingSub(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSettingsTab === 'billing') {
+      loadSubscription();
+    }
+  }, [activeSettingsTab]);
 
   // Social account connection state
   const [connectedSocials, setConnectedSocials] = useState([
@@ -199,7 +227,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveSettingsTab(tab.id)}
+                onClick={() => onSettingsTabChange(tab.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   isSelected
                     ? 'bg-neutral-800 text-white shadow-sm ring-1 ring-white/10'
@@ -269,15 +297,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="lg:col-span-7 p-6 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-5 shadow-xl">
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                  Active Subscription
-                </span>
-                <h3 className="text-lg font-bold text-white mt-1">Clipnera Pro Plan</h3>
-                <p className="text-xs text-neutral-400">$39 / month (billed annually)</p>
+                {loadingSub ? (
+                  <div className="animate-pulse space-y-2">
+                    <div className="h-5 bg-neutral-800 rounded w-32"></div>
+                    <div className="h-4 bg-neutral-800 rounded w-48"></div>
+                  </div>
+                ) : (
+                  <>
+                    <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                      {subscription?.subscription_status === 'active' ? 'Active Subscription' : 'No Active Subscription'}
+                    </span>
+                    <h3 className="text-lg font-bold text-white mt-1">
+                      {subscription?.plan ? subscription.plan.toUpperCase() : 'FREE'} Plan
+                    </h3>
+                    <p className="text-xs text-neutral-400">
+                      {subscription?.current_period_end ? `Renews ${new Date(subscription.current_period_end).toLocaleDateString()}` : 'No active subscription'}
+                    </p>
+                  </>
+                )}
               </div>
               <div className="text-right">
-                <span className="text-xs text-neutral-400 block">Next Renewal:</span>
-                <span className="text-xs font-mono font-bold text-white">Oct 14, 2026</span>
+                {!loadingSub && subscription && (
+                  <span className="text-xs text-neutral-400 block">Credits Remaining</span>
+                )}
+                {!loadingSub && subscription && (
+                  <span className="text-xs font-mono font-bold text-white">
+                    {subscription.credit_minutes_remaining} / {subscription.credit_minutes_total} mins
+                  </span>
+                )}
               </div>
             </div>
 
@@ -289,13 +336,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <span>AI Rendering Quota</span>
                 </span>
                 <span className="font-mono text-amber-400 font-bold">
-                  {user.aiCreditsMinutesRemaining} of {user.aiCreditsTotal} mins
+                  {subscription?.credit_minutes_remaining || 0} of {subscription?.credit_minutes_total || 0} mins
                 </span>
               </div>
               <div className="h-2.5 w-full bg-neutral-900 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-amber-500 to-rose-500"
-                  style={{ width: `${(user.aiCreditsMinutesRemaining / user.aiCreditsTotal) * 100}%` }}
+                  style={{ width: `${subscription && subscription.credit_minutes_total > 0 ? ((subscription.credit_minutes_remaining / subscription.credit_minutes_total) * 100) : 0}%` }}
                 />
               </div>
               <p className="text-[11px] text-neutral-500">
@@ -303,24 +350,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </p>
             </div>
 
-            {/* Plan Perks */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider">Plan Features Included:</h4>
-              <div className="grid sm:grid-cols-2 gap-2 text-xs text-neutral-300">
-                <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-400" /> 4K 60FPS Master Exports
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-400" /> Unlimited AI Hook Generations
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-400" /> Multi-Channel Social Auto-Post
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-400" /> Custom Watermark & Brand Kits
-                </div>
-              </div>
-            </div>
+            {/* Upgrade Button for Free / Low Credits */}
+            {(user.plan === 'free' || (subscription && subscription.credit_minutes_remaining < 10)) && (
+              <button
+                onClick={() => setIsPlanModalOpen(true)}
+                className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-sm shadow-md shadow-amber-500/15 active:scale-95 transition-all"
+              >
+                Upgrade Plan
+              </button>
+            )}
           </div>
 
           <div className="lg:col-span-5 p-6 rounded-2xl bg-gradient-to-br from-amber-950/30 via-neutral-900 to-neutral-950 border border-amber-500/30 space-y-4 shadow-xl">
@@ -334,9 +372,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 
             <div className="space-y-2">
               {[
-                { mins: '+100 Mins', price: '$15', desc: '~25 full long video projects' },
-                { mins: '+300 Mins', price: '$39', desc: '~80 full long video projects' },
-                { mins: '+1,000 Mins', price: '$99', desc: 'Agency bulk rendering volume' },
+                { mins: '+100 Mins', price: '$15', desc: '~25 full long video projects', amount: 100 },
+                { mins: '+300 Mins', price: '$39', desc: '~80 full long video projects', amount: 300 },
+                { mins: '+1,000 Mins', price: '$99', desc: 'Agency bulk rendering volume', amount: 1000 },
               ].map((pack, idx) => (
                 <div
                   key={idx}
@@ -347,13 +385,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <p className="text-[10px] text-neutral-400">{pack.desc}</p>
                   </div>
                   <button
-                    onClick={() => {
-                      onUpdateUser({
-                        ...user,
-                        aiCreditsMinutesRemaining: user.aiCreditsMinutesRemaining + 100,
-                        aiCreditsTotal: user.aiCreditsTotal + 100,
-                      });
-                      alert(`Refilled ${pack.mins} successfully!`);
+                    onClick={async () => {
+                      try {
+                        await subscriptionApi.topupCredits(pack.amount, `Credit top-up: ${pack.mins}`);
+                        await loadSubscription();
+                        alert(`Refilled ${pack.mins} successfully!`);
+                      } catch {
+                        alert('Failed to refill credits. Please try again.');
+                      }
                     }}
                     className="px-3 py-1.5 rounded-lg bg-amber-500 text-neutral-950 font-bold text-xs hover:bg-amber-400 transition-colors"
                   >
@@ -561,6 +600,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
       )}
+
+      <PlanSelectionModal
+        isOpen={isPlanModalOpen}
+        onClose={() => setIsPlanModalOpen(false)}
+        onPlanSelected={(plan) => {
+          setIsPlanModalOpen(false);
+          setSelectedPlan(plan);
+          setIsPaymentModalOpen(true);
+        }}
+        onActivateFree={async () => {
+          setIsPlanModalOpen(false);
+          try {
+            await subscriptionApi.activateFreePlan();
+            await loadSubscription();
+          } catch {
+            // ignore
+          }
+        }}
+      />
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedPlan(null);
+        }}
+        plan={selectedPlan}
+        onPaymentComplete={() => {
+          setIsPaymentModalOpen(false);
+          setSelectedPlan(null);
+          loadSubscription();
+        }}
+      />
     </div>
   );
 };

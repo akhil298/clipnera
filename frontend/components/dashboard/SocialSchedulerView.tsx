@@ -20,7 +20,6 @@ import {
   Smartphone
 } from 'lucide-react';
 import { ViralClip, ScheduledPost } from '@/lib/types';
-import { SCHEDULED_POSTS_MOCK, SAMPLE_PROJECTS } from '@/lib/data/mockProjects';
 import confetti from 'canvas-confetti';
 
 interface SocialSchedulerViewProps {
@@ -30,13 +29,13 @@ interface SocialSchedulerViewProps {
 }
 
 export const SocialSchedulerView: React.FC<SocialSchedulerViewProps> = ({
-  clips = SAMPLE_PROJECTS[0].clips,
+  clips = [],
   selectedClip,
   onSelectClip,
 }) => {
-  const fallbackClip = selectedClip || clips?.[0] || SAMPLE_PROJECTS[0].clips[0];
-  const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>(SCHEDULED_POSTS_MOCK);
-  const [activeClip, setActiveClip] = useState<ViralClip>(fallbackClip);
+  const fallbackClip = selectedClip || clips?.[0];
+  const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
+  const [activeClip, setActiveClip] = useState<ViralClip | undefined>(fallbackClip);
   const [selectedTimezone, setSelectedTimezone] = useState('America/New_York (EST)');
   const [selectedPlatform, setSelectedPlatform] = useState<'tiktok' | 'instagram' | 'youtube' | 'x'>('tiktok');
   const [isGeneratingHooks, setIsGeneratingHooks] = useState(false);
@@ -130,12 +129,11 @@ export const SocialSchedulerView: React.FC<SocialSchedulerViewProps> = ({
 
   const handleGenerateHooksWithGemini = async () => {
     setIsGeneratingHooks(true);
-    // Static mode: generate sample hooks locally (backend wiring pending)
     await new Promise((r) => setTimeout(r, 700));
     setGeneratedHooks([
       {
         type: 'Curiosity Loop',
-        text: `${activeClip.hook} Here's what nobody tells you...`,
+        text: activeClip?.hook ? `${activeClip.hook} Here's what nobody tells you...` : 'Why most creators get this completely wrong...',
         strength: 97,
         predictedRetention: '86%',
       },
@@ -156,6 +154,7 @@ export const SocialSchedulerView: React.FC<SocialSchedulerViewProps> = ({
   };
 
   const handleSchedulePost = () => {
+    if (!activeClip) return;
     const timing = PLATFORM_TIMINGS.find((p) => p.platform === selectedPlatform);
     const newPost: ScheduledPost = {
       id: `sch-${Date.now()}`,

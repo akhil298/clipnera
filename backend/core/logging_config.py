@@ -1,39 +1,23 @@
 import logging
-import logging.handlers
-import sys
-from pathlib import Path
-
-from core.config import get_settings
-
-settings = get_settings()
-
-LOG_DIR = Path("logs")
-LOG_DIR.mkdir(exist_ok=True)
+import logging.config
 
 
 def setup_logging() -> None:
     """Configure logging — show app logs, suppress verbose library logs."""
-    log_level = logging.INFO
+    root_logger = logging.getLogger()
+    if getattr(root_logger, "_clipnera_configured", False):
+        return
+    root_logger._clipnera_configured = True
 
-    file_handler = logging.handlers.RotatingFileHandler(
-        LOG_DIR / "clipnera.log",
-        maxBytes=10 * 1024 * 1024,
-        backupCount=5,
-        encoding="utf-8",
-    )
-    file_handler.setFormatter(
-        logging.Formatter("%(asctime)s | %(levelname)-8s | %(message)s")
-    )
+    for handler in list(root_logger.handlers):
+        root_logger.removeHandler(handler)
 
-    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler = logging.StreamHandler()
     console_handler.setFormatter(
         logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
     )
-
-    root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
-    root_logger.addHandler(file_handler)
     root_logger.addHandler(console_handler)
+    root_logger.setLevel(logging.INFO)
 
     for logger_name in [
         "sqlalchemy",
@@ -48,6 +32,13 @@ def setup_logging() -> None:
         "urllib3",
     ]:
         logging.getLogger(logger_name).setLevel(logging.ERROR)
+
+    for uvicorn_logger_name in ["uvicorn", "uvicorn.access", "uvicorn.error"]:
+        uvicorn_logger = logging.getLogger(uvicorn_logger_name)
+        uvicorn_logger.propagate = True
+        uvicorn_logger.setLevel(logging.INFO)
+        for handler in list(uvicorn_logger.handlers):
+            uvicorn_logger.removeHandler(handler)
 
 
 def get_logger(name: str) -> logging.Logger:

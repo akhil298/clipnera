@@ -15,7 +15,8 @@ import {
   Palette,
   Settings,
   LayoutDashboard,
-  Folder
+  Folder,
+  Crown
 } from 'lucide-react';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
 import { Avatar } from './Avatar';
@@ -32,6 +33,7 @@ interface HeaderProps {
   onOpenNotifications: () => void;
   onOpenAuthModal: () => void;
   onNavigateTab: (tab: TabType) => void;
+  onUpgradePlan?: () => void;
 }
 
 const TAB_TITLES: Record<TabType, { title: string; icon: React.FC<{ className?: string }> }> = {
@@ -57,6 +59,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenNotifications,
   onOpenAuthModal,
   onNavigateTab,
+  onUpgradePlan,
 }) => {
   const activeWorkspace = workspaces.find((w) => w.id === user.activeWorkspaceId) || workspaces[0];
   const CurrentIcon = TAB_TITLES[activeTab]?.icon || LayoutDashboard;
@@ -142,6 +145,17 @@ export const Header: React.FC<HeaderProps> = ({
           <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
           <span className="font-semibold">{user.aiCreditsMinutesRemaining}m</span>
         </button>
+
+        {/* Upgrade Plan Button for Free Users */}
+        {user.plan === 'free' && (
+          <button
+            onClick={onUpgradePlan || (() => onNavigateTab('settings'))}
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/15 active:scale-95 transition-all"
+          >
+            <Crown className="w-3.5 h-3.5" />
+            <span>Upgrade Plan</span>
+          </button>
+        )}
 
         {/* Notifications Bell */}
         <button

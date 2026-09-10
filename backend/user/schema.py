@@ -11,8 +11,8 @@ class UserProfileResponse(BaseModel):
     email: str
     avatar_url: Optional[str] = None
     avatar_initials: str = ""
-    plan: str = "pro"
-    ai_credits_minutes_remaining: int = 500
-    ai_credits_total: int = 1000
+    plan: str = "free"
+    ai_credits_minutes_remaining: int = 0
+    ai_credits_total: int = 0
     active_workspace_id: Optional[str] = None
     providers: list[str] = []

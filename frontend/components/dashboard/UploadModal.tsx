@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { VideoProject, CaptionPreset, AudioEnhancementConfig, DownloadProgress } from '@/lib/types';
 import { CAPTION_PRESETS } from '@/lib/data/mockProjects';
-import { analyzeVideoSource, generateClipsForProject } from '@/lib/utils/urlParser';
+import { analyzeVideoSource } from '@/lib/utils/urlParser';
 import { clipApi, pipelineApi, YouTubeMetadataResponse } from '@/lib/api';
 
 interface UploadModalProps {
@@ -221,20 +221,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
     const meta = analyzeVideoSource(urlInput, { title: ytMeta?.title, channelTitle: ytMeta?.channel_title });
     const newProjectId = `proj-${Date.now()}`;
-    const generatedClips = generateClipsForProject(meta, newProjectId).map((clip) => ({
-      ...clip,
-      captionConfig: {
-        ...clip.captionConfig,
-        preset: captionPreset,
-      },
-      autoBrollKeywords: autoBroll ? clip.autoBrollKeywords : [],
-      soundEffects: autoSfx ? clip.soundEffects : [],
-      autoZoom: {
-        ...clip.autoZoom,
-        enabled: autoZoom,
-      },
-      audioEnhancement: audioEnhanceConfig,
-    }));
 
     const newProject: VideoProject = {
       id: newProjectId,
@@ -244,7 +230,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       folderColor: meta.folderColor || 'amber',
       sourceUrl: urlInput,
       sourceChannel: meta.sourceChannel || 'YouTube',
-      description: `Project folder for ${customFolderName}. Contains ${generatedClips.length} AI-extracted viral shorts with Studio Denoise active.`,
+      description: `Project folder for ${customFolderName}. AI clips will be generated after processing.`,
       tags: meta.tags || ['Viral', 'Shorts', 'AI', 'Denoised'],
       genre: meta.genre,
       duration: meta.duration,
@@ -254,7 +240,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       uploadedAt: new Date().toISOString(),
       syncStatus: downloadProgress?.status === 'done' ? 'synced' : 'syncing',
       offlineAvailable: downloadProgress?.status === 'done',
-      clips: generatedClips,
+      clips: [],
       transcript: [],
       audioEnhancement: audioEnhanceConfig,
       processingProgress: downloadProgress?.status === 'done' ? 100 : downloadProgress?.status === 'error' ? 0 : Math.round(downloadProgress?.percent ?? 0),

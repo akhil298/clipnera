@@ -41,11 +41,10 @@ export function AuthForm({ onAuthenticated, initialMode }: AuthFormProps) {
 
     try {
       if (mode === 'login') {
-        const data = await (await import('@/lib/api')).authApi.login({
+        await (await import('@/lib/api')).authApi.login({
           email: form.email,
           password: form.password,
         });
-        localStorage.setItem('token', data.access_token);
         onAuthenticated();
       } else if (mode === 'register') {
         await (await import('@/lib/api')).authApi.register({

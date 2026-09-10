@@ -45,7 +45,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.UniqueConstraint("email", name="uq_users_email"),
-        postgresql_if_not_exists=True,
+
     )
     op.create_index("ix_users_email", "users", ["email"], unique=True)
 
@@ -60,7 +60,7 @@ def upgrade() -> None:
         sa.Column("refresh_token", sa.Text, nullable=True),
         sa.Column("token_expires_at", sa.DateTime(), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
-        postgresql_if_not_exists=True,
+
     )
     op.create_index("ix_user_accounts_user_id", "user_accounts", ["user_id"])
 
@@ -74,7 +74,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
         sa.UniqueConstraint("slug", name="uq_workspaces_slug"),
-        postgresql_if_not_exists=True,
+
     )
     op.create_index("ix_workspaces_slug", "workspaces", ["slug"], unique=True)
     op.create_index("ix_workspaces_owner_id", "workspaces", ["owner_id"])
@@ -89,7 +89,7 @@ def upgrade() -> None:
         sa.Column("status", member_status, nullable=False),
         sa.Column("invited_by", sa.String(36), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
-        postgresql_if_not_exists=True,
+
     )
     op.create_index("ix_workspace_members_workspace_id", "workspace_members", ["workspace_id"])
     op.create_index("ix_workspace_members_user_id", "workspace_members", ["user_id"])
@@ -113,7 +113,7 @@ def upgrade() -> None:
         sa.Column("audio_reverted", sa.Boolean(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
-        postgresql_if_not_exists=True,
+
     )
     op.create_index("ix_video_projects_user_id", "video_projects", ["user_id"])
 
@@ -127,7 +127,7 @@ def upgrade() -> None:
         sa.Column("step_artifacts", sa.Text, nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
         sa.Column("updated_at", sa.DateTime(), nullable=False),
-        postgresql_if_not_exists=True,
+
     )
     op.create_index("ix_pipeline_states_project_id", "pipeline_states", ["project_id"])
 
@@ -143,7 +143,7 @@ def upgrade() -> None:
         sa.Column("message", sa.Text, nullable=True),
         sa.Column("artifact_path", sa.String(500), nullable=True),
         sa.Column("created_at", sa.DateTime(), nullable=False),
-        postgresql_if_not_exists=True,
+
     )
     op.create_index("ix_pipeline_step_logs_pipeline_id", "pipeline_step_logs", ["pipeline_id"])
 

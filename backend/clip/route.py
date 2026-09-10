@@ -83,3 +83,43 @@ async def get_download_progress(project_id: str, user: CurrentUserDep):
 
     progress = await YouTubeService.get_progress(project_id)
     return progress or {"status": "idle", "percent": 0.0, "total": None, "speed": None, "eta": None}
+
+
+@clip.get("/projects")
+async def list_projects(user: CurrentUserDep):
+    from clip.repository import ClipRepository
+    from clip_generation.repository import ClipRepository as ClipGenRepository
+    from core.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as session:
+        clip_repo = ClipRepository(session)
+        clip_gen_repo = ClipGenRepository(session)
+        projects = await clip_repo.list_projects(user["user_id"])
+
+        result = []
+        for p in projects:
+            clips = await clip_gen_repo.list_clips(p.id, user["user_id"])
+            result.append({
+                "id": p.id,
+                "title": p.title,
+                "source_type": p.source_type,
+                "source_url": p.source_url,
+                "status": p.status.value if hasattr(p.status, "value") else p.status,
+                "duration_seconds": p.duration_seconds or 0,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+                "clips": [
+                    {
+                        "id": c.id,
+                        "title": c.title,
+                        "score": c.score,
+                        "duration_seconds": c.duration_seconds,
+                        "start_time": c.start_time,
+                        "end_time": c.end_time,
+                        "content_category": c.content_category,
+                        "status": c.status,
+                        "created_at": c.created_at.isoformat() if c.created_at else None,
+                    }
+                    for c in clips
+                ]
+            })
+        return {"projects": result, "total": len(result)}

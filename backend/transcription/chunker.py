@@ -81,11 +81,6 @@ class TranscriptionChunker:
 
     @staticmethod
     def _estimate_duration(input_path: str) -> float:
-        import asyncio
         from audio.extraction.ffmpeg_runner import FFmpegRunner
         runner = FFmpegRunner()
-        try:
-            loop = asyncio.get_event_loop()
-            return loop.run_until_complete(runner.probe_duration(input_path))
-        except RuntimeError:
-            return asyncio.run(runner.probe_duration(input_path))
+        return runner.probe_duration(input_path)

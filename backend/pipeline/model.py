@@ -25,10 +25,28 @@ class PipelineStepType(str, enum.Enum):
     AUDIO_EXTRACTION = "audio_extraction"
     AI_NOISE_CANCELLATION = "ai_noise_cancellation"
     TRANSCRIPTION = "transcription"
+    TOPIC_RESEARCH = "topic_research"
+    VISUAL_ANALYSIS = "visual_analysis"
+    CONTENT_CLASSIFICATION = "content_classification"
+    HIGHLIGHT_DETECTION = "highlight_detection"
+    SCORING = "scoring"
+    METADATA_GENERATION = "metadata_generation"
     CLIP_GENERATION = "clip_generation"
-    CAPTION_STYLING = "caption_styling"
-    AUTO_REFAME = "auto_reframe"
-    EXPORT = "export"
+    SUBTITLE_STYLING = "subtitle_styling"
+    BURN_IN_EXPORT = "burn_in_export"
+
+    _aliases: dict[str, PipelineStepType] = {}
+
+    @classmethod
+    def resolve(cls, value: str) -> PipelineStepType:
+        alias_map = {
+            "caption_styling": cls.SUBTITLE_STYLING,
+            "auto_reframe": cls.CLIP_GENERATION,
+            "export": cls.BURN_IN_EXPORT,
+        }
+        if value in alias_map:
+            return alias_map[value]
+        return cls(value)
 
 
 class PipelineState(Base):
@@ -39,7 +57,7 @@ class PipelineState(Base):
         String(36), ForeignKey("video_projects.id", ondelete="CASCADE"), nullable=False, index=True
     )
     current_step: Mapped[str] = mapped_column(
-        Enum(PipelineStepType, values_callable=lambda obj: [e.value for e in obj]),
+        Enum(PipelineStepType, values_callable=lambda obj: [e.value for e in obj], name="pipeline_step_type"),
         default=PipelineStepType.DOWNLOAD,
         nullable=False,
     )
@@ -60,7 +78,7 @@ class PipelineStepLog(Base):
         String(36), ForeignKey("pipeline_states.id", ondelete="CASCADE"), nullable=False, index=True
     )
     step: Mapped[str] = mapped_column(
-        Enum(PipelineStepType, values_callable=lambda obj: [e.value for e in obj]),
+        Enum(PipelineStepType, values_callable=lambda obj: [e.value for e in obj], name="pipeline_step_type"),
         nullable=False,
     )
     status: Mapped[str] = mapped_column(

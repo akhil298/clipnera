@@ -1,7 +1,7 @@
 'use client';
 
 import { Play, Flame, ArrowRight, ChevronDown, Headphones } from 'lucide-react';
-import { SAMPLE_PROJECTS } from '@/lib/data/mockProjects';
+import { LANDING_SAMPLE_PROJECTS } from '@/lib/data/mockProjects';
 import { getCaptionStyle } from '@/lib/utils/captionStyles';
 
 interface BeforeAfterShowcaseProps {
@@ -56,11 +56,11 @@ export function BeforeAfterShowcase({
             </div>
 
             <div className="relative aspect-video rounded-xl bg-black border border-neutral-800 overflow-hidden group">
-              <img
-                src={SAMPLE_PROJECTS[0].posterUrl}
-                alt="Raw podcast"
-                className="w-full h-full object-cover opacity-75 grayscale-[30%]"
-              />
+                <img
+                  src={LANDING_SAMPLE_PROJECTS[0].posterUrl}
+                  alt="Raw podcast"
+                  className="w-full h-full object-cover opacity-75 grayscale-[30%]"
+                />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-3">
                 <div className="flex items-center justify-between text-[11px] text-neutral-300">
                   <span className="font-mono">Unedited Audio • Flat Aspect</span>
@@ -102,7 +102,7 @@ export function BeforeAfterShowcase({
 
             <div className="relative aspect-[9/16] max-h-[320px] mx-auto rounded-2xl bg-black border-2 border-amber-500/40 overflow-hidden shadow-2xl flex flex-col justify-between p-4">
               <img
-                src={SAMPLE_PROJECTS[0].posterUrl}
+                src={LANDING_SAMPLE_PROJECTS[0].posterUrl}
                 alt="Vertical clip"
                 className="absolute inset-0 w-full h-full object-cover scale-110"
               />

@@ -25,25 +25,28 @@ class BaseConfig(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
 
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/clipneras"
+    DATABASE_URL: str = ""
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    SECRET_KEY: str = "dev-secret-key-change-in-production"
+    SECRET_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
     OPENAI_API_KEY: str = ""
-    OPENAI_MODEL: str = "gpt-4o"
+    OPENAI_MODEL: str = "gpt-4o-mini"
     ANTHROPIC_API_KEY: str = ""
-    ANTHROPIC_MODEL: str = "claude-sonnet-4-20250514"
+    ANTHROPIC_MODEL: str = "claude-3-5-haiku-20241022"
     XAI_API_KEY: str = ""
-    XAI_MODEL: str = "grok-4"
+    XAI_MODEL: str = "grok-2-mini"
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "openai/gpt-oss-20b"
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-2.0-flash"
 
     AWS_REGION: str = "us-east-1"
-    AWS_ACCESS_KEY_ID: str = "test"
-    AWS_SECRET_ACCESS_KEY: str = "test"
-    LOCALSTACK_ENDPOINT: str = "http://localhost:4566"
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    LOCALSTACK_ENDPOINT: str = ""
+    S3_BUCKET_NAME: str = "clipnera-videos"
 
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
@@ -58,6 +61,8 @@ class BaseConfig(BaseSettings):
 
     TRANSCRIPTION_OUTPUT_DIR: str = "./transcription_outputs"
     HF_TOKEN: str = ""
+    WATERMARK_ENABLED: bool = True
+    WATERMARK_PATH: str = "./backend/static/watermark.png"
 
 
 class DevelopmentConfig(BaseConfig):

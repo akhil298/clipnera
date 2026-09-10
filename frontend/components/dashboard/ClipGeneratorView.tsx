@@ -66,13 +66,14 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
   onRevertAudio,
   onApplyAudio,
 }) => {
-  const [selectedClip, setSelectedClip] = useState<ViralClip>(project.clips[0] || null);
+  const safeProject = project || { clips: [] as ViralClip[], title: '', folderName: '' };
+  const [selectedClip, setSelectedClip] = useState<ViralClip | null>(safeProject.clips[0] || null);
   const [isPlayingRaw, setIsPlayingRaw] = useState(false);
   const [copiedHookId, setCopiedHookId] = useState<string | null>(null);
   const [filterScore, setFilterScore] = useState<number>(85);
   const [quickExportingId, setQuickExportingId] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
-  const [newFolderName, setNewFolderName] = useState(project.folderName || project.title);
+  const [newFolderName, setNewFolderName] = useState(safeProject.folderName || safeProject.title || '');
 
   const handleCopyHook = (clipId: string, hookText: string) => {
     navigator.clipboard.writeText(hookText);
@@ -94,12 +95,12 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
 
   const handleSaveRename = () => {
     if (newFolderName.trim() && onRenameFolder) {
-      onRenameFolder(project.id, newFolderName.trim());
+      onRenameFolder(safeProject.id, newFolderName.trim());
     }
     setIsRenaming(false);
   };
 
-  const filteredClips = project.clips.filter((c) => c.viralityScore >= filterScore);
+  const filteredClips = safeProject.clips.filter((c) => c.viralityScore >= filterScore);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -114,12 +115,12 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
         </button>
 
         <div className="flex items-center gap-2 text-xs text-neutral-400">
-          <span className="text-neutral-500 font-mono">Folder ID: {project.id}</span>
+          <span className="text-neutral-500 font-mono">Folder ID: {safeProject.id}</span>
         </div>
       </div>
 
       {/* Processing Overlay */}
-      {project.processingStatus === 'processing' && (
+      {safeProject.processingStatus === 'processing' && (
         <div className="rounded-2xl bg-neutral-900/90 border border-amber-500/30 p-6 flex items-center justify-center gap-4">
           <div className="relative w-12 h-12 flex items-center justify-center">
             <div className="absolute inset-0 rounded-full border-4 border-amber-400/20 border-t-amber-400 animate-spin" />
@@ -128,13 +129,13 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
           <div>
             <h2 className="text-sm font-bold text-white">Processing Video...</h2>
             <p className="text-xs text-neutral-400">
-              Downloading and preparing your project folder. Please wait {project.processingProgress ?? 0}%
+              Downloading and preparing your project folder. Please wait {safeProject.processingProgress ?? 0}%
             </p>
           </div>
         </div>
       )}
 
-      {project.processingStatus === 'failed' && (
+      {safeProject.processingStatus === 'failed' && (
         <div className="rounded-2xl bg-neutral-900/90 border border-rose-500/30 p-6 flex items-center justify-center gap-4">
           <AlertCircle className="w-6 h-6 text-rose-400" />
           <div>
@@ -165,14 +166,14 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
             <div className="flex flex-wrap items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1.5">
                 <Folder className="w-3.5 h-3.5" />
-                <span>{project.folderCategory || 'Project Folder'}</span>
+                <span>{safeProject.folderCategory || 'Project Folder'}</span>
               </span>
               <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400">
-                {project.clips.length} Respected Videos Ready
+                {safeProject.clips.length} Respected Videos Ready
               </span>
-              {project.sourceUrl && (
+              {safeProject.sourceUrl && (
                 <a
-                  href={project.sourceUrl}
+                  href={safeProject.sourceUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="px-2.5 py-0.5 rounded-md text-[11px] font-medium bg-neutral-950 text-neutral-400 hover:text-amber-300 border border-neutral-800 flex items-center gap-1 transition-colors"
@@ -210,11 +211,11 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
             ) : (
               <div className="flex items-center gap-2 group/name">
                 <h1 className="text-xl lg:text-2xl font-extrabold text-white tracking-tight">
-                  {project.folderName || project.title}
+                  {safeProject.folderName || safeProject.title}
                 </h1>
                 <button
                   onClick={() => {
-                    setNewFolderName(project.folderName || project.title);
+                    setNewFolderName(safeProject.folderName || safeProject.title);
                     setIsRenaming(true);
                   }}
                   className="opacity-60 hover:opacity-100 p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-amber-400 transition-all"
@@ -226,13 +227,13 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
             )}
 
             <p className="text-xs text-neutral-400 flex flex-wrap items-center gap-2">
-              <span>Channel: <strong className="text-neutral-200">{project.sourceChannel || 'Original Source'}</strong></span>
+              <span>Channel: <strong className="text-neutral-200">{safeProject.sourceChannel || 'Original Source'}</strong></span>
               <span>•</span>
               <Clock className="w-3.5 h-3.5 text-neutral-500 inline" />
-              <span>Duration: {Math.floor(project.duration / 60)}m {project.duration % 60}s</span>
+              <span>Duration: {Math.floor(safeProject.duration / 60)}m {safeProject.duration % 60}s</span>
               <span>•</span>
               <span className="text-amber-400 font-semibold">
-                Average Virality: {Math.round(project.clips.reduce((acc, c) => acc + c.viralityScore, 0) / (project.clips.length || 1))}/100
+                Average Virality: {Math.round(safeProject.clips.reduce((acc, c) => acc + c.viralityScore, 0) / (safeProject.clips.length || 1))}/100
               </span>
             </p>
           </div>
@@ -254,7 +255,7 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
               className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/15 active:scale-95 transition-all flex items-center gap-2"
             >
               <Download className="w-4 h-4" />
-              <span>Batch Export All ({project.clips.length})</span>
+              <span>Batch Export All ({safeProject.clips.length})</span>
             </button>
           </div>
         </div>
@@ -267,7 +268,7 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
               <span>AI Virality Spikes Across Timeline:</span>
             </div>
             <span className="text-[11px] text-neutral-400 font-mono">
-              00:00 - {Math.floor(project.duration / 60)}:{String(project.duration % 60).padStart(2, '0')}
+              00:00 - {Math.floor(safeProject.duration / 60)}:{String(safeProject.duration % 60).padStart(2, '0')}
             </span>
           </div>
 
@@ -286,9 +287,9 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
             </div>
 
             {/* Render Highlighted Clip Spans */}
-            {project.clips.map((clip) => {
-              const leftPercent = (clip.startTime / project.duration) * 100;
-              const widthPercent = Math.max(3, (clip.duration / project.duration) * 100);
+            {safeProject.clips.map((clip) => {
+              const leftPercent = (clip.startTime / safeProject.duration) * 100;
+              const widthPercent = Math.max(3, (clip.duration / safeProject.duration) * 100);
               const isSelected = selectedClip?.id === clip.id;
 
               return (
@@ -493,7 +494,7 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
                 {/* Poster Background */}
                 <div className="absolute inset-0">
                   <img
-                    src={project.posterUrl}
+                    src={safeProject.posterUrl}
                     alt={selectedClip.title}
                     className="w-full h-full object-cover opacity-70 scale-105"
                   />
