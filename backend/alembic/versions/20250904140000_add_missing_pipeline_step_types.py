@@ -23,6 +23,8 @@ MISSING_VALUES = [
     "highlight_detection",
     "scoring",
     "metadata_generation",
+    "bounding_box_detection",
+    "aspect_ratio_render",
     "subtitle_styling",
     "burn_in_export",
 ]
