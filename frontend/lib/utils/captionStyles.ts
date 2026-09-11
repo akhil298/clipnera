@@ -171,6 +171,29 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       shadowIntensity: 0.8,
     },
   },
+  bold_captions: {
+    id: 'bold_captions',
+    name: 'Bold Captions',
+    brandName: 'Bold VIRAL',
+    description: 'Bold, high-contrast captions optimized for short-form video',
+    badge: 'Default',
+    config: {
+      preset: 'bold_captions',
+      fontSize: 60,
+      fontFamily: 'Inter, sans-serif',
+      textColor: '#ffffff',
+      highlightColor: '#fbbf24',
+      secondaryHighlightColor: '#f8fafc',
+      hasBgBox: true,
+      bgBoxColor: '#000000',
+      uppercase: true,
+      animation: 'bounce',
+      positionY: 78,
+      emojisEnabled: true,
+      maxWordsPerLine: 6,
+      shadowIntensity: 0.8,
+    },
+  },
 };
 
 export const getCaptionStyle = (preset: CaptionPreset): CaptionStyle => {

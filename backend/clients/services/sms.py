@@ -15,13 +15,23 @@ class SMSClient:
     """SMS client via Twilio."""
 
     def __init__(self) -> None:
-        self._client = TwilioClient(
-            settings.TWILIO_ACCOUNT_SID,
-            settings.TWILIO_AUTH_TOKEN,
-        )
-        self._from_number = settings.TWILIO_PHONE_NUMBER
+        if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN:
+            self._client = None
+            self._from_number = None
+        else:
+            self._client = TwilioClient(
+                settings.TWILIO_ACCOUNT_SID,
+                settings.TWILIO_AUTH_TOKEN,
+            )
+            self._from_number = settings.TWILIO_PHONE_NUMBER
 
     def send(self, to: str, message: str) -> str:
+        if not self._client:
+            raise CustomException(
+                message="SMS not configured: missing Twilio credentials",
+                code="SMS_NOT_CONFIGURED",
+                status_code=503,
+            )
         try:
             msg = self._client.messages.create(
                 body=message,

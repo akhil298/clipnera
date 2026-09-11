@@ -34,6 +34,9 @@ CLASSIFICATION_PROMPT = """You are a content classification assistant. Given a v
  Return a JSON object with keys: "category", "confidence" (0-1), "keywords" (list of relevant keywords), "reasoning" (brief explanation).
  Title: {title}
  Description: {description}
+ Entities: {entities}
+ Events: {events}
+ Current relevance: {current_relevance}
  Keywords: {keywords}
  """
 
@@ -46,11 +49,17 @@ class ContentClassifier:
     async def classify(self, topic_research: dict, transcript_segments: list[dict]) -> dict:
         title = topic_research.get("title", "")
         description = topic_research.get("summary", "")
-        keywords = topic_research.get("keywords", [])[:20]
+        keywords = topic_research.get("keywords") or (topic_research.get("topics", []) + topic_research.get("entities", []))
+        entities = topic_research.get("entities", [])
+        events = topic_research.get("events", [])
+        current_relevance = topic_research.get("current_relevance", "")
 
         prompt = CLASSIFICATION_PROMPT.format(
             title=title,
             description=description,
+            entities=", ".join(entities),
+            events=", ".join(events),
+            current_relevance=current_relevance,
             keywords=", ".join(keywords),
         )
 

@@ -29,8 +29,10 @@ class PipelineStepType(str, enum.Enum):
     VISUAL_ANALYSIS = "visual_analysis"
     CONTENT_CLASSIFICATION = "content_classification"
     HIGHLIGHT_DETECTION = "highlight_detection"
+    BOUNDING_BOX_DETECTION = "bounding_box_detection"
     SCORING = "scoring"
     METADATA_GENERATION = "metadata_generation"
+    ASPECT_RATIO_RENDER = "aspect_ratio_render"
     CLIP_GENERATION = "clip_generation"
     SUBTITLE_STYLING = "subtitle_styling"
     BURN_IN_EXPORT = "burn_in_export"
@@ -41,7 +43,9 @@ class PipelineStepType(str, enum.Enum):
     def resolve(cls, value: str) -> PipelineStepType:
         alias_map = {
             "caption_styling": cls.SUBTITLE_STYLING,
-            "auto_reframe": cls.CLIP_GENERATION,
+            "auto_reframe": cls.ASPECT_RATIO_RENDER,
+            "reframe": cls.ASPECT_RATIO_RENDER,
+            "bbox_detection": cls.BOUNDING_BOX_DETECTION,
             "export": cls.BURN_IN_EXPORT,
         }
         if value in alias_map:

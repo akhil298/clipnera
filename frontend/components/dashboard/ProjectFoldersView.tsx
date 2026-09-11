@@ -22,7 +22,8 @@ import {
   Layers,
   Plus,
   Scissors,
-  Share2
+  Share2,
+  Zap
 } from 'lucide-react';
 import { VideoProject, ViralClip } from '@/lib/types';
 import { analyzeVideoSource } from '@/lib/utils/urlParser';
@@ -528,15 +529,39 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
             const colorClass = getFolderColorClass(project.folderColor);
 
             return (
-        <div
-          key={project.id}
-          className={`group rounded-2xl border transition-all flex flex-col justify-between overflow-hidden shadow-lg ${
-            isSelected
-              ? 'bg-neutral-900 border-amber-500/60 ring-1 ring-amber-500/30'
-              : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900'
-          } ${(project.processingStatus === 'processing') ? 'opacity-90' : ''}`}
-        >
-          {/* Processing Progress Bar */}
+          <div
+            key={project.id}
+            className={`group rounded-2xl border transition-all flex flex-col justify-between overflow-hidden shadow-lg relative ${
+              isSelected
+                ? 'bg-neutral-900 border-amber-500/60 ring-1 ring-amber-500/30'
+                : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900'
+            } ${(project.processingStatus === 'processing') ? 'opacity-90' : ''}`}
+          >
+            {/* Loading overlay: dark gradient sweep from left to right */}
+            {project.processingStatus === 'processing' && (
+              <>
+                <div
+                  className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-black/10 pointer-events-none transition-all duration-500 ease-out"
+                  style={{ width: `${localProcessingProgress[project.id] ?? project.processingProgress ?? 0}%`, left: 0 }}
+                />
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-amber-400 shadow-lg animate-pulse z-10"
+                  style={{ left: `calc(${localProcessingProgress[project.id] ?? project.processingProgress ?? 0}% - 8px)` }}
+                />
+              </>
+            )}
+
+            {/* Credits Charged Badge */}
+            {project.creditsDeducted && project.creditsDeducted > 0 && (
+              <div className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20">
+                <Zap className="w-3 h-3 text-amber-400" />
+                <span className="text-[9px] font-mono font-semibold text-amber-300">
+                  {project.creditsDeducted} credit{project.creditsDeducted !== 1 ? 's' : ''}
+                </span>
+              </div>
+            )}
+
+            {/* Processing Progress Bar */}
           {(project.processingStatus === 'processing' || (localProcessingProgress[project.id] !== undefined && project.processingStatus !== 'failed')) && (
             <div className="w-full h-1 bg-neutral-800">
               <div

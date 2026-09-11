@@ -38,9 +38,15 @@ class BaseConfig(BaseSettings):
     XAI_API_KEY: str = ""
     XAI_MODEL: str = "grok-2-mini"
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "openai/gpt-oss-20b"
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.0-flash"
+
+    DEFAULT_OUTPUT_ASPECT_RATIOS: str = "9:16,1:1,4:5,16:9"
+    CLIP_OUTPUT_DIR: str = "./generated_clips"
+    FRAME_ANALYSIS_INTERVAL: float = 5.0
+    CANDIDATE_FRAME_INTERVAL: float = 2.0
+    CANDIDATE_MAX_FRAMES: int = 8
 
     AWS_REGION: str = "us-east-1"
     AWS_ACCESS_KEY_ID: str = ""

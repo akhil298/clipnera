@@ -13,9 +13,11 @@ from clip_generation.route import clip_generation as clip_generation_router
 from subtitle_styling.route import subtitle_styling as subtitle_styling_router
 from subscription.route import router as subscription_router
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from core import get_settings, register_middlewares
 from core.exceptions import CustomException
@@ -43,6 +45,8 @@ app = FastAPI(
 )
 
 register_middlewares(app)
+Path(settings.CLIP_OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
+app.mount("/static/clips", StaticFiles(directory=settings.CLIP_OUTPUT_DIR), name="clips")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(notification_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")

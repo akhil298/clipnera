@@ -17,6 +17,28 @@ class SubtitleStyleType(str, enum.Enum):
     BOXED = "boxed"
     NEON = "neon"
     TYPEWRITER = "typewriter"
+    DEFAULT = "default"
+    HORMOZI = "hormozi"
+    MRBEAST = "mrbeast"
+    TIKTOK = "tiktok"
+    PODCAST = "podcast"
+
+    @classmethod
+    def is_template(cls, style_type: str) -> bool:
+        return style_type in ("default", "hormozi", "mrbeast", "tiktok", "podcast")
+
+    @classmethod
+    def to_template(cls, style_type: str) -> str:
+        mapping = {
+            "bold_captions": "default",
+            "karaoke": "default",
+            "boxed": "hormozi",
+            "neon": "neon",
+            "minimal": "minimal",
+            "typewriter": "minimal",
+            "podcast": "podcast",
+        }
+        return mapping.get(style_type, style_type)
 
 
 class SubtitleStyle(Base):

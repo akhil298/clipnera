@@ -18,7 +18,7 @@ import { AuthModal } from './AuthModal';
 import { PlanSelectionModal } from './PlanSelectionModal';
 import { PaymentModal } from './PaymentModal';
 import { VideoProject, ViralClip, TabType, UserProfile, Workspace, AppNotification, PipelineStep } from '@/lib/types';
-import { userApi, workspaceApi, authApi, pipelineApi, subscriptionApi } from '@/lib/api';
+import { userApi, workspaceApi, authApi, pipelineApi, subscriptionApi, clipApi, mapBackendClip } from '@/lib/api';
 import { isAuthenticated, clearAuth } from '@/lib/auth';
 
 export default function DashboardApp() {
@@ -119,17 +119,68 @@ export default function DashboardApp() {
   useEffect(() => {
     if (!activeProject?.id) return;
     let cancelled = false;
-    pipelineApi.getStatus(activeProject.id).then((status) => {
-      if (!cancelled) {
+    let intervalId: NodeJS.Timeout | null = null;
+
+    const fetchStatus = async () => {
+      try {
+        const status = await pipelineApi.getStatus(activeProject.id);
+        if (cancelled) return;
         setPipelineSteps(status.steps || []);
-      }
-    }).catch(() => {
-      if (!cancelled) {
+
+        if (!status.is_completed && !status.error) {
+          if (!status.steps || status.steps.length === 0) return;
+
+          const allPending = status.steps.every((s) => s.status === 'pending');
+          if (allPending) return;
+
+          const runningStep = status.steps.find((s) => s.status === 'running');
+          const stepCount = status.steps.length;
+          const completedCount = status.steps.filter(
+            (s) => s.status === 'completed' || s.status === 'skipped'
+          ).length;
+          const runningPercent = runningStep?.progress_percent ?? 0;
+          const overallPercent = Math.round(
+            ((completedCount + runningPercent / 100) / stepCount) * 100
+          );
+
+          handleUpdateProject(activeProject.id, {
+            processingProgress: overallPercent,
+            processingStatus: overallPercent >= 100 ? 'completed' : 'processing',
+          });
+        } else {
+          handleUpdateProject(activeProject.id, {
+            processingProgress: 100,
+            processingStatus: status.error ? 'failed' : 'completed',
+          });
+
+          if (!status.error && activeProject.clips.length === 0) {
+            try {
+              const clipResponse = await clipApi.listClips(activeProject.id);
+              if (cancelled) return;
+              const mappedClips = (clipResponse.clips || []).map(mapBackendClip);
+              if (mappedClips.length > 0) {
+                handleUpdateProject(activeProject.id, { clips: mappedClips });
+                setSelectedClip(mappedClips[0]);
+              }
+            } catch (clipErr) {
+              console.error('Failed to fetch clips:', clipErr);
+            }
+          }
+
+          if (intervalId) clearInterval(intervalId);
+        }
+      } catch {
+        if (cancelled) return;
         setPipelineSteps([]);
       }
-    });
+    };
+
+    fetchStatus();
+    intervalId = setInterval(fetchStatus, 3000);
+
     return () => {
       cancelled = true;
+      if (intervalId) clearInterval(intervalId);
     };
   }, [activeProject?.id]);
 

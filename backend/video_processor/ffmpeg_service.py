@@ -3,7 +3,10 @@ from __future__ import annotations
 import asyncio
 import os
 import subprocess
+from pathlib import Path
 from typing import Optional
+
+from content_intelligence.reframing import crop_tracking_expressions
 
 from core.logging_config import get_logger
 from core.exceptions import CustomException
@@ -29,8 +32,7 @@ class FFmpegService:
     async def get_video_info(self, input_path: str) -> dict:
         cmd = [
             "ffprobe", "-v", "error",
-            "-show_entries", "stream=width,height,codec_name,duration:stream_index=0",
-            "-show_entries", "format=duration,bit_rate",
+            "-show_streams", "-show_format",
             "-of", "json",
             input_path,
         ]
@@ -93,6 +95,80 @@ class FFmpegService:
         if proc.returncode != 0:
             err = stderr.decode("utf-8", errors="ignore")[-200:]
             raise CustomException(message=f"Reframe failed: {err}", code="REFAME_FAILED", status_code=500)
+
+    async def crop_with_tracking(
+        self,
+        input_path: str,
+        output_path: str,
+        start_time: float = 0.0,
+        duration: float | None = None,
+        crop_tracking: list[dict] | None = None,
+        target_width: int = 1080,
+        target_height: int = 1920,
+        source_width: int | None = None,
+        source_height: int | None = None,
+    ) -> None:
+        if duration is None:
+            duration = await self.probe_duration(input_path)
+        crop_tracking = crop_tracking or []
+        if duration <= 0 or target_width <= 0 or target_height <= 0:
+            raise CustomException(message="Invalid crop render parameters", code="INVALID_CROP_RENDER", status_code=400)
+
+        info = await self.get_video_info(input_path)
+        streams = info.get("streams") or []
+        stream = next((item for item in streams if item.get("codec_type") == "video"), streams[0] if streams else {})
+        source_width = int(source_width or stream.get("width", 0) or 0)
+        source_height = int(source_height or stream.get("height", 0) or 0)
+        if not source_width or not source_height:
+            raise CustomException(message="Source video dimensions are unavailable", code="VIDEO_DIMENSIONS_UNAVAILABLE", status_code=400)
+
+        target_ratio = target_width / target_height
+        source_ratio = source_width / source_height
+        if source_ratio > target_ratio:
+            crop_height = source_height
+            crop_width = int(round(crop_height * target_ratio))
+        else:
+            crop_width = source_width
+            crop_height = int(round(crop_width / target_ratio))
+        crop_width -= crop_width % 2
+        crop_height -= crop_height % 2
+        crop_width = max(2, crop_width)
+        crop_height = max(2, crop_height)
+
+        relative_tracking = [
+            {**point, "timestamp": max(0.0, float(point.get("timestamp", 0.0)) - start_time)}
+            for point in crop_tracking
+        ]
+        output_file = Path(output_path)
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        x_expression, y_expression = crop_tracking_expressions(
+            relative_tracking,
+            source_width,
+            source_height,
+            crop_width,
+            crop_height,
+        )
+        x_expression = x_expression.replace(",", "\\,")
+        y_expression = y_expression.replace(",", "\\,")
+        video_filter = (
+            f"crop={crop_width}:{crop_height}:{x_expression}:{y_expression},"
+            f"scale={target_width}:{target_height}:flags=lanczos"
+        )
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", str(start_time), "-i", input_path,
+            "-t", str(duration),
+            "-vf", video_filter,
+            "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+            "-c:a", "aac", "-b:a", "128k",
+            "-movflags", "+faststart",
+            output_path,
+        ]
+        proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            err = stderr.decode("utf-8", errors="ignore")[-500:]
+            raise CustomException(message=f"Tracked crop failed: {err}", code="TRACKED_CROP_FAILED", status_code=500)
 
     async def concat_segments(self, segment_paths: list[str], output_path: str) -> None:
         list_file = output_path + ".concat.txt"

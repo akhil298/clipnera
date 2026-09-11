@@ -8,6 +8,8 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from auth.dependencies import CurrentUserDep
+from clip_generation.schema import SocialExportRequest, SocialExportResponse
+from clip_generation.service import ClipService
 from pipeline.model import PipelineStepType, StepStatus
 from pipeline.service import PipelineOrchestrator
 from pipeline.repository import PipelineRepository
@@ -27,27 +29,63 @@ _progress_lock = asyncio.Lock()
 
 
 def _progress_callback_factory(project_id: str):
-    async def callback(message: str, percent: int, _: str | None) -> None:
+    async def callback(message: str, percent: int, _: str | None, step: str | None = None, step_status: str | None = None) -> None:
         async with _progress_lock:
-            _progress_store[project_id] = {
-                "message": message,
-                "percent": percent,
-                "status": "running",
-            }
+            entry = _progress_store.get(project_id, {"status": "idle", "percent": 0, "message": ""})
+            entry["message"] = message
+            entry["percent"] = percent
+            entry["status"] = "running"
+            if step:
+                entry["current_step"] = step
+            if step_status:
+                entry["step_status"] = step_status
+            _progress_store[project_id] = entry
     return callback
 
 
-async def _run_pipeline(orchestrator: PipelineOrchestrator, project_id: str, credit_refund_callback=None) -> None:
+async def _run_pipeline(orchestrator: PipelineOrchestrator, project_id: str, user: dict | None = None, credit_refund_callback=None) -> None:
     try:
-        await orchestrator.run()
+        results = await orchestrator.run()
         async with _progress_lock:
-            _progress_store[project_id] = {"status": "completed", "percent": 100, "message": "Pipeline completed"}
+            entry = _progress_store.get(project_id, {"status": "idle", "percent": 0, "message": ""})
+            entry.update({"status": "completed", "percent": 100, "message": "Pipeline completed", "step_status": "completed"})
+            _progress_store[project_id] = entry
+
+        if user and (user.get("email") or user.get("phone")):
+            from notifications.service import NotificationService
+            notifier = NotificationService()
+            clip_count = None
+            gen_result = results.get("clip_generation") or results.get("metadata_generation")
+            if gen_result:
+                clips = gen_result.get("clips") or []
+                if isinstance(clips, list):
+                    clip_count = len(clips)
+            await notifier.notify_pipeline_complete(
+                user_email=user.get("email"),
+                user_phone=user.get("phone"),
+                project_id=project_id,
+                success=True,
+                clip_count=clip_count,
+            )
     except Exception as exc:
         log.error(f"Pipeline failed: project={project_id} error={exc}")
         async with _progress_lock:
-            _progress_store[project_id] = {"status": "error", "percent": 0, "message": str(exc)}
+            entry = _progress_store.get(project_id, {"status": "idle", "percent": 0, "message": ""})
+            entry.update({"status": "error", "percent": 0, "message": str(exc), "step_status": "failed"})
+            _progress_store[project_id] = entry
         if credit_refund_callback:
             await credit_refund_callback()
+
+        if user:
+            from notifications.service import NotificationService
+            notifier = NotificationService()
+            await notifier.notify_pipeline_complete(
+                user_email=user.get("email"),
+                user_phone=user.get("phone"),
+                project_id=project_id,
+                success=False,
+                error=str(exc),
+            )
         raise
 
 
@@ -62,7 +100,28 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
             raise CustomException(message="Project not found", code="NOT_FOUND", status_code=404)
 
         body = body or {}
-        selected_steps = [PipelineStepType.resolve(s) for s in body.get("steps", ["download", "audio_extraction", "ai_noise_cancellation"])]
+        default_steps = [
+            "download",
+            "audio_extraction",
+            "ai_noise_cancellation",
+            "transcription",
+            "topic_research",
+            "visual_analysis",
+            "content_classification",
+            "highlight_detection",
+            "bounding_box_detection",
+            "scoring",
+            "metadata_generation",
+            "aspect_ratio_render",
+            "clip_generation",
+        ]
+        selected_steps = [PipelineStepType.resolve(s) for s in body.get("steps", default_steps)]
+        output_aspect_ratios = body.get("output_aspect_ratios")
+        if isinstance(output_aspect_ratios, str):
+            output_aspect_ratios = [item.strip() for item in output_aspect_ratios.split(",") if item.strip()]
+        if not output_aspect_ratios:
+            from core.config import get_settings
+            output_aspect_ratios = [item.strip() for item in get_settings().DEFAULT_OUTPUT_ASPECT_RATIOS.split(",") if item.strip()]
         audio_config = body.get("audio_config", {
             "ai_denoise": True,
             "noise_suppression_strength": 90,
@@ -122,14 +181,16 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
             audio_config=audio_config,
             progress_callback=_progress_callback_factory(project_id),
             watermark_enabled=watermark_enabled,
+            output_aspect_ratios=output_aspect_ratios,
         )
 
-        asyncio.create_task(_run_pipeline(orchestrator, project_id, credit_refund_callback=refund_credits))
+        asyncio.create_task(_run_pipeline(orchestrator, project_id, user=user, credit_refund_callback=refund_credits))
 
         return {
             "project_id": project_id,
             "status": "started",
             "selected_steps": [s.value for s in selected_steps],
+            "output_aspect_ratios": output_aspect_ratios,
             "watermark_enabled": watermark_enabled,
             "credits_deducted": credit_cost,
         }
@@ -238,7 +299,28 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
             raise CustomException(message="Pipeline not found", code="NOT_FOUND", status_code=404)
 
         body = body or {}
-        selected_steps = [PipelineStepType.resolve(s) for s in body.get("steps", ["download", "audio_extraction", "ai_noise_cancellation"])]
+        default_steps = [
+            "download",
+            "audio_extraction",
+            "ai_noise_cancellation",
+            "transcription",
+            "topic_research",
+            "visual_analysis",
+            "content_classification",
+            "highlight_detection",
+            "bounding_box_detection",
+            "scoring",
+            "metadata_generation",
+            "aspect_ratio_render",
+            "clip_generation",
+        ]
+        selected_steps = [PipelineStepType.resolve(s) for s in body.get("steps", default_steps)]
+        output_aspect_ratios = body.get("output_aspect_ratios")
+        if isinstance(output_aspect_ratios, str):
+            output_aspect_ratios = [item.strip() for item in output_aspect_ratios.split(",") if item.strip()]
+        if not output_aspect_ratios:
+            from core.config import get_settings
+            output_aspect_ratios = [item.strip() for item in get_settings().DEFAULT_OUTPUT_ASPECT_RATIOS.split(",") if item.strip()]
         audio_config = body.get("audio_config", {
             "ai_denoise": True,
             "noise_suppression_strength": 90,
@@ -296,13 +378,59 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
             audio_config=audio_config,
             progress_callback=_progress_callback_factory(project_id),
             watermark_enabled=watermark_enabled,
+            output_aspect_ratios=output_aspect_ratios,
+            resume=True,
         )
 
-        asyncio.create_task(_run_pipeline(orchestrator, project_id, credit_refund_callback=refund_credits))
+        asyncio.create_task(_run_pipeline(orchestrator, project_id, user=user, credit_refund_callback=refund_credits))
 
         return {
             "project_id": project_id,
             "status": "resumed",
             "selected_steps": [s.value for s in selected_steps],
+            "output_aspect_ratios": output_aspect_ratios,
             "watermark_enabled": watermark_enabled,
+            "credits_deducted": credit_cost,
         }
+
+
+@pipeline.get("/social-platforms")
+async def list_social_platforms():
+    from clip_generation.model import SocialPlatform, SOCIAL_PLATFORM_DEFAULTS
+
+    platforms = []
+    for platform in SocialPlatform:
+        defaults = SOCIAL_PLATFORM_DEFAULTS[platform.value]
+        platforms.append({
+            "platform": platform.value,
+            "aspect_ratio": defaults["aspect_ratio"],
+            "dimensions": defaults["dimensions"],
+            "default_style": defaults["subtitle_style"],
+            "max_duration": defaults["max_duration"],
+            "emoji_enabled": defaults["emoji_enabled"],
+        })
+    return {"platforms": platforms}
+
+
+@pipeline.post("/export/{project_id}")
+async def export_clips_for_social(project_id: str, request: SocialExportRequest, user: CurrentUserDep):
+    async with AsyncSessionLocal() as session:
+        clip_repo = ClipRepository(session)
+        project = await clip_repo.get_project(project_id, user["user_id"])
+        if not project:
+            raise CustomException(message="Project not found", code="NOT_FOUND", status_code=404)
+
+    service = ClipService()
+    result = await service.export_clips_for_social(
+        project_id=project_id,
+        user_id=user["user_id"],
+        platforms=request.platforms,
+        style_type=request.style_type,
+        custom_config=request.custom_config,
+        max_clips=request.max_clips,
+        max_duration_override=request.max_duration,
+        enable_emoji=request.enable_emoji,
+        watermark_enabled=request.watermark_enabled,
+        burn_subtitles=request.burn_subtitles,
+    )
+    return result

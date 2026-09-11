@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import enum
 from datetime import datetime
+from typing import Any
 from uuid import uuid4
 
 from sqlalchemy import String, ForeignKey, Enum, DateTime, Integer, Text, Float, Boolean
@@ -26,6 +27,133 @@ class ContentCategory(str, enum.Enum):
     UNKNOWN = "unknown"
 
 
+class SocialPlatform(str, enum.Enum):
+    TIKTOK = "tiktok"
+    INSTAGRAM_REELS = "instagram_reels"
+    YOUTUBE_SHORTS = "youtube_shorts"
+    INSTAGRAM_FEED = "instagram_feed"
+    LINKEDIN = "linkedin"
+    TWITTER = "twitter"
+    FACEBOOK = "facebook"
+    SNAPCHAT = "snapchat"
+
+
+SOCIAL_PLATFORM_DEFAULTS: dict[str, dict[str, Any]] = {
+    SocialPlatform.TIKTOK.value: {
+        "aspect_ratio": "9:16",
+        "dimensions": [1080, 1920],
+        "subtitle_style": "tiktok",
+        "max_duration": 60,
+        "caption_max_chars": 42,
+        "caption_max_words_per_line": 4,
+        "position_y": 0.78,
+        "emoji_enabled": True,
+        "word_pop": True,
+        "animation": "karaoke",
+    },
+    SocialPlatform.INSTAGRAM_REELS.value: {
+        "aspect_ratio": "9:16",
+        "dimensions": [1080, 1920],
+        "subtitle_style": "default",
+        "max_duration": 90,
+        "caption_max_chars": 42,
+        "caption_max_words_per_line": 4,
+        "position_y": 0.80,
+        "emoji_enabled": True,
+        "word_pop": True,
+        "animation": "karaoke",
+    },
+    SocialPlatform.YOUTUBE_SHORTS.value: {
+        "aspect_ratio": "9:16",
+        "dimensions": [1080, 1920],
+        "subtitle_style": "mrbeast",
+        "max_duration": 60,
+        "caption_max_chars": 42,
+        "caption_max_words_per_line": 3,
+        "position_y": 0.70,
+        "emoji_enabled": True,
+        "word_pop": True,
+        "animation": "karaoke",
+    },
+    SocialPlatform.INSTAGRAM_FEED.value: {
+        "aspect_ratio": "1:1",
+        "dimensions": [1080, 1080],
+        "subtitle_style": "minimal",
+        "max_duration": 120,
+        "caption_max_chars": 42,
+        "caption_max_words_per_line": 6,
+        "position_y": 0.82,
+        "emoji_enabled": False,
+        "word_pop": False,
+        "animation": "fade",
+    },
+    SocialPlatform.LINKEDIN.value: {
+        "aspect_ratio": "1:1",
+        "dimensions": [1080, 1080],
+        "subtitle_style": "podcast",
+        "max_duration": 120,
+        "caption_max_chars": 42,
+        "caption_max_words_per_line": 5,
+        "position_y": 0.80,
+        "emoji_enabled": False,
+        "word_pop": False,
+        "animation": "karaoke",
+    },
+    SocialPlatform.TWITTER.value: {
+        "aspect_ratio": "16:9",
+        "dimensions": [1920, 1080],
+        "subtitle_style": "minimal",
+        "max_duration": 140,
+        "caption_max_chars": 42,
+        "caption_max_words_per_line": 6,
+        "position_y": 0.82,
+        "emoji_enabled": False,
+        "word_pop": False,
+        "animation": "fade",
+    },
+    SocialPlatform.FACEBOOK.value: {
+        "aspect_ratio": "16:9",
+        "dimensions": [1920, 1080],
+        "subtitle_style": "boxed",
+        "max_duration": 120,
+        "caption_max_chars": 42,
+        "caption_max_words_per_line": 4,
+        "position_y": 0.80,
+        "emoji_enabled": True,
+        "word_pop": True,
+        "animation": "karaoke",
+    },
+    SocialPlatform.SNAPCHAT.value: {
+        "aspect_ratio": "9:16",
+        "dimensions": [1080, 1920],
+        "subtitle_style": "tiktok",
+        "max_duration": 60,
+        "caption_max_chars": 42,
+        "caption_max_words_per_line": 4,
+        "position_y": 0.78,
+        "emoji_enabled": True,
+        "word_pop": True,
+        "animation": "karaoke",
+    },
+}
+
+
+class SocialExportTemplate(Base):
+    __tablename__ = "social_export_templates"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    platform: Mapped[str] = mapped_column(String(50), nullable=False)
+    aspect_ratio: Mapped[str] = mapped_column(String(10), nullable=False)
+    subtitle_style: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    config: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_preset: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class VideoAnalysis(Base):
     __tablename__ = "video_analysis"
 
@@ -41,6 +169,7 @@ class VideoAnalysis(Base):
     scene_changes: Mapped[str | None] = mapped_column(Text, nullable=True)
     frame_descriptions: Mapped[str | None] = mapped_column(Text, nullable=True)
     transcript_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    analysis_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
@@ -62,11 +191,13 @@ class GeneratedClip(Base):
     start_time: Mapped[float] = mapped_column(Float, nullable=False)
     end_time: Mapped[float] = mapped_column(Float, nullable=False)
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
-    score: Mapped[float] = mapped_column(Float, nullable=False)
+    score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
+    scores: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     s3_bucket: Mapped[str | None] = mapped_column(String(255), nullable=True)
     presigned_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    poster_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     local_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     subtitle_style_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("subtitle_styles.id", ondelete="SET NULL"), nullable=True
@@ -74,6 +205,13 @@ class GeneratedClip(Base):
     burned_subtitle_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     burned_presigned_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)
+    transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
+    visual_analysis: Mapped[str | None] = mapped_column(Text, nullable=True)
+    bounding_boxes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    crop_tracking: Mapped[str | None] = mapped_column(Text, nullable=True)
+    output_formats: Mapped[str | None] = mapped_column(Text, nullable=True)
+    output_files: Mapped[str | None] = mapped_column(Text, nullable=True)
+    analysis_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False

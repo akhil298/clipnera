@@ -1,5 +1,5 @@
 ﻿export type AspectRatio = '9:16' | '1:1' | '16:9';
-export type CaptionPreset = 'hormozi' | 'mrbeast' | 'neon' | 'cyberpunk' | 'minimal' | 'karaoke_yellow' | 'sunset';
+export type CaptionPreset = 'hormozi' | 'mrbeast' | 'neon' | 'cyberpunk' | 'minimal' | 'karaoke_yellow' | 'sunset' | 'bold_captions';
 export type LayoutMode = 'single_speaker' | 'split_screen' | 'screen_share_focus';
 
 export interface AudioEnhancementConfig {
@@ -118,6 +118,7 @@ export interface ViralClip {
   title: string;
   hook: string;
   posterUrl?: string;
+  presignedUrl?: string;
   viralityScore: number;
   hookScore: number;
   engagementScore: number;
@@ -169,6 +170,8 @@ export interface VideoProject {
   audioReverted?: boolean;
   processingProgress?: number; // 0-100
   processingStatus?: 'idle' | 'processing' | 'completed' | 'failed';
+  creditsDeducted?: number;
+  pipelineSteps?: PipelineStep[];
 }
 
 export interface ScheduledPost {
@@ -283,4 +286,12 @@ export interface PipelineStatus {
   is_completed: boolean;
   error: string | null;
   steps: PipelineStep[];
+}
+
+export interface PipelineProgressEvent {
+  message: string;
+  percent: number;
+  status: 'idle' | 'running' | 'completed' | 'error';
+  current_step?: string;
+  step_status?: string;
 }

@@ -21,6 +21,7 @@ import { VideoProject, CaptionPreset, AudioEnhancementConfig, DownloadProgress }
 import { CAPTION_PRESETS } from '@/lib/data/mockProjects';
 import { analyzeVideoSource } from '@/lib/utils/urlParser';
 import { clipApi, pipelineApi, YouTubeMetadataResponse } from '@/lib/api';
+import { PipelineProgressTracker } from './PipelineProgressTracker';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -57,6 +58,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [ytMetaError, setYtMetaError] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   const downloadUnsubRef = useRef<(() => void) | null>(null);
+
+  const [pipelineStarted, setPipelineStarted] = useState(false);
+  const [pipelineProjectId, setPipelineProjectId] = useState<string | null>(null);
+  const [pipelineSteps, setPipelineSteps] = useState<string[]>([]);
+  const [creditsDeducted, setCreditsDeducted] = useState<number>(0);
+  const [pipelineError, setPipelineError] = useState<string | null>(null);
 
   useEffect(() => {
     const trimmed = urlInput.trim();
@@ -170,41 +177,46 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
     try {
       setProcessingLogs((prev) => [...prev, 'Starting AI processing pipeline...']);
-      await pipelineApi.start(projectId!, steps, audioConfig);
+      setPipelineError(null);
+      setPipelineStarted(false);
 
-      const unsubPipeline = pipelineApi.subscribeProgress(
-        projectId!,
-        (progress: { message: string; percent: number; status: string }) => {
-          setProcessingLogs((prev) => {
-            const last = prev[prev.length - 1] || '';
-            if (last !== progress.message) {
-              return [...prev.slice(0, -1), progress.message];
-            }
-            return prev;
-          });
-          if (progress.status === 'completed') {
-            setProcessingStep(5);
-          } else if (progress.status === 'error') {
-            setProcessingLogs((prev) => [...prev, `Pipeline error: ${progress.message}`]);
-          }
-        },
-        () => {
-          setProcessingLogs((prev) => [...prev, 'Pipeline stream error']);
-        },
-      );
+      const startResult = await pipelineApi.start(projectId!, steps, audioConfig);
+      setPipelineSteps(startResult.selected_steps || steps);
+      setCreditsDeducted(startResult.credits_deducted || 0);
+
+      setPipelineStarted(true);
+      setPipelineProjectId(projectId!);
+      setProcessingLogs((prev) => [...prev, `Pipeline started. Credits deducted: ${startResult.credits_deducted || 0}`]);
 
       await new Promise((resolve) => {
         const interval = setInterval(async () => {
           try {
             const status = await pipelineApi.getStatus(projectId!);
-            if (status.is_completed || status.error) {
+            if (status.is_completed) {
               clearInterval(interval);
-              unsubPipeline();
+              setProcessingStep(5);
+              setProcessingLogs((prev) => [...prev, 'Pipeline completed successfully!']);
               resolve(true);
+            } else if (status.error) {
+              clearInterval(interval);
+              setPipelineError(status.error);
+              setProcessingLogs((prev) => [...prev, `Pipeline error: ${status.error}`]);
+              resolve(false);
+            } else {
+              setProcessingLogs((prev) => {
+                const last = prev[prev.length - 1] || '';
+                const currentSteps = status.steps?.filter((s: any) => s.status === 'running');
+                if (currentSteps && currentSteps.length > 0) {
+                  const msg = currentSteps[0].message || '';
+                  if (msg && msg !== last) {
+                    return [...prev.slice(0, -1), msg];
+                  }
+                }
+                return prev;
+              });
             }
           } catch {
             clearInterval(interval);
-            unsubPipeline();
             resolve(false);
           }
         }, 2000);
@@ -220,10 +232,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     await new Promise((r) => setTimeout(r, 500));
 
     const meta = analyzeVideoSource(urlInput, { title: ytMeta?.title, channelTitle: ytMeta?.channel_title });
-    const newProjectId = `proj-${Date.now()}`;
 
     const newProject: VideoProject = {
-      id: newProjectId,
+      id: projectId || `proj-${Date.now()}`,
       title: customTitle || meta.cleanTitle,
       folderName: customFolderName || meta.folderName,
       folderCategory: 'YouTube Ingest',
@@ -243,8 +254,18 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       clips: [],
       transcript: [],
       audioEnhancement: audioEnhanceConfig,
-      processingProgress: downloadProgress?.status === 'done' ? 100 : downloadProgress?.status === 'error' ? 0 : Math.round(downloadProgress?.percent ?? 0),
-      processingStatus: downloadProgress?.status === 'done' ? 'completed' : downloadProgress?.status === 'error' ? 'failed' : 'processing',
+      creditsDeducted: creditsDeducted,
+      pipelineSteps: pipelineSteps.map((s) => ({
+        step: s,
+        status: 'pending',
+        progress_percent: 0,
+        message: null,
+        artifact_path: null,
+        started_at: null,
+        finished_at: null,
+      })),
+      processingProgress: downloadProgress?.status === 'done' && !pipelineError ? 100 : downloadProgress?.status === 'error' ? 0 : Math.round(downloadProgress?.percent ?? 0),
+      processingStatus: pipelineError ? 'failed' : downloadProgress?.status === 'done' ? 'completed' : 'processing',
     };
 
     downloadUnsubRef.current?.();
@@ -615,56 +636,81 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               </div>
             </>
           ) : (
-            <div className="py-8 space-y-6 text-center">
-              <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
-                <div className="absolute inset-0 rounded-full border-4 border-amber-400/20 border-t-amber-400 animate-spin" />
-                <Sparkles className="w-8 h-8 text-amber-400 animate-pulse" />
-              </div>
+            <div className="py-6 space-y-6">
+              {!pipelineStarted ? (
+                <>
+                  <div className="text-center py-8">
+                    <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
+                      <div className="absolute inset-0 rounded-full border-4 border-amber-400/20 border-t-amber-400 animate-spin" />
+                      <Sparkles className="w-8 h-8 text-amber-400 animate-pulse" />
+                    </div>
 
-              <div>
-                <h3 className="text-base font-bold text-white font-['Syne',sans-serif]">
-                  AI Generation & Denoising Engine Active
-                </h3>
-                <p className="text-xs text-neutral-400 mt-1">
-                  Analyzing speech cadence, virality hooks, cleaning audio, and auto-reframing video...
-                </p>
-              </div>
+                    <div>
+                      <h3 className="text-base font-bold text-white font-['Syne',sans-serif]">
+                        AI Generation & Denoising Engine Active
+                      </h3>
+                      <p className="text-xs text-neutral-400 mt-1">
+                        Analyzing speech cadence, virality hooks, cleaning audio, and auto-reframing video...
+                      </p>
+                    </div>
+                  </div>
 
-              {downloadProgress && (
-                <div className="max-w-md mx-auto p-4 rounded-xl bg-neutral-950 border border-neutral-800 space-y-3">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-2 text-neutral-300">
-                      <ArrowDown className="w-4 h-4 text-amber-400" />
-                      <span className="font-semibold">
-                        {downloadProgress.status === 'uploading' ? 'Uploading to cloud...' : 'Downloading video...'}
-                      </span>
-                    </span>
-                    <span className="font-mono font-bold text-amber-400">
-                      {(downloadProgress.percent ?? 0).toFixed(0)}%
-                    </span>
+                  {downloadProgress && (
+                    <div className="max-w-md mx-auto p-4 rounded-xl bg-neutral-950 border border-neutral-800 space-y-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="flex items-center gap-2 text-neutral-300">
+                          <ArrowDown className="w-4 h-4 text-amber-400" />
+                          <span className="font-semibold">
+                            {downloadProgress.status === 'uploading' ? 'Uploading to cloud...' : 'Downloading video...'}
+                          </span>
+                        </span>
+                        <span className="font-mono font-bold text-amber-400">
+                          {(downloadProgress.percent ?? 0).toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="h-2 w-full bg-neutral-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all duration-300 ease-out"
+                          style={{ width: `${Math.min(downloadProgress.percent ?? 0, 100)}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-neutral-500 font-mono">
+                        <span>{downloadProgress.total ? `Size: ${downloadProgress.total}` : 'Fetching...'}</span>
+                        <span>{downloadProgress.speed ? `Speed: ${downloadProgress.speed}` : ''}</span>
+                        <span>{downloadProgress.eta ? `ETA: ${downloadProgress.eta}` : ''}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="max-w-md mx-auto space-y-2 text-left bg-neutral-950 p-4 rounded-xl border border-neutral-800 font-mono text-xs">
+                    {processingLogs.map((log, index) => (
+                      <div key={index} className="flex items-start gap-2 text-neutral-300">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                        <span>{log}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="h-2 w-full bg-neutral-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all duration-300 ease-out"
-                      style={{ width: `${Math.min(downloadProgress.percent ?? 0, 100)}%` }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between text-[10px] text-neutral-500 font-mono">
-                    <span>{downloadProgress.total ? `Size: ${downloadProgress.total}` : 'Fetching...'}</span>
-                    <span>{downloadProgress.speed ? `Speed: ${downloadProgress.speed}` : ''}</span>
-                    <span>{downloadProgress.eta ? `ETA: ${downloadProgress.eta}` : ''}</span>
+                </>
+              ) : (
+                <div className="max-w-3xl mx-auto w-full">
+                  <PipelineProgressTracker
+                    projectId={pipelineProjectId || ''}
+                    selectedSteps={pipelineSteps}
+                    creditsDeducted={creditsDeducted}
+                    isDownloadComplete={downloadProgress?.status === 'done'}
+                    downloadProgress={downloadProgress ?? undefined}
+                  />
+
+                  <div className="mt-4 max-w-md mx-auto space-y-2 text-left bg-neutral-950 p-4 rounded-xl border border-neutral-800 font-mono text-xs">
+                    {processingLogs.map((log, index) => (
+                      <div key={index} className="flex items-start gap-2 text-neutral-300">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+                        <span>{log}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
-
-              <div className="max-w-md mx-auto space-y-2 text-left bg-neutral-950 p-4 rounded-xl border border-neutral-800 font-mono text-xs">
-                {processingLogs.map((log, index) => (
-                  <div key={index} className="flex items-start gap-2 text-neutral-300">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                    <span>{log}</span>
-                  </div>
-                ))}
-              </div>
             </div>
           )}
         </div>

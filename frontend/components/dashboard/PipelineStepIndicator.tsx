@@ -13,9 +13,17 @@ const STEP_LABELS: Record<string, string> = {
   audio_extraction: 'Extract Audio',
   ai_noise_cancellation: 'AI Noise Cancellation',
   transcription: 'Transcription',
+  topic_research: 'Topic Research',
+  visual_analysis: 'Visual Analysis',
+  content_classification: 'Content Classification',
+  highlight_detection: 'Highlight Detection',
+  bounding_box_detection: 'Bounding Box Detection',
+  scoring: 'Clip Scoring',
+  metadata_generation: 'Clip Metadata',
+  aspect_ratio_render: 'Aspect Ratio & Tracking',
+  auto_reframe: 'Aspect Ratio & Tracking',
   clip_generation: 'Clip Generation',
   caption_styling: 'Caption Styling',
-  auto_reframe: 'Auto Reframe',
   export: 'Export',
 };
 

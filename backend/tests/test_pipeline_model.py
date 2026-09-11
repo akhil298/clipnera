@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
+
 import pytest
 
 from pipeline.model import PipelineStepType
@@ -10,6 +13,13 @@ def test_pipeline_step_types():
     assert PipelineStepType.TRANSCRIPTION.value == "transcription"
     assert PipelineStepType.HIGHLIGHT_DETECTION.value == "highlight_detection"
     assert PipelineStepType.BURN_IN_EXPORT.value == "burn_in_export"
+
+
+def test_pipeline_step_migration_includes_render_and_box_values():
+    migration_path = Path(__file__).resolve().parents[1] / "alembic" / "versions" / "20250904140000_add_missing_pipeline_step_types.py"
+    source = migration_path.read_text(encoding="utf-8")
+    assert "aspect_ratio_render" in source
+    assert "bounding_box_detection" in source
 
 
 def test_pipeline_step_order():

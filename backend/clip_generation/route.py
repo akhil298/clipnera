@@ -12,11 +12,16 @@ clip_generation = APIRouter(prefix="/clips", tags=["clip-generation"])
 
 
 @clip_generation.post("/{project_id}/generate")
-async def generate_clips(project_id: str, user: CurrentUserDep):
+async def generate_clips(project_id: str, user: CurrentUserDep, data: dict | None = None):
     service = ClipService()
+    data = data or {}
+    output_aspect_ratios = data.get("output_aspect_ratios")
+    if isinstance(output_aspect_ratios, str):
+        output_aspect_ratios = [item.strip() for item in output_aspect_ratios.split(",") if item.strip()]
     result = await service.generate_clips_for_project(
         project_id=project_id,
         user_id=user["user_id"],
+        output_aspect_ratios=output_aspect_ratios,
     )
     return result
 

@@ -2,39 +2,46 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import time
-from pathlib import Path
-from typing import Any, Callable, Optional
-from core.database import AsyncSessionLocal
+from typing import Any, Callable
+from uuid import uuid4
+
 from clients.ai.gemini import Gemini
 from clients.ai.groq import Groq
+from core.database import AsyncSessionLocal
 from core.logging_config import get_logger
-from core.exceptions import CustomException
-from content_intelligence.classifier import ContentClassifier
 from content_intelligence.analyzer import FrameAnalyzer
+from content_intelligence.classifier import ContentClassifier
 from content_intelligence.highlighter import HighlightDetector
-from content_intelligence.scorer import ClipScorer
 from content_intelligence.metadata_gen import MetadataGenerator
+from content_intelligence.reframing import build_output_formats
+from content_intelligence.research import TopicResearcher
+from content_intelligence.scorer import ClipScorer
 
 log = get_logger(__name__)
 
 
 class ContentIntelligenceService:
     def __init__(self) -> None:
+        self._groq = Groq()
         self._gemini = Gemini()
-        self._grok = Groq()
-        self._classifier = ContentClassifier(self._grok, self._gemini)
+        self._researcher = TopicResearcher(self._groq)
+        self._classifier = ContentClassifier(self._groq, self._gemini)
         self._analyzer = FrameAnalyzer(self._gemini)
-        self._highlighter = HighlightDetector()
+        self._highlighter = HighlightDetector(self._groq)
         self._scorer = ClipScorer()
-        self._metadata_gen = MetadataGenerator(self._grok)
+        self._metadata_gen = MetadataGenerator(self._groq)
 
-    async def analyze_project(self, project_id: str, video_path: str, transcript_segments: list[dict], progress_callback: Callable[[str, int, str | None], None] | None = None) -> dict:
+    async def analyze_project(
+        self,
+        project_id: str,
+        video_path: str,
+        transcript_segments: list[dict],
+        progress_callback: Callable[[str, int, str | None], None] | None = None,
+    ) -> dict:
         if progress_callback:
             await self._notify(progress_callback, "Researching topic...", 10)
 
-        topic_research = await self._research_topic(video_path)
+        topic_research = await self._research_topic(video_path, transcript_segments)
 
         if progress_callback:
             await self._notify(progress_callback, "Classifying content category...", 20)
@@ -55,7 +62,14 @@ class ContentIntelligenceService:
         await self._persist_analysis(project_id, analysis)
         return analysis
 
-    async def detect_highlights(self, project_id: str, video_path: str, transcript_segments: list[dict], analysis: dict, progress_callback: Callable[[str, int, str | None], None] | None = None) -> list[dict]:
+    async def detect_highlights(
+        self,
+        project_id: str,
+        video_path: str,
+        transcript_segments: list[dict],
+        analysis: dict,
+        progress_callback: Callable[[str, int, str | None], None] | None = None,
+    ) -> list[dict]:
         if progress_callback:
             await self._notify(progress_callback, "Detecting highlight segments...", 50)
 
@@ -76,28 +90,66 @@ class ContentIntelligenceService:
     async def generate_metadata_for_clips(self, clips: list[dict]) -> list[dict]:
         return await self._metadata_gen.generate_batch(clips)
 
-    async def _research_topic(self, video_path: str) -> dict:
-        filename = Path(video_path).stem
-        return {
-            "title": filename,
-            "keywords": [],
-            "summary": "",
-        }
+    async def analyze_candidate_clips(
+        self,
+        video_path: str,
+        clips: list[dict],
+        max_frames_per_clip: int = 8,
+        frame_interval: float = 2.0,
+    ) -> dict[str, list[dict]]:
+        return await self._analyzer.analyze_candidate_clips(
+            video_path,
+            clips,
+            max_frames_per_clip=max_frames_per_clip,
+            frame_interval=frame_interval,
+        )
+
+    def build_output_formats(
+        self,
+        frame_analyses: list[dict],
+        source_width: int,
+        source_height: int,
+        aspect_ratios: list[str] | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        ratios = aspect_ratios or self.default_aspect_ratios()
+        return build_output_formats(frame_analyses, source_width, source_height, ratios)
+
+    @staticmethod
+    def default_aspect_ratios() -> list[str]:
+        from core.config import get_settings
+
+        raw = getattr(get_settings(), "DEFAULT_OUTPUT_ASPECT_RATIOS", "9:16,1:1,4:5,16:9")
+        return [item.strip() for item in raw.split(",") if item.strip()]
+
+    async def _research_topic(self, video_path: str, transcript_segments: list[dict]) -> dict:
+        return await self._researcher.research(video_path, transcript_segments)
 
     async def _persist_analysis(self, project_id: str, analysis: dict) -> None:
         try:
             from clip_generation.model import VideoAnalysis
             from sqlalchemy import insert
+
+            frame_analysis = analysis.get("frame_analysis", {})
+            topic_research = analysis.get("topic_research", {})
+            classification = analysis.get("classification", {})
             async with AsyncSessionLocal() as session:
                 stmt = insert(VideoAnalysis).values(
-                    id=str(__import__("uuid").uuid4()),
+                    id=str(uuid4()),
                     project_id=project_id,
-                    content_category=analysis.get("classification", {}).get("category"),
-                    category_confidence=analysis.get("classification", {}).get("confidence"),
-                    topic_keywords=json.dumps(analysis.get("topic_research", {}).get("keywords", [])),
-                    scene_changes=json.dumps(analysis.get("frame_analysis", {}).get("scene_changes", [])),
-                    frame_descriptions=json.dumps(analysis.get("frame_analysis", {}).get("descriptions", {})),
-                    transcript_summary=analysis.get("topic_research", {}).get("summary"),
+                    content_category=classification.get("category"),
+                    category_confidence=classification.get("confidence"),
+                    topic_keywords=json.dumps(topic_research.get("topics", []), ensure_ascii=False),
+                    scene_changes=json.dumps(frame_analysis.get("scene_changes", [])),
+                    frame_descriptions=json.dumps(frame_analysis.get("descriptions", {}), ensure_ascii=False),
+                    transcript_summary=json.dumps({
+                        "summary": topic_research.get("summary", ""),
+                        "entities": topic_research.get("entities", []),
+                        "events": topic_research.get("events", []),
+                        "key_moments": topic_research.get("key_moments", []),
+                        "context_required": topic_research.get("context_required", []),
+                        "current_relevance": topic_research.get("current_relevance", ""),
+                    }, ensure_ascii=False),
+                    analysis_json=json.dumps(analysis, ensure_ascii=False, default=str),
                 )
                 await session.execute(stmt)
                 await session.commit()
@@ -110,5 +162,5 @@ class ContentIntelligenceService:
                 result = cb(message, percent, None)
                 if asyncio.iscoroutine(result):
                     await result
-            except Exception as e:
-                log.debug(f"Progress notify failed: {e}")
+            except Exception as exc:
+                log.debug(f"Progress notify failed: {exc}")

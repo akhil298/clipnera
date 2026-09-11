@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Callable, Optional
 
 from core.logging_config import get_logger
+from core.config import get_settings
 
 from clip.youtube_service import YouTubeService
 from audio.extraction.service import AudioExtractionService
@@ -22,7 +25,7 @@ from pipeline.model import PipelineStepType, StepStatus
 log = get_logger(__name__)
 
 
-ProgressCallback = Callable[[str, int, Optional[str]], None]
+ProgressCallback = Callable[[str, int, Optional[str], Optional[str], Optional[str]], None]
 
 
 class PipelineOrchestrator:
@@ -35,6 +38,8 @@ class PipelineOrchestrator:
         audio_config: Optional[dict] = None,
         progress_callback: Optional[ProgressCallback] = None,
         watermark_enabled: bool = True,
+        output_aspect_ratios: list[str] | None = None,
+        resume: bool = False,
     ) -> None:
         log.info(
             "Pipeline orchestrator initialized",
@@ -44,6 +49,7 @@ class PipelineOrchestrator:
                 "url": url,
                 "selected_steps": [s.value for s in selected_steps],
                 "watermark_enabled": watermark_enabled,
+                "resume": resume,
             },
         )
         self.project_id = project_id
@@ -53,6 +59,8 @@ class PipelineOrchestrator:
         self.audio_config = audio_config or {}
         self.progress_callback = progress_callback
         self.watermark_enabled = watermark_enabled
+        self.output_aspect_ratios = output_aspect_ratios or self._default_aspect_ratios()
+        self._resume = resume
         self._youtube = YouTubeService()
         self._audio_extractor = AudioExtractionService()
         self._audio_service = AudioService()
@@ -60,6 +68,7 @@ class PipelineOrchestrator:
         self._clip_service = ClipService()
         self._cancel = False
         self._local_path: str | None = None
+        self._step_statuses: dict[str, str] = {}
 
     def cancel(self) -> None:
         self._cancel = True
@@ -79,12 +88,17 @@ class PipelineOrchestrator:
             PipelineStepType.VISUAL_ANALYSIS,
             PipelineStepType.CONTENT_CLASSIFICATION,
             PipelineStepType.HIGHLIGHT_DETECTION,
+            PipelineStepType.BOUNDING_BOX_DETECTION,
             PipelineStepType.SCORING,
             PipelineStepType.METADATA_GENERATION,
+            PipelineStepType.ASPECT_RATIO_RENDER,
             PipelineStepType.CLIP_GENERATION,
             PipelineStepType.SUBTITLE_STYLING,
             PipelineStepType.BURN_IN_EXPORT,
         ]
+
+        if self._resume:
+            await self._load_step_statuses()
 
         log.info(
             "Pipeline started",
@@ -111,6 +125,16 @@ class PipelineOrchestrator:
                         extra={"project_id": self.project_id, "step": step.value},
                     )
                     continue
+
+                if self._resume and self._step_statuses.get(step.value) == "completed":
+                    restored = await self._restore_step_artifact(step)
+                    if restored is not None:
+                        results[step.value] = restored
+                        self._notify(
+                            f"Skipping completed step: {step.value}", 100,
+                            step=step.value, step_status="completed",
+                        )
+                        continue
 
                 try:
                     await self._mark_step_running(step)
@@ -167,10 +191,14 @@ class PipelineOrchestrator:
             return await self._step_content_classification(context)
         if step == PipelineStepType.HIGHLIGHT_DETECTION:
             return await self._step_highlight_detection(context)
+        if step == PipelineStepType.BOUNDING_BOX_DETECTION:
+            return await self._step_bounding_box_detection(context)
         if step == PipelineStepType.SCORING:
             return await self._step_scoring(context)
         if step == PipelineStepType.METADATA_GENERATION:
             return await self._step_metadata_generation(context)
+        if step == PipelineStepType.ASPECT_RATIO_RENDER:
+            return await self._step_aspect_ratio_render(context)
         if step == PipelineStepType.CLIP_GENERATION:
             return await self._step_clip_generation(context)
         if step == PipelineStepType.SUBTITLE_STYLING:
@@ -349,8 +377,13 @@ class PipelineOrchestrator:
         log.info("Starting transcription", extra={"project_id": self.project_id, "video_path": video_path})
         self._notify("Transcribing audio...", 10)
 
+        audio_result = context.get(PipelineStepType.AUDIO_EXTRACTION.value, {})
+        noise_result = context.get(PipelineStepType.AI_NOISE_CANCELLATION.value, {})
+        audio_input = noise_result.get("enhanced_audio_path") or audio_result.get("audio_path") or video_path
+        if not audio_input or not Path(audio_input).exists():
+            audio_input = video_path
         request = TranscriptionRequest(
-            input_path=video_path,
+            input_path=audio_input,
             model_size="small",
             language=None,
             chunk_duration=1200,
@@ -389,9 +422,7 @@ class PipelineOrchestrator:
 
     async def _step_topic_research(self, context: dict) -> dict:
         self._notify("Researching topic...", 20)
-        transcription = context.get(PipelineStepType.TRANSCRIPTION.value, {})
-        transcript_result = transcription.get("transcription_result", {})
-        segments = transcript_result.get("segments", [])
+        segments = self._transcript_segments(context)
         log.info(
             "Starting topic research",
             extra={"project_id": self.project_id, "segment_count": len(segments)},
@@ -441,19 +472,15 @@ class PipelineOrchestrator:
                         extra={"project_id": self.project_id, "video_path": video_path},
                     )
 
-        from content_intelligence.analyzer import FrameAnalyzer
-        from clients.ai.gemini import Gemini
-        analyzer = FrameAnalyzer(Gemini())
-
         topic = context.get(PipelineStepType.TOPIC_RESEARCH.value, {})
         analysis = topic.get("analysis", {})
-        category = analysis.get("classification", {}).get("category", "unknown")
-        log.info(
-            "Visual analysis request",
-            extra={"project_id": self.project_id, "video_path": video_path, "category": category},
-        )
+        frame_result = analysis.get("frame_analysis")
+        if not frame_result:
+            from content_intelligence.analyzer import FrameAnalyzer
+            from clients.ai.gemini import Gemini
 
-        frame_result = await analyzer.analyze(video_path, category)
+            category = analysis.get("classification", {}).get("category", "unknown")
+            frame_result = await FrameAnalyzer(Gemini()).analyze(video_path, category)
         log.info(
             "Visual analysis complete",
             extra={"project_id": self.project_id, "result_type": type(frame_result).__name__},
@@ -464,18 +491,13 @@ class PipelineOrchestrator:
     async def _step_content_classification(self, context: dict) -> dict:
         self._notify("Classifying content...", 50)
         topic = context.get(PipelineStepType.TOPIC_RESEARCH.value, {})
-        transcription = context.get(PipelineStepType.TRANSCRIPTION.value, {})
-        segments = transcription.get("transcription_result", {}).get("segments", [])
-        log.info(
-            "Starting content classification",
-            extra={"project_id": self.project_id, "segment_count": len(segments)},
-        )
-
-        from content_intelligence.service import ContentIntelligenceService
-        service = ContentIntelligenceService()
-
-        topic_research = topic.get("topic_research", {})
-        classification = await service._classifier.classify(topic_research, segments)
+        analysis = topic.get("analysis", {})
+        segments = self._transcript_segments(context)
+        classification = analysis.get("classification")
+        if not classification:
+            from content_intelligence.service import ContentIntelligenceService
+            service = ContentIntelligenceService()
+            classification = await service._classifier.classify(topic.get("topic_research", {}), segments)
         log.info(
             "Content classification complete",
             extra={"project_id": self.project_id, "classification": str(classification)},
@@ -499,8 +521,7 @@ class PipelineOrchestrator:
                         extra={"project_id": self.project_id, "video_path": video_path},
                     )
 
-        transcription = context.get(PipelineStepType.TRANSCRIPTION.value, {})
-        segments = transcription.get("transcription_result", {}).get("segments", [])
+        segments = self._transcript_segments(context)
         log.info(
             "Highlight detection inputs",
             extra={"project_id": self.project_id, "video_path": video_path, "segment_count": len(segments)},
@@ -578,10 +599,24 @@ class PipelineOrchestrator:
             extra={"project_id": self.project_id, "clip_count": len(final_clips)},
         )
 
-        self._notify(f"Processing {len(final_clips)} clips...", 50)
+        topic = context.get(PipelineStepType.TOPIC_RESEARCH.value, {})
+        highlight_result = context.get(PipelineStepType.HIGHLIGHT_DETECTION.value, {})
+        score_result = context.get(PipelineStepType.SCORING.value, {})
+        meta_result = context.get(PipelineStepType.METADATA_GENERATION.value, {})
+        bounding_result = context.get(PipelineStepType.BOUNDING_BOX_DETECTION.value, {})
+        aspect_result = context.get(PipelineStepType.ASPECT_RATIO_RENDER.value, {})
         result = await self._clip_service.generate_clips_for_project(
-            self.project_id, self.user_id,
+            self.project_id,
+            self.user_id,
             progress_callback=lambda msg, pct, _: self._notify(msg, pct),
+            transcript_segments=self._transcript_segments(context),
+            analysis=topic.get("analysis", {}),
+            highlights=highlight_result.get("highlights", []),
+            scored_highlights=score_result.get("scored_highlights", []),
+            final_clips=meta_result.get("final_clips", []),
+            candidate_visual_analysis=bounding_result.get("candidate_visual_analysis", {}),
+            rendered_clips=aspect_result.get("rendered_clips"),
+            output_aspect_ratios=self.output_aspect_ratios,
         )
         log.info(
             "Clip generation complete",
@@ -590,21 +625,100 @@ class PipelineOrchestrator:
         self._notify("Clip generation complete", 100)
         return result
 
+    async def _project_video_path(self) -> str | None:
+        async with AsyncSessionLocal() as session:
+            repo = ClipRepository(session)
+            project = await repo.get_project(self.project_id, self.user_id)
+            return project.local_path if project else None
+
+    def _transcript_segments(self, context: dict) -> list[dict]:
+        transcription = context.get(PipelineStepType.TRANSCRIPTION.value, {})
+        result = transcription.get("transcription_result", {}) if isinstance(transcription, dict) else getattr(transcription, "transcription_result", None)
+        if hasattr(result, "model_dump"):
+            result = result.model_dump()
+        if isinstance(result, dict):
+            return list(result.get("segments", []) or [])
+        return list(getattr(result, "segments", []) or [])
+
+    def _default_aspect_ratios(self) -> list[str]:
+        from core.config import get_settings
+
+        raw = getattr(get_settings(), "DEFAULT_OUTPUT_ASPECT_RATIOS", "9:16,1:1,4:5,16:9")
+        return [item.strip() for item in raw.split(",") if item.strip()]
+
+    async def _step_bounding_box_detection(self, context: dict) -> dict:
+        self._notify("Detecting subjects and bounding boxes...", 40)
+        highlight_result = context.get(PipelineStepType.HIGHLIGHT_DETECTION.value, {})
+        highlights = highlight_result.get("highlights", [])
+        video_path = self._local_path or await self._project_video_path()
+        if not video_path or not Path(video_path).exists():
+            raise ValueError("Missing video path for bounding box detection")
+
+        from content_intelligence.service import ContentIntelligenceService
+        service = ContentIntelligenceService()
+        candidate_visual_analysis = await service.analyze_candidate_clips(
+            video_path,
+            highlights,
+            max_frames_per_clip=get_settings().CANDIDATE_MAX_FRAMES,
+            frame_interval=get_settings().CANDIDATE_FRAME_INTERVAL,
+        )
+        self._notify(f"Analyzed bounding boxes for {len(highlights)} clips", 100)
+        return {"candidate_visual_analysis": candidate_visual_analysis}
+
+    async def _step_aspect_ratio_render(self, context: dict) -> dict:
+        self._notify("Calculating aspect-ratio crops...", 40)
+        meta_result = context.get(PipelineStepType.METADATA_GENERATION.value, {})
+        final_clips = meta_result.get("final_clips", [])
+        bounding_result = context.get(PipelineStepType.BOUNDING_BOX_DETECTION.value, {})
+        candidate_visual_analysis = bounding_result.get("candidate_visual_analysis", {})
+        video_path = self._local_path or await self._project_video_path()
+        if not video_path or not Path(video_path).exists():
+            raise ValueError("Missing video path for aspect-ratio rendering")
+
+        rendered_clips = await self._clip_service.prepare_clip_outputs(
+            project_id=self.project_id,
+            video_path=video_path,
+            clips=final_clips,
+            transcript_segments=self._transcript_segments(context),
+            candidate_visual_analysis=candidate_visual_analysis,
+            output_aspect_ratios=self.output_aspect_ratios,
+        )
+        self._notify("Aspect-ratio crops calculated", 100)
+        return {"rendered_clips": rendered_clips}
+
     async def _step_subtitle_styling(self, context: dict) -> dict:
         self._notify("Preparing subtitle styles...", 100)
         log.info("Starting subtitle styling step", extra={"project_id": self.project_id})
         from subtitle_styling.service import SubtitleStylingService
+        from subtitle_styling.phrase_segmenter import segment_for_captions
+
         service = SubtitleStylingService()
         presets = await service.get_style_presets()
+
+        segments = self._transcript_segments(context)
+        caption_segments = []
+        if segments:
+            caption_segments = segment_for_captions(
+                segments,
+                max_chars=42,
+                max_words_per_line=7,
+            )
+            log.info(
+                "Phrase segmentation complete",
+                extra={"project_id": self.project_id, "segment_count": len(caption_segments)},
+            )
+
         log.info(
             "Subtitle styling step complete",
-            extra={"project_id": self.project_id, "preset_count": len(presets)},
+            extra={"project_id": self.project_id, "preset_count": len(presets), "caption_segment_count": len(caption_segments)},
         )
-        return {"presets": presets, "message": "User selects style before burn-in"}
+        return {"presets": presets, "caption_segments": caption_segments, "message": "User selects style before burn-in"}
 
     async def _step_burn_in_export(self, context: dict) -> dict:
         self._notify("Burning titles into clips...", 50)
         log.info("Starting burn-in export", extra={"project_id": self.project_id})
+
+        transcript_segments = self._transcript_segments(context)
 
         async with AsyncSessionLocal() as session:
             repo = ClipRepository(session)
@@ -626,6 +740,8 @@ class PipelineOrchestrator:
                     )
                     continue
                 try:
+                    clip_transcript = json.loads(clip.transcript or "[]") if clip.transcript else None
+                    transcript_to_use = clip_transcript or transcript_segments
                     log.info(
                         "Burning subtitles for clip",
                         extra={"project_id": self.project_id, "clip_id": clip.id, "title": clip.title},
@@ -634,8 +750,11 @@ class PipelineOrchestrator:
                         video_path=clip.local_path,
                         clip_start=clip.start_time,
                         clip_end=clip.end_time,
+                        style_type="default",
                         title_text=clip.title,
                         enable_watermark=self.watermark_enabled,
+                        transcript_segments=transcript_to_use,
+                        word_snapping=True,
                     )
                     burned.append({
                         "clip_id": clip.id,
@@ -664,8 +783,53 @@ class PipelineOrchestrator:
         self._notify(f"Burned {len(burned)}/{len(clips)} clips", 100)
         return {"status": "completed", "burned_clips": burned, "message": "Titles burned at export time"}
 
+    async def _load_step_statuses(self) -> None:
+        try:
+            from pipeline.repository import PipelineRepository
+            async with AsyncSessionLocal() as session:
+                repo = PipelineRepository(session)
+                logs = await repo.get_step_logs_for_pipeline(self.project_id)
+                self._step_statuses = {log_entry.step.value: log_entry.status.value for log_entry in logs}
+        except Exception as exc:
+            log.debug(f"Failed to load step statuses for resume: {exc}")
+            self._step_statuses = {}
+
+    async def _restore_step_artifact(self, step: PipelineStepType) -> Any | None:
+        try:
+            from pipeline.repository import PipelineRepository
+            async with AsyncSessionLocal() as session:
+                repo = PipelineRepository(session)
+                logs = await repo.get_step_logs_for_pipeline(self.project_id)
+                for log_entry in logs:
+                    if log_entry.step == step and log_entry.artifact_path:
+                        import json as _json
+                        try:
+                            with open(log_entry.artifact_path, "r") as f:
+                                return _json.load(f)
+                        except Exception:
+                            return None
+        except Exception:
+            pass
+        return None
+
+    async def _save_step_artifact(self, step: PipelineStepType, result: Any) -> None:
+        try:
+            from pipeline.repository import PipelineRepository
+            async with AsyncSessionLocal() as session:
+                repo = PipelineRepository(session)
+                import json as _json
+                import tempfile
+                artifact_path = os.path.join(tempfile.gettempdir(), f"artifact_{self.project_id}_{step.value}.json")
+                with open(artifact_path, "w") as f:
+                    _json.dump(result, f, default=str)
+                state = await repo.get_pipeline(self.project_id)
+                if state:
+                    await repo.save_artifact(state.id, step, artifact_path)
+        except Exception as exc:
+            log.debug(f"Failed to save artifact for step {step.value}: {exc}")
+
     async def _mark_step_running(self, step: PipelineStepType) -> None:
-        self._notify(f"Starting {step.value}...", 0)
+        self._notify(f"Starting {step.value}...", 0, step=step.value, step_status="running")
         try:
             from pipeline.repository import PipelineRepository
             async with AsyncSessionLocal() as session:
@@ -677,7 +841,7 @@ class PipelineOrchestrator:
             log.debug(f"Failed to update step status to running: {exc}")
 
     async def _mark_step_completed(self, step: PipelineStepType, result: Any) -> None:
-        self._notify(f"Completed {step.value}", 100)
+        self._notify(f"Completed {step.value}", 100, step=step.value, step_status="completed")
         try:
             from pipeline.repository import PipelineRepository
             async with AsyncSessionLocal() as session:
@@ -685,11 +849,12 @@ class PipelineOrchestrator:
                 state = await repo.get_pipeline(self.project_id)
                 if state:
                     await repo.update_step_status(state.id, step, StepStatus.COMPLETED)
+            await self._save_step_artifact(step, result)
         except Exception as exc:
             log.debug(f"Failed to update step status to completed: {exc}")
 
     async def _mark_step_failed(self, step: PipelineStepType, error: str) -> None:
-        self._notify(f"Failed: {step.value} - {error}", 0)
+        self._notify(f"Failed: {step.value} - {error}", 0, step=step.value, step_status="failed")
         try:
             from pipeline.repository import PipelineRepository
             async with AsyncSessionLocal() as session:
@@ -705,7 +870,8 @@ class PipelineOrchestrator:
             from pipeline.repository import PipelineRepository
             async with AsyncSessionLocal() as session:
                 repo = PipelineRepository(session)
-                await repo.update_pipeline_current_step(self.project_id, PipelineStepType.BURN_IN_EXPORT, is_completed=True)
+                last_step = self.selected_steps[-1] if self.selected_steps else PipelineStepType.CLIP_GENERATION
+                await repo.update_pipeline_current_step(self.project_id, last_step, is_completed=True)
         except Exception as exc:
             log.error(f"Failed to mark pipeline completed: project={self.project_id} error={exc}")
 
@@ -722,10 +888,12 @@ class PipelineOrchestrator:
         except Exception as exc:
             log.error(f"Failed to mark pipeline failed: project={self.project_id} error={exc}")
 
-    def _notify(self, message: str, percent: int) -> None:
+    def _notify(
+        self, message: str, percent: int, step: Optional[str] = None, step_status: Optional[str] = None
+    ) -> None:
         if self.progress_callback:
             try:
-                result = self.progress_callback(message, percent, None)
+                result = self.progress_callback(message, percent, None, step, step_status)
                 if asyncio.iscoroutine(result):
                     asyncio.create_task(result)
             except Exception as e:

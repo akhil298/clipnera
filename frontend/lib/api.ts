@@ -1,4 +1,4 @@
-import { BrandKit } from '@/lib/types';
+import { BrandKit, PipelineProgressEvent, PipelineStatus, ViralClip, CaptionConfig } from '@/lib/types';
 import { getToken, clearAuth, setAuth } from '@/lib/auth';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
@@ -152,6 +152,98 @@ export interface AvailableFormatsResponse {
   audio: FormatInfo[];
 }
 
+export interface BackendClip {
+  video_id: string;
+  clip_id: string;
+  id: string;
+  project_id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  start_time: number;
+  end_time: number;
+  duration_seconds: number;
+  timestamps: { start: number; end: number; duration: number };
+  reason: string;
+  score: number;
+  scores: Record<string, number>;
+  content_category: string | null;
+  presigned_url: string | null;
+  poster_url: string | null;
+  local_path: string | null;
+  status: string;
+  burned_presigned_url: string | null;
+  transcript: Array<{ start: number; end: number; text: string; speaker?: string }>;
+  created_at: string | null;
+}
+
+export interface ClipListResponse {
+  project_id: string;
+  clips: BackendClip[];
+  total: number;
+}
+
+const DEFAULT_CAPTION_CONFIG: CaptionConfig = {
+  preset: 'bold_captions',
+  fontSize: 60,
+  fontFamily: 'Inter, sans-serif',
+  textColor: '#ffffff',
+  highlightColor: '#fbbf24',
+  secondaryHighlightColor: '#f8fafc',
+  hasBgBox: true,
+  bgBoxColor: '#000000',
+  uppercase: true,
+  animation: 'bounce',
+  positionY: 78,
+  emojisEnabled: true,
+  maxWordsPerLine: 6,
+      shadowIntensity: 0.8,
+};
+
+export function mapBackendClip(clip: BackendClip): ViralClip {
+  const viralityScore = Math.round(clip.score ?? 50);
+  const hookScore = typeof clip.scores?.hook_score === 'number'
+    ? Math.round(clip.scores.hook_score * 100)
+    : viralityScore;
+  const engagementScore = typeof clip.scores?.engagement_score === 'number'
+    ? Math.round(clip.scores.engagement_score * 100)
+    : viralityScore;
+  return {
+    id: clip.id,
+    title: clip.title,
+    hook: clip.reason || clip.title,
+    posterUrl: clip.poster_url || '',
+    presignedUrl: clip.presigned_url || clip.burned_presigned_url || '',
+    viralityScore,
+    hookScore,
+    engagementScore,
+    startTime: clip.start_time,
+    endTime: clip.end_time,
+    duration: Math.round(clip.duration_seconds || (clip.end_time - clip.start_time)),
+    rationale: clip.reason || '',
+    suggestedAspectRatio: '9:16',
+    suggestedLayout: 'single_speaker',
+    aspectRatio: '9:16',
+    layoutMode: 'single_speaker',
+    keywords: [],
+    emojiHighlights: [],
+    autoBrollKeywords: [],
+    transcriptSegments: [],
+    bRollOverlays: [],
+    soundEffects: [],
+    captionConfig: DEFAULT_CAPTION_CONFIG,
+    autoZoom: { enabled: true, frequency: 'subtle', scale: 1.1 },
+    autoReframe: { mode: 'center', speakerCropX: 0.5, speakerSmoothing: 0.5 },
+    socialOptimization: {
+      hashtags: [],
+      optimizedHooks: [],
+      targetPlatforms: ['tiktok', 'instagram', 'youtube'],
+      postStatus: 'draft',
+    },
+    thumbnailTime: 1.0,
+  };
+}
+
 async function authedRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const token = getToken();
   const res = await fetch(`${API_BASE}/api/v1${path}`, {
@@ -285,12 +377,13 @@ export const clipApi = {
       }
     };
 
-    pollProgress();
+     pollProgress();
 
     return () => {
       isCancelled = true;
     };
   },
+  listClips: (projectId: string) => authedRequest<ClipListResponse>(`/clips/${projectId}`),
 };
 
 export interface AudioProcessRequest {
@@ -319,31 +412,37 @@ export const audioApi = {
     authedRequest<{ zones: AudioPresetZone[] }>('/audio/presets'),
 };
 
-export interface PipelineStatus {
-  project_id: string;
-  current_step: string;
-  is_completed: boolean;
-  error: string | null;
-  steps: Array<{
-    step: string;
-    status: string;
-    progress_percent: number;
-    message: string | null;
-    artifact_path: string | null;
-    started_at: string | null;
-    finished_at: string | null;
-  }>;
-}
+const DEFAULT_PIPELINE_STEPS = [
+  'download',
+  'audio_extraction',
+  'ai_noise_cancellation',
+  'transcription',
+  'topic_research',
+  'visual_analysis',
+  'content_classification',
+  'highlight_detection',
+  'bounding_box_detection',
+  'scoring',
+  'metadata_generation',
+  'aspect_ratio_render',
+  'clip_generation',
+];
+const DEFAULT_OUTPUT_ASPECT_RATIOS = ['9:16', '1:1', '4:5', '16:9'];
 
 export const pipelineApi = {
-  start: (projectId: string, steps: string[] = ['download', 'audio_extraction', 'ai_noise_cancellation'], audioConfig: Record<string, any> = {}) =>
-    authedRequest<{ project_id: string; status: string; selected_steps: string[] }>(`/pipeline/start/${projectId}`, {
+  start: (
+    projectId: string,
+    steps: string[] = DEFAULT_PIPELINE_STEPS,
+    audioConfig: Record<string, any> = {},
+    outputAspectRatios: string[] = DEFAULT_OUTPUT_ASPECT_RATIOS,
+  ) =>
+    authedRequest<{ project_id: string; status: string; selected_steps: string[]; credits_deducted: number }>(`/pipeline/start/${projectId}`, {
       method: 'POST',
-      body: JSON.stringify({ steps, audio_config: audioConfig }),
+      body: JSON.stringify({ steps, audio_config: audioConfig, output_aspect_ratios: outputAspectRatios }),
     }),
   subscribeProgress: (
     projectId: string,
-    onProgress: (data: { message: string; percent: number; status: string }) => void,
+    onProgress: (data: PipelineProgressEvent) => void,
     onError?: (err: Error) => void,
   ): (() => void) => {
     const ctrl = new AbortController();
@@ -412,10 +511,15 @@ export const pipelineApi = {
     authedRequest<{ project_id: string; step: string; status: string }>(`/pipeline/revert/${projectId}/${step}`, {
       method: 'POST',
     }),
-  resume: (projectId: string, steps: string[] = ['download', 'audio_extraction', 'ai_noise_cancellation'], audioConfig: Record<string, any> = {}) =>
-    authedRequest<{ project_id: string; status: string; selected_steps: string[] }>(`/pipeline/resume/${projectId}`, {
+  resume: (
+    projectId: string,
+    steps: string[] = DEFAULT_PIPELINE_STEPS,
+    audioConfig: Record<string, any> = {},
+    outputAspectRatios: string[] = DEFAULT_OUTPUT_ASPECT_RATIOS,
+  ) =>
+    authedRequest<{ project_id: string; status: string; selected_steps: string[]; credits_deducted: number }>(`/pipeline/resume/${projectId}`, {
       method: 'POST',
-      body: JSON.stringify({ steps, audio_config: audioConfig }),
+      body: JSON.stringify({ steps, audio_config: audioConfig, output_aspect_ratios: outputAspectRatios }),
     }),
 };
 

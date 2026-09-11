@@ -1,5 +1,5 @@
 ﻿"use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Sparkles,
   Play,
@@ -68,6 +68,15 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
 }) => {
   const safeProject = project || { clips: [] as ViralClip[], title: '', folderName: '' };
   const [selectedClip, setSelectedClip] = useState<ViralClip | null>(safeProject.clips[0] || null);
+  const [isPlayingClip, setIsPlayingClip] = useState(false);
+
+  useEffect(() => {
+    if (safeProject.clips.length > 0 && !selectedClip) {
+      setSelectedClip(safeProject.clips[0]);
+    } else if (safeProject.clips.length > 0 && selectedClip && !safeProject.clips.find((c) => c.id === selectedClip.id)) {
+      setSelectedClip(safeProject.clips[0]);
+    }
+  }, [safeProject.clips, selectedClip]);
   const [isPlayingRaw, setIsPlayingRaw] = useState(false);
   const [copiedHookId, setCopiedHookId] = useState<string | null>(null);
   const [filterScore, setFilterScore] = useState<number>(85);
@@ -161,6 +170,30 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
 
       {/* Project Folder Banner & Virality Spikes Timeline */}
       <div className="rounded-2xl bg-neutral-900/90 border border-neutral-800 p-5 lg:p-6 relative overflow-hidden shadow-xl">
+        {/* Loading overlay: dark gradient sweep from left to right as processing progresses */}
+        {safeProject.processingStatus === 'processing' && (
+          <>
+            <div
+              className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-black/10 pointer-events-none transition-all duration-500 ease-out"
+              style={{ width: `${safeProject.processingProgress ?? 0}%`, left: 0 }}
+            />
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-amber-400 shadow-lg animate-pulse"
+              style={{ left: `calc(${safeProject.processingProgress ?? 0}% - 10px)` }}
+            />
+          </>
+        )}
+
+        {/* Credits Charged Badge */}
+        {safeProject.creditsDeducted && safeProject.creditsDeducted > 0 && (
+          <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/20">
+            <Zap className="w-3 h-3 text-amber-400" />
+            <span className="text-[10px] font-mono font-semibold text-amber-300">
+              {safeProject.creditsDeducted} credit{safeProject.creditsDeducted !== 1 ? 's' : ''} deducted
+            </span>
+          </div>
+        )}
+
         <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
           <div className="space-y-2 flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -491,13 +524,53 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
             {/* Vertical Video Phone Frame Mockup */}
             {selectedClip && (
               <div className="relative mx-auto w-56 aspect-[9/16] rounded-2xl bg-black border-2 border-neutral-800 shadow-xl overflow-hidden flex flex-col justify-between p-3">
-                {/* Poster Background */}
+                {/* Video Preview with Play Overlay */}
                 <div className="absolute inset-0">
-                  <img
-                    src={safeProject.posterUrl}
-                    alt={selectedClip.title}
-                    className="w-full h-full object-cover opacity-70 scale-105"
-                  />
+                  {selectedClip.presignedUrl ? (
+                    <>
+                      <video
+                        src={selectedClip.presignedUrl}
+                        autoPlay={isPlayingClip}
+                        muted
+                        loop
+                        playsInline
+                        poster={selectedClip.posterUrl || safeProject.posterUrl}
+                        className="w-full h-full object-cover"
+                        onPlay={() => setIsPlayingClip(true)}
+                        onPause={() => setIsPlayingClip(false)}
+                      />
+                      {!isPlayingClip && selectedClip.posterUrl && (
+                        <img
+                          src={selectedClip.posterUrl}
+                          alt={selectedClip.title}
+                          className="absolute inset-0 w-full h-full object-cover opacity-40"
+                        />
+                      )}
+                      {!isPlayingClip && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <button
+                            onClick={() => setIsPlayingClip(true)}
+                            className="w-14 h-14 rounded-full bg-amber-500/90 hover:bg-amber-400 text-neutral-950 flex items-center justify-center shadow-xl transition-all active:scale-90"
+                          >
+                            <Play className="w-6 h-6 fill-current" />
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <img
+                        src={safeProject.posterUrl}
+                        alt={selectedClip.title}
+                        className="w-full h-full object-cover opacity-70 scale-105"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-14 h-14 rounded-full bg-neutral-800/60 flex items-center justify-center">
+                          <Play className="w-6 h-6 text-neutral-400" />
+                        </div>
+                      </div>
+                    </>
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/60" />
                 </div>
 
