@@ -4,6 +4,7 @@ import asyncio
 import os
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 import httpx
@@ -97,6 +98,8 @@ class YouTubeService:
         1. YOUTUBE_COOKIES_BROWSER: yt-dlp reads cookies directly from browser (recommended).
            Set to browser name, e.g. "chrome", "firefox", "edge".
         2. YOUTUBE_COOKIES_PATH: path to a manually exported cookies.txt file.
+
+        If neither is set, the project falls back to its bundled backend/youtube_cookies.txt file.
         """
         options: dict = {
             "quiet": True,
@@ -111,11 +114,28 @@ class YouTubeService:
         if cookie_browser:
             options["cookiesfrombrowser"] = (cookie_browser,)
             log.info(f"YouTube cookies will be read from browser: {cookie_browser}")
-        else:
-            cookie_path = os.environ.get("YOUTUBE_COOKIES_PATH")
-            if cookie_path and os.path.exists(cookie_path):
-                options["cookiefile"] = cookie_path
-                log.info(f"YouTube cookies file loaded from {cookie_path}")
+            return options
+
+        cookie_path = os.environ.get("YOUTUBE_COOKIES_PATH")
+        if not cookie_path:
+            backend_dir = Path(__file__).resolve().parent.parent
+            candidate_paths = [
+                backend_dir / "youtube_cookies.txt",
+                Path.cwd() / "youtube_cookies.txt",
+                backend_dir / ".." / "youtube_cookies.txt",
+            ]
+            for candidate in candidate_paths:
+                if candidate.exists():
+                    cookie_path = str(candidate.resolve())
+                    break
+
+        if cookie_path:
+            cookie_file = Path(cookie_path).expanduser()
+            if cookie_file.exists():
+                options["cookiefile"] = str(cookie_file.resolve())
+                log.info(f"YouTube cookies file loaded from {cookie_file.resolve()}")
+            else:
+                log.warning(f"YOUTUBE_COOKIES_PATH is set but file does not exist: {cookie_path}")
 
         return options
 

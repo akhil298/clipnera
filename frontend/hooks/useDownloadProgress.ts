@@ -24,7 +24,8 @@ export function useDownloadProgress(): UseDownloadProgressResult {
   const pollProgress = async (projectId: string) => {
     try {
       const token = getToken();
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'}/api/v1/clips/progress/${projectId}`, {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+      const res = await fetch(`${apiBase}/api/v1/clips/progress/${projectId}`, {
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
