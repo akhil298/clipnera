@@ -246,6 +246,11 @@ export function mapBackendClip(clip: BackendClip): ViralClip {
 
 async function authedRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const token = getToken();
+  if (!token) {
+    handleUnauthorized();
+    throw new Error('Unauthorized: Your session has expired.');
+  }
+
   const res = await fetch(`${API_BASE}/api/v1${path}`, {
     ...options,
     headers: {

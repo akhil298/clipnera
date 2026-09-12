@@ -39,12 +39,15 @@ export function isTokenExpired(): boolean {
 }
 
 export function isAuthenticated(): boolean {
-  const { token } = getAuth();
-  return !!token;
+  return !!getToken();
 }
 
 export function getToken(): string | null {
-  const { token } = getAuth();
+  const { token, expiresAt } = getAuth();
   if (!token) return null;
+  if (expiresAt !== null && (Number.isNaN(expiresAt) || Date.now() >= expiresAt)) {
+    clearAuth();
+    return null;
+  }
   return token;
 }
