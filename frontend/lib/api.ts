@@ -1,7 +1,7 @@
 import { BrandKit, PipelineProgressEvent, PipelineStatus, ViralClip, CaptionConfig } from '@/lib/types';
 import { getToken, clearAuth, setAuth } from '@/lib/auth';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
 function handleUnauthorized(): void {
   clearAuth();
