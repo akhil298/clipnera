@@ -565,8 +565,12 @@ class YouTubeService:
             log.error(f"[{project_id}] Failed to generate presigned URL: {str(e)}")
             presigned_url = ""
 
-        await self.set_progress(project_id, {"status": "done", "percent": 100.0})
-        log.info(f"[{project_id}] ✓✓✓ COMPLETE - Video ready for processing! File: s3://{self._bucket}/{s3_key}")
+        await self.set_progress(project_id, {
+            "status": "finalizing",
+            "percent": 100.0,
+            "message": "Upload complete; saving video metadata...",
+        })
+        log.info(f"[{project_id}] Upload complete; waiting for database metadata commit. File: s3://{self._bucket}/{s3_key}")
 
         return {
             "title": title,

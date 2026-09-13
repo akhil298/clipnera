@@ -14,6 +14,7 @@ from pipeline.model import PipelineStepType, StepStatus
 from pipeline.service import PipelineOrchestrator
 from pipeline.repository import PipelineRepository
 from clip.repository import ClipRepository
+from clip.model import ProjectStatus
 from core.logging_config import get_logger
 from core.database import AsyncSessionLocal
 from core.exceptions import CustomException
@@ -99,6 +100,13 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
         if not project:
             raise CustomException(message="Project not found", code="NOT_FOUND", status_code=404)
 
+        if project.status != ProjectStatus.UPLOADED or not project.duration_seconds:
+            raise CustomException(
+                message="Video download and metadata save are not complete yet. Please wait for the upload to finish.",
+                code="VIDEO_NOT_READY",
+                status_code=409,
+            )
+
         body = body or {}
         default_steps = [
             "audio_extraction",
@@ -126,8 +134,6 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
         })
         watermark_enabled = body.get("watermark_enabled", True)
 
-        await pipeline_repo.create_pipeline(project_id, selected_steps)
-
         plan_repo = PlanRepository(session)
         sub_repo = UserSubscriptionRepository(session)
         tx_repo = PaymentTransactionRepository(session)
@@ -137,6 +143,8 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
         duration_seconds = project.duration_seconds or 0
         if duration_seconds <= 0:
             raise CustomException(message="Video duration not available. Please wait for download to complete.", code="DURATION_UNAVAILABLE", status_code=400)
+
+        await pipeline_repo.create_pipeline(project_id, selected_steps)
 
         credit_cost = subscription_service.calculate_video_credit_cost(duration_seconds)
         try:

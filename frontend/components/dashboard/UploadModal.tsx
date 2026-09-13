@@ -150,19 +150,22 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 reject(new Error(progress.message || 'Download failed'));
               }
             },
-            () => {
-              setProcessingLogs((prev) => [...prev, 'Download stream error, continuing...']);
-              resolve();
+            (err) => {
+              setProcessingLogs((prev) => [...prev, `Download stream error: ${err.message}`]);
+              unsub();
+              reject(err);
             },
           );
         });
+      } else if (!projectId || downloadResult?.status !== 'done') {
+        throw new Error('Download did not complete successfully.');
       }
     } catch (err) {
-      setProcessingLogs((prev) => [...prev, 'Backend download unavailable, continuing with local processing...']);
-    }
-
-    if (!projectId) {
-      projectId = `proj-${Date.now()}`;
+      const message = err instanceof Error ? err.message : 'Video download failed.';
+      setProcessingLogs((prev) => [...prev, message]);
+      setPipelineError(message);
+      setIsProcessing(false);
+      return;
     }
 
     const audioConfig = {

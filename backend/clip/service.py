@@ -111,6 +111,12 @@ class ClipService:
                 status=ProjectStatus.UPLOADED,
                 local_path=result.get("local_path"),
             )
+            await YouTubeService.set_progress(project_id, {
+                "status": "done",
+                "percent": 100.0,
+                "total": self._youtube._format_bytes(result["file_size"]),
+                "message": "Video downloaded, metadata saved, and upload complete.",
+            })
             log.info(f"Video downloaded: project={project_id} user={user_id}")
         except ValueError as e:
             log.error(f"Download failed: project={project_id} user={user_id} error={e}")
