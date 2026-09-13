@@ -401,6 +401,14 @@ class ClipService:
                 status_code=422,
             )
 
+        rendered_count = sum(1 for clip in saved_clips if clip.local_path)
+        if rendered_count == 0:
+            raise CustomException(
+                message="Clip files could not be rendered. Check the FFmpeg video encoder configuration.",
+                code="CLIP_RENDER_FAILED",
+                status_code=500,
+            )
+
         if progress_callback:
             await self._notify(progress_callback, "Clip generation completed", 100)
 

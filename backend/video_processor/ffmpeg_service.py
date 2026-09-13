@@ -15,6 +15,39 @@ log = get_logger(__name__)
 
 
 class FFmpegService:
+    _encoder_args: list[str] | None = None
+
+    @classmethod
+    async def _get_encoder_args(cls) -> list[str]:
+        if cls._encoder_args is not None:
+            return cls._encoder_args
+
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-hide_banner", "-encoders",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        stdout, _ = await proc.communicate()
+        available = stdout.decode("utf-8", errors="ignore")
+
+        if "libx264" in available:
+            cls._encoder_args = ["-c:v", "libx264", "-preset", "fast", "-crf", "20"]
+        elif "libopenh264" in available:
+            cls._encoder_args = ["-c:v", "libopenh264", "-b:v", "2M"]
+        elif "h264_nvenc" in available:
+            cls._encoder_args = ["-c:v", "h264_nvenc", "-preset", "fast", "-cq", "23"]
+        elif "mpeg4" in available:
+            cls._encoder_args = ["-c:v", "mpeg4", "-q:v", "5"]
+        else:
+            raise CustomException(
+                message="FFmpeg has no supported video encoder. Install libx264 or enable mpeg4 encoding.",
+                code="VIDEO_ENCODER_UNAVAILABLE",
+                status_code=500,
+            )
+
+        log.info("Selected FFmpeg video encoder: %s", cls._encoder_args[1])
+        return cls._encoder_args
+
     async def probe_duration(self, input_path: str) -> float:
         cmd = [
             "ffprobe", "-v", "error",
@@ -57,11 +90,12 @@ class FFmpegService:
 
     async def cut_segment(self, input_path: str, start: float, duration: float, output_path: str, reencode: bool = True) -> None:
         if reencode:
+            encoder_args = await self._get_encoder_args()
             cmd = [
                 "ffmpeg", "-y",
                 "-ss", str(start), "-i", input_path,
                 "-t", str(duration),
-                "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+                *encoder_args,
                 "-c:a", "aac", "-b:a", "128k",
                 "-movflags", "+faststart",
                 output_path,
@@ -82,11 +116,12 @@ class FFmpegService:
             raise CustomException(message=f"Cut segment failed: {err}", code="CUT_FAILED", status_code=500)
 
     async def vertical_reframe(self, input_path: str, output_path: str, target_width: int = 1080, target_height: int = 1920) -> None:
+        encoder_args = await self._get_encoder_args()
         cmd = [
             "ffmpeg", "-y", "-i", input_path,
             "-vf", f"scale=iw*min({target_width}/iw\\,{target_height}/ih):ih*min({target_width}/iw\\,{target_height}/ih),"
                     f"crop={target_width}:{target_height}:(iw-{target_width})/2:(ih-{target_height})/2",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+            *encoder_args,
             "-c:a", "aac", "-b:a", "128k",
             output_path,
         ]
@@ -154,12 +189,13 @@ class FFmpegService:
             f"crop={crop_width}:{crop_height}:{x_expression}:{y_expression},"
             f"scale={target_width}:{target_height}:flags=lanczos"
         )
+        encoder_args = await self._get_encoder_args()
         cmd = [
             "ffmpeg", "-y",
             "-ss", str(start_time), "-i", input_path,
             "-t", str(duration),
             "-vf", video_filter,
-            "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+            *encoder_args,
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             output_path,
@@ -177,10 +213,11 @@ class FFmpegService:
                 safe_path = path.replace("'", "'\\''")
                 f.write(f"file '{safe_path}'\n")
 
+        encoder_args = await self._get_encoder_args()
         cmd = [
             "ffmpeg", "-y", "-f", "concat", "-safe", "0",
             "-i", list_file,
-            "-c:v", "libx264", "-preset", "fast", "-crf", "20",
+            *encoder_args,
             "-c:a", "aac", "-b:a", "128k",
             output_path,
         ]
