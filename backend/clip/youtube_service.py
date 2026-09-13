@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -112,6 +113,11 @@ class YouTubeService:
                 "User-Agent": self.USER_AGENT,
             },
         }
+
+        deno_path = shutil.which("deno")
+        if deno_path:
+            options["js_runtimes"] = {"deno": deno_path}
+            log.info(f"yt-dlp JavaScript runtime enabled: {deno_path}")
 
         cookie_browser = os.environ.get("YOUTUBE_COOKIES_BROWSER")
         if cookie_browser:
