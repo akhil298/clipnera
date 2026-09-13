@@ -117,7 +117,7 @@ export default function DashboardApp() {
   }, [isAuthed]);
 
   useEffect(() => {
-    if (!activeProject?.id) return;
+    if (!activeProject?.id || activeProject.processingStatus === 'failed') return;
     let cancelled = false;
     let intervalId: NodeJS.Timeout | null = null;
 
@@ -185,7 +185,7 @@ export default function DashboardApp() {
   }, [activeProject?.id]);
 
   const handleRevertPipelineStep = async (step: string) => {
-    if (!activeProject?.id) return;
+    if (!activeProject?.id || activeProject.processingStatus === 'failed') return;
     try {
       await pipelineApi.revertStep(activeProject.id, step);
       const status = await pipelineApi.getStatus(activeProject.id);
