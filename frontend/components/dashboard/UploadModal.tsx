@@ -173,6 +173,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       humFilter,
     };
 
+    // Pipeline steps (download already done, so skip it)
     const steps = ['audio_extraction', 'ai_noise_cancellation', 'transcription', 'clip_generation', 'caption_styling', 'auto_reframe'];
 
     try {

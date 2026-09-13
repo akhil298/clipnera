@@ -101,7 +101,6 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
 
         body = body or {}
         default_steps = [
-            "download",
             "audio_extraction",
             "ai_noise_cancellation",
             "transcription",
@@ -115,13 +114,9 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
             "aspect_ratio_render",
             "clip_generation",
         ]
+        # Only use single aspect ratio (9:16) - user can export others later
         selected_steps = [PipelineStepType.resolve(s) for s in body.get("steps", default_steps)]
-        output_aspect_ratios = body.get("output_aspect_ratios")
-        if isinstance(output_aspect_ratios, str):
-            output_aspect_ratios = [item.strip() for item in output_aspect_ratios.split(",") if item.strip()]
-        if not output_aspect_ratios:
-            from core.config import get_settings
-            output_aspect_ratios = [item.strip() for item in get_settings().DEFAULT_OUTPUT_ASPECT_RATIOS.split(",") if item.strip()]
+        output_aspect_ratios = ["9:16"]  # Single aspect ratio for faster processing
         audio_config = body.get("audio_config", {
             "ai_denoise": True,
             "noise_suppression_strength": 90,
@@ -141,7 +136,7 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
 
         duration_seconds = project.duration_seconds or 0
         if duration_seconds <= 0:
-            raise CustomException(message="Video duration not available. Please wait for metadata extraction.", code="DURATION_UNAVAILABLE", status_code=400)
+            raise CustomException(message="Video duration not available. Please wait for download to complete.", code="DURATION_UNAVAILABLE", status_code=400)
 
         credit_cost = subscription_service.calculate_video_credit_cost(duration_seconds)
         try:
@@ -300,7 +295,6 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
 
         body = body or {}
         default_steps = [
-            "download",
             "audio_extraction",
             "ai_noise_cancellation",
             "transcription",
@@ -314,13 +308,9 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
             "aspect_ratio_render",
             "clip_generation",
         ]
+        # Only use single aspect ratio (9:16) - user can export others later
         selected_steps = [PipelineStepType.resolve(s) for s in body.get("steps", default_steps)]
-        output_aspect_ratios = body.get("output_aspect_ratios")
-        if isinstance(output_aspect_ratios, str):
-            output_aspect_ratios = [item.strip() for item in output_aspect_ratios.split(",") if item.strip()]
-        if not output_aspect_ratios:
-            from core.config import get_settings
-            output_aspect_ratios = [item.strip() for item in get_settings().DEFAULT_OUTPUT_ASPECT_RATIOS.split(",") if item.strip()]
+        output_aspect_ratios = ["9:16"]  # Single aspect ratio for faster processing
         audio_config = body.get("audio_config", {
             "ai_denoise": True,
             "noise_suppression_strength": 90,

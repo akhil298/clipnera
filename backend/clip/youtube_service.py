@@ -105,6 +105,9 @@ class YouTubeService:
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
+            "socket_timeout": 15,
+            "retries": 1,
+            "fragment_retries": 1,
             "http_headers": {
                 "User-Agent": self.USER_AGENT,
             },
@@ -117,8 +120,19 @@ class YouTubeService:
             return options
 
         cookie_path = os.environ.get("YOUTUBE_COOKIES_PATH")
+        backend_dir = Path(__file__).resolve().parent.parent
+        if cookie_path and Path(cookie_path).name.startswith(".env"):
+            log.warning("Ignoring invalid YOUTUBE_COOKIES_PATH pointing to an environment file")
+            cookie_path = None
+
+        if cookie_path:
+            configured_path = Path(cookie_path).expanduser()
+            if not configured_path.is_absolute():
+                backend_relative_path = backend_dir / configured_path
+                if backend_relative_path.exists():
+                    cookie_path = str(backend_relative_path)
+
         if not cookie_path:
-            backend_dir = Path(__file__).resolve().parent.parent
             candidate_paths = [
                 backend_dir / "youtube_cookies.txt",
                 Path.cwd() / "youtube_cookies.txt",
@@ -135,7 +149,7 @@ class YouTubeService:
                 options["cookiefile"] = str(cookie_file.resolve())
                 log.info(f"YouTube cookies file loaded from {cookie_file.resolve()}")
             else:
-                log.warning(f"YOUTUBE_COOKIES_PATH is set but file does not exist: {cookie_path}")
+                log.warning(f"YOUTUBE_COOKIES_PATH points to a missing file: {cookie_path}")
 
         return options
 

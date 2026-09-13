@@ -80,7 +80,6 @@ class PipelineOrchestrator:
     async def run(self) -> dict:
         results: dict[str, Any] = {}
         step_order = [
-            PipelineStepType.DOWNLOAD,
             PipelineStepType.AUDIO_EXTRACTION,
             PipelineStepType.AI_NOISE_CANCELLATION,
             PipelineStepType.TRANSCRIPTION,
@@ -207,57 +206,15 @@ class PipelineOrchestrator:
             return await self._step_burn_in_export(context)
         raise ValueError(f"Unknown pipeline step: {step.value}")
 
-    async def _step_download(self) -> dict:
-        log.info("Checking for existing downloaded video", extra={"project_id": self.project_id, "url": self.url})
-        async with AsyncSessionLocal() as session:
-            repo = ClipRepository(session)
-            project = await repo.get_project(self.project_id, self.user_id)
-            if project and project.local_path and Path(project.local_path).exists():
-                log.info(
-                    "Video already downloaded, skipping",
-                    extra={"project_id": self.project_id, "local_path": project.local_path},
-                )
-                self._notify("Video already downloaded, skipping...", 100)
-                self._local_path = project.local_path
-                return {"local_path": project.local_path, "skipped": True}
-
-        log.info("Starting video download", extra={"project_id": self.project_id, "url": self.url})
-        self._notify("Downloading video...", 0)
-        result = await self._youtube.download_and_store(self.url, self.user_id, self.project_id)
-        self._local_path = result.get("local_path")
-        log.info(
-            "Download complete",
-            extra={
-                "project_id": self.project_id,
-                "local_path": self._local_path,
-                "file_size": result.get("file_size"),
-                "duration_seconds": result.get("duration_seconds"),
-            },
-        )
-        self._notify("Download complete", 100)
-        return result
-
     async def _step_audio_extraction(self, context: dict) -> dict:
-        download_result = context.get(PipelineStepType.DOWNLOAD.value, {})
-        video_path = download_result.get("local_path") or self._local_path
+        # Get video path from project (download already completed before pipeline start)
+        video_path = await self._project_video_path()
         log.info("Resolving video path for audio extraction", extra={"project_id": self.project_id, "video_path": video_path})
-
-        if not video_path or not Path(video_path).exists():
-            async with AsyncSessionLocal() as session:
-                repo = ClipRepository(session)
-                project = await repo.get_project(self.project_id, self.user_id)
-                if project and project.local_path and Path(project.local_path).exists():
-                    video_path = project.local_path
-                    self._local_path = video_path
-                    log.info(
-                        "Recovered video path from database",
-                        extra={"project_id": self.project_id, "video_path": video_path},
-                    )
 
         if not video_path or not Path(video_path).exists():
             raise ValueError(
                 "Missing downloaded video path for audio extraction. "
-                "Run the 'download' step first or ensure the local file still exists."
+                "Video should have been downloaded before starting pipeline."
             )
 
         log.info("Starting audio extraction", extra={"project_id": self.project_id, "video_path": video_path})
@@ -355,21 +312,9 @@ class PipelineOrchestrator:
         }
 
     async def _step_transcription(self, context: dict) -> dict:
-        download_result = context.get(PipelineStepType.DOWNLOAD.value, {})
-        video_path = download_result.get("local_path") or self._local_path
+        # Get video path from project (download already completed before pipeline start)
+        video_path = await self._project_video_path()
         log.info("Resolving video path for transcription", extra={"project_id": self.project_id, "video_path": video_path})
-
-        if not video_path or not Path(video_path).exists():
-            async with AsyncSessionLocal() as session:
-                repo = ClipRepository(session)
-                project = await repo.get_project(self.project_id, self.user_id)
-                if project and project.local_path and Path(project.local_path).exists():
-                    video_path = project.local_path
-                    self._local_path = video_path
-                    log.info(
-                        "Recovered video path from database",
-                        extra={"project_id": self.project_id, "video_path": video_path},
-                    )
 
         if not video_path or not Path(video_path).exists():
             raise ValueError("Missing video path for transcription")
@@ -431,17 +376,9 @@ class PipelineOrchestrator:
         from content_intelligence.service import ContentIntelligenceService
         service = ContentIntelligenceService()
 
-        video_path = self._local_path
+        video_path = await self._project_video_path()
         if not video_path or not Path(video_path).exists():
-            async with AsyncSessionLocal() as session:
-                repo = ClipRepository(session)
-                project = await repo.get_project(self.project_id, self.user_id)
-                if project and project.local_path and Path(project.local_path).exists():
-                    video_path = project.local_path
-                    log.info(
-                        "Recovered video path from database for topic research",
-                        extra={"project_id": self.project_id, "video_path": video_path},
-                    )
+            raise ValueError("Missing video path for topic research")
 
         analysis = await service.analyze_project(
             project_id=self.project_id,
@@ -460,17 +397,9 @@ class PipelineOrchestrator:
         self._notify("Analyzing video frames...", 20)
         log.info("Starting visual analysis", extra={"project_id": self.project_id})
 
-        video_path = self._local_path
+        video_path = await self._project_video_path()
         if not video_path or not Path(video_path).exists():
-            async with AsyncSessionLocal() as session:
-                repo = ClipRepository(session)
-                project = await repo.get_project(self.project_id, self.user_id)
-                if project and project.local_path and Path(project.local_path).exists():
-                    video_path = project.local_path
-                    log.info(
-                        "Recovered video path from database for visual analysis",
-                        extra={"project_id": self.project_id, "video_path": video_path},
-                    )
+            raise ValueError("Missing video path for visual analysis")
 
         topic = context.get(PipelineStepType.TOPIC_RESEARCH.value, {})
         analysis = topic.get("analysis", {})
@@ -509,17 +438,9 @@ class PipelineOrchestrator:
         self._notify("Detecting highlights...", 30)
         log.info("Starting highlight detection", extra={"project_id": self.project_id})
 
-        video_path = self._local_path
+        video_path = await self._project_video_path()
         if not video_path or not Path(video_path).exists():
-            async with AsyncSessionLocal() as session:
-                repo = ClipRepository(session)
-                project = await repo.get_project(self.project_id, self.user_id)
-                if project and project.local_path and Path(project.local_path).exists():
-                    video_path = project.local_path
-                    log.info(
-                        "Recovered video path from database for highlight detection",
-                        extra={"project_id": self.project_id, "video_path": video_path},
-                    )
+            raise ValueError("Missing video path for highlight detection")
 
         segments = self._transcript_segments(context)
         log.info(
@@ -650,7 +571,7 @@ class PipelineOrchestrator:
         self._notify("Detecting subjects and bounding boxes...", 40)
         highlight_result = context.get(PipelineStepType.HIGHLIGHT_DETECTION.value, {})
         highlights = highlight_result.get("highlights", [])
-        video_path = self._local_path or await self._project_video_path()
+        video_path = await self._project_video_path()
         if not video_path or not Path(video_path).exists():
             raise ValueError("Missing video path for bounding box detection")
 
@@ -671,7 +592,7 @@ class PipelineOrchestrator:
         final_clips = meta_result.get("final_clips", [])
         bounding_result = context.get(PipelineStepType.BOUNDING_BOX_DETECTION.value, {})
         candidate_visual_analysis = bounding_result.get("candidate_visual_analysis", {})
-        video_path = self._local_path or await self._project_video_path()
+        video_path = await self._project_video_path()
         if not video_path or not Path(video_path).exists():
             raise ValueError("Missing video path for aspect-ratio rendering")
 

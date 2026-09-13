@@ -330,6 +330,12 @@ class ClipService:
                 await self._notify(progress_callback, "Generating clip metadata...", 75)
             final_clips = await self._content_ai.generate_metadata_for_clips(scored_highlights)
 
+        # Fallback: if no AI highlights were generated, create clips from transcript segments
+        if not final_clips and transcript_segments:
+            if progress_callback:
+                await self._notify(progress_callback, "No AI highlights found, creating clips from transcript...", 78)
+            final_clips = self._create_fallback_clips(transcript_segments, video_metadata.get("duration", 0))
+
         if candidate_visual_analysis is None:
             if progress_callback:
                 await self._notify(progress_callback, "Analyzing candidate clip frames...", 80)
@@ -713,6 +719,83 @@ class ClipService:
         if progress_callback:
             await self._notify(progress_callback, "Transcription complete", 100)
         return list(segments)
+
+    def _create_fallback_clips(self, transcript_segments: list[dict], video_duration: float) -> list[dict]:
+        """Create fallback clips from transcript segments when AI highlight detection fails."""
+        if not transcript_segments:
+            return []
+        
+        clips = []
+        MIN_CLIP_DURATION = 20.0
+        MAX_CLIP_DURATION = 90.0
+        TARGET_DURATION = 45.0
+        
+        current_clip_start = None
+        current_clip_text = ""
+        current_speaker = None
+        
+        for segment in transcript_segments:
+            seg_start = float(segment.get("start", 0))
+            seg_end = float(segment.get("end", 0))
+            seg_text = segment.get("text", "").strip()
+            seg_speaker = segment.get("speaker")
+            
+            if not seg_text:
+                continue
+            
+            # Start new clip if speaker changes or clip would be too long
+            if current_clip_start is None:
+                current_clip_start = seg_start
+                current_clip_text = seg_text
+                current_speaker = seg_speaker
+            elif seg_speaker != current_speaker or (seg_end - current_clip_start) >= MAX_CLIP_DURATION:
+                # Finalize current clip if it meets minimum duration
+                if (current_clip_start is not None and 
+                    len(current_clip_text) > 50 and 
+                    seg_start - current_clip_start >= MIN_CLIP_DURATION):
+                    clips.append({
+                        "clip_id": f"fallback_{len(clips) + 1:03d}",
+                        "title": current_clip_text[:60] + ("..." if len(current_clip_text) > 60 else ""),
+                        "description": current_clip_text[:200],
+                        "start_time": current_clip_start,
+                        "end_time": min(seg_start, current_clip_start + TARGET_DURATION),
+                        "duration": min(TARGET_DURATION, seg_start - current_clip_start),
+                        "score": 50.0,
+                        "content_category": "unknown",
+                        "reason": "Fallback clip from transcript segment",
+                        "scores": {},
+                        "transcript_excerpt": current_clip_text[:500],
+                        "speakers": [current_speaker] if current_speaker else [],
+                    })
+                # Start new clip
+                current_clip_start = seg_start
+                current_clip_text = seg_text
+                current_speaker = seg_speaker
+            else:
+                current_clip_text += " " + seg_text
+        
+        # Don't forget the last clip
+        if (current_clip_start is not None and 
+            len(current_clip_text) > 50 and 
+            video_duration - current_clip_start >= MIN_CLIP_DURATION):
+            clips.append({
+                "clip_id": f"fallback_{len(clips) + 1:03d}",
+                "title": current_clip_text[:60] + ("..." if len(current_clip_text) > 60 else ""),
+                "description": current_clip_text[:200],
+                "start_time": current_clip_start,
+                "end_time": min(video_duration, current_clip_start + TARGET_DURATION),
+                "duration": min(TARGET_DURATION, video_duration - current_clip_start),
+                "score": 50.0,
+                "content_category": "unknown",
+                "reason": "Fallback clip from transcript segment",
+                "scores": {},
+                "transcript_excerpt": current_clip_text[:500],
+                "speakers": [current_speaker] if current_speaker else [],
+            })
+        
+        # Limit to reasonable number of clips
+        max_clips = int((video_duration / 3600.0) * 6) + 1 if video_duration > 0 else 10
+        return clips[:max_clips]
 
     def _serialize_style(self, style: SubtitleStyle) -> dict:
         return {
