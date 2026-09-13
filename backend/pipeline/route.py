@@ -87,7 +87,6 @@ async def _run_pipeline(orchestrator: PipelineOrchestrator, project_id: str, use
                 success=False,
                 error=str(exc),
             )
-        raise
 
 
 @pipeline.post("/start/{project_id}")

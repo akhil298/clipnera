@@ -120,6 +120,7 @@ export default function DashboardApp() {
     if (!activeProject?.id || activeProject.processingStatus === 'failed') return;
     let cancelled = false;
     let intervalId: NodeJS.Timeout | null = null;
+    let clipsFetchRequested = false;
 
     const fetchStatus = async () => {
       try {
@@ -153,7 +154,8 @@ export default function DashboardApp() {
             processingStatus: status.error ? 'failed' : 'completed',
           });
 
-          if (!status.error && activeProject.clips.length === 0) {
+          if (!status.error && activeProject.clips.length === 0 && !clipsFetchRequested) {
+            clipsFetchRequested = true;
             try {
               const clipResponse = await clipApi.listClips(activeProject.id);
               if (cancelled) return;

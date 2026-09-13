@@ -203,8 +203,43 @@ class FFmpegService:
         proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         _, stderr = await proc.communicate()
         if proc.returncode != 0:
-            err = stderr.decode("utf-8", errors="ignore")[-500:]
-            raise CustomException(message=f"Tracked crop failed: {err}", code="TRACKED_CROP_FAILED", status_code=500)
+            tracked_error = stderr.decode("utf-8", errors="ignore")[-500:]
+            log.warning("Tracked crop failed; retrying with centered crop: %s", tracked_error)
+            try:
+                output_file.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+            fallback_filter = (
+                f"crop={crop_width}:{crop_height}:(iw-{crop_width})/2:(ih-{crop_height})/2,"
+                f"scale={target_width}:{target_height}:flags=lanczos"
+            )
+            fallback_cmd = [
+                "ffmpeg", "-y",
+                "-ss", str(start_time), "-i", input_path,
+                "-t", str(duration),
+                "-vf", fallback_filter,
+                *encoder_args,
+                "-c:a", "aac", "-b:a", "128k",
+                "-movflags", "+faststart",
+                output_path,
+            ]
+            fallback_proc = await asyncio.create_subprocess_exec(
+                *fallback_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, fallback_stderr = await fallback_proc.communicate()
+            if fallback_proc.returncode == 0 and output_file.exists() and output_file.stat().st_size > 0:
+                log.info("Centered crop fallback succeeded: output=%s", output_path)
+                return
+
+            fallback_error = fallback_stderr.decode("utf-8", errors="ignore")[-500:]
+            raise CustomException(
+                message=f"Tracked crop and centered fallback failed: {fallback_error or tracked_error}",
+                code="TRACKED_CROP_FAILED",
+                status_code=500,
+            )
 
     async def concat_segments(self, segment_paths: list[str], output_path: str) -> None:
         list_file = output_path + ".concat.txt"

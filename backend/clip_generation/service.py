@@ -486,7 +486,7 @@ class ClipService:
                         source_width=source_width,
                         source_height=source_height,
                     )
-                    output_files[aspect_ratio] = str(output_path)
+                    output_files[aspect_ratio] = str(output_path) if output_path.exists() and output_path.stat().st_size > 0 else ""
                 except Exception as exc:
                     log.warning(f"Clip render failed: clip={clip_id} format={aspect_ratio} error={exc}")
                     output_files[aspect_ratio] = ""
