@@ -83,14 +83,14 @@ class WhisperXTranscriptionService(TranscriptionService):
             language = checkpoint.get("language", language)
             log.info(f"Resuming from checkpoint: {len(processed_chunks)} chunks already processed")
 
-        duration = TranscriptionChunker.estimate_duration(audio_path)
+        duration = await asyncio.to_thread(TranscriptionChunker.estimate_duration, audio_path)
         chunks = TranscriptionChunker.estimate_chunks(duration, request.chunk_duration, request.chunk_overlap)
 
         log.info(f"Transcription input: audio_path={audio_path}, duration={duration:.2f}s, chunks={len(chunks)}, model={request.model_size}")
 
         diarize_fn = None
         if request.diarization:
-            diarize_fn = self._try_load_diarizer()
+            diarize_fn = await asyncio.to_thread(self._try_load_diarizer)
 
         for idx, chunk in enumerate(chunks):
             chunk_id = f"{chunk['start']:.3f}_{chunk['end']:.3f}"

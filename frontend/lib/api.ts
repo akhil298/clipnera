@@ -417,8 +417,7 @@ export const audioApi = {
     authedRequest<{ zones: AudioPresetZone[] }>('/audio/presets'),
 };
 
-const DEFAULT_PIPELINE_STEPS = [
-  'download',
+export const DEFAULT_PIPELINE_STEPS = [
   'audio_extraction',
   'ai_noise_cancellation',
   'transcription',

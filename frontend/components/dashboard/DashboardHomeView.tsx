@@ -27,7 +27,7 @@ import {
   FolderOpen
 } from 'lucide-react';
 import { VideoProject, ViralClip, UserProfile, TabType, Workspace } from '@/lib/types';
-import { clipApi, pipelineApi, analyticsApi } from '@/lib/api';
+import { clipApi, pipelineApi, analyticsApi, DEFAULT_PIPELINE_STEPS, mapBackendClip } from '@/lib/api';
 
 interface DashboardHomeViewProps {
   user: UserProfile;
@@ -160,8 +160,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
         }
       );
 
-      const steps = ['audio_extraction', 'ai_noise_cancellation', 'transcription', 'clip_generation'];
-      await pipelineApi.start(projectId, steps, {
+      await pipelineApi.start(projectId, DEFAULT_PIPELINE_STEPS, {
         aiDenoise: true,
         noiseSuppressionStrength: 90,
         deReverb: true,
@@ -176,10 +175,22 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
         projectId,
         (progress) => {
           if (progress.status === 'completed') {
-            setQuickStatus('Pipeline complete! Clips ready.');
-            setIsQuickProcessing(false);
-            unsubPipeline();
-            unsubDownload?.();
+            void clipApi.listClips(projectId)
+              .then((clipResponse) => {
+                const clips = (clipResponse.clips || []).map(mapBackendClip);
+                if (clips.length === 0) {
+                  setQuickStatus('Pipeline completed, but no clips were generated.');
+                  return;
+                }
+                onSelectProject({ ...newProject, clips, processingStatus: 'completed', processingProgress: 100 });
+                setQuickStatus(`${clips.length} clips ready.`);
+              })
+              .catch(() => setQuickStatus('Pipeline completed, but clips could not be loaded.'))
+              .finally(() => {
+                setIsQuickProcessing(false);
+                unsubPipeline();
+                unsubDownload?.();
+              });
           } else if (progress.status === 'error') {
             setQuickStatus(`Pipeline error: ${progress.message}`);
             setIsQuickProcessing(false);

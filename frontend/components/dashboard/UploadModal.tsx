@@ -177,7 +177,20 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     };
 
     // Pipeline steps (download already done, so skip it)
-    const steps = ['audio_extraction', 'ai_noise_cancellation', 'transcription', 'clip_generation', 'caption_styling', 'auto_reframe'];
+    const steps = [
+      'audio_extraction',
+      'ai_noise_cancellation',
+      'transcription',
+      'topic_research',
+      'visual_analysis',
+      'content_classification',
+      'highlight_detection',
+      'bounding_box_detection',
+      'scoring',
+      'metadata_generation',
+      'aspect_ratio_render',
+      'clip_generation',
+    ];
 
     try {
       setProcessingLogs((prev) => [...prev, 'Starting AI processing pipeline...']);

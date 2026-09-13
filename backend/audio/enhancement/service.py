@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import time
 import logging
@@ -114,7 +115,7 @@ def _apply_ai_denoise(audio: np.ndarray, sr: int, preset: dict) -> np.ndarray:
             y=audio,
             sr=sr,
             prop_decrease=preset["prop_decrease"],
-            freq_mask_smooth_hz=preset["freq_mask_smooth_hz"],
+            freq_mask_smooth_hz=max(31.0, preset["freq_mask_smooth_hz"]),
             time_constant_s=preset["time_constant_s"],
         )
         return reduced
@@ -191,9 +192,9 @@ class AudioService:
     async def process_audio(self, request: AudioEnhanceRequest, audio_bytes: bytes) -> AudioEnhanceResponse:
         start = time.time()
         try:
-            audio, sr = audio_bytes_to_np(audio_bytes)
-            processed, applied = process_audio_pipeline(audio, sr, request.config)
-            output_bytes = np_to_wav_bytes(processed, sr)
+            audio, sr = await asyncio.to_thread(audio_bytes_to_np, audio_bytes)
+            processed, applied = await asyncio.to_thread(process_audio_pipeline, audio, sr, request.config)
+            output_bytes = await asyncio.to_thread(np_to_wav_bytes, processed, sr)
             processed_url = self._upload_processed(output_bytes, request.audio_url)
             elapsed = time.time() - start
             return AudioEnhanceResponse(
@@ -221,9 +222,13 @@ class AudioService:
     async def generate_preview(self, request: AudioPreviewRequest) -> AudioEnhanceResponse:
         start = time.time()
         try:
-            audio = generate_test_tone(request.frequency_hz, request.duration_seconds, SAMPLE_RATE)
-            processed, applied = process_audio_pipeline(audio, SAMPLE_RATE, request.config)
-            output_bytes = np_to_wav_bytes(processed, SAMPLE_RATE)
+            audio = await asyncio.to_thread(
+                generate_test_tone, request.frequency_hz, request.duration_seconds, SAMPLE_RATE
+            )
+            processed, applied = await asyncio.to_thread(
+                process_audio_pipeline, audio, SAMPLE_RATE, request.config
+            )
+            output_bytes = await asyncio.to_thread(np_to_wav_bytes, processed, SAMPLE_RATE)
             preview_url = f"preview://{id(output_bytes)}"
             elapsed = time.time() - start
             return AudioEnhanceResponse(

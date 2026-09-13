@@ -20,3 +20,4 @@ scipy==1.14.1
 librosa==0.10.2.post1
 faster-whisper>=1.1.1
 whisperx==3.7.4
+httpx[http2]==0.28.1

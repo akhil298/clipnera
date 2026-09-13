@@ -324,8 +324,13 @@ class PipelineOrchestrator:
 
         audio_result = context.get(PipelineStepType.AUDIO_EXTRACTION.value, {})
         noise_result = context.get(PipelineStepType.AI_NOISE_CANCELLATION.value, {})
-        audio_input = noise_result.get("enhanced_audio_path") or audio_result.get("audio_path") or video_path
-        if not audio_input or not Path(audio_input).exists():
+        enhanced_audio_path = noise_result.get("after_audio_path")
+        extracted_audio_path = audio_result.get("extraction_result", {}).get("output_path")
+        if enhanced_audio_path and Path(enhanced_audio_path).is_file() and Path(enhanced_audio_path).stat().st_size > 0:
+            audio_input = enhanced_audio_path
+        elif extracted_audio_path and Path(extracted_audio_path).is_file():
+            audio_input = extracted_audio_path
+        else:
             audio_input = video_path
         request = TranscriptionRequest(
             input_path=audio_input,

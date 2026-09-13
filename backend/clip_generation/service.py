@@ -370,6 +370,13 @@ class ClipService:
             video_metadata=video_metadata,
         )
 
+        if not saved_clips:
+            raise CustomException(
+                message="Clip generation produced no clips. Check the transcript and highlight detection steps.",
+                code="NO_CLIPS_GENERATED",
+                status_code=422,
+            )
+
         if progress_callback:
             await self._notify(progress_callback, "Clip generation completed", 100)
 
