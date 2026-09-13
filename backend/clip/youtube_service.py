@@ -116,7 +116,7 @@ class YouTubeService:
 
         deno_path = shutil.which("deno")
         if deno_path:
-            options["js_runtimes"] = {"deno": None}
+            options["js_runtimes"] = {"deno": {}}
             options["remote_components"] = ["ejs:github"]
             log.info(f"yt-dlp JavaScript runtime enabled: {deno_path}")
 
