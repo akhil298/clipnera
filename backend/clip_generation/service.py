@@ -21,6 +21,30 @@ settings = get_settings()
 log = get_logger(__name__)
 
 
+def _sanitize_str(s: str | None) -> str | None:
+    if s is None:
+        return None
+    try:
+        normalized = s.encode("utf-16", "surrogatepass").decode("utf-16", errors="replace")
+        return normalized.encode("utf-8", errors="replace").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return s.encode("utf-8", errors="replace").decode("utf-8")
+
+
+def _sanitize_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _sanitize_str(value)
+    if isinstance(value, list):
+        return [_sanitize_value(item) for item in value]
+    if isinstance(value, dict):
+        return {_sanitize_str(str(key)): _sanitize_value(item) for key, item in value.items()}
+    return value
+
+
+def _json_dumps(value: Any) -> str:
+    return json.dumps(_sanitize_value(value), ensure_ascii=False, default=str)
+
+
 class ClipService:
     def __init__(self) -> None:
         self._ffmpeg = FFmpegService()
@@ -512,13 +536,13 @@ class ClipService:
                 saved_clip = await repo.create_clip(
                     project_id=project_id,
                     user_id=user_id,
-                    title=str(clip.get("title") or f"Clip {clip_id}"),
-                    description=clip.get("description"),
+                    title=_sanitize_str(str(clip.get("title") or f"Clip {clip_id}")),
+                    description=_sanitize_str(clip.get("description")),
                     start_time=start,
                     end_time=end,
                     duration_seconds=float(clip.get("duration", end - start)),
                     score=float(clip.get("score", 0.0)),
-                    scores=json.dumps(clip.get("scores", {}), ensure_ascii=False),
+                    scores=_json_dumps(clip.get("scores", {})),
                     content_category=clip.get("content_category", ContentCategory.UNKNOWN.value),
                     status="completed" if local_path else "pending",
                     local_path=local_path,
@@ -526,13 +550,13 @@ class ClipService:
                     s3_bucket=self._bucket if presigned_url else None,
                     presigned_url=presigned_url,
                     poster_url=poster_url,
-                    transcript=json.dumps(transcript, ensure_ascii=False),
-                    visual_analysis=json.dumps(visual_analysis, ensure_ascii=False, default=str),
-                    bounding_boxes=json.dumps(clip.get("bounding_boxes", []), ensure_ascii=False, default=str),
-                    crop_tracking=json.dumps(clip.get("crop_tracking", {}), ensure_ascii=False, default=str),
-                    output_formats=json.dumps(clip.get("output_formats", {}), ensure_ascii=False, default=str),
-                    output_files=json.dumps(output_files, ensure_ascii=False),
-                    analysis_json=json.dumps(clip_analysis, ensure_ascii=False, default=str),
+                    transcript=_json_dumps(transcript),
+                    visual_analysis=_json_dumps(visual_analysis),
+                    bounding_boxes=_json_dumps(clip.get("bounding_boxes", [])),
+                    crop_tracking=_json_dumps(clip.get("crop_tracking", {})),
+                    output_formats=_json_dumps(clip.get("output_formats", {})),
+                    output_files=_json_dumps(output_files),
+                    analysis_json=_json_dumps(clip_analysis),
                 )
                 saved.append(saved_clip)
             return saved
