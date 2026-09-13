@@ -67,3 +67,16 @@ class ClipRepository:
         )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def delete_project(self, project_id: str, user_id: str) -> bool:
+        stmt = select(VideoProject).where(
+            VideoProject.id == project_id,
+            VideoProject.user_id == user_id,
+        )
+        result = await self._session.execute(stmt)
+        project = result.scalar_one_or_none()
+        if not project:
+            return False
+        await self._session.delete(project)
+        await self._session.commit()
+        return True

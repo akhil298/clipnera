@@ -123,3 +123,19 @@ async def list_projects(user: CurrentUserDep):
                 ]
             })
         return {"projects": result, "total": len(result)}
+
+
+@clip.delete("/projects/{project_id}", status_code=204)
+async def delete_project(
+    project_id: str,
+    user: CurrentUserDep,
+):
+    from clip.service import ClipService
+    from clip.repository import ClipRepository
+    from core.database import AsyncSessionLocal
+
+    async with AsyncSessionLocal() as session:
+        repo = ClipRepository(session)
+        service = ClipService(repo)
+        await service.delete_project(user["user_id"], project_id)
+    return None

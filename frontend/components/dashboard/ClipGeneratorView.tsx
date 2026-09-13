@@ -31,6 +31,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { VideoProject, ViralClip, TabType, PipelineStep } from '@/lib/types';
+import { clipApi } from '@/lib/api';
 import { PipelineStepIndicator } from './PipelineStepIndicator';
 import { AudioBeforeAfter } from './AudioBeforeAfter';
 import confetti from 'canvas-confetti';
@@ -81,6 +82,8 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
   const [copiedHookId, setCopiedHookId] = useState<string | null>(null);
   const [filterScore, setFilterScore] = useState<number>(85);
   const [quickExportingId, setQuickExportingId] = useState<string | null>(null);
+  const [isBatchExporting, setIsBatchExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
   const [newFolderName, setNewFolderName] = useState(safeProject.folderName || safeProject.title || '');
 
@@ -90,16 +93,61 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
     setTimeout(() => setCopiedHookId(null), 2000);
   };
 
+  const downloadExport = (url: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
   const handleQuickExport = (clip: ViralClip) => {
+    if (!clip.presignedUrl) {
+      setExportError('This clip is not ready for download yet.');
+      return;
+    }
+
+    setExportError(null);
     setQuickExportingId(clip.id);
-    setTimeout(() => {
+    try {
+      downloadExport(clip.presignedUrl, `${safeProject.title || 'clip'}-${clip.id}.mp4`);
+      confetti({ particleCount: 75, spread: 60, origin: { y: 0.7 } });
+    } finally {
       setQuickExportingId(null);
-      confetti({
-        particleCount: 75,
-        spread: 60,
-        origin: { y: 0.7 },
+    }
+  };
+
+  const handleBatchExport = async () => {
+    if (!safeProject.id || safeProject.clips.length === 0) {
+      setExportError('There are no clips available to export.');
+      return;
+    }
+
+    setExportError(null);
+    setIsBatchExporting(true);
+    try {
+      const result = await clipApi.exportProject(safeProject.id, safeProject.clips.length);
+      const downloadableClips = result.exported_clips.filter((clip) => clip.burned_presigned_url);
+
+      downloadableClips.forEach((clip, index) => {
+        downloadExport(
+          clip.burned_presigned_url as string,
+          `${safeProject.title || 'clip'}-${clip.clip_id}-${clip.platform}-${index + 1}.mp4`,
+        );
       });
-    }, 1500);
+
+      if (downloadableClips.length === 0) {
+        throw new Error('The export completed without producing downloadable files.');
+      }
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Export failed. Please try again.');
+    } finally {
+      setIsBatchExporting(false);
+    }
   };
 
   const handleSaveRename = () => {
@@ -282,16 +330,21 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
             </button>
 
             <button
-              onClick={() => {
-                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-              }}
+              onClick={handleBatchExport}
+              disabled={isBatchExporting}
               className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/15 active:scale-95 transition-all flex items-center gap-2"
             >
               <Download className="w-4 h-4" />
-              <span>Batch Export All ({safeProject.clips.length})</span>
+              <span>{isBatchExporting ? 'Exporting...' : `Batch Export All (${safeProject.clips.length})`}</span>
             </button>
           </div>
         </div>
+
+        {exportError && (
+          <div className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+            {exportError}
+          </div>
+        )}
 
         {/* Interactive Virality Spikes Visualizer across Raw Video Duration */}
         <div className="mt-6 pt-5 border-t border-neutral-800/80">

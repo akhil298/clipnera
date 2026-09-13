@@ -1,7 +1,6 @@
 'use client';
 
 import { Play, Flame, ArrowRight, ChevronDown, Headphones } from 'lucide-react';
-import { LANDING_SAMPLE_PROJECTS } from '@/lib/data/mockProjects';
 import { getCaptionStyle } from '@/lib/utils/captionStyles';
 
 interface BeforeAfterShowcaseProps {
@@ -57,7 +56,7 @@ export function BeforeAfterShowcase({
 
             <div className="relative aspect-video rounded-xl bg-black border border-neutral-800 overflow-hidden group">
                 <img
-                  src={LANDING_SAMPLE_PROJECTS[0].posterUrl}
+                  src="https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=800&auto=format&fit=crop&q=80"
                   alt="Raw podcast"
                   className="w-full h-full object-cover opacity-75 grayscale-[30%]"
                 />
@@ -102,7 +101,7 @@ export function BeforeAfterShowcase({
 
             <div className="relative aspect-[9/16] max-h-[320px] mx-auto rounded-2xl bg-black border-2 border-amber-500/40 overflow-hidden shadow-2xl flex flex-col justify-between p-4">
               <img
-                src={LANDING_SAMPLE_PROJECTS[0].posterUrl}
+                src="https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=800&auto=format&fit=crop&q=80"
                 alt="Vertical clip"
                 className="absolute inset-0 w-full h-full object-cover scale-110"
               />

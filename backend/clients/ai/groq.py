@@ -13,13 +13,53 @@ from .base import BaseAI
 settings = get_settings()
 log = get_logger(__name__)
 
+DEFAULT_MODEL = "llama-3.1-8b-instant"
+MAX_TOKENS_PER_MINUTE = 25000
+
+
+def _estimate_tokens(text: str) -> int:
+    """Rough token estimation: ~4 chars per token for English."""
+    return len(text) // 4
+
+
+def _truncate_messages(messages: list[dict[str, Any]], max_tokens: int) -> list[dict[str, Any]]:
+    """Truncate messages to fit within token budget, preserving system message and recent context."""
+    if not messages:
+        return messages
+    
+    system_msgs = [m for m in messages if m.get("role") == "system"]
+    other_msgs = [m for m in messages if m.get("role") != "system"]
+    
+    total_tokens = sum(_estimate_tokens(str(m.get("content", ""))) for m in messages)
+    if total_tokens <= max_tokens:
+        return messages
+    
+    # Keep system messages and truncate from the oldest user/assistant messages
+    system_tokens = sum(_estimate_tokens(str(m.get("content", ""))) for m in system_msgs)
+    available_tokens = max_tokens - system_tokens
+    
+    if available_tokens <= 0:
+        return system_msgs[:1]
+    
+    truncated = []
+    current_tokens = 0
+    # Add messages from the end (most recent first)
+    for msg in reversed(other_msgs):
+        msg_tokens = _estimate_tokens(str(msg.get("content", "")))
+        if current_tokens + msg_tokens > available_tokens:
+            break
+        truncated.insert(0, msg)
+        current_tokens += msg_tokens
+    
+    return system_msgs + truncated
+
 
 class Groq(BaseAI):
     """Groq chat completion client using Groq's native async SDK."""
 
     def __init__(self, api_key: str | None = None, model: str | None = None, timeout: float = 60.0) -> None:
         self.api_key = (api_key or getattr(settings, "GROQ_API_KEY", "") or "").strip()
-        self.model = "openai/gpt-oss-120b"
+        self.model = model or getattr(settings, "GROQ_MODEL", DEFAULT_MODEL)
         if not self.api_key:
             log.warning("Groq API key is missing; Groq-backed steps will fail or fall back.")
         self._client = AsyncGroq(
@@ -34,7 +74,11 @@ class Groq(BaseAI):
         )
 
     async def chat(self, messages: list[dict[str, Any]], **kwargs: Any) -> str:
-        log.info("Groq API call started: mode=chat, model=%s, messages=%d", self.model, len(messages))
+        truncated_messages = _truncate_messages(messages, MAX_TOKENS_PER_MINUTE)
+        if len(truncated_messages) < len(messages):
+            log.warning("Truncated messages from %d to %d to fit token budget", len(messages), len(truncated_messages))
+        
+        log.info("Groq API call started: mode=chat, model=%s, messages=%d", self.model, len(truncated_messages))
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(3),
             wait=wait_exponential(multiplier=1, min=1, max=10),
@@ -47,7 +91,7 @@ class Groq(BaseAI):
                 try:
                     response = await self._client.chat.completions.create(
                         model=self.model,
-                        messages=messages,
+                        messages=truncated_messages,
                         stream=False,
                         **kwargs,
                     )
@@ -69,8 +113,12 @@ class Groq(BaseAI):
         raise RuntimeError("Unreachable")
 
     async def stream_chat(self, messages: list[dict[str, Any]], **kwargs: Any) -> AsyncIterator[str]:
-        log.info("Groq API call started: mode=stream, model=%s, messages=%d", self.model, len(messages))
-        payload = {"model": self.model, "messages": messages, "stream": True, **kwargs}
+        truncated_messages = _truncate_messages(messages, MAX_TOKENS_PER_MINUTE)
+        if len(truncated_messages) < len(messages):
+            log.warning("Truncated messages from %d to %d to fit token budget", len(messages), len(truncated_messages))
+        
+        log.info("Groq API call started: mode=stream, model=%s, messages=%d", self.model, len(truncated_messages))
+        payload = {"model": self.model, "messages": truncated_messages, "stream": True, **kwargs}
         chunk_count = 0
         try:
             log.info("Groq API request hit: mode=stream, model=%s", self.model)

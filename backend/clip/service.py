@@ -6,6 +6,7 @@ from clip.repository import ClipRepository
 from clip.schema import YouTubeURLRequest, VideoMetadataResponse, YouTubeDownloadRequest
 from clip.youtube_service import YouTubeService
 from clip.model import ProjectStatus
+from clients.services.s3 import S3
 from core.exceptions import CustomException
 from core.logging_config import get_logger
 from datetime import datetime
@@ -97,6 +98,25 @@ class ClipService:
             "created_at": project.created_at.isoformat(),
         }
 
+
+    async def delete_project(self, user_id: str, project_id: str) -> None:
+        project = await self._repo.get_project(project_id, user_id)
+        if not project:
+            raise CustomException(
+                message="Project not found",
+                code="NOT_FOUND",
+                status_code=404,
+            )
+
+        if project.s3_bucket and project.s3_key:
+            try:
+                s3 = S3()
+                s3.delete_object(project.s3_bucket, project.s3_key)
+                log.info(f"Deleted S3 object: bucket={project.s3_bucket} key={project.s3_key}")
+            except Exception as e:
+                log.warning(f"Failed to delete S3 object for project {project_id}: {e}")
+
+        await self._repo.delete_project(project_id, user_id)
 
     async def _background_download(self, url: str, user_id: str, project_id: str, format_id: str | None = None) -> None:
         try:

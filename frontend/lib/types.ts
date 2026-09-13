@@ -115,10 +115,12 @@ export interface SocialOptimization {
 
 export interface ViralClip {
   id: string;
+  projectId?: string;
   title: string;
   hook: string;
   posterUrl?: string;
   presignedUrl?: string;
+  burnedPresignedUrl?: string;
   viralityScore: number;
   hookScore: number;
   engagementScore: number;

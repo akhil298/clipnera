@@ -49,6 +49,7 @@ import { getCaptionConfig, getAllCaptionStyles } from '@/lib/utils/captionStyles
 import { sfxEngine } from '@/lib/utils/audioSynth';
 import confetti from 'canvas-confetti';
 import { AudioEnhancerPanel } from './AudioEnhancerPanel';
+import { clipApi } from '@/lib/api';
 
 interface VideoEditorStudioProps {
   clip?: ViralClip;
@@ -111,10 +112,46 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
   const animationFrameRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
   const playedSfxSet = useRef<Set<string>>(new Set());
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     lastTimeRef.current = performance.now();
   }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (isPlaying) {
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  }, [isPlaying]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = isMuted;
+    video.volume = volume;
+  }, [isMuted, volume]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.playbackRate = playbackSpeed;
+  }, [playbackSpeed]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (safeClip.presignedUrl) {
+      video.src = safeClip.presignedUrl;
+      video.poster = safeClip.posterUrl || '';
+      video.load();
+      setCurrentTime(0);
+      setDuration(safeClip.duration || 30);
+    }
+  }, [safeClip.presignedUrl, safeClip.posterUrl, safeClip.duration]);
 
   // Flattened words list for text-based editor & sync
   const allWords: WordTimestamp[] = transcriptSegments.flatMap((s) => s.words || []);
@@ -249,27 +286,54 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
     sfxEngine.playEffect(type);
   };
 
-  // Export video simulation
-  const handleStartExport = () => {
+  // Export video via backend
+  const handleStartExport = async () => {
     setIsExporting(true);
-    setExportProgress(10);
+    setExportProgress(5);
     setExportComplete(false);
 
-    const interval = setInterval(() => {
-      setExportProgress((p) => {
-        if (p >= 100) {
-          clearInterval(interval);
-          setExportComplete(true);
-          confetti({
-            particleCount: 120,
-            spread: 80,
-            origin: { y: 0.6 },
-          });
-          return 100;
+    try {
+      const projectId = safeClip.projectId;
+      if (!projectId) {
+        throw new Error('No project ID found for export');
+      }
+
+      const result = await clipApi.exportProject(projectId, 1);
+
+      if (result?.exported_clips && result.exported_clips.length > 0) {
+        const exported = result.exported_clips[0];
+        if (exported.burned_presigned_url) {
+          onUpdateClip({ ...safeClip, burnedPresignedUrl: exported.burned_presigned_url, presignedUrl: exported.burned_presigned_url });
         }
-        return p + 15;
-      });
-    }, 300);
+      }
+
+      const interval = setInterval(() => {
+        setExportProgress((p) => {
+          if (p >= 95) return p;
+          return p + 10;
+        });
+      }, 300);
+
+      const checkComplete = async () => {
+        clearInterval(interval);
+        setExportProgress(100);
+        setExportComplete(true);
+        confetti({
+          particleCount: 120,
+          spread: 80,
+          origin: { y: 0.6 },
+        });
+      };
+
+      setTimeout(() => {
+        checkComplete();
+      }, 2500);
+    } catch (err) {
+      setIsExporting(false);
+      setExportProgress(0);
+      setExportComplete(false);
+      alert(`Export failed: ${(err as Error).message}`);
+    }
   };
 
   return (
@@ -396,11 +460,39 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                 transform: `scale(${currentZoomScale})`,
               }}
             >
-              <img
-                src="https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=1200&auto=format&fit=crop&q=80"
-                alt="Video Speaker"
-                className="w-full h-full object-cover object-center"
-              />
+              {safeClip.presignedUrl ? (
+                <video
+                  ref={videoRef}
+                  src={safeClip.presignedUrl}
+                  poster={safeClip.posterUrl || 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=1200&auto=format&fit=crop&q=80'}
+                  className="w-full h-full object-cover object-center"
+                  muted={isMuted}
+                  playsInline
+                  preload="metadata"
+                  onTimeUpdate={(e) => {
+                    const vid = e.currentTarget;
+                    setCurrentTime(vid.currentTime);
+                  }}
+                  onLoadedMetadata={(e) => {
+                    const vid = e.currentTarget;
+                    if (vid.duration && isFinite(vid.duration)) {
+                      setDuration(vid.duration);
+                    }
+                  }}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onEnded={() => {
+                    setIsPlaying(false);
+                    setCurrentTime(0);
+                  }}
+                />
+              ) : (
+                <img
+                  src="https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=1200&auto=format&fit=crop&q=80"
+                  alt="Video Speaker"
+                  className="w-full h-full object-cover object-center"
+                />
+              )}
               <div className="absolute inset-0 bg-black/20" />
             </div>
 
@@ -568,7 +660,11 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                 step={0.1}
                 value={currentTime}
                 onChange={(e) => {
-                  setCurrentTime(Number(e.target.value));
+                  const time = Number(e.target.value);
+                  setCurrentTime(time);
+                  if (videoRef.current) {
+                    videoRef.current.currentTime = time;
+                  }
                   playedSfxSet.current.clear();
                 }}
                 className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
@@ -1290,10 +1386,14 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                 <button
                   onClick={() => {
                     setIsExporting(false);
-                    // trigger direct fake download link
+                    const exportUrl = safeClip.burnedPresignedUrl || safeClip.presignedUrl || safeClip.posterUrl || '#';
                     const link = document.createElement('a');
-                    link.href = safeClip.transcriptSegments[0]?.text || '#';
+                    link.href = exportUrl;
                     link.download = `${safeClip.title.replace(/\s+/g, '_')}_Clipnera.mp4`;
+                    link.target = '_blank';
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
                   }}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-neutral-950 font-bold text-xs shadow-lg shadow-rose-500/25 active:scale-95 transition-all"
                 >

@@ -4,14 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import { AuthForm } from '@/components/auth/AuthForm';
-import { LANDING_SAMPLE_PROJECTS } from '@/lib/data/mockProjects';
 import { Navbar } from './Navbar';
 import { HeroSection } from './HeroSection';
 import { BeforeAfterShowcase } from './BeforeAfterShowcase';
 import { SocialProof } from './SocialProof';
 import { FeaturesGrid } from './FeaturesGrid';
 import { CaptionTypographyShowcase } from './CaptionTypographyShowcase';
-import { SamplesSection } from './SamplesSection';
 import { HowItWorks } from './HowItWorks';
 import { RoiCalculator } from './RoiCalculator';
 import { PricingSection } from './PricingSection';
@@ -58,7 +56,6 @@ export default function LandingPageView() {
 
   const handleLaunchStudio = () => router.push('/dashboard');
   const handleLaunchApp = () => router.push('/dashboard');
-  const handleOpenSample = (projectId: string) => router.push('/dashboard');
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-['Plus_Jakarta_Sans',sans-serif]">
@@ -103,8 +100,6 @@ export default function LandingPageView() {
           <CaptionTypographyShowcase />
         </div>
       </section>
-
-      <SamplesSection onLaunchApp={handleLaunchApp} onOpenSample={handleOpenSample} />
 
       <HowItWorks />
 

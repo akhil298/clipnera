@@ -1,4 +1,4 @@
-import { BrandKit, PipelineProgressEvent, PipelineStatus, ViralClip, CaptionConfig } from '@/lib/types';
+import { BrandKit, PipelineProgressEvent, PipelineStatus, ViralClip, CaptionConfig, WordTimestamp } from '@/lib/types';
 import { getToken, clearAuth, setAuth } from '@/lib/auth';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
@@ -183,6 +183,20 @@ export interface ClipListResponse {
   total: number;
 }
 
+export interface SocialExportResponse {
+  project_id: string;
+  exported_clips: Array<{
+    clip_id: string;
+    platform: string;
+    aspect_ratio: string;
+    burned_presigned_url?: string | null;
+    local_path?: string | null;
+    s3_key?: string | null;
+  }>;
+  platforms: string[];
+  total_exported: number;
+}
+
 const DEFAULT_CAPTION_CONFIG: CaptionConfig = {
   preset: 'bold_captions',
   fontSize: 60,
@@ -210,10 +224,12 @@ export function mapBackendClip(clip: BackendClip): ViralClip {
     : viralityScore;
   return {
     id: clip.id,
+    projectId: clip.project_id,
     title: clip.title,
     hook: clip.reason || clip.title,
     posterUrl: clip.poster_url || '',
     presignedUrl: clip.presigned_url || clip.burned_presigned_url || '',
+    burnedPresignedUrl: clip.burned_presigned_url || '',
     viralityScore,
     hookScore,
     engagementScore,
@@ -228,7 +244,30 @@ export function mapBackendClip(clip: BackendClip): ViralClip {
     keywords: [],
     emojiHighlights: [],
     autoBrollKeywords: [],
-    transcriptSegments: [],
+    transcriptSegments: (clip.transcript || []).map((seg, segIdx) => {
+      const words: WordTimestamp[] = (seg.text || '')
+        .split(/\s+/)
+        .filter(Boolean)
+        .map((word, wordIdx) => {
+          const segDuration = (seg.end || 0) - (seg.start || 0);
+          const wordDuration = segDuration / Math.max(1, (seg.text || '').split(/\s+/).filter(Boolean).length);
+          return {
+            id: `${clip.id}-w-${segIdx}-${wordIdx}`,
+            text: word,
+            start: Math.max(0, (seg.start || 0) + wordIdx * wordDuration),
+            end: Math.max(0, (seg.start || 0) + (wordIdx + 1) * wordDuration),
+          };
+        });
+      return {
+        id: `${clip.id}-seg-${segIdx}`,
+        speaker: seg.speaker || 'Speaker',
+        speakerColor: '#38bdf8',
+        start: seg.start || 0,
+        end: seg.end || 0,
+        text: seg.text || '',
+        words,
+      };
+    }),
     bRollOverlays: [],
     soundEffects: [],
     captionConfig: DEFAULT_CAPTION_CONFIG,
@@ -329,6 +368,16 @@ export const clipApi = {
     method: 'POST',
     body: JSON.stringify({ url, format_id: formatId }),
   }),
+  exportProject: (projectId: string, maxClips?: number) => authedRequest<SocialExportResponse>(`/pipeline/export/${projectId}`, {
+    method: 'POST',
+    body: JSON.stringify({
+      platforms: ['tiktok'],
+      max_clips: maxClips,
+      burn_subtitles: true,
+      enable_emoji: true,
+      watermark_enabled: true,
+    }),
+  }),
   subscribeDownloadProgress: (
     projectId: string,
     onProgress: (progress: DownloadProgress) => void,
@@ -389,6 +438,9 @@ export const clipApi = {
     };
   },
   listClips: (projectId: string) => authedRequest<ClipListResponse>(`/clips/${projectId}`),
+  deleteProject: (projectId: string) => authedRequest<void>(`/clips/projects/${projectId}`, {
+    method: 'DELETE',
+  }),
 };
 
 export interface AudioProcessRequest {

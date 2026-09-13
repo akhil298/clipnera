@@ -236,16 +236,41 @@ export default function DashboardApp() {
   };
 
   // Handle deleting a folder
-  const handleDeleteFolder = (projectId: string) => {
-    const updated = projects.filter((p) => p.id !== projectId);
-    setProjects(updated);
-    if (activeProject?.id === projectId) {
-      if (updated.length > 0) {
-        setActiveProject(updated[0]);
-        if (updated[0].clips.length > 0) {
-          setSelectedClip(updated[0].clips[0]);
+  const handleDeleteFolder = async (projectId: string) => {
+    const project = projects.find((p) => p.id === projectId);
+    const projectName = project?.folderName || project?.title || "Project";
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${projectName}"? This will also remove all clips inside this folder. This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    try {
+      await clipApi.deleteProject(projectId);
+      const updated = projects.filter((p) => p.id !== projectId);
+      setProjects(updated);
+      if (activeProject?.id === projectId) {
+        if (updated.length > 0) {
+          setActiveProject(updated[0]);
+          if (updated[0].clips.length > 0) {
+            setSelectedClip(updated[0].clips[0]);
+          }
+        } else {
+          setActiveProject(undefined);
+          setSelectedClip(undefined);
         }
       }
+      const newNotif: AppNotification = {
+        id: `notif-${Date.now()}`,
+        title: 'Project Folder Deleted',
+        message: `Folder "${projectName}" and all its clips have been removed.`,
+        timestamp: 'Just now',
+        read: false,
+        type: 'render_complete',
+      };
+      setNotifications([newNotif, ...notifications]);
+    } catch (err) {
+      console.error('Failed to delete project:', err);
+      alert('Failed to delete project. Please try again.');
     }
   };
 
