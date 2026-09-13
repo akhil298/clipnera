@@ -30,23 +30,46 @@ class FFmpegService:
         stdout, _ = await proc.communicate()
         available = stdout.decode("utf-8", errors="ignore")
 
-        if "libx264" in available:
-            cls._encoder_args = ["-c:v", "libx264", "-preset", "fast", "-crf", "20"]
-        elif "libopenh264" in available:
-            cls._encoder_args = ["-c:v", "libopenh264", "-b:v", "2M"]
-        elif "h264_nvenc" in available:
-            cls._encoder_args = ["-c:v", "h264_nvenc", "-preset", "fast", "-cq", "23"]
-        elif "mpeg4" in available:
-            cls._encoder_args = ["-c:v", "mpeg4", "-q:v", "5"]
-        else:
+        if proc.returncode != 0:
             raise CustomException(
-                message="FFmpeg has no supported video encoder. Install libx264 or enable mpeg4 encoding.",
-                code="VIDEO_ENCODER_UNAVAILABLE",
+                message=f"Unable to inspect FFmpeg encoders (exit code {proc.returncode}).",
+                code="VIDEO_ENCODER_CHECK_FAILED",
                 status_code=500,
             )
 
-        log.info("Selected FFmpeg video encoder: %s", cls._encoder_args[1])
-        return cls._encoder_args
+        candidates = [
+            ("libx264", ["-c:v", "libx264", "-preset", "fast", "-crf", "20"]),
+            ("libopenh264", ["-c:v", "libopenh264", "-b:v", "2M"]),
+            ("h264_nvenc", ["-c:v", "h264_nvenc", "-preset", "fast", "-cq", "23"]),
+            ("mpeg4", ["-c:v", "mpeg4", "-q:v", "5"]),
+        ]
+        for encoder, args in candidates:
+            if encoder not in available:
+                continue
+            probe = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-hide_banner", "-loglevel", "error",
+                "-f", "lavfi", "-i", "color=c=black:s=16x16:d=0.1",
+                "-frames:v", "1", *args, "-f", "null", "-",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            _, probe_stderr = await probe.communicate()
+            if probe.returncode == 0:
+                cls._encoder_args = args
+                log.info("Selected FFmpeg video encoder: %s", encoder)
+                return cls._encoder_args
+            log.warning(
+                "FFmpeg encoder unavailable at runtime: %s error=%s",
+                encoder,
+                probe_stderr.decode("utf-8", errors="ignore").strip()[-300:],
+            )
+
+        else:
+            raise CustomException(
+                message="FFmpeg has no usable supported video encoder. Install libx264, libopenh264, or enable mpeg4 encoding.",
+                code="VIDEO_ENCODER_UNAVAILABLE",
+                status_code=500,
+            )
 
     async def probe_duration(self, input_path: str) -> float:
         cmd = [

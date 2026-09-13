@@ -460,6 +460,7 @@ class ClipService:
             output_aspect_ratios = [item.strip() for item in output_aspect_ratios.split(",") if item.strip()]
         ratios = output_aspect_ratios or self._content_ai.default_aspect_ratios()
         rendered: list[dict[str, Any]] = []
+        render_errors: list[str] = []
 
         for index, clip in enumerate(clips):
             clip_copy = dict(clip)
@@ -488,7 +489,12 @@ class ClipService:
                     )
                     output_files[aspect_ratio] = str(output_path) if output_path.exists() and output_path.stat().st_size > 0 else ""
                 except Exception as exc:
-                    log.warning(f"Clip render failed: clip={clip_id} format={aspect_ratio} error={exc}")
+                    error_message = str(exc) or type(exc).__name__
+                    render_errors.append(f"clip={clip_id} format={aspect_ratio}: {error_message}")
+                    log.exception(
+                        "Clip render failed",
+                        extra={"project_id": project_id, "clip_id": clip_id, "aspect_ratio": aspect_ratio},
+                    )
                     output_files[aspect_ratio] = ""
 
             clip_copy["transcript"] = self._clip_transcript(transcript_segments=transcript_segments, start=start, end=end)
@@ -504,6 +510,19 @@ class ClipService:
             clip_copy["duration"] = duration
             clip_copy["reason"] = str(clip_copy.get("reason") or clip_copy.get("description") or "")
             rendered.append(clip_copy)
+
+        rendered_count = sum(
+            1
+            for clip in rendered
+            for output_path in (clip.get("output_files") or {}).values()
+            if output_path and Path(output_path).exists() and Path(output_path).stat().st_size > 0
+        )
+        if rendered and rendered_count == 0 and render_errors:
+            raise CustomException(
+                message=f"All clip renders failed. First FFmpeg error: {render_errors[0]}",
+                code="CLIP_RENDER_FAILED",
+                status_code=500,
+            )
 
         return rendered
 
