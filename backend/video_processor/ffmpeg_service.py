@@ -113,6 +113,18 @@ class FFmpegService:
             raise CustomException(message=f"Frame extraction failed: {err}", code="FRAME_EXTRACT_FAILED", status_code=500)
 
     async def cut_segment(self, input_path: str, start: float, duration: float, output_path: str, reencode: bool = True) -> None:
+        end = start + duration
+        log.info(
+            "About to cut video segment",
+            extra={
+                "input_path": input_path,
+                "output_path": output_path,
+                "start": round(start, 3),
+                "end": round(end, 3),
+                "duration": round(duration, 3),
+                "reencode": reencode,
+            },
+        )
         if reencode:
             encoder_args = await self._get_encoder_args()
             cmd = [
@@ -138,6 +150,19 @@ class FFmpegService:
         if proc.returncode != 0:
             err = stderr.decode("utf-8", errors="ignore")[-200:]
             raise CustomException(message=f"Cut segment failed: {err}", code="CUT_FAILED", status_code=500)
+        file_size = Path(output_path).stat().st_size if Path(output_path).exists() else 0
+        log.info(
+            "Video segment cut successfully",
+            extra={
+                "input_path": input_path,
+                "output_path": output_path,
+                "start": round(start, 3),
+                "end": round(end, 3),
+                "duration": round(duration, 3),
+                "file_size_bytes": file_size,
+                "file_size_mb": round(file_size / (1024 * 1024), 2),
+            },
+        )
 
     async def vertical_reframe(self, input_path: str, output_path: str, target_width: int = 1080, target_height: int = 1920) -> None:
         encoder_args = await self._get_encoder_args()
@@ -263,6 +288,23 @@ class FFmpegService:
             },
         )
 
+        end_time = start_time + duration
+        log.info(
+            "About to cut video clip",
+            extra={
+                "input_path": input_path,
+                "output_path": output_path,
+                "start_time": round(start_time, 3),
+                "end_time": round(end_time, 3),
+                "duration": round(duration, 3),
+                "target_width": target_width,
+                "target_height": target_height,
+                "source_width": source_width,
+                "source_height": source_height,
+                "crop_tracking_points": len(crop_tracking) if crop_tracking else 0,
+            },
+        )
+
         encoder_args = await self._get_encoder_args()
         cmd = [
             "ffmpeg", "-y",
@@ -274,7 +316,7 @@ class FFmpegService:
             "-movflags", "+faststart",
             output_path,
         ]
-        
+
         log.info(
             "Executing FFmpeg command (tracked crop)",
             extra={
@@ -284,12 +326,12 @@ class FFmpegService:
                 "duration": duration,
             },
         )
-        
+
         ffmpeg_start = time.time()
         proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         _, stderr = await proc.communicate()
         ffmpeg_elapsed = time.time() - ffmpeg_start
-        
+
         if proc.returncode != 0:
             tracked_error = stderr.decode("utf-8", errors="ignore")[-500:]
             log.warning(
@@ -340,12 +382,17 @@ class FFmpegService:
             if fallback_proc.returncode == 0 and output_file.exists() and output_file.stat().st_size > 0:
                 total_elapsed = time.time() - crop_start_time
                 log.info(
-                    "Centered crop fallback SUCCEEDED",
+                    "Video clip cut successfully (centered crop fallback)",
                     extra={
+                        "input_path": input_path,
                         "output_path": output_path,
+                        "start_time": round(start_time, 3),
+                        "end_time": round(end_time, 3),
+                        "duration": round(duration, 3),
                         "fallback_elapsed_seconds": round(fallback_elapsed, 2),
                         "total_elapsed_seconds": round(total_elapsed, 2),
                         "file_size_bytes": output_file.stat().st_size,
+                        "file_size_mb": round(output_file.stat().st_size / (1024 * 1024), 2),
                     },
                 )
                 return
@@ -369,15 +416,17 @@ class FFmpegService:
         total_elapsed = time.time() - crop_start_time
         file_size = output_file.stat().st_size if output_file.exists() else 0
         log.info(
-            "FFmpeg crop_with_tracking COMPLETED",
+            "Video clip cut successfully",
             extra={
+                "input_path": input_path,
                 "output_path": output_path,
+                "start_time": round(start_time, 3),
+                "end_time": round(end_time, 3),
+                "duration": round(duration, 3),
                 "file_size_bytes": file_size,
                 "file_size_mb": round(file_size / (1024 * 1024), 2),
                 "ffmpeg_elapsed_seconds": round(ffmpeg_elapsed, 2),
                 "total_elapsed_seconds": round(total_elapsed, 2),
-                "requested_start": start_time,
-                "requested_duration": duration,
             },
         )
 

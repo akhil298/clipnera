@@ -284,14 +284,14 @@ export default function DashboardApp() {
             processingStatus: status.error ? 'failed' : 'completed',
           });
 
-          if (!status.error && activeProject.clips.length === 0 && !clipsFetchRequested) {
+          if (!status.error && !clipsFetchRequested) {
             clipsFetchRequested = true;
             try {
               const clipResponse = await clipApi.listClips(activeProject.id);
               if (cancelled) return;
               const mappedClips = (clipResponse.clips || []).map(mapBackendClip);
+              handleUpdateProject(activeProject.id, { clips: mappedClips });
               if (mappedClips.length > 0) {
-                handleUpdateProject(activeProject.id, { clips: mappedClips });
                 setSelectedClip(mappedClips[0]);
               }
             } catch (clipErr) {

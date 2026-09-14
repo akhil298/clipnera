@@ -161,6 +161,20 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
 
   const filteredClips = safeProject.clips.filter((c) => c.viralityScore >= filterScore);
 
+  useEffect(() => {
+    if (!safeProject.clips.length) {
+      setSelectedClip(null);
+      return;
+    }
+    if (!filteredClips.length) {
+      setSelectedClip(null);
+      return;
+    }
+    if (!selectedClip || !filteredClips.find((c) => c.id === selectedClip.id)) {
+      setSelectedClip(filteredClips[0]);
+    }
+  }, [safeProject.clips, filteredClips, selectedClip]);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Breadcrumb & Quick Back to Folders Hub */}
@@ -558,6 +572,22 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
                 </div>
               );
             })}
+            {safeProject.clips.length > 0 && filteredClips.length === 0 && (
+              <div className="rounded-xl border border-dashed border-neutral-800 bg-neutral-900/60 p-4 text-center">
+                <p className="text-xs text-neutral-400">No clips match the current filter.</p>
+                <button
+                  onClick={() => setFilterScore(0)}
+                  className="mt-2 text-[11px] font-semibold text-amber-300 hover:text-amber-200"
+                >
+                  Reset filter
+                </button>
+              </div>
+            )}
+            {safeProject.clips.length === 0 && (
+              <div className="rounded-xl border border-dashed border-neutral-800 bg-neutral-900/60 p-4 text-center">
+                <p className="text-xs text-neutral-400">No clips generated yet. Please wait for the pipeline to complete.</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -582,52 +612,50 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
                 {/* Video Preview with Play Overlay */}
                 <div className="absolute inset-0">
                   {selectedClip.presignedUrl ? (
-                    <>
-                      <video
-                        src={selectedClip.presignedUrl}
-                        autoPlay={isPlayingClip}
-                        muted
-                        loop
-                        playsInline
-                        poster={selectedClip.posterUrl || safeProject.posterUrl}
-                        className="w-full h-full object-cover"
-                        onPlay={() => setIsPlayingClip(true)}
-                        onPause={() => setIsPlayingClip(false)}
-                      />
-                      {!isPlayingClip && selectedClip.posterUrl && (
-                        <img
-                          src={selectedClip.posterUrl}
-                          alt={selectedClip.title}
-                          className="absolute inset-0 w-full h-full object-cover opacity-40"
-                        />
-                      )}
-                      {!isPlayingClip && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <button
-                            onClick={() => setIsPlayingClip(true)}
-                            className="w-14 h-14 rounded-full bg-amber-500/90 hover:bg-amber-400 text-neutral-950 flex items-center justify-center shadow-xl transition-all active:scale-90"
-                          >
-                            <Play className="w-6 h-6 fill-current" />
-                          </button>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {safeProject.posterUrl && (
-                        <img
-                          src={safeProject.posterUrl}
-                          alt={selectedClip.title}
-                          className="w-full h-full object-cover opacity-70 scale-105"
-                        />
-                      )}
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-14 h-14 rounded-full bg-neutral-800/60 flex items-center justify-center">
-                          <Play className="w-6 h-6 text-neutral-400" />
-                        </div>
-                      </div>
-                    </>
-                  )}
+                     <>
+                       <video
+                         src={selectedClip.presignedUrl}
+                         autoPlay={isPlayingClip}
+                         muted
+                         loop
+                         playsInline
+                         poster={selectedClip.posterUrl || safeProject.posterUrl}
+                         className="w-full h-full object-cover"
+                         onPlay={() => setIsPlayingClip(true)}
+                         onPause={() => setIsPlayingClip(false)}
+                         onError={() => {
+                           console.error('Clip preview failed to load:', selectedClip.presignedUrl);
+                           setIsPlayingClip(false);
+                         }}
+                       />
+                       {!isPlayingClip && selectedClip.posterUrl && (
+                         <img
+                           src={selectedClip.posterUrl}
+                           alt={selectedClip.title}
+                           className="absolute inset-0 w-full h-full object-cover opacity-40"
+                         />
+                       )}
+                       {!isPlayingClip && (
+                         <div className="absolute inset-0 flex items-center justify-center">
+                           <button
+                             onClick={() => setIsPlayingClip(true)}
+                             className="w-14 h-14 rounded-full bg-amber-500/90 hover:bg-amber-400 text-neutral-950 flex items-center justify-center shadow-xl transition-all active:scale-90"
+                           >
+                             <Play className="w-6 h-6 fill-current" />
+                           </button>
+                         </div>
+                       )}
+                     </>
+                   ) : (
+                     <div className="absolute inset-0 flex items-center justify-center">
+                       <div className="text-center space-y-2">
+                         <div className="w-14 h-14 rounded-full bg-neutral-800/60 flex items-center justify-center mx-auto">
+                           <Play className="w-6 h-6 text-neutral-400" />
+                         </div>
+                         <p className="text-[10px] text-neutral-400">Video not available</p>
+                       </div>
+                     </div>
+                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/60" />
                 </div>
 

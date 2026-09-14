@@ -539,11 +539,19 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                 : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900'
             } ${(project.processingStatus === 'processing') ? 'ring-1 ring-amber-500/40' : ''}`}
           >
+            {/* Thumbnail background during processing */}
+            {project.processingStatus === 'processing' && project.posterUrl && (
+              <div
+                className="absolute inset-0 bg-cover bg-center pointer-events-none"
+                style={{ backgroundImage: `url(${project.posterUrl})` }}
+              />
+            )}
+
             {/* Loading overlay: dark gradient sweep from left to right */}
             {project.processingStatus === 'processing' && (
               <>
                 <div
-                  className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-black/10 pointer-events-none transition-all duration-500 ease-out"
+                  className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-black/40 pointer-events-none transition-all duration-500 ease-out"
                   style={{ width: `${localProcessingProgress[project.id] ?? project.processingProgress ?? 0}%`, left: 0 }}
                 />
                 <div

@@ -518,16 +518,17 @@ class ClipService:
                 output_path = self._output_path(project_id, clip_id, aspect_ratio)
                 
                 log.info(
-                    "Starting clip cut",
+                    "About to cut clip",
                     extra={
                         "project_id": project_id,
                         "clip_id": clip_id,
+                        "clip_index": index,
                         "aspect_ratio": aspect_ratio,
                         "input_path": video_path,
                         "output_path": str(output_path),
-                        "start_time": start,
-                        "duration": duration,
-                        "end_time": end,
+                        "start_time": round(start, 3),
+                        "end_time": round(end, 3),
+                        "duration": round(duration, 3),
                         "target_width": int(output_config["target_width"]),
                         "target_height": int(output_config["target_height"]),
                         "crop_tracking_points": len(output_config.get("crop_tracking", [])),
@@ -553,18 +554,19 @@ class ClipService:
                         file_size = output_path.stat().st_size
                         output_files[aspect_ratio] = str(output_path)
                         log.info(
-                            "Clip cut completed successfully",
+                            "Clip cut successfully",
                             extra={
                                 "project_id": project_id,
                                 "clip_id": clip_id,
+                                "clip_index": index,
                                 "aspect_ratio": aspect_ratio,
                                 "output_path": str(output_path),
                                 "file_size_bytes": file_size,
                                 "file_size_mb": round(file_size / (1024 * 1024), 2),
                                 "elapsed_seconds": round(cut_elapsed, 2),
-                                "requested_start": start,
-                                "requested_duration": duration,
-                                "requested_end": end,
+                                "start_time": round(start, 3),
+                                "end_time": round(end, 3),
+                                "duration": round(duration, 3),
                             },
                         )
                     else:
