@@ -193,51 +193,51 @@ class PipelineOrchestrator:
             extra={"project_id": self.project_id, "step": step.value},
         )
         if step == PipelineStepType.DOWNLOAD:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+            print(f"----------------------------------{step.value} --------------------------")
             return await self._step_download()
         if step == PipelineStepType.AUDIO_EXTRACTION:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+            print(f"----------------------------------{step.value} --------------------------")
 
             return await self._step_audio_extraction(context)
         if step == PipelineStepType.AI_NOISE_CANCELLATION:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+            print(f"----------------------------------{step.value} --------------------------")
 
             return await self._step_ai_noise_cancellation(context)
         if step == PipelineStepType.TRANSCRIPTION:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")   
+            print(f"----------------------------------{step.value} --------------------------")   
             return await self._step_transcription(context)
         if step == PipelineStepType.TOPIC_RESEARCH:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+            print(f"----------------------------------{step.value} --------------------------")
             return await self._step_topic_research(context)
         if step == PipelineStepType.VISUAL_ANALYSIS:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+            print(f"----------------------------------{step.value} --------------------------")
             return await self._step_visual_analysis(context)
         if step == PipelineStepType.CONTENT_CLASSIFICATION:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+            print(f"----------------------------------{step.value} --------------------------")
             return await self._step_content_classification(context)
         if step == PipelineStepType.HIGHLIGHT_DETECTION:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")   
+            print(f"----------------------------------{step.value} --------------------------")   
             return await self._step_highlight_detection(context)
         if step == PipelineStepType.BOUNDING_BOX_DETECTION:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+            print(f"----------------------------------{step.value} --------------------------")
             return await self._step_bounding_box_detection(context)
         if step == PipelineStepType.SCORING:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+            print(f"----------------------------------{step.value} --------------------------")
             return await self._step_scoring(context)
         if step == PipelineStepType.METADATA_GENERATION:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+            print(f"----------------------------------{step.value} --------------------------")
             return await self._step_metadata_generation(context)
         if step == PipelineStepType.ASPECT_RATIO_RENDER:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+            print(f"----------------------------------{step.value} --------------------------")
             return await self._step_aspect_ratio_render(context)
         if step == PipelineStepType.CLIP_GENERATION:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+            print(f"----------------------------------{step.value} --------------------------")
             return await self._step_clip_generation(context)
         if step == PipelineStepType.SUBTITLE_STYLING:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+            print(f"----------------------------------{step.value} --------------------------")
             return await self._step_subtitle_styling(context)
         if step == PipelineStepType.BURN_IN_EXPORT:
-            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+            print(f"----------------------------------{step.value} --------------------------")
             return await self._step_burn_in_export(context)
         # if step == PipelineStepType.DEPTH_CAPTIONS:
         #     return await self._step_depth_captions(context)
