@@ -197,7 +197,7 @@ export default function DashboardApp() {
             // Projects without a pipeline are still valid folders.
           }
           const clips = (project.clips || []).map(mapBackendClip);
-          const processing = project.status === 'processing' || project.status === 'pending' ||
+          const processing = ['processing', 'pending', 'uploaded'].includes(project.status) ||
             Boolean(pipelineStatus && !pipelineStatus.is_completed && !pipelineStatus.error && pipelineStatus.steps?.length);
           return {
             id: project.id,
