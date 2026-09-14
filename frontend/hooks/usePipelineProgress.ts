@@ -106,9 +106,9 @@ export function usePipelineProgress(
               progress_percent: 100,
             });
           }
-        } else if (data.status === 'error') {
+        } else if (data.status === 'error' || data.status === 'cancelled') {
           setIsProcessing(false);
-          setError(data.message || 'Pipeline failed');
+          setError(data.message || (data.status === 'cancelled' ? 'Pipeline cancelled' : 'Pipeline failed'));
         } else {
           setIsProcessing(true);
         }

@@ -36,6 +36,7 @@ class PipelineStepType(str, enum.Enum):
     CLIP_GENERATION = "clip_generation"
     SUBTITLE_STYLING = "subtitle_styling"
     BURN_IN_EXPORT = "burn_in_export"
+    DEPTH_CAPTIONS = "depth_captions"
 
     _aliases: dict[str, PipelineStepType] = {}
 
@@ -47,6 +48,7 @@ class PipelineStepType(str, enum.Enum):
             "reframe": cls.ASPECT_RATIO_RENDER,
             "bbox_detection": cls.BOUNDING_BOX_DETECTION,
             "export": cls.BURN_IN_EXPORT,
+            "depth_captions": cls.DEPTH_CAPTIONS,
         }
         if value in alias_map:
             return alias_map[value]

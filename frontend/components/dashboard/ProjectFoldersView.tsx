@@ -40,6 +40,7 @@ interface ProjectFoldersViewProps {
   onDeleteFolder: (projectId: string) => void;
   onOpenUploadModal: () => void;
   onUpdateProject?: (projectId: string, updates: Partial<VideoProject>) => void;
+  onCancelPipeline?: (projectId: string) => void;
 }
 
 export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
@@ -52,6 +53,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
   onDeleteFolder,
   onOpenUploadModal,
   onUpdateProject,
+  onCancelPipeline,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -535,7 +537,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
               isSelected
                 ? 'bg-neutral-900 border-amber-500/60 ring-1 ring-amber-500/30'
                 : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900'
-            } ${(project.processingStatus === 'processing') ? 'opacity-90' : ''}`}
+            } ${(project.processingStatus === 'processing') ? 'ring-1 ring-amber-500/40' : ''}`}
           >
             {/* Loading overlay: dark gradient sweep from left to right */}
             {project.processingStatus === 'processing' && (
@@ -755,6 +757,14 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                         ? `Processing ${localProcessingProgress[project.id] ?? project.processingProgress ?? 0}%`
                         : `Avg ${Math.round(project.clips.reduce((acc, c) => acc + c.viralityScore, 0) / (project.clips.length || 1))}/100`}
                     </span>
+                    {project.processingStatus === 'processing' && onCancelPipeline && (
+                      <button
+                        onClick={() => onCancelPipeline(project.id)}
+                        className="px-2 py-0.5 rounded text-[10px] font-semibold text-rose-300 border border-rose-500/30 hover:bg-rose-500/10"
+                      >
+                        Cancel
+                      </button>
+                    )}
                     {isSelected && project.processingStatus !== 'processing' && (
                       <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3" /> Active
@@ -799,6 +809,15 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                           <ArrowRight className="w-3 h-3" />
                         </>
                       )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        onDeleteFolder(project.id);
+                      }}
+                      className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                      title="Delete Project"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>

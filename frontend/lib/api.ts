@@ -177,6 +177,17 @@ export interface BackendClip {
   created_at: string | null;
 }
 
+export interface BackendProject {
+  id: string;
+  title: string;
+  source_type: string;
+  source_url: string | null;
+  status: string;
+  duration_seconds: number;
+  created_at: string | null;
+  clips: BackendClip[];
+}
+
 export interface ClipListResponse {
   project_id: string;
   clips: BackendClip[];
@@ -199,7 +210,7 @@ export interface SocialExportResponse {
 
 const DEFAULT_CAPTION_CONFIG: CaptionConfig = {
   preset: 'bold_captions',
-  fontSize: 60,
+  fontSize: 48,
   fontFamily: 'Inter, sans-serif',
   textColor: '#ffffff',
   highlightColor: '#fbbf24',
@@ -208,10 +219,12 @@ const DEFAULT_CAPTION_CONFIG: CaptionConfig = {
   bgBoxColor: '#000000',
   uppercase: true,
   animation: 'bounce',
+  animationSpeed: 1.0,
   positionY: 78,
-  emojisEnabled: true,
+   emojisEnabled: true,
+  emojiCollection: 'skull_fire',
   maxWordsPerLine: 6,
-      shadowIntensity: 0.8,
+  shadowIntensity: 0.8,
 };
 
 export function mapBackendClip(clip: BackendClip): ViralClip {
@@ -356,6 +369,7 @@ export const workspaceApi = {
 };
 
 export const clipApi = {
+  listProjects: () => authedRequest<{ projects: BackendProject[]; total: number }>('/clips/projects'),
   fetchYoutubeMetadata: (url: string) => authedRequest<YouTubeMetadataResponse>('/clips/youtube/metadata', {
     method: 'POST',
     body: JSON.stringify({ url }),
@@ -368,7 +382,7 @@ export const clipApi = {
     method: 'POST',
     body: JSON.stringify({ url, format_id: formatId }),
   }),
-  exportProject: (projectId: string, maxClips?: number) => authedRequest<SocialExportResponse>(`/pipeline/export/${projectId}`, {
+  exportProject: (projectId: string, maxClips?: number, captionConfig?: CaptionConfig) => authedRequest<SocialExportResponse>(`/pipeline/export/${projectId}`, {
     method: 'POST',
     body: JSON.stringify({
       platforms: ['tiktok'],
@@ -376,6 +390,24 @@ export const clipApi = {
       burn_subtitles: true,
       enable_emoji: true,
       watermark_enabled: true,
+      style_type: captionConfig?.preset || 'bold_captions',
+      custom_config: captionConfig ? {
+        font_size: captionConfig.fontSize,
+        font_family: captionConfig.fontFamily,
+        font_color: captionConfig.textColor,
+        highlight_color: captionConfig.highlightColor,
+        secondary_highlight_color: captionConfig.secondaryHighlightColor,
+        has_bg_box: captionConfig.hasBgBox,
+        bg_box_color: captionConfig.bgBoxColor,
+        uppercase: captionConfig.uppercase,
+        animation: captionConfig.animation,
+        animation_speed: captionConfig.animationSpeed,
+        position_y: captionConfig.positionY,
+         emojis_enabled: captionConfig.emojisEnabled,
+         emoji_collection: captionConfig.emojiCollection,
+         max_words_per_line: captionConfig.maxWordsPerLine,
+        shadow_intensity: captionConfig.shadowIntensity,
+      } : undefined,
     }),
   }),
   subscribeDownloadProgress: (
@@ -544,7 +576,7 @@ export const pipelineApi = {
             try {
               const data = JSON.parse(line.slice(5).trim());
               onProgress(data);
-              if (data.status === 'completed' || data.status === 'error') {
+              if (data.status === 'completed' || data.status === 'error' || data.status === 'cancelled') {
                 ctrl.abort();
                 return;
               }
@@ -563,6 +595,10 @@ export const pipelineApi = {
   },
   getStatus: (projectId: string) =>
     authedRequest<PipelineStatus>(`/pipeline/status/${projectId}`),
+  cancel: (projectId: string) =>
+    authedRequest<{ project_id: string; status: string }>(`/pipeline/cancel/${projectId}`, {
+      method: 'POST',
+    }),
   revertStep: (projectId: string, step: string) =>
     authedRequest<{ project_id: string; step: string; status: string }>(`/pipeline/revert/${projectId}/${step}`, {
       method: 'POST',

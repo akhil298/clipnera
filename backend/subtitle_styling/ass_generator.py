@@ -125,6 +125,8 @@ class AssGenerator:
         height: int = 1920,
         title: str | None = None,
         ai_cues: list[dict[str, Any]] | None = None,
+        animation_speed: float = 1.0,
+        emoji_collection: str | None = None,
     ) -> str:
         template = get_template(style_id)
 
@@ -209,10 +211,12 @@ class AssGenerator:
         clip_duration = clip_end - clip_start
 
         if title and title.strip():
+            from subtitle_styling.emoji_annotator import inject_collection_emojis
+            styled_title = inject_collection_emojis(title.strip(), emoji_collection)
             show_for = min(4.0, clip_duration)
             lines.append(
                 f"Dialogue: 1,{ass_time(0)},{ass_time(show_for)},Title,,0,0,0,,"
-                f"{{\\fad(200,300)}}{escape_ass(title.strip())}"
+                f"{{\\fad(200,300)}}{escape_ass(styled_title)}"
             )
 
         if not transcript_words:
@@ -278,6 +282,7 @@ class AssGenerator:
                     else None,
                     primary_color=primary_color,
                     outline_width=max(1, round(template.get("stroke_width", 3))),
+                    animation_speed=animation_speed,
                 )
 
                 lines.append(
@@ -301,6 +306,7 @@ class AssGenerator:
         box_color: str | None,
         primary_color: str,
         outline_width: int,
+        animation_speed: float = 1.0,
     ) -> str:
         parts: list[str] = []
         for i, word in enumerate(group):
@@ -313,7 +319,9 @@ class AssGenerator:
                 continue
 
             if is_active:
-                pop = "\\t(0,70,\\fscx109\\fscy109)"
+                # Scale pop animation duration by animation_speed (default 70ms at 1.0x)
+                pop_duration = max(10, round(70 / animation_speed))
+                pop = f"\\t(0,{pop_duration},\\fscx109\\fscy109)"
                 if box_color:
                     parts.append(
                         f"{{\\c{highlight_color}\\bord{outline_width}\\3c{box_color}"
@@ -449,6 +457,8 @@ def build_ass_file(
     title: str | None = None,
     ai_cues: list[dict[str, Any]] | None = None,
     output_path: str | None = None,
+    animation_speed: float = 1.0,
+    emoji_collection: str | None = None,
 ) -> str:
     """Generate an ASS subtitle file and return its path."""
     generator = AssGenerator()
@@ -461,6 +471,8 @@ def build_ass_file(
         height=height,
         title=title,
         ai_cues=ai_cues,
+        animation_speed=animation_speed,
+        emoji_collection=emoji_collection,
     )
 
     if output_path:

@@ -181,6 +181,7 @@ class WhisperXTranscriptionService(TranscriptionService):
                 except OSError:
                     pass
                 gc.collect()
+                await asyncio.sleep(0)
             except Exception as exc:
                 log.error(f"Chunk {idx} transcription failed: {exc}")
                 raise CustomException(message=f"Transcription failed at chunk {idx+1}: {exc}", code="TRANSCRIPTION_CHUNK_FAILED", status_code=500) from exc

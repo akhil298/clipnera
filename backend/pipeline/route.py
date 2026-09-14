@@ -26,7 +26,9 @@ log = get_logger(__name__)
 pipeline = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
 _progress_store: dict[str, dict[str, Any]] = {}
+_active_orchestrators: dict[str, PipelineOrchestrator] = {}
 _progress_lock = asyncio.Lock()
+_semaphore = asyncio.Semaphore(10)
 
 
 def _progress_callback_factory(project_id: str):
@@ -47,6 +49,12 @@ def _progress_callback_factory(project_id: str):
 async def _run_pipeline(orchestrator: PipelineOrchestrator, project_id: str, user: dict | None = None, credit_refund_callback=None) -> None:
     try:
         results = await orchestrator.run()
+        if orchestrator.is_cancelled:
+            async with _progress_lock:
+                entry = _progress_store.get(project_id, {"percent": 0, "message": ""})
+                entry.update({"status": "cancelled", "message": "Pipeline cancelled by user", "step_status": "cancelled"})
+                _progress_store[project_id] = entry
+            return
         async with _progress_lock:
             entry = _progress_store.get(project_id, {"status": "idle", "percent": 0, "message": ""})
             entry.update({"status": "completed", "percent": 100, "message": "Pipeline completed", "step_status": "completed"})
@@ -87,6 +95,8 @@ async def _run_pipeline(orchestrator: PipelineOrchestrator, project_id: str, use
                 success=False,
                 error=str(exc),
             )
+    finally:
+        _active_orchestrators.pop(project_id, None)
 
 
 @pipeline.post("/start/{project_id}")
@@ -120,6 +130,7 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
             "metadata_generation",
             "aspect_ratio_render",
             "clip_generation",
+            "depth_captions",
         ]
         # Only use single aspect ratio (9:16) - user can export others later
         selected_steps = [PipelineStepType.resolve(s) for s in body.get("steps", default_steps)]
@@ -186,6 +197,8 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
             output_aspect_ratios=output_aspect_ratios,
         )
 
+        _active_orchestrators[project_id] = orchestrator
+
         asyncio.create_task(_run_pipeline(orchestrator, project_id, user=user, credit_refund_callback=refund_credits))
 
         return {
@@ -196,6 +209,24 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
             "watermark_enabled": watermark_enabled,
             "credits_deducted": credit_cost,
         }
+
+
+@pipeline.post("/cancel/{project_id}")
+async def cancel_pipeline(project_id: str, user: CurrentUserDep):
+    async with AsyncSessionLocal() as session:
+        project = await ClipRepository(session).get_project(project_id, user["user_id"])
+        if not project:
+            raise CustomException(message="Project not found", code="NOT_FOUND", status_code=404)
+
+    orchestrator = _active_orchestrators.get(project_id)
+    if not orchestrator:
+        raise CustomException(message="No active pipeline found", code="PIPELINE_NOT_RUNNING", status_code=409)
+    orchestrator.cancel()
+    async with _progress_lock:
+        entry = _progress_store.get(project_id, {"percent": 0, "message": ""})
+        entry.update({"status": "cancelled", "message": "Pipeline cancelled by user", "step_status": "cancelled"})
+        _progress_store[project_id] = entry
+    return {"project_id": project_id, "status": "cancelled"}
 
 
 @pipeline.get("/progress/{project_id}")
@@ -214,47 +245,48 @@ async def pipeline_progress(project_id: str, user: CurrentUserDep):
 
 @pipeline.get("/status/{project_id}")
 async def pipeline_status(project_id: str, user: CurrentUserDep):
-    try:
-        async with AsyncSessionLocal() as session:
-            pipeline_repo = PipelineRepository(session)
-            clip_repo = ClipRepository(session)
+    async with _semaphore:
+        try:
+            async with AsyncSessionLocal() as session:
+                pipeline_repo = PipelineRepository(session)
+                clip_repo = ClipRepository(session)
 
-            project = await clip_repo.get_project(project_id, user["user_id"])
-            if not project:
-                return {"project_id": project_id, "status": "not_started", "steps": []}
+                project = await clip_repo.get_project(project_id, user["user_id"])
+                if not project:
+                    return {"project_id": project_id, "status": "not_started", "steps": []}
 
-            state = await pipeline_repo.get_pipeline(project_id)
-            if not state:
-                return {"project_id": project_id, "status": "not_started", "steps": []}
+                state = await pipeline_repo.get_pipeline(project_id)
+                if not state:
+                    return {"project_id": project_id, "status": "not_started", "steps": []}
 
-            logs = await pipeline_repo.get_step_logs(state.id)
-            steps = []
-            for log_entry in logs:
-                steps.append({
-                    "step": log_entry.step,
-                    "status": log_entry.status,
-                    "progress_percent": log_entry.progress_percent,
-                    "message": log_entry.message,
-                    "artifact_path": log_entry.artifact_path,
-                    "started_at": log_entry.started_at.isoformat() if log_entry.started_at else None,
-                    "finished_at": log_entry.finished_at.isoformat() if log_entry.finished_at else None,
-                })
+                logs = await pipeline_repo.get_step_logs(state.id)
+                steps = []
+                for log_entry in logs:
+                    steps.append({
+                        "step": log_entry.step,
+                        "status": log_entry.status,
+                        "progress_percent": log_entry.progress_percent,
+                        "message": log_entry.message,
+                        "artifact_path": log_entry.artifact_path,
+                        "started_at": log_entry.started_at.isoformat() if log_entry.started_at else None,
+                        "finished_at": log_entry.finished_at.isoformat() if log_entry.finished_at else None,
+                    })
 
+                return {
+                    "project_id": project_id,
+                    "current_step": state.current_step,
+                    "is_completed": state.is_completed,
+                    "error": state.error,
+                    "steps": steps,
+                }
+        except Exception as exc:
+            log.error(f"Pipeline status failed: project={project_id} error={exc}")
             return {
                 "project_id": project_id,
-                "current_step": state.current_step,
-                "is_completed": state.is_completed,
-                "error": state.error,
-                "steps": steps,
+                "status": "error",
+                "error": str(exc),
+                "steps": [],
             }
-    except Exception as exc:
-        log.error(f"Pipeline status failed: project={project_id} error={exc}")
-        return {
-            "project_id": project_id,
-            "status": "error",
-            "error": str(exc),
-            "steps": [],
-        }
 
 
 @pipeline.post("/revert/{project_id}/{step}")
@@ -314,6 +346,7 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
             "metadata_generation",
             "aspect_ratio_render",
             "clip_generation",
+            "depth_captions",
         ]
         # Only use single aspect ratio (9:16) - user can export others later
         selected_steps = [PipelineStepType.resolve(s) for s in body.get("steps", default_steps)]
@@ -429,5 +462,6 @@ async def export_clips_for_social(project_id: str, request: SocialExportRequest,
         enable_emoji=request.enable_emoji,
         watermark_enabled=request.watermark_enabled,
         burn_subtitles=request.burn_subtitles,
+        animation_speed=request.animation_speed,
     )
     return result

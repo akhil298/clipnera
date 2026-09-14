@@ -218,6 +218,7 @@ class SocialExportRequest(BaseModel):
     enable_emoji: Optional[bool] = Field(default=True, description="Auto-insert emojis based on transcript keywords")
     watermark_enabled: bool = True
     burn_subtitles: bool = True
+    animation_speed: Optional[float] = Field(default=1.0, description="Animation speed multiplier for caption effects")
 
 
 class SocialExportClipResponse(BaseModel):

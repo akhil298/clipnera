@@ -46,6 +46,7 @@ import {
   AudioEnhancementConfig,
 } from '@/lib/types';
 import { getCaptionConfig, getAllCaptionStyles } from '@/lib/utils/captionStyles';
+import { EMOJI_COLLECTIONS, getEmojiCollection } from '@/lib/data/emojiCollections';
 import { sfxEngine } from '@/lib/utils/audioSynth';
 import confetti from 'canvas-confetti';
 import { AudioEnhancerPanel } from './AudioEnhancerPanel';
@@ -71,6 +72,25 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
       </div>
     );
   }
+
+  const applyEmojiCollection = (text: string): string => {
+    if (!captionConfig.emojiCollection) return text;
+    const collection = getEmojiCollection(captionConfig.emojiCollection);
+    if (!collection.emojis || collection.emojis.length === 0) return text;
+    const spaces = [];
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === ' ') spaces.push(i);
+    }
+    if (spaces.length < 2) {
+      return `${text} ${collection.emojis.join(' ')}`;
+    }
+    const firstBreak = spaces[0] + 1;
+    const lastBreak = spaces[spaces.length - 1];
+    const prefixEmojis = collection.emojis.slice(0, 2).join(' ');
+    const middleText = text.slice(firstBreak, lastBreak).trim();
+    const suffixText = text.slice(lastBreak).trim();
+    return `${text.slice(0, firstBreak)}${prefixEmojis} ${middleText} ${suffixText}`;
+  };
 
   const safeClip = clip;
 
@@ -298,7 +318,7 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
         throw new Error('No project ID found for export');
       }
 
-      const result = await clipApi.exportProject(projectId, 1);
+      const result = await clipApi.exportProject(projectId, 1, captionConfig);
 
       if (result?.exported_clips && result.exported_clips.length > 0) {
         const exported = result.exported_clips[0];
@@ -493,7 +513,7 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                   className="w-full h-full object-cover object-center"
                 />
               )}
-              <div className="absolute inset-0 bg-black/20" />
+              <div className="absolute inset-0 bg-black/50" />
             </div>
 
             {/* B-Roll Video Overlay (if active at currentTime) */}
@@ -588,9 +608,8 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                   }}
                 >
                   <span style={{ color: captionConfig.highlightColor }}>
-                    99% OF CREATORS
-                  </span>{' '}
-                  FAIL 🔥
+                    {applyEmojiCollection(safeClip.title || 'Your caption')}
+                  </span>
                 </div>
               )}
             </div>
@@ -864,7 +883,7 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
 
               {/* Fine Controls */}
               <div className="space-y-3 pt-2 border-t border-neutral-800/80">
-                {/* Font Size & Position Y */}
+                {/* Font Size & Animation Speed */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className="flex items-center justify-between text-xs text-neutral-400 mb-1">
@@ -873,8 +892,8 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                     </div>
                     <input
                       type="range"
-                      min={20}
-                      max={56}
+                      min={8}
+                      max={72}
                       value={captionConfig.fontSize}
                       onChange={(e) =>
                         setCaptionConfig({
@@ -885,7 +904,30 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                       className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
                     />
                   </div>
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-neutral-400 mb-1">
+                      <span>Animation Speed</span>
+                      <span className="font-mono">{captionConfig.animationSpeed.toFixed(2)}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0.25}
+                      max={3.0}
+                      step={0.25}
+                      value={captionConfig.animationSpeed}
+                      onChange={(e) =>
+                        setCaptionConfig({
+                          ...captionConfig,
+                          animationSpeed: Number(e.target.value),
+                        })
+                      }
+                      className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                    />
+                  </div>
+                </div>
 
+                {/* Position Y & Other Controls */}
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className="flex items-center justify-between text-xs text-neutral-400 mb-1">
                       <span>Vertical Pos (Y)</span>
@@ -900,6 +942,26 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                         setCaptionConfig({
                           ...captionConfig,
                           positionY: Number(e.target.value),
+                        })
+                      }
+                      className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-neutral-400 mb-1">
+                      <span>Shadow Intensity</span>
+                      <span className="font-mono">{captionConfig.shadowIntensity.toFixed(1)}x</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      value={captionConfig.shadowIntensity}
+                      onChange={(e) =>
+                        setCaptionConfig({
+                          ...captionConfig,
+                          shadowIntensity: Number(e.target.value),
                         })
                       }
                       className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
@@ -997,22 +1059,70 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                     <span className="text-xs text-neutral-200">Auto Kinetic Emojis</span>
                   </label>
 
-                  <label className="flex items-center gap-2 p-2 rounded-xl bg-neutral-950 border border-neutral-800 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={captionConfig.hasBgBox}
-                      onChange={(e) =>
-                        setCaptionConfig({
-                          ...captionConfig,
-                          hasBgBox: e.target.checked,
-                        })
-                      }
-                      className="rounded accent-amber-400"
-                    />
-                    <span className="text-xs text-neutral-200">Dark Box Backdrop</span>
-                  </label>
-                </div>
-              </div>
+                   <label className="flex items-center gap-2 p-2 rounded-xl bg-neutral-950 border border-neutral-800 cursor-pointer">
+                     <input
+                       type="checkbox"
+                       checked={captionConfig.hasBgBox}
+                       onChange={(e) =>
+                         setCaptionConfig({
+                           ...captionConfig,
+                           hasBgBox: e.target.checked,
+                         })
+                       }
+                       className="rounded accent-amber-400"
+                     />
+                     <span className="text-xs text-neutral-200">Dark Box Backdrop</span>
+                   </label>
+                 </div>
+
+                {/* Emoji Collection Selector */}
+                {captionConfig.emojisEnabled && (
+                  <div className="space-y-2 pt-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-neutral-300">Emoji Collection</span>
+                      <span className="text-xs text-neutral-500">
+                        {captionConfig.emojiCollection
+                          ? getEmojiCollection(captionConfig.emojiCollection).emoji
+                          : 'None'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                      {EMOJI_COLLECTIONS.map((col) => (
+                        <button
+                          key={col.id}
+                          onClick={() =>
+                            setCaptionConfig({
+                              ...captionConfig,
+                              emojiCollection:
+                                captionConfig.emojiCollection === col.id ? undefined : col.id,
+                            })
+                          }
+                          className={`p-2 rounded-lg text-xs font-semibold transition-all text-center ${
+                            captionConfig.emojiCollection === col.id
+                              ? 'bg-neutral-800 border-2 border-amber-400 text-amber-300'
+                              : 'bg-neutral-950 border border-neutral-800 text-neutral-400 hover:text-neutral-300 hover:border-neutral-700'
+                          }}`}
+                        >
+                          {col.emoji}
+                        </button>
+                      ))}
+                    </div>
+                    {captionConfig.emojiCollection && (
+                      <button
+                        onClick={() =>
+                          setCaptionConfig({
+                            ...captionConfig,
+                            emojiCollection: undefined,
+                          })
+                        }
+                        className="text-[10px] text-neutral-500 hover:text-neutral-300 underline"
+                      >
+                        Clear Emoji Collection
+                      </button>
+                    )}
+                  </div>
+                )}
+               </div>
             </div>
           )}
 

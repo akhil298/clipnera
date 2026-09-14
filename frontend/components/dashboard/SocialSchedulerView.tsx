@@ -54,7 +54,7 @@ export const SocialSchedulerView: React.FC<SocialSchedulerViewProps> = ({
     activeClip?.socialOptimization?.optimizedHooks || [
       {
         type: 'Curiosity Gap',
-        text: '99% of creators make this fatal mistake in the first 3 seconds.',
+        text: activeClip?.hook || 'What nobody tells you about this topic...',
         strength: 99,
         predictedRetention: '+41%',
       },
@@ -74,7 +74,7 @@ export const SocialSchedulerView: React.FC<SocialSchedulerViewProps> = ({
   );
 
   const [customCaption, setCustomCaption] = useState(
-    `${activeClip?.hook || 'Why 99% of creators fail.'}\n\nHere's the step-by-step breakdown. Drop a comment below if you want the full AI prompt checklist! 👇`
+    `${activeClip?.hook || activeClip?.title || 'Your caption'}\n\nHere's the step-by-step breakdown. Drop a comment below if you want the full AI prompt checklist! 👇`
   );
 
   // Platform AI Timing data

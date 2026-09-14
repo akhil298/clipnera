@@ -91,6 +91,83 @@ POWER_WORDS: set[str] = {
     "ten",
 }
 
+EMOJI_COLLECTIONS: dict[str, list[str]] = {
+    "skull_fire": ["\U0001F480", "\U0001F525"],
+    "skull_only": ["\U0001F480"],
+    "fire": ["\U0001F525"],
+    "fire_skull": ["\U0001F525", "\U0001F480"],
+    "arrow": ["\U0001F449", "\U0001F5E1\ufe0f"],
+    "money_eyes": ["\U0001F4B0", "\U0001F440"],
+    "explosion": ["\U0001F4A5", "\U0001F480", "\U0001F525"],
+    "rocket": ["\U0001F680", "\U0001F449"],
+    "thumbs_up": ["\U0001F44D", "\U0001F449"],
+    "crown": ["\U0001F451", "\U0001F449"],
+    "lightning": ["\u26a1", "\U0001F4A1"],
+    "sparkles": ["\u2728", "\u2728"],
+    "shock": ["\U0001F621", "\U0001F621", "\u26a1"],
+    "crown_skull": ["\U0001F451", "\U0001F480", "\U0001F525"],
+    "dice": ["\U0001F3B2", "\U0001F480"],
+    "fist": ["\U0001F44A", "\U0001F449"],
+    "eye_fire": ["\U0001F440", "\U0001F525"],
+    "clown": ["\U0001F927", "\U0001F525"],
+    "ghost": ["\U0001F47B", "\U0001F480"],
+    "skull_crossbones": ["\U0001F480", "\u2620\ufe0f"],
+}
+
+_COLLECTION_NAME_ALIASES: dict[str, str] = {
+    "skull_fire": "skull_fire",
+    "skullfire": "skull_fire",
+    "skull and fire": "skull_fire",
+    "fire_skull": "fire_skull",
+    "fireskull": "fire_skull",
+    "fire and skull": "fire_skull",
+}
+
+
+def get_emoji_collection(name: str) -> list[str]:
+    """Return the emoji list for a named collection, falling back to skull_fire."""
+    if not name:
+        return EMOJI_COLLECTIONS["skull_fire"]
+    normalized = _COLLECTION_NAME_ALIASES.get(name.lower().strip(), name.lower().strip())
+    return EMOJI_COLLECTIONS.get(normalized, EMOJI_COLLECTIONS["skull_fire"])
+
+
+def inject_collection_emojis(
+    text: str,
+    collection_name: str | None = None,
+    max_insertions: int = 3,
+) -> str:
+    """Insert collection emojis at natural break points in caption text.
+
+    Places emojis after the first word and before the last word by default,
+    producing effects like 'WHY 💀🔥 99% OF CREATORS FAIL'.
+    """
+    if not collection_name:
+        return text
+    emojis = get_emoji_collection(collection_name)
+    if not emojis:
+        return text
+
+    spaces = [i for i, ch in enumerate(text) if ch == " "]
+    if len(spaces) < 2:
+        insertion = " ".join(emojis[:max_insertions])
+        return f"{text} {insertion}"
+
+    first_break = spaces[0] + 1
+    last_break = spaces[-1]
+
+    prefix = " ".join(emojis[: max_insertions // 2 + 1]) if emojis else ""
+    middle = " ".join(emojis[max_insertions // 2 + 1 : max_insertions]) if len(emojis) > max_insertions // 2 + 1 else ""
+
+    if middle:
+        return (
+            text[:first_break] + prefix + " " +
+            text[first_break:last_break] + " " + middle + " " +
+            text[last_break:]
+        )
+    return text[:first_break] + prefix + " " + text[first_break:]
+
+
 _NORMALIZE_RE = re.compile(r"[^a-z0-9%]+")
 _NUMBER_RE = re.compile(r"\d")
 

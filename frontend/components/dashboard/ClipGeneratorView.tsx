@@ -129,7 +129,9 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
     setExportError(null);
     setIsBatchExporting(true);
     try {
-      const result = await clipApi.exportProject(safeProject.id, safeProject.clips.length);
+      // Use the first clip's caption config for batch export, or default
+      const firstClipCaptionConfig = safeProject.clips[0]?.captionConfig;
+      const result = await clipApi.exportProject(safeProject.id, safeProject.clips.length, firstClipCaptionConfig);
       const downloadableClips = result.exported_clips.filter((clip) => clip.burned_presigned_url);
 
       downloadableClips.forEach((clip, index) => {
@@ -612,11 +614,13 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
                     </>
                   ) : (
                     <>
-                      <img
-                        src={safeProject.posterUrl}
-                        alt={selectedClip.title}
-                        className="w-full h-full object-cover opacity-70 scale-105"
-                      />
+                      {safeProject.posterUrl && (
+                        <img
+                          src={safeProject.posterUrl}
+                          alt={selectedClip.title}
+                          className="w-full h-full object-cover opacity-70 scale-105"
+                        />
+                      )}
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-14 h-14 rounded-full bg-neutral-800/60 flex items-center justify-center">
                           <Play className="w-6 h-6 text-neutral-400" />
@@ -647,11 +651,7 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
                         color: selectedClip.captionConfig.textColor,
                       }}
                     >
-                      WHY{' '}
-                      <span style={{ color: selectedClip.captionConfig.highlightColor }}>
-                        99% OF CREATORS
-                      </span>{' '}
-                      FAIL 💀🔥
+                      {selectedClip.hook || selectedClip.title || 'Your caption'}
                     </p>
                   </div>
                 </div>

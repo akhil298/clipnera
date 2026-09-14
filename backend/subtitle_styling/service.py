@@ -105,10 +105,23 @@ class SubtitleStylingService:
         word_snapping: bool = True,
         ai_cues: Optional[list[dict[str, Any]]] = None,
     ) -> str:
+        # Extract animation_speed and emoji_collection from custom_config if provided
+        animation_speed = 1.0
+        emoji_collection = None
+        if custom_config and isinstance(custom_config, dict):
+            if "animation_speed" in custom_config:
+                try:
+                    animation_speed = float(custom_config["animation_speed"])
+                except (ValueError, TypeError):
+                    animation_speed = 1.0
+            emoji_collection = custom_config.get("emoji_collection")
+        
         if self._is_template_style(style_type) and transcript_segments is not None:
             return await self._burn_with_ass(
                 video_path, clip_start, clip_end, style_type, title_text,
                 enable_watermark, transcript_segments, word_snapping, ai_cues,
+                animation_speed,
+                emoji_collection,
             )
         return await self._burn_with_srt(
             video_path, clip_start, clip_end, style_type, custom_config,
@@ -131,6 +144,8 @@ class SubtitleStylingService:
         transcript_segments: list[dict],
         word_snapping: bool,
         ai_cues: Optional[list[dict[str, Any]]] = None,
+        animation_speed: float = 1.0,
+        emoji_collection: Optional[str] = None,
     ) -> str:
         template_name = style_type
         if not get_template_names().__contains__(style_type):
@@ -166,6 +181,8 @@ class SubtitleStylingService:
             height=height,
             title=title_text,
             ai_cues=ai_cues,
+            animation_speed=animation_speed,
+            emoji_collection=emoji_collection,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:

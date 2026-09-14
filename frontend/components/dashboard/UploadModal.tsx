@@ -129,10 +129,41 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setProcessingLogs(['Ingesting YouTube video stream and initializing project folder...']);
 
     let projectId: string | null = null;
+    let projectPublished = false;
 
     try {
       const downloadResult: any = await clipApi.downloadYoutube(urlInput);
       projectId = downloadResult?.id || null;
+
+      if (projectId) {
+        const meta = analyzeVideoSource(urlInput, { title: ytMeta?.title, channelTitle: ytMeta?.channel_title });
+        onProjectCreated({
+          id: projectId,
+          title: customTitle || meta.cleanTitle,
+          folderName: customFolderName || meta.folderName,
+          folderCategory: 'YouTube Ingest',
+          folderColor: meta.folderColor || 'amber',
+          sourceUrl: urlInput,
+          sourceChannel: meta.sourceChannel || 'YouTube',
+          description: `Project folder for ${customFolderName || meta.folderName}. Processing has started.`,
+          tags: meta.tags || ['YouTube', 'AI', 'Shorts'],
+          genre: meta.genre,
+          duration: meta.duration,
+          sourceType: 'youtube_url',
+          videoUrl: '',
+          posterUrl: meta.posterUrl,
+          uploadedAt: new Date().toISOString(),
+          syncStatus: 'syncing',
+          offlineAvailable: false,
+          clips: [],
+          transcript: [],
+          processingProgress: 0,
+          processingStatus: 'processing',
+          audioEnhancement: audioEnhanceConfig,
+        });
+        projectPublished = true;
+        onClose();
+      }
 
       if (projectId && downloadResult?.status === 'processing') {
         await new Promise<void>((resolve, reject) => {
@@ -240,6 +271,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       });
     } catch (err) {
       setProcessingLogs((prev) => [...prev, 'Pipeline encountered an issue. Using local simulation fallback...']);
+    }
+
+    if (projectPublished) {
+      setIsProcessing(false);
+      return;
     }
 
     await new Promise((r) => setTimeout(r, 600));

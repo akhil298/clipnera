@@ -1,5 +1,5 @@
 ﻿export type AspectRatio = '9:16' | '1:1' | '16:9';
-export type CaptionPreset = 'hormozi' | 'mrbeast' | 'neon' | 'cyberpunk' | 'minimal' | 'karaoke_yellow' | 'sunset' | 'bold_captions';
+export type CaptionPreset = 'hormozi' | 'mrbeast' | 'neon' | 'cyberpunk' | 'minimal' | 'karaoke_yellow' | 'sunset' | 'bold_captions' | 'tiny' | 'micro';
 export type LayoutMode = 'single_speaker' | 'split_screen' | 'screen_share_focus';
 
 export interface AudioEnhancementConfig {
@@ -75,9 +75,11 @@ export interface CaptionConfig {
   hasBgBox: boolean;
   bgBoxColor: string;
   uppercase: boolean;
-  animation: 'bounce' | 'pop' | 'wave' | 'karaoke' | 'glow';
-  positionY: number; // percentage from top (e.g. 72%)
+  animation: 'bounce' | 'pop' | 'wave' | 'karaoke' | 'glow' | 'fade' | 'none';
+  animationSpeed: number;
+  positionY: number;
   emojisEnabled: boolean;
+  emojiCollection?: string;
   maxWordsPerLine: number;
   shadowIntensity: number;
 }
@@ -293,7 +295,7 @@ export interface PipelineStatus {
 export interface PipelineProgressEvent {
   message: string;
   percent: number;
-  status: 'idle' | 'running' | 'completed' | 'error';
+  status: 'idle' | 'running' | 'completed' | 'error' | 'cancelled';
   current_step?: string;
   step_status?: string;
 }

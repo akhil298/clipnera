@@ -18,6 +18,8 @@ from transcription.service import WhisperXTranscriptionService
 from transcription.schema import TranscriptionRequest
 from clip.repository import ClipRepository
 from clip_generation.service import ClipService
+from depth_captions.pipeline import create_depth_captions_job
+from depth_captions.schema import DepthCaptionRequest, StylePreset, DepthMode, TranscriptSegment
 from core.database import AsyncSessionLocal
 
 from pipeline.model import PipelineStepType, StepStatus
@@ -26,6 +28,11 @@ log = get_logger(__name__)
 
 
 ProgressCallback = Callable[[str, int, Optional[str], Optional[str], Optional[str]], None]
+
+
+def _read_audio_file(path: str) -> bytes:
+    with open(path, "rb") as f:
+        return f.read()
 
 
 class PipelineOrchestrator:
@@ -77,6 +84,10 @@ class PipelineOrchestrator:
             extra={"project_id": self.project_id, "user_id": self.user_id},
         )
 
+    @property
+    def is_cancelled(self) -> bool:
+        return self._cancel
+
     async def run(self) -> dict:
         results: dict[str, Any] = {}
         step_order = [
@@ -94,6 +105,7 @@ class PipelineOrchestrator:
             PipelineStepType.CLIP_GENERATION,
             PipelineStepType.SUBTITLE_STYLING,
             PipelineStepType.BURN_IN_EXPORT,
+            PipelineStepType.DEPTH_CAPTIONS,
         ]
 
         if self._resume:
@@ -135,6 +147,8 @@ class PipelineOrchestrator:
                         )
                         continue
 
+                await asyncio.sleep(0)
+
                 try:
                     await self._mark_step_running(step)
                     result = await self._execute_step(step, results)
@@ -153,6 +167,7 @@ class PipelineOrchestrator:
                     )
                     await self._mark_step_failed(step, str(exc))
                     raise
+                await asyncio.sleep(0)
 
             log.info(
                 "Pipeline finished",
@@ -163,7 +178,10 @@ class PipelineOrchestrator:
                     "canceled": self._cancel,
                 },
             )
-            await self._mark_pipeline_completed()
+            if self._cancel:
+                await self._mark_pipeline_failed("Pipeline cancelled by user")
+            else:
+                await self._mark_pipeline_completed()
         except Exception as exc:
             await self._mark_pipeline_failed(str(exc))
             raise
@@ -175,35 +193,54 @@ class PipelineOrchestrator:
             extra={"project_id": self.project_id, "step": step.value},
         )
         if step == PipelineStepType.DOWNLOAD:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
             return await self._step_download()
         if step == PipelineStepType.AUDIO_EXTRACTION:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+
             return await self._step_audio_extraction(context)
         if step == PipelineStepType.AI_NOISE_CANCELLATION:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
+
             return await self._step_ai_noise_cancellation(context)
         if step == PipelineStepType.TRANSCRIPTION:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")   
             return await self._step_transcription(context)
         if step == PipelineStepType.TOPIC_RESEARCH:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
             return await self._step_topic_research(context)
         if step == PipelineStepType.VISUAL_ANALYSIS:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
             return await self._step_visual_analysis(context)
         if step == PipelineStepType.CONTENT_CLASSIFICATION:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
             return await self._step_content_classification(context)
         if step == PipelineStepType.HIGHLIGHT_DETECTION:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")   
             return await self._step_highlight_detection(context)
         if step == PipelineStepType.BOUNDING_BOX_DETECTION:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
             return await self._step_bounding_box_detection(context)
         if step == PipelineStepType.SCORING:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
             return await self._step_scoring(context)
         if step == PipelineStepType.METADATA_GENERATION:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
             return await self._step_metadata_generation(context)
         if step == PipelineStepType.ASPECT_RATIO_RENDER:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
             return await self._step_aspect_ratio_render(context)
         if step == PipelineStepType.CLIP_GENERATION:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
             return await self._step_clip_generation(context)
         if step == PipelineStepType.SUBTITLE_STYLING:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
             return await self._step_subtitle_styling(context)
         if step == PipelineStepType.BURN_IN_EXPORT:
+            print("&&&&&&&&&&& {step.value} &&&&&&&&&&&")
             return await self._step_burn_in_export(context)
+        # if step == PipelineStepType.DEPTH_CAPTIONS:
+        #     return await self._step_depth_captions(context)
         raise ValueError(f"Unknown pipeline step: {step.value}")
 
     async def _step_audio_extraction(self, context: dict) -> dict:
@@ -259,8 +296,7 @@ class PipelineOrchestrator:
 
         self._notify("Running AI noise cancellation...", 20)
 
-        with open(audio_path, "rb") as f:
-            audio_bytes = f.read()
+        audio_bytes = await asyncio.to_thread(_read_audio_file, audio_path)
         log.info(
             "Audio bytes loaded for enhancement",
             extra={"project_id": self.project_id, "audio_path": audio_path, "size_bytes": len(audio_bytes)},
@@ -708,6 +744,54 @@ class PipelineOrchestrator:
         )
         self._notify(f"Burned {len(burned)}/{len(clips)} clips", 100)
         return {"status": "completed", "burned_clips": burned, "message": "Titles burned at export time"}
+
+    async def _step_depth_captions(self, context: dict) -> dict:
+        self._notify("Generating depth captions...", 10)
+        log.info("Starting depth captions generation", extra={"project_id": self.project_id})
+
+        video_path = await self._project_video_path()
+        if not video_path or not Path(video_path).exists():
+            raise ValueError("Missing video path for depth captions")
+
+        transcript_segments_data = self._transcript_segments(context)
+        if not transcript_segments_data:
+            raise ValueError("No transcript segments available for depth captions")
+
+        transcript_segments = [TranscriptSegment(**s) for s in transcript_segments_data]
+
+        request = DepthCaptionRequest(
+            project_id=self.project_id,
+            clip_id="auto",  # Will use the first clip
+            style=StylePreset.GIANT_EDITORIAL,
+            depth_mode=DepthMode.AUTO,
+            language="en",
+        )
+
+        async def progress_cb(message: str, percent: int, stage: str | None = None):
+            self._notify(f"Depth captions: {message}", percent, step="depth_captions", step_status=stage or "running")
+
+        result = await create_depth_captions_job(
+            request,
+            transcript_segments,
+            video_path,
+            progress_callback=progress_cb,
+        )
+
+        if result.status.value == "failed":
+            raise RuntimeError(f"Depth captions failed: {result.error}")
+
+        log.info(
+            "Depth captions generation complete",
+            extra={"project_id": self.project_id, "job_id": result.job_id, "output_url": result.output_url},
+        )
+        self._notify("Depth captions complete", 100)
+
+        return {
+            "job_id": result.job_id,
+            "output_url": result.output_url,
+            "preview_url": result.preview_url,
+            "status": result.status.value,
+        }
 
     async def _load_step_statuses(self) -> None:
         try:
