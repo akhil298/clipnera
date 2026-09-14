@@ -57,13 +57,13 @@ class PipelineRepository:
 
     async def get_step_logs_for_pipeline(self, project_id: str) -> list[PipelineStepLog]:
         stmt = (
-            select(PipelineState, PipelineStepLog)
-            .join(PipelineStepLog, PipelineStepLog.pipeline_id == PipelineState.id)
+            select(PipelineStepLog)
+            .join(PipelineState, PipelineStepLog.pipeline_id == PipelineState.id)
             .where(PipelineState.project_id == project_id)
             .order_by(PipelineStepLog.created_at.asc())
         )
         result = await self._session.execute(stmt)
-        return list(result.scalars().unique().all())
+        return list(result.scalars().all())
 
     async def update_step_status(
         self, pipeline_id: str, step: PipelineStepType, status: StepStatus, **kwargs
