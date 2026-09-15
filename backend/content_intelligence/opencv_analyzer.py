@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import logging
+import subprocess
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -130,32 +130,66 @@ class OpenCVAnalyzer:
             return None
 
     def _extract_frames_sync(self, video_path: str, timestamps: list[float]) -> list[OpenCVFrame]:
-        cap = cv2.VideoCapture(video_path)
-        if not cap.isOpened():
-            log.warning("[OPENCV] [EXTRACT OPEN FAILED] video=%s", video_path)
-            return []
-        log.info("[OPENCV] [EXTRACT OPENED] video=%s", video_path)
+        log.info("[OPENCV] [EXTRACT OPENED] decoder=ffmpeg software video=%s", video_path)
         frames: list[OpenCVFrame] = []
-        try:
-            for index, ts in enumerate(timestamps, start=1):
-                cap.set(cv2.CAP_PROP_POS_MSEC, ts * 1000)
-                ret, frame = cap.read()
-                if not ret or frame is None:
-                    log.warning("[OPENCV] [FRAME SKIP] index=%d/%d timestamp=%.3fs", index, len(timestamps), ts)
-                    continue
-                h, w = frame.shape[:2]
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                hist = cv2.calcHist([gray], [0], None, [32], [0, 256])
-                cv2.normalize(hist, hist, 0, 1, cv2.NORM_MINMAX)
-                log.info("[OPENCV] [FRAME] index=%d/%d timestamp=%.3fs size=%dx%d", index, len(timestamps), ts, w, h)
-                frames.append(OpenCVFrame(
-                    timestamp=round(ts, 3),
-                    frame=frame,
-                    width=w,
-                    height=h,
-                    gray=gray,
-                    hist=hist,
-                ))
-        finally:
-            cap.release()
+        for index, ts in enumerate(timestamps, start=1):
+            frame = self._decode_frame_with_ffmpeg(video_path, ts)
+            if frame is None:
+                log.warning("[OPENCV] [FRAME SKIP] index=%d/%d timestamp=%.3fs", index, len(timestamps), ts)
+                continue
+            h, w = frame.shape[:2]
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            hist = cv2.calcHist([gray], [0], None, [32], [0, 256])
+            cv2.normalize(hist, hist, 0, 1, cv2.NORM_MINMAX)
+            log.info("[OPENCV] [FRAME] index=%d/%d timestamp=%.3fs size=%dx%d", index, len(timestamps), ts, w, h)
+            frames.append(OpenCVFrame(
+                timestamp=round(ts, 3),
+                frame=frame,
+                width=w,
+                height=h,
+                gray=gray,
+                hist=hist,
+            ))
         return frames
+
+    @staticmethod
+    def _decode_frame_with_ffmpeg(video_path: str, timestamp: float) -> np.ndarray | None:
+        command = [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostdin",
+            "-hwaccel",
+            "none",
+            "-ss",
+            str(timestamp),
+            "-i",
+            video_path,
+            "-an",
+            "-frames:v",
+            "1",
+            "-f",
+            "image2pipe",
+            "-vcodec",
+            "mjpeg",
+            "-q:v",
+            "2",
+            "pipe:1",
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+        except OSError as exc:
+            log.error("[OPENCV] FFmpeg frame decode unavailable: %s", exc)
+            return None
+        if result.returncode != 0 or not result.stdout:
+            error = result.stderr.decode("utf-8", errors="ignore").strip().replace("\n", " ")
+            log.debug("[OPENCV] FFmpeg frame decode failed at %.3fs: %s", timestamp, error[-300:])
+            return None
+        frame = cv2.imdecode(np.frombuffer(result.stdout, dtype=np.uint8), cv2.IMREAD_COLOR)
+        return frame if frame is not None and frame.size else None
