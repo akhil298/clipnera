@@ -5,7 +5,6 @@ import json
 from typing import Any, Callable
 from uuid import uuid4
 
-from clients.ai.gemini import Gemini
 from clients.ai.groq import Groq
 from core.database import AsyncSessionLocal
 from core.logging_config import get_logger
@@ -23,10 +22,9 @@ log = get_logger(__name__)
 class ContentIntelligenceService:
     def __init__(self) -> None:
         self._groq = Groq()
-        self._gemini = Gemini()
         self._researcher = TopicResearcher(self._groq)
-        self._classifier = ContentClassifier(self._groq, self._gemini)
-        self._analyzer = FrameAnalyzer(self._gemini)
+        self._classifier = ContentClassifier(self._groq)
+        self._analyzer = FrameAnalyzer()
         self._highlighter = HighlightDetector(self._groq)
         self._scorer = ClipScorer()
         self._metadata_gen = MetadataGenerator(self._groq)
@@ -104,7 +102,7 @@ class ContentIntelligenceService:
             frame_interval=frame_interval,
         )
 
-    def build_output_formats(
+    def build_smart_output_formats(
         self,
         frame_analyses: list[dict],
         source_width: int,
@@ -121,6 +119,28 @@ class ContentIntelligenceService:
             source_width=source_width,
             source_height=source_height,
             aspect_ratios=ratios,
+            content_category=content_category,
+            transcript_segments=transcript_segments,
+            scene_changes=scene_changes,
+            video_path=video_path,
+        )
+
+    def build_output_formats(
+        self,
+        frame_analyses: list[dict[str, Any]],
+        source_width: int,
+        source_height: int,
+        aspect_ratios: list[str] | None = None,
+        content_category: str = "unknown",
+        transcript_segments: list[dict[str, Any]] | None = None,
+        scene_changes: list[float] | None = None,
+        video_path: str | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        return self.build_smart_output_formats(
+            frame_analyses=frame_analyses,
+            source_width=source_width,
+            source_height=source_height,
+            aspect_ratios=aspect_ratios,
             content_category=content_category,
             transcript_segments=transcript_segments,
             scene_changes=scene_changes,

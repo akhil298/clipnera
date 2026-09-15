@@ -12,13 +12,9 @@ class FakeOpenAI:
         raise RuntimeError("API unavailable")
 
 
-class FakeGemini:
-    pass
-
-
 @pytest.mark.asyncio
 async def test_classifier_heuristic_gaming():
-    classifier = ContentClassifier(FakeOpenAI(), FakeGemini())
+    classifier = ContentClassifier(FakeOpenAI())
     result = await classifier.classify(
         {"title": "Epic Minecraft Gameplay", "summary": "Playing Minecraft", "keywords": ["game", "minecraft"]},
         [],
@@ -29,7 +25,7 @@ async def test_classifier_heuristic_gaming():
 
 @pytest.mark.asyncio
 async def test_classifier_heuristic_comedy():
-    classifier = ContentClassifier(FakeOpenAI(), FakeGemini())
+    classifier = ContentClassifier(FakeOpenAI())
     result = await classifier.classify(
         {"title": "Funniest Moments Compilation", "summary": "Hilarious clips", "keywords": ["funny", "hilarious"]},
         [],

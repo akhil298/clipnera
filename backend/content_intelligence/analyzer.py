@@ -7,7 +7,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import cv2
+
 from core.logging_config import get_logger
+from content_intelligence.opencv_analyzer import OpenCVFrame, OpenCVAnalyzer
 from video_processor.ffmpeg_service import FFmpegService
 
 log = get_logger(__name__)
@@ -17,6 +20,7 @@ class FrameAnalyzer:
     def __init__(self, vision_client: Any | None = None, ffmpeg: FFmpegService | None = None) -> None:
         self._vision = vision_client
         self._ffmpeg = ffmpeg or FFmpegService()
+        self._opencv = OpenCVAnalyzer()
 
     async def analyze(self, video_path: str, content_category: str, max_frames: int = 30) -> dict:
         duration = await self._ffmpeg.probe_duration(video_path)
@@ -107,10 +111,10 @@ class FrameAnalyzer:
             await self._ffmpeg.extract_frame(video_path, timestamp, frame_path)
             if not os.path.exists(frame_path):
                 return self._fallback_frame(timestamp, source_width, source_height, content_category, "Frame was not created")
+            if not self._vision:
+                frame = cv2.imread(frame_path)
+                return self._opencv_frame(frame, timestamp, content_category)
             image_bytes = Path(frame_path).read_bytes()
-
-        if not self._vision:
-            return self._fallback_frame(timestamp, source_width, source_height, content_category, "Vision client is not configured")
 
         b64 = base64.b64encode(image_bytes).decode("utf-8")
         prompt = (
@@ -170,6 +174,41 @@ class FrameAnalyzer:
         except Exception as exc:
             log.debug(f"Vision analysis failed at {timestamp}: {exc}")
             return self._fallback_frame(timestamp, source_width, source_height, content_category, str(exc))
+
+    def _opencv_frame(self, frame: Any, timestamp: float, content_category: str) -> dict[str, Any]:
+        if frame is None or frame.size == 0:
+            return self._fallback_frame(timestamp, 0, 0, content_category, "OpenCV could not read frame")
+        height, width = frame.shape[:2]
+        analyzed = self._opencv.compute_saliency(
+            OpenCVFrame(timestamp=timestamp, frame=frame, width=width, height=height)
+        )
+        if not analyzed:
+            return self._fallback_frame(timestamp, width, height, content_category, "No salient region detected")
+        box = {
+            "x": analyzed["x"],
+            "y": analyzed["y"],
+            "width": analyzed["width"],
+            "height": analyzed["height"],
+        }
+        return {
+            "timestamp": round(float(timestamp), 3),
+            "frame_width": width,
+            "frame_height": height,
+            "description": "",
+            "subjects": [{"label": "salient_region", "confidence": analyzed["saliency_score"], "bounding_box": box}],
+            "faces": [],
+            "objects": [],
+            "on_screen_text": [],
+            "scene": "",
+            "camera_shot": "",
+            "body_position": "",
+            "speaker": None,
+            "visual_quality": {"score": analyzed["saliency_score"], "issues": []},
+            "text_logos": [],
+            "main_subject_position": box,
+            "suitable_for_vertical_crop": True,
+            "content_category": content_category,
+        }
 
     async def _describe_frame(self, video_path: str, timestamp: float) -> str:
         frame = await self._analyze_frame(video_path, timestamp, 0, 0, "unknown")

@@ -447,10 +447,9 @@ class PipelineOrchestrator:
         frame_result = analysis.get("frame_analysis")
         if not frame_result:
             from content_intelligence.analyzer import FrameAnalyzer
-            from clients.ai.gemini import Gemini
 
             category = analysis.get("classification", {}).get("category", "unknown")
-            frame_result = await FrameAnalyzer(Gemini()).analyze(video_path, category)
+            frame_result = await FrameAnalyzer().analyze(video_path, category)
         log.info(
             "Visual analysis complete",
             extra={"project_id": self.project_id, "result_type": type(frame_result).__name__},

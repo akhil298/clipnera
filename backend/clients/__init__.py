@@ -1,4 +1,4 @@
-from .ai import BaseAI, OpenAI, Anthropic, XAI, Gemini, get_ai
+from .ai import BaseAI, OpenAI, Anthropic, XAI, get_ai
 from .services import *
 
 __all__ = [
@@ -6,6 +6,5 @@ __all__ = [
     "OpenAI",
     "Anthropic",
     "XAI",
-    "Gemini",
     "get_ai",
 ]

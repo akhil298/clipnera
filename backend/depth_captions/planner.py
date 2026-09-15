@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from core.logging_config import get_logger
 from core.exceptions import CustomException
-from clients.ai.gemini import Gemini
 from clients.ai.groq import Groq
 from depth_captions.schema import (
     EditPlan,
@@ -32,9 +31,7 @@ log = get_logger(__name__)
 
 class LLMPlanner:
     def __init__(self) -> None:
-        self._gemini = Gemini()
         self._groq = Groq()
-        self._model = "gemini-2.0-flash"
 
     async def generate_edit_plan(
         self,
@@ -54,7 +51,7 @@ class LLMPlanner:
         )
         
         try:
-            response = await self._gemini.generate(prompt)
+            response = await self._groq.chat([{"role": "user", "content": prompt}], max_tokens=2000)
             plan_data = self._parse_llm_response(response)
             
             edit_plan = EditPlan(

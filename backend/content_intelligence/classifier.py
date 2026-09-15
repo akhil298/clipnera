@@ -42,9 +42,8 @@ CLASSIFICATION_PROMPT = """You are a content classification assistant. Given a v
 
 
 class ContentClassifier:
-    def __init__(self, text_client: Any, gemini_client: Any) -> None:
+    def __init__(self, text_client: Any) -> None:
         self._text_client = text_client
-        self._gemini = gemini_client
 
     async def classify(self, topic_research: dict, transcript_segments: list[dict]) -> dict:
         title = topic_research.get("title", "")
