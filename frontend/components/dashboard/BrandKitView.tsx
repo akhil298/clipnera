@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { BrandKit } from '@/lib/types';
 import { brandKitApi } from '@/lib/api';
+import { BrandKitSkeleton } from '@/components/skeletons';
 import { CAPTION_PRESETS } from '@/lib/data/captionPresets';
 
 const DEFAULT_BRAND_KIT: BrandKit = {
@@ -118,11 +119,7 @@ export const BrandKitView: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-xs text-neutral-400">Loading brand kit...</div>
-      </div>
-    );
+    return <BrandKitSkeleton />;
   }
 
   return (

@@ -80,7 +80,7 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
   }, [safeProject.clips, selectedClip]);
   const [isPlayingRaw, setIsPlayingRaw] = useState(false);
   const [copiedHookId, setCopiedHookId] = useState<string | null>(null);
-  const [filterScore, setFilterScore] = useState<number>(85);
+  const [filterScore, setFilterScore] = useState<number>(0);
   const [quickExportingId, setQuickExportingId] = useState<string | null>(null);
   const [isBatchExporting, setIsBatchExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -446,7 +446,8 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
                 onChange={(e) => setFilterScore(Number(e.target.value))}
                 className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-white focus:outline-none focus:border-amber-400"
               >
-                <option value={70}>All (70+)</option>
+                <option value={0}>All (0+)</option>
+                <option value={70}>Standard (70+)</option>
                 <option value={85}>High (85+)</option>
                 <option value={90}>Ultra Viral (90+)</option>
                 <option value={95}>Superstar (95+)</option>

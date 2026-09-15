@@ -40,6 +40,8 @@ const EMPTY_RETENTION_DATA = [
   { second: 30, rawRetention: 22, clipneraAiRetention: 30, eventAnnotation: 'End' },
 ];
 
+import { AnalyticsSkeleton } from '@/components/skeletons';
+
 export const ViralAnalyticsView: React.FC = () => {
   const [activePlatformFilter, setActivePlatformFilter] = useState<'all' | 'tiktok' | 'reels' | 'shorts'>('all');
   const [simulatorHook, setSimulatorHook] = useState(
@@ -63,6 +65,10 @@ export const ViralAnalyticsView: React.FC = () => {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  if (!isMounted) {
+    return <AnalyticsSkeleton />;
+  }
 
   // Platform Performance dataset
   const PLATFORM_PERFORMANCE = [
@@ -210,10 +216,9 @@ export const ViralAnalyticsView: React.FC = () => {
         </div>
 
         {/* Retention Area Chart */}
-        {isMounted ? (
-          <div className="h-72 w-full pt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={EMPTY_RETENTION_DATA}>
+        <div className="h-72 w-full pt-4">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={EMPTY_RETENTION_DATA}>
                 <defs>
                   <linearGradient id="clipneraGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.4} />
@@ -273,11 +278,6 @@ export const ViralAnalyticsView: React.FC = () => {
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        ) : (
-          <div className="h-72 w-full pt-4 flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
-          </div>
-        )}
       </div>
 
       {/* Grid: Platform Breakdown (Left) + AI Virality Hook Predictor Simulator (Right) */}

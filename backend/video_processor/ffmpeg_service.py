@@ -114,8 +114,10 @@ class FFmpegService:
 
     async def cut_segment(self, input_path: str, start: float, duration: float, output_path: str, reencode: bool = True) -> None:
         end = start + duration
+        segment_cut_start = time.time()
         log.info(
-            "About to cut video segment",
+            ">>> [CUT START] video segment | start=%ss end=%ss duration=%ss reencode=%s",
+            round(start, 3), round(end, 3), round(duration, 3), reencode,
             extra={
                 "input_path": input_path,
                 "output_path": output_path,
@@ -151,8 +153,11 @@ class FFmpegService:
             err = stderr.decode("utf-8", errors="ignore")[-200:]
             raise CustomException(message=f"Cut segment failed: {err}", code="CUT_FAILED", status_code=500)
         file_size = Path(output_path).stat().st_size if Path(output_path).exists() else 0
+        segment_cut_elapsed = time.time() - segment_cut_start
         log.info(
-            "Video segment cut successfully",
+            "<<< [CUT OK] video segment | start=%ss end=%ss duration=%ss size=%sMB elapsed=%ss",
+            round(start, 3), round(end, 3), round(duration, 3),
+            round(file_size / (1024 * 1024), 2), round(segment_cut_elapsed, 2),
             extra={
                 "input_path": input_path,
                 "output_path": output_path,
@@ -161,6 +166,7 @@ class FFmpegService:
                 "duration": round(duration, 3),
                 "file_size_bytes": file_size,
                 "file_size_mb": round(file_size / (1024 * 1024), 2),
+                "elapsed_seconds": round(segment_cut_elapsed, 2),
             },
         )
 
@@ -290,7 +296,10 @@ class FFmpegService:
 
         end_time = start_time + duration
         log.info(
-            "About to cut video clip",
+            ">>> [CUT START] video clip | start=%ss end=%ss duration=%ss target=%sx%s source=%sx%s tracking_points=%s",
+            round(start_time, 3), round(end_time, 3), round(duration, 3),
+            target_width, target_height, source_width, source_height,
+            len(crop_tracking) if crop_tracking else 0,
             extra={
                 "input_path": input_path,
                 "output_path": output_path,
@@ -382,7 +391,10 @@ class FFmpegService:
             if fallback_proc.returncode == 0 and output_file.exists() and output_file.stat().st_size > 0:
                 total_elapsed = time.time() - crop_start_time
                 log.info(
-                    "Video clip cut successfully (centered crop fallback)",
+                    "<<< [CUT OK] video clip (centered crop fallback) | start=%ss end=%ss duration=%ss size=%sMB ffmpeg=%ss total=%ss",
+                    round(start_time, 3), round(end_time, 3), round(duration, 3),
+                    round(output_file.stat().st_size / (1024 * 1024), 2),
+                    round(fallback_elapsed, 2), round(total_elapsed, 2),
                     extra={
                         "input_path": input_path,
                         "output_path": output_path,
@@ -416,7 +428,9 @@ class FFmpegService:
         total_elapsed = time.time() - crop_start_time
         file_size = output_file.stat().st_size if output_file.exists() else 0
         log.info(
-            "Video clip cut successfully",
+            "<<< [CUT OK] video clip | start=%ss end=%ss duration=%ss size=%sMB ffmpeg=%ss total=%ss",
+            round(start_time, 3), round(end_time, 3), round(duration, 3),
+            round(file_size / (1024 * 1024), 2), round(ffmpeg_elapsed, 2), round(total_elapsed, 2),
             extra={
                 "input_path": input_path,
                 "output_path": output_path,

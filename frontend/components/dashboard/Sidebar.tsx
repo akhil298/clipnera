@@ -21,6 +21,7 @@ import {
   X
 } from 'lucide-react';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
+import { Skeleton } from '@/components/skeletons';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -88,7 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
-  const distributionNavItems = [
+  const distributionNavItems: Array<{ id: TabType; label: string; icon: React.FC<{ className?: string }>; description: string }> = [
     // {
     //   id: 'scheduler' as TabType,
     //   label: 'Social Scheduler',
@@ -269,7 +270,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Project Folders Quick Switcher (when not collapsed) */}
-        {!isCollapsed && projects.length > 0 && (
+        {!isCollapsed && (projects.length === 0 ? (
+          <div className="space-y-1.5 pt-1">
+            <div className="px-3 flex items-center justify-between text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+              <span>Your Project Folders</span>
+            </div>
+            <div className="space-y-1 pl-1">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg">
+                  <Skeleton className="w-3.5 h-3.5 rounded shrink-0" />
+                  <Skeleton className="h-3 flex-1" />
+                  <Skeleton className="h-3 w-6 rounded shrink-0" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : projects.length > 0 && (
           <div className="space-y-1.5 pt-1">
             <div className="px-3 flex items-center justify-between text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
               <span>Your Project Folders</span>
@@ -318,7 +334,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               })}
             </div>
           </div>
-        )}
+        ))}
 
         {/* Distribution Group */}
         <div className="space-y-1">

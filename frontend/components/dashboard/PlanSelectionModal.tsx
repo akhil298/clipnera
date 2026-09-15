@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Check, CreditCard, Zap, Crown, Sparkles, Shield } from 'lucide-react';
 import { subscriptionApi, PlanResponse } from '@/lib/api';
+import { ModalSkeleton } from '@/components/skeletons';
 
 interface PlanSelectionModalProps {
   isOpen: boolean;
@@ -58,11 +59,7 @@ export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, onActivate
             </button>
           </div>
 
-          {loading && (
-            <div className="flex items-center justify-center py-20">
-              <div className="w-8 h-8 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
-            </div>
-          )}
+          {loading && <ModalSkeleton />}
 
           {error && (
             <div className="text-center py-20 text-red-400">{error}</div>

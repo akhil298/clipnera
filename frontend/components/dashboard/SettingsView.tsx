@@ -20,6 +20,7 @@ import {
 import { UserProfile, Workspace } from '@/lib/types';
 import { Avatar } from './Avatar';
 import { workspaceApi, subscriptionApi } from '@/lib/api';
+import { TableSkeleton } from '@/components/skeletons';
 import { PlanSelectionModal } from './PlanSelectionModal';
 import { PaymentModal } from './PaymentModal';
 
@@ -554,14 +555,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </h3>
             </div>
 
-            {!activeWorkspaceId ? (
-              <div className="py-8 text-center">
-                <p className="text-xs text-neutral-400">Create a workspace first to manage team members.</p>
-              </div>
-            ) : (
+             {!activeWorkspaceId ? (
+               <div className="py-8 text-center">
+                 <p className="text-xs text-neutral-400">Create a workspace first to manage team members.</p>
+               </div>
+             ) : (
               <div className="divide-y divide-neutral-800">
                 {loadingMembers ? (
-                  <div className="py-6 text-center text-xs text-neutral-400">Loading team members...</div>
+                  <TableSkeleton rows={4} />
                 ) : teamMembers.length === 0 ? (
                   <div className="py-8 text-center">
                     <Users className="w-8 h-8 text-neutral-600 mx-auto mb-2" />

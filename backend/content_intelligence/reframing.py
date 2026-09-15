@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import math
-from typing import Any, Iterable
+from typing import Any
+
+from core.logging_config import get_logger
+
+log = get_logger(__name__)
 
 SUPPORTED_ASPECT_RATIOS = ("9:16", "1:1", "4:5", "16:9")
 DEFAULT_OUTPUT_DIMENSIONS = {
@@ -41,145 +46,6 @@ def normalize_box(box: dict[str, Any], frame_width: int | None = None, frame_hei
     width = min(1.0 - x, max(0.0, width))
     height = min(1.0 - y, max(0.0, height))
     return {"x": round(x, 6), "y": round(y, 6), "width": round(width, 6), "height": round(height, 6)}
-
-
-
-def _subjects(frame: dict[str, Any]) -> list[dict[str, Any]]:
-    subjects = frame.get("subjects") or frame.get("objects") or []
-    return [s for s in subjects if s.get("bounding_box")]
-
-
-def _subject_score(subject: dict[str, Any]) -> float:
-    label = str(subject.get("label", "")).lower()
-    confidence = min(1.0, max(0.0, float(subject.get("confidence", 0.0) or 0.0)))
-    box = normalize_box(subject.get("bounding_box", {}))
-    area = max(box["width"] * box["height"], 1e-6)
-    speaker_bonus = 0.35 if subject.get("is_speaker") or subject.get("speaker") else 0.0
-    person_bonus = 0.2 if any(token in label for token in ("person", "speaker", "prime minister", "interviewer", "guest")) else 0.0
-    return confidence * (0.5 + area) + speaker_bonus + person_bonus
-
-
-def primary_subject(frame: dict[str, Any]) -> dict[str, Any] | None:
-    subjects = _subjects(frame)
-    return max(subjects, key=_subject_score) if subjects else None
-
-
-def _target_crop_size(source_width: int, source_height: int, aspect_ratio: str) -> tuple[int, int]:
-    target_width_ratio, target_height_ratio = parse_aspect_ratio(aspect_ratio)
-    source_ratio = source_width / source_height
-    target_ratio = target_width_ratio / target_height_ratio
-    if source_ratio > target_ratio:
-        crop_height = source_height
-        crop_width = max(1, int(round(crop_height * target_ratio)))
-    else:
-        crop_width = source_width
-        crop_height = max(1, int(round(crop_width / target_ratio)))
-    if crop_width % 2:
-        crop_width -= 1
-    if crop_height % 2:
-        crop_height -= 1
-    return max(2, crop_width), max(2, crop_height)
-
-
-def _expanded_subject_box(subject: dict[str, Any], margin: float) -> dict[str, float]:
-    box = normalize_box(subject.get("bounding_box", {}))
-    padding = max(0.0, margin)
-    x = max(0.0, box["x"] - padding)
-    y = max(0.0, box["y"] - padding)
-    right = min(1.0, box["x"] + box["width"] + padding)
-    bottom = min(1.0, box["y"] + box["height"] + padding)
-    return {"x": x, "y": y, "width": right - x, "height": bottom - y}
-
-
-def crop_for_subject(
-    frame: dict[str, Any],
-    source_width: int,
-    source_height: int,
-    aspect_ratio: str,
-    margin: float = 0.08,
-) -> dict[str, float]:
-    crop_width, crop_height = _target_crop_size(source_width, source_height, aspect_ratio)
-    subject = primary_subject(frame)
-    if not subject:
-        return {
-            "x": round((source_width - crop_width) / 2 / source_width, 6),
-            "y": round((source_height - crop_height) / 2 / source_height, 6),
-            "width": round(crop_width / source_width, 6),
-            "height": round(crop_height / source_height, 6),
-        }
-
-    subject_box = _expanded_subject_box(subject, margin)
-    center_x = subject_box["x"] + subject_box["width"] / 2
-    center_y = subject_box["y"] + subject_box["height"] / 2
-    crop_x = center_x * source_width - crop_width / 2
-    crop_y = center_y * source_height - crop_height / 2
-    crop_x = min(source_width - crop_width, max(0.0, crop_x))
-    crop_y = min(source_height - crop_height, max(0.0, crop_y))
-    return {
-        "x": round(crop_x / source_width, 6),
-        "y": round(crop_y / source_height, 6),
-        "width": round(crop_width / source_width, 6),
-        "height": round(crop_height / source_height, 6),
-    }
-
-
-def build_crop_tracking(
-    frame_analyses: Iterable[dict[str, Any]],
-    source_width: int,
-    source_height: int,
-    aspect_ratio: str,
-    margin: float = 0.08,
-) -> list[dict[str, Any]]:
-    tracking: list[dict[str, Any]] = []
-    for frame in frame_analyses:
-        timestamp = float(frame.get("timestamp", 0.0))
-        tracking.append({
-            "timestamp": round(timestamp, 3),
-            "bbox": crop_for_subject(frame, source_width, source_height, aspect_ratio, margin),
-        })
-    return tracking
-
-
-def build_output_formats(
-    frame_analyses: Iterable[dict[str, Any]],
-    source_width: int,
-    source_height: int,
-    aspect_ratios: Iterable[str] = SUPPORTED_ASPECT_RATIOS,
-    margin: float = 0.08,
-) -> dict[str, dict[str, Any]]:
-    frames = list(frame_analyses)
-    outputs: dict[str, dict[str, Any]] = {}
-    for aspect_ratio in aspect_ratios:
-        if aspect_ratio not in SUPPORTED_ASPECT_RATIOS:
-            raise ValueError(f"Unsupported aspect ratio: {aspect_ratio}")
-        if frames and all("bbox" in item and "timestamp" in item for item in frames):
-            tracking = [
-                {"timestamp": float(item.get("timestamp", 0.0)), "bbox": normalize_box(item.get("bbox", {}))}
-                for item in frames
-            ]
-            crop = tracking[0]["bbox"] if tracking else {
-                "x": 0.0,
-                "y": 0.0,
-                "width": 1.0,
-                "height": 1.0,
-            }
-        else:
-            tracking = build_crop_tracking(frames, source_width, source_height, aspect_ratio, margin)
-            crop = tracking[0]["bbox"] if tracking else {
-                "x": 0.0,
-                "y": 0.0,
-                "width": 1.0,
-                "height": 1.0,
-            }
-        tracking_enabled = aspect_ratio != "16:9" and len(tracking) > 1
-        outputs[aspect_ratio] = {
-            "crop": crop,
-            "tracking": tracking_enabled,
-            "crop_tracking": tracking,
-            "target_width": DEFAULT_OUTPUT_DIMENSIONS[aspect_ratio][0],
-            "target_height": DEFAULT_OUTPUT_DIMENSIONS[aspect_ratio][1],
-        }
-    return outputs
 
 
 def crop_tracking_expressions(
@@ -232,3 +98,234 @@ def output_dimensions(aspect_ratio: str, preferred: tuple[int, int] | None = Non
             raise ValueError(f"Preferred dimensions do not match {aspect_ratio}")
         return width, height
     return DEFAULT_OUTPUT_DIMENSIONS[aspect_ratio]
+
+
+def _normalize_box_for_importance(box: dict[str, Any] | None) -> dict[str, float] | None:
+    if not box or not isinstance(box, dict):
+        return None
+    try:
+        x = float(box.get("x", 0.0))
+        y = float(box.get("y", 0.0))
+        w = float(box.get("width", 0.0))
+        h = float(box.get("height", 0.0))
+        if max(x, w) > 1.0:
+            fw = float(box.get("frame_width", 1.0)) or 1.0
+            fh = float(box.get("frame_height", 1.0)) or 1.0
+            x, w = x / fw, w / fw
+            y, h = y / fh, h / fh
+        x = min(1.0, max(0.0, x))
+        y = min(1.0, max(0.0, y))
+        w = min(1.0 - x, max(0.0, w))
+        h = min(1.0 - y, max(0.0, h))
+        return {"x": round(x, 6), "y": round(y, 6), "width": round(w, 6), "height": round(h, 6)}
+    except (TypeError, ValueError):
+        return None
+
+
+def _ensure_analyzers():
+    from content_intelligence.layout_analyzer import LayoutAnalyzer
+    from content_intelligence.content_importance import ContentImportanceAnalyzer
+    from content_intelligence.crop_strategy import CropStrategySelector, SceneContext
+    return LayoutAnalyzer, ContentImportanceAnalyzer, CropStrategySelector, SceneContext
+
+
+def _opencv_scene_fallback(video_path: str, duration: float) -> list[float]:
+    try:
+        from content_intelligence.opencv_analyzer import OpenCVAnalyzer
+        analyzer = OpenCVAnalyzer()
+        print("******************************************* Started Open CV ***********************************************")
+        loop = asyncio.get_event_loop()
+        frames = loop.run_until_complete(analyzer.extract_frames(video_path, duration))
+        return analyzer.detect_scenes(frames)
+    except Exception as exc:
+        log.warning("OpenCV scene detection failed: %s", exc)
+        return []
+
+
+def _opencv_frame_supplement(frame_analyses: list[dict[str, Any]], video_path: str, duration: float) -> list[dict[str, Any]]:
+    try:
+        from content_intelligence.opencv_analyzer import OpenCVAnalyzer
+        analyzer = OpenCVAnalyzer()
+        loop = asyncio.get_event_loop()
+        frames = loop.run_until_complete(analyzer.extract_frames(video_path, duration))
+        motion_map = analyzer.compute_motion_map(frames)
+        saliency_map = {}
+        for f in frames:
+            sal = analyzer.compute_saliency(f)
+            if sal:
+                saliency_map[f.timestamp] = sal
+        augmented = list(frame_analyses)
+        for frame in augmented:
+            ts = float(frame.get("timestamp", 0.0))
+            if ts in motion_map:
+                frame["opencv_motion"] = motion_map[ts]
+            if ts in saliency_map:
+                frame["opencv_saliency"] = saliency_map[ts]
+        return augmented
+    except Exception as exc:
+        log.warning("OpenCV frame supplement failed: %s", exc)
+        return frame_analyses
+
+
+def build_smart_output_formats(
+    frame_analyses: list[dict[str, Any]],
+    source_width: int,
+    source_height: int,
+    aspect_ratios: list[str] | None = None,
+    content_category: str = "unknown",
+    transcript_segments: list[dict[str, Any]] | None = None,
+    scene_changes: list[float] | None = None,
+    video_path: str | None = None,
+    margin: float = 0.08,
+) -> dict[str, dict[str, Any]]:
+    ratios = [r for r in (aspect_ratios or list(SUPPORTED_ASPECT_RATIOS)) if r in SUPPORTED_ASPECT_RATIOS]
+    if not ratios:
+        ratios = list(SUPPORTED_ASPECT_RATIOS)
+
+    LayoutAnalyzer, ContentImportanceAnalyzer, CropStrategySelector, SceneContext = _ensure_analyzers()
+
+    frames = list(frame_analyses)
+    if video_path and frames:
+        try:
+            duration = max(0.0, max(float(f.get("timestamp", 0.0)) for f in frames) + 5.0)
+            if not scene_changes:
+                scene_changes = _opencv_scene_fallback(video_path, duration)
+            frames = _opencv_frame_supplement(frames, video_path, duration)
+        except Exception as exc:
+            log.warning("OpenCV preprocessing failed: %s", exc)
+
+    if not frames:
+        log.warning("No frame analyses available for smart output, cannot proceed without OpenCV data")
+        raise ValueError("No frame analyses available for smart output")
+
+    layout_analyzer = LayoutAnalyzer()
+    importance_analyzer = ContentImportanceAnalyzer()
+    strategy_selector = CropStrategySelector()
+
+    layout_decisions = layout_analyzer.analyze_scenes(
+        frames=frames,
+        scene_changes=scene_changes,
+        content_category=content_category,
+    )
+    log.info(
+        "Layout analysis complete",
+        extra={
+            "content_category": content_category,
+            "scene_count": len(layout_decisions),
+            "layouts": [d.layout for d in layout_decisions],
+            "confidences": [round(d.confidence, 3) for d in layout_decisions],
+        },
+    )
+
+    outputs: dict[str, dict[str, Any]] = {}
+    for aspect_ratio in ratios:
+        target_width, target_height = DEFAULT_OUTPUT_DIMENSIONS[aspect_ratio]
+        tracking: list[dict[str, Any]] = []
+        for layout_decision in layout_decisions:
+            scene_frames = [
+                f for f in frames
+                if layout_decision.scene_start <= float(f.get("timestamp", 0.0)) < layout_decision.scene_end
+            ]
+            if not scene_frames:
+                scene_frames = frames[:3]
+            scene_dict: dict[str, Any] = {
+                "scene_start": layout_decision.scene_start,
+                "scene_end": layout_decision.scene_end,
+                "frames": scene_frames,
+            }
+            importance_map = importance_analyzer.analyze(scene_dict, content_category=content_category)
+            active_speaker = importance_analyzer._find_active_speaker(scene_frames)
+            all_faces: list[dict[str, Any]] = []
+            for f in scene_frames:
+                for face in f.get("faces", []) or []:
+                    nb = _normalize_box_for_importance(face.get("bounding_box"))
+                    if nb:
+                        all_faces.append(face)
+            ctx = SceneContext(
+                layout=layout_decision.layout,
+                layout_confidence=layout_decision.confidence,
+                scene_start=layout_decision.scene_start,
+                scene_end=layout_decision.scene_end,
+                subjects=[
+                    s for f in scene_frames for s in (f.get("subjects", []) or [])
+                ],
+                faces=all_faces,
+                active_speaker=active_speaker,
+                importance_map=importance_map,
+                content_category=content_category,
+                aspect_ratio=aspect_ratio,
+                source_width=source_width,
+                source_height=source_height,
+            )
+            _, crop_result = CropStrategySelector().select(ctx)
+            fps = max(1.0, len(scene_frames) / max(1.0, layout_decision.scene_end - layout_decision.scene_start))
+            scene_tracking = _build_crop_tracking(ctx, fps=fps)
+            tracking.extend(scene_tracking)
+            log.info(
+                "Crop strategy applied",
+                extra={
+                    "aspect_ratio": aspect_ratio,
+                    "layout": layout_decision.layout,
+                    "strategy": crop_result.strategy,
+                    "confidence": crop_result.confidence,
+                    "crop_x": crop_result.x,
+                    "crop_y": crop_result.y,
+                    "crop_w": crop_result.width,
+                    "crop_h": crop_result.height,
+                    "scene_start": layout_decision.scene_start,
+                    "scene_end": layout_decision.scene_end,
+                },
+            )
+
+        if not tracking and frames:
+            tracking = _build_crop_tracking(
+                SceneContext(
+                    layout="unknown",
+                    layout_confidence=0.0,
+                    scene_start=0.0,
+                    scene_end=frames[-1].get("timestamp", 0.0) + 5.0,
+                    source_width=source_width,
+                    source_height=source_height,
+                    aspect_ratio=aspect_ratio,
+                    content_category=content_category,
+                ),
+                fps=2.0,
+            )
+        initial_crop = tracking[0]["bbox"] if tracking else {
+            "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0,
+        }
+        tracking_enabled = aspect_ratio != "16:9" and len(tracking) > 1
+        outputs[aspect_ratio] = {
+            "crop": initial_crop,
+            "tracking": tracking_enabled,
+            "crop_tracking": tracking,
+            "target_width": target_width,
+            "target_height": target_height,
+        }
+    return outputs
+
+
+def _build_crop_tracking(scene: SceneContext, fps: float = 2.0) -> list[dict[str, Any]]:
+    from content_intelligence.crop_strategy import CropStrategySelector
+    selector = CropStrategySelector()
+    _, crop = selector.select(scene)
+    duration = max(0.0, scene.scene_end - scene.scene_start)
+    if duration <= 0.0:
+        duration = 5.0
+    n_points = max(2, int(duration * fps))
+    step = duration / max(1, n_points - 1)
+    tracking: list[dict[str, Any]] = []
+    for i in range(n_points):
+        ts = round(scene.scene_start + i * step, 3)
+        tracking.append({
+            "timestamp": ts,
+            "bbox": {
+                "x": round(crop.x, 6),
+                "y": round(crop.y, 6),
+                "width": round(crop.width, 6),
+                "height": round(crop.height, 6),
+            },
+            "strategy": crop.strategy,
+            "confidence": crop.confidence,
+        })
+    return tracking

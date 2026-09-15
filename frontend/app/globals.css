@@ -56,10 +56,27 @@
   100% { transform: scale(0.8); opacity: 0.5; }
 }
 
+@keyframes skeleton-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
 .animate-float {
   animation: float 6s ease-in-out infinite;
 }
 
 .animate-pulse-ring {
   animation: pulse-ring 3s ease-in-out infinite;
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(38, 38, 38, 0.6) 25%,
+    rgba(64, 64, 64, 0.8) 50%,
+    rgba(38, 38, 38, 0.6) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.8s ease-in-out infinite;
+  border-radius: 0.5rem;
 }

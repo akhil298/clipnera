@@ -3,12 +3,7 @@ from __future__ import annotations
 import pytest
 
 from content_intelligence.highlighter import HighlightDetector
-from content_intelligence.reframing import (
-    build_crop_tracking,
-    build_output_formats,
-    crop_for_subject,
-    normalize_box,
-)
+from content_intelligence.reframing import build_smart_output_formats
 from content_intelligence.research import TopicResearcher
 
 
@@ -22,28 +17,7 @@ class FakeGroq:
         return json.dumps(self.payload)
 
 
-def test_crop_for_subject_keeps_speaker_inside_vertical_frame() -> None:
-    frame = {
-        "subjects": [
-            {
-                "label": "Prime Minister",
-                "confidence": 0.98,
-                "is_speaker": True,
-                "bounding_box": {"x": 0.35, "y": 0.12, "width": 0.28, "height": 0.72},
-            }
-        ]
-    }
-
-    crop = crop_for_subject(frame, 1920, 1080, "9:16")
-
-    assert crop["height"] == 1.0
-    assert crop["width"] == pytest.approx(608 / 1920, abs=0.001)
-    assert crop["x"] >= 0
-    assert crop["x"] + crop["width"] >= 0.49
-    assert crop["x"] <= 0.49
-
-
-def test_crop_tracking_and_output_formats_are_normalized() -> None:
+def test_smart_output_formats_with_scene_changes() -> None:
     frames = [
         {
             "timestamp": 10.0,
@@ -51,9 +25,13 @@ def test_crop_tracking_and_output_formats_are_normalized() -> None:
                 {
                     "label": "Speaker",
                     "confidence": 0.95,
+                    "is_speaker": True,
                     "bounding_box": {"x": 0.25, "y": 0.1, "width": 0.3, "height": 0.8},
                 }
             ],
+            "faces": [],
+            "objects": [],
+            "description": "Single speaker",
         },
         {
             "timestamp": 14.0,
@@ -61,20 +39,29 @@ def test_crop_tracking_and_output_formats_are_normalized() -> None:
                 {
                     "label": "Speaker",
                     "confidence": 0.95,
+                    "is_speaker": True,
                     "bounding_box": {"x": 0.55, "y": 0.1, "width": 0.3, "height": 0.8},
                 }
             ],
+            "faces": [],
+            "objects": [],
+            "description": "Single speaker moving",
         },
     ]
 
-    tracking = build_crop_tracking(frames, 1920, 1080, "9:16")
-    outputs = build_output_formats(frames, 1920, 1080)
+    outputs = build_smart_output_formats(
+        frames, 1920, 1080,
+        aspect_ratios=["9:16", "16:9"],
+        content_category="unknown",
+        scene_changes=[0.0, 16.0],
+        video_path=None,
+    )
 
-    assert len(tracking) == 2
-    assert tracking[0]["bbox"]["x"] < tracking[1]["bbox"]["x"]
+    assert "9:16" in outputs
+    assert "16:9" in outputs
     assert outputs["9:16"]["tracking"] is True
     assert outputs["16:9"]["tracking"] is False
-    assert normalize_box(outputs["9:16"]["crop"])["height"] == 1.0
+    assert outputs["9:16"]["crop"]["height"] == 1.0
 
 
 @pytest.mark.asyncio

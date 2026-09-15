@@ -511,14 +511,28 @@ class ClipService:
             )
 
             frames = list(candidate_visual_analysis.get(clip_id) or candidate_visual_analysis.get(str(index)) or _fallback_frames or [])
-            output_formats = self._content_ai.build_output_formats(frames, source_width, source_height, ratios)
+            content_category = clip_copy.get("content_category", "unknown")
+            scene_changes = None
+            if frames and frames[0].get("scene_changes") is None and frames:
+                first_frame = frames[0]
+                scene_changes = first_frame.get("scene_changes")
+            output_formats = self._content_ai.build_smart_output_formats(
+                frames, source_width, source_height, ratios,
+                content_category=content_category,
+                transcript_segments=transcript_segments,
+                scene_changes=scene_changes,
+                video_path=video_path,
+            )
             output_files: dict[str, str] = {}
 
             for aspect_ratio, output_config in output_formats.items():
                 output_path = self._output_path(project_id, clip_id, aspect_ratio)
                 
                 log.info(
-                    "About to cut clip",
+                    ">>> [CUT START] clip=%s idx=%s ratio=%s | start=%ss end=%ss duration=%ss target=%sx%s",
+                    clip_id, index, aspect_ratio,
+                    round(start, 3), round(end, 3), round(duration, 3),
+                    int(output_config["target_width"]), int(output_config["target_height"]),
                     extra={
                         "project_id": project_id,
                         "clip_id": clip_id,
@@ -554,7 +568,10 @@ class ClipService:
                         file_size = output_path.stat().st_size
                         output_files[aspect_ratio] = str(output_path)
                         log.info(
-                            "Clip cut successfully",
+                            "<<< [CUT OK] clip=%s idx=%s ratio=%s | start=%ss end=%ss duration=%ss size=%sMB elapsed=%ss",
+                            clip_id, index, aspect_ratio,
+                            round(start, 3), round(end, 3), round(duration, 3),
+                            round(file_size / (1024 * 1024), 2), round(cut_elapsed, 2),
                             extra={
                                 "project_id": project_id,
                                 "clip_id": clip_id,

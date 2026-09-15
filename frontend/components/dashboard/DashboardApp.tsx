@@ -19,6 +19,7 @@ import { AuthModal } from './AuthModal';
 import { PlanSelectionModal } from './PlanSelectionModal';
 import { PaymentModal } from './PaymentModal';
 import { VideoProject, ViralClip, TabType, UserProfile, Workspace, AppNotification, PipelineStep } from '@/lib/types';
+import { DashboardSkeleton } from '@/components/skeletons';
 import { userApi, workspaceApi, authApi, pipelineApi, subscriptionApi, clipApi, mapBackendClip } from '@/lib/api';
 import { isAuthenticated, clearAuth } from '@/lib/auth';
 
@@ -566,11 +567,7 @@ export default function DashboardApp() {
 
 
   if (isAuthed === null || !currentUser) {
-    return (
-      <div className="min-h-screen bg-neutral-950 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (

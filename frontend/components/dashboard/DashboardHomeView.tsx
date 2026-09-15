@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { VideoProject, ViralClip, UserProfile, TabType, Workspace } from '@/lib/types';
 import { clipApi, pipelineApi, analyticsApi, DEFAULT_PIPELINE_STEPS, mapBackendClip } from '@/lib/api';
+import { StatsSkeleton } from '@/components/skeletons';
 
 interface DashboardHomeViewProps {
   user: UserProfile;
@@ -327,43 +328,47 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
       </div>
 
       {/* 2. STATS KPI BAR */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
-          <div className="flex items-center justify-between text-neutral-400">
-            <span className="text-xs font-medium">Total Viral Shorts</span>
-            <Film className="w-4 h-4 text-amber-400" />
+      {stats ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+          <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
+            <div className="flex items-center justify-between text-neutral-400">
+              <span className="text-xs font-medium">Total Viral Shorts</span>
+              <Film className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-2xl font-bold text-white font-mono">{stats.total_viral_shorts}</div>
+            <p className="text-[11px] text-neutral-400 font-medium">Ready to distribute</p>
           </div>
-          <div className="text-2xl font-bold text-white font-mono">{stats?.total_viral_shorts ?? totalClipsCount}</div>
-          <p className="text-[11px] text-neutral-400 font-medium">Ready to distribute</p>
-        </div>
 
-        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
-          <div className="flex items-center justify-between text-neutral-400">
-            <span className="text-xs font-medium">Manual Hours Saved</span>
-            <Clock className="w-4 h-4 text-amber-400" />
+          <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
+            <div className="flex items-center justify-between text-neutral-400">
+              <span className="text-xs font-medium">Manual Hours Saved</span>
+              <Clock className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-2xl font-bold text-white font-mono">{stats.manual_hours_saved} hrs</div>
+            <p className="text-[11px] text-neutral-400 font-medium">10x faster workflow</p>
           </div>
-          <div className="text-2xl font-bold text-white font-mono">{stats ? `${stats.manual_hours_saved} hrs` : '-- hrs'}</div>
-          <p className="text-[11px] text-neutral-400 font-medium">10x faster workflow</p>
-        </div>
 
-        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
-          <div className="flex items-center justify-between text-neutral-400">
-            <span className="text-xs font-medium">Avg Virality Score</span>
-            <Flame className="w-4 h-4 text-amber-400" />
+          <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
+            <div className="flex items-center justify-between text-neutral-400">
+              <span className="text-xs font-medium">Avg Virality Score</span>
+              <Flame className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-2xl font-bold text-white font-mono">{stats.avg_virality_score} / 100</div>
+            <p className="text-[11px] text-amber-400 font-medium">Top 2% AI benchmark</p>
           </div>
-          <div className="text-2xl font-bold text-white font-mono">{stats ? `${stats.avg_virality_score} / 100` : '-- / 100'}</div>
-          <p className="text-[11px] text-amber-400 font-medium">Top 2% AI benchmark</p>
-        </div>
 
-        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
-          <div className="flex items-center justify-between text-neutral-400">
-            <span className="text-xs font-medium">Best Post Window</span>
-            <CalendarDays className="w-4 h-4 text-amber-400" />
+          <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
+            <div className="flex items-center justify-between text-neutral-400">
+              <span className="text-xs font-medium">Best Post Window</span>
+              <CalendarDays className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-2xl font-bold text-white font-mono">{stats.best_post_window}</div>
+            <p className="text-[11px] text-neutral-400 font-medium">TikTok & IG Peak</p>
           </div>
-          <div className="text-2xl font-bold text-white font-mono">{stats?.best_post_window ?? '--:--'}</div>
-          <p className="text-[11px] text-neutral-400 font-medium">TikTok & IG Peak</p>
         </div>
-      </div>
+      ) : (
+        <StatsSkeleton />
+      )}
 
       {/* 3. FEATURED VIRAL SHORTS */}
       {currentProject && currentProject.clips.length > 0 ? (

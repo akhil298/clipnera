@@ -28,6 +28,7 @@ import {
 import { VideoProject, ViralClip } from '@/lib/types';
 import { analyzeVideoSource } from '@/lib/utils/urlParser';
 import { clipApi, YouTubeMetadataResponse } from '@/lib/api';
+import { StatsSkeleton } from '@/components/skeletons';
 import confetti from 'canvas-confetti';
 
 interface ProjectFoldersViewProps {
@@ -424,45 +425,49 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
       </div>
 
       {/* 2. STATS ROW */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
-          <div className="flex items-center justify-between text-neutral-400">
-            <span className="text-xs font-medium">Active Folders</span>
-            <Folder className="w-4 h-4 text-amber-400" />
+      {projects.length === 0 ? (
+        <StatsSkeleton />
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+          <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
+            <div className="flex items-center justify-between text-neutral-400">
+              <span className="text-xs font-medium">Active Folders</span>
+              <Folder className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-2xl font-bold text-white font-mono">{projects.length}</div>
+            <p className="text-[11px] text-neutral-400 font-medium">All organized</p>
           </div>
-          <div className="text-2xl font-bold text-white font-mono">{projects.length}</div>
-          <p className="text-[11px] text-neutral-400 font-medium">All organized</p>
-        </div>
 
-        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
-          <div className="flex items-center justify-between text-neutral-400">
-            <span className="text-xs font-medium">Total Respected Videos</span>
-            <Film className="w-4 h-4 text-amber-400" />
+          <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
+            <div className="flex items-center justify-between text-neutral-400">
+              <span className="text-xs font-medium">Total Respected Videos</span>
+              <Film className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-2xl font-bold text-white font-mono">{totalClips}</div>
+            <p className="text-[11px] text-neutral-400 font-medium">Inside folders</p>
           </div>
-          <div className="text-2xl font-bold text-white font-mono">{totalClips}</div>
-          <p className="text-[11px] text-neutral-400 font-medium">Inside folders</p>
-        </div>
 
-        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
-          <div className="flex items-center justify-between text-neutral-400">
-            <span className="text-xs font-medium">Avg Folder Virality</span>
-            <Flame className="w-4 h-4 text-amber-400" />
+          <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
+            <div className="flex items-center justify-between text-neutral-400">
+              <span className="text-xs font-medium">Avg Folder Virality</span>
+              <Flame className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-2xl font-bold text-white font-mono">{avgVirality} / 100</div>
+            <p className="text-[11px] text-amber-400 font-medium">Top tier ranking</p>
           </div>
-          <div className="text-2xl font-bold text-white font-mono">{avgVirality} / 100</div>
-          <p className="text-[11px] text-amber-400 font-medium">Top tier ranking</p>
-        </div>
 
-        <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
-          <div className="flex items-center justify-between text-neutral-400">
-            <span className="text-xs font-medium">Original Watchtime</span>
-            <Clock className="w-4 h-4 text-amber-400" />
+          <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-1">
+            <div className="flex items-center justify-between text-neutral-400">
+              <span className="text-xs font-medium">Original Watchtime</span>
+              <Clock className="w-4 h-4 text-amber-400" />
+            </div>
+            <div className="text-2xl font-bold text-white font-mono">
+              {Math.round(projects.reduce((acc, p) => acc + (p.duration || 0), 0) / 60)} mins
+            </div>
+            <p className="text-[11px] text-neutral-400 font-medium">Repurposed into shorts</p>
           </div>
-          <div className="text-2xl font-bold text-white font-mono">
-            {Math.round(projects.reduce((acc, p) => acc + (p.duration || 0), 0) / 60)} mins
-          </div>
-          <p className="text-[11px] text-neutral-400 font-medium">Repurposed into shorts</p>
         </div>
-      </div>
+      )}
 
       {/* 3. SEARCH & FILTER TOOLBAR */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
