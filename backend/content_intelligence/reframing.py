@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import math
 from typing import Any
 
@@ -129,38 +130,48 @@ def _ensure_analyzers():
     return LayoutAnalyzer, ContentImportanceAnalyzer, CropStrategySelector, SceneContext
 
 
-def _opencv_scene_fallback(video_path: str, duration: float) -> list[float]:
+def _extract_opencv_frames(video_path: str, duration: float):
     try:
         from content_intelligence.opencv_analyzer import OpenCVAnalyzer
         analyzer = OpenCVAnalyzer()
-        print("******************************************* Started Open CV ***********************************************")
-        loop = asyncio.get_event_loop()
-        frames = loop.run_until_complete(analyzer.extract_frames(video_path, duration))
-        return analyzer.detect_scenes(frames)
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(analyzer.extract_frames(video_path, duration))
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            return executor.submit(asyncio.run, analyzer.extract_frames(video_path, duration)).result()
+    except Exception as exc:
+        log.warning("OpenCV frame extraction failed: %s", exc)
+        return None
+
+
+def _opencv_scene_fallback(frames: list[Any]) -> list[float]:
+    try:
+        from content_intelligence.opencv_analyzer import OpenCVAnalyzer
+        return OpenCVAnalyzer().detect_scenes(frames)
     except Exception as exc:
         log.warning("OpenCV scene detection failed: %s", exc)
         return []
 
 
-def _opencv_frame_supplement(frame_analyses: list[dict[str, Any]], video_path: str, duration: float) -> list[dict[str, Any]]:
+def _opencv_frame_supplement(frame_analyses: list[dict[str, Any]], frames: list[Any]) -> list[dict[str, Any]]:
     try:
         from content_intelligence.opencv_analyzer import OpenCVAnalyzer
         analyzer = OpenCVAnalyzer()
-        loop = asyncio.get_event_loop()
-        frames = loop.run_until_complete(analyzer.extract_frames(video_path, duration))
         motion_map = analyzer.compute_motion_map(frames)
         saliency_map = {}
-        for f in frames:
-            sal = analyzer.compute_saliency(f)
-            if sal:
-                saliency_map[f.timestamp] = sal
+        for opencv_frame in frames:
+            saliency = analyzer.compute_saliency(opencv_frame)
+            if saliency:
+                saliency_map[opencv_frame.timestamp] = saliency
         augmented = list(frame_analyses)
         for frame in augmented:
-            ts = float(frame.get("timestamp", 0.0))
-            if ts in motion_map:
-                frame["opencv_motion"] = motion_map[ts]
-            if ts in saliency_map:
-                frame["opencv_saliency"] = saliency_map[ts]
+            timestamp = float(frame.get("timestamp", 0.0))
+            if timestamp in motion_map:
+                frame["opencv_motion"] = motion_map[timestamp]
+            if timestamp in saliency_map:
+                frame["opencv_saliency"] = saliency_map[timestamp]
         return augmented
     except Exception as exc:
         log.warning("OpenCV frame supplement failed: %s", exc)
@@ -188,9 +199,12 @@ def build_smart_output_formats(
     if video_path and frames:
         try:
             duration = max(0.0, max(float(f.get("timestamp", 0.0)) for f in frames) + 5.0)
-            if not scene_changes:
-                scene_changes = _opencv_scene_fallback(video_path, duration)
-            frames = _opencv_frame_supplement(frames, video_path, duration)
+            opencv_frames = _extract_opencv_frames(video_path, duration)
+            if opencv_frames:
+                log.info("OpenCV preprocessing frames extracted: %d", len(opencv_frames))
+                if not scene_changes:
+                    scene_changes = _opencv_scene_fallback(opencv_frames)
+                frames = _opencv_frame_supplement(frames, opencv_frames)
         except Exception as exc:
             log.warning("OpenCV preprocessing failed: %s", exc)
 
