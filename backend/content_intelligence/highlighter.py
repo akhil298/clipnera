@@ -10,7 +10,7 @@ log = get_logger(__name__)
 
 MIN_CLIP_DURATION = 20.0
 MAX_CLIP_DURATION = 60.0
-MAX_CLIPS_PER_HOUR = 6.0
+MAX_CLIPS_PER_HOUR = 12.0
 
 
 class HighlightDetector:
@@ -20,33 +20,26 @@ class HighlightDetector:
     async def detect(self, video_path: str, transcript_segments: list[dict], analysis: dict, clip_settings: dict[str, Any] | None = None) -> list[dict]:
         duration = self._probe_duration(video_path)
         category = analysis.get("classification", {}).get("category", "unknown")
-        frame_analysis = analysis.get("frame_analysis", {})
         settings = clip_settings or {}
 
         min_clip_duration = float(settings.get("min_clip_duration") or MIN_CLIP_DURATION)
         max_clip_duration = float(settings.get("max_clip_duration") or MAX_CLIP_DURATION)
         max_clips_per_hour = float(settings.get("max_clips_per_hour") or MAX_CLIPS_PER_HOUR)
 
-        if self._text_client and transcript_segments:
-            candidates = await self._detect_with_llm(transcript_segments, analysis, duration, category, min_clip_duration, max_clip_duration)
-            if candidates:
-                candidates = self._merge_overlapping(candidates, min_clip_duration, max_clip_duration)
-                candidates = [self._cap_candidate(c, duration, min_clip_duration, max_clip_duration) for c in candidates]
-                max_clips = int((duration / 3600.0) * max_clips_per_hour) + 1
-                candidates = sorted(candidates, key=lambda item: item.get("score", 0), reverse=True)[:max_clips]
-                for i, candidate in enumerate(candidates):
-                    candidate["id"] = f"highlight_{i}"
-                    candidate["content_category"] = category
-                return candidates
+        candidates = await self._detect_with_llm(transcript_segments, analysis, duration, category, min_clip_duration, max_clip_duration)
+        if not candidates:
+            log.warning("LLM returned no highlights; returning empty clip list instead of code-generated fallback")
+            return []
 
-        candidates: list[dict] = []
-        if transcript_segments:
-            candidates.extend(self._detect_from_transcript(transcript_segments, category, min_clip_duration))
-        candidates.extend(self._detect_from_scenes(frame_analysis, duration, category, min_clip_duration))
-        candidates = [self._cap_candidate(c, duration, min_clip_duration, max_clip_duration) for c in candidates]
-        candidates = self._merge_overlapping(candidates, min_clip_duration, max_clip_duration)
-        max_clips = int((duration / 3600.0) * max_clips_per_hour) + 1
-        candidates = candidates[:max_clips]
+        explicit_min = "min_clip_duration" in settings
+        explicit_max = "max_clip_duration" in settings
+        if explicit_min or explicit_max:
+            effective_min = min_clip_duration if explicit_min else 0.0
+            effective_max = max_clip_duration if explicit_max else 0.0
+            candidates = self._enforce_duration_bounds(candidates, duration, effective_min, effective_max)
+
+        max_clips = max(1, int((duration / 3600.0) * max_clips_per_hour))
+        candidates = sorted(candidates, key=lambda item: item.get("score", 0), reverse=True)[:max_clips]
 
         for i, candidate in enumerate(candidates):
             candidate["id"] = f"highlight_{i}"
@@ -60,6 +53,7 @@ class HighlightDetector:
                 "max_clip_duration": max_clip_duration,
                 "max_clips_per_hour": max_clips_per_hour,
                 "selected_clips": len(candidates),
+                "source": "llm_only",
                 "clip_ranges": [
                     {
                         "id": c.get("id", f"highlight_{idx}"),
@@ -105,6 +99,7 @@ REQUIREMENTS:
 - Prefer the strongest hooks, arguments, or emotional moments.
 - Each moment must start and end at exact transcript timestamps.
 - Do not invent content outside the transcript.
+- Return as many distinct moments as possible, up to a reasonable number for a video of this length.
 
 Transcript:
 {transcript}
@@ -144,32 +139,6 @@ JSON schema:
                     },
                 )
                 continue
-            if end - start < min_clip_duration:
-                log.debug(
-                    "Skipped LLM moment",
-                    extra={
-                        "start": round(start, 2),
-                        "end": round(end, 2),
-                        "duration": round(end - start, 2),
-                        "reason": "below_min_duration",
-                    },
-                )
-                continue
-            start, end = self._cap_duration(start, end, duration, min_clip_duration, max_clip_duration)
-            snapped_start, snapped_end = self._snap_boundaries(start, end, transcript_segments, duration)
-            start, end = snapped_start, snapped_end
-            if end - start < min_clip_duration:
-                log.debug(
-                    "Skipped LLM moment",
-                    extra={
-                        "start": round(start, 2),
-                        "end": round(end, 2),
-                        "duration": round(end - start, 2),
-                        "reason": "below_min_duration_after_snap",
-                    },
-                )
-                continue
-            start, end = self._cap_duration(start, end, duration, min_clip_duration, max_clip_duration)
             excerpt = " ".join(
                 segment.get("text", "")
                 for segment in transcript_segments
@@ -208,7 +177,22 @@ JSON schema:
                 "candidates_skipped": len(data.get("moments", [])) - len(candidates),
             },
         )
-        return [self._cap_candidate(c, duration, min_clip_duration, max_clip_duration) for c in candidates]
+        return candidates
+
+    @staticmethod
+    def _enforce_duration_bounds(candidates: list[dict], duration: float, min_clip_duration: float, max_clip_duration: float) -> list[dict]:
+        enforced = []
+        for candidate in candidates:
+            start = float(candidate.get("start_time", 0.0))
+            end = float(candidate.get("end_time", start))
+            if min_clip_duration > 0 and end - start < min_clip_duration:
+                continue
+            if max_clip_duration > 0 and end - start > max_clip_duration:
+                candidate = dict(candidate)
+                candidate["start_time"] = round(start, 3)
+                candidate["end_time"] = round(start + max_clip_duration, 3)
+            enforced.append(candidate)
+        return enforced
 
     @staticmethod
     def _score(value: Any) -> float:

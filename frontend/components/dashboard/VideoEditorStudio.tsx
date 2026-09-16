@@ -480,39 +480,37 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                 transform: `scale(${currentZoomScale})`,
               }}
             >
-              {safeClip.presignedUrl ? (
-                <video
-                  ref={videoRef}
-                  src={safeClip.presignedUrl}
-                  poster={safeClip.posterUrl || 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=1200&auto=format&fit=crop&q=80'}
-                  className="w-full h-full object-cover object-center"
-                  muted={isMuted}
-                  playsInline
-                  preload="metadata"
-                  onTimeUpdate={(e) => {
-                    const vid = e.currentTarget;
-                    setCurrentTime(vid.currentTime);
-                  }}
-                  onLoadedMetadata={(e) => {
-                    const vid = e.currentTarget;
-                    if (vid.duration && isFinite(vid.duration)) {
-                      setDuration(vid.duration);
-                    }
-                  }}
-                  onPlay={() => setIsPlaying(true)}
-                  onPause={() => setIsPlaying(false)}
-                  onEnded={() => {
-                    setIsPlaying(false);
-                    setCurrentTime(0);
-                  }}
-                />
-              ) : (
-                <img
-                  src="https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=1200&auto=format&fit=crop&q=80"
-                  alt="Video Speaker"
-                  className="w-full h-full object-cover object-center"
-                />
-              )}
+               {safeClip.presignedUrl ? (
+                 <video
+                   ref={videoRef}
+                   src={safeClip.presignedUrl}
+                   poster={safeClip.posterUrl || ''}
+                   className="w-full h-full object-cover object-center"
+                   muted={isMuted}
+                   playsInline
+                   preload="metadata"
+                   onTimeUpdate={(e) => {
+                     const vid = e.currentTarget;
+                     setCurrentTime(vid.currentTime);
+                   }}
+                   onLoadedMetadata={(e) => {
+                     const vid = e.currentTarget;
+                     if (vid.duration && isFinite(vid.duration)) {
+                       setDuration(vid.duration);
+                     }
+                   }}
+                   onPlay={() => setIsPlaying(true)}
+                   onPause={() => setIsPlaying(false)}
+                   onEnded={() => {
+                     setIsPlaying(false);
+                     setCurrentTime(0);
+                   }}
+                 />
+               ) : (
+                 <div className="w-full h-full bg-neutral-800 flex items-center justify-center">
+                   <p className="text-neutral-400 text-xs">Video not available</p>
+                 </div>
+               )}
               <div className="absolute inset-0 bg-black/50" />
             </div>
 

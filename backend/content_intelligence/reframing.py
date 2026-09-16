@@ -305,6 +305,7 @@ async def build_smart_output_formats(
                 fps=2.0,
             )
         tracking = _subsample_tracking(tracking, MAX_TOTAL_TRACKING_POINTS)
+        tracking = _smooth_tracking(tracking)
         initial_crop = tracking[0]["bbox"] if tracking else {
             "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0,
         }
@@ -334,6 +335,35 @@ def _subsample_tracking(tracking: list[dict[str, Any]], limit: int) -> list[dict
     if subsampled[-1] is not tracking[-1]:
         subsampled.append(tracking[-1])
     return subsampled
+
+
+def _smooth_tracking(tracking: list[dict[str, Any]], max_jump: float = 0.08) -> list[dict[str, Any]]:
+    if len(tracking) < 3:
+        return tracking
+    smoothed = [dict(tracking[0])]
+    for i in range(1, len(tracking)):
+        prev = smoothed[-1].get("bbox", {})
+        curr = tracking[i].get("bbox", {})
+        next_box = {
+            "x": max(0.0, min(1.0, curr.get("x", prev.get("x", 0.5)))),
+            "y": max(0.0, min(1.0, curr.get("y", prev.get("y", 0.5)))),
+            "width": max(0.05, min(1.0, curr.get("width", prev.get("width", 1.0)))),
+            "height": max(0.05, min(1.0, curr.get("height", prev.get("height", 1.0)))),
+        }
+        dx = max(0.0, abs(next_box["x"] - prev["x"]) - max_jump)
+        dy = max(0.0, abs(next_box["y"] - prev["y"]) - max_jump)
+        dw = max(0.0, abs(next_box["width"] - prev["width"]) - max_jump)
+        dh = max(0.0, abs(next_box["height"] - prev["height"]) - max_jump)
+        if dx > 0 or dy > 0 or dw > 0 or dh > 0:
+            factor = 0.35
+            next_box = {
+                "x": prev["x"] + (next_box["x"] - prev["x"]) * factor,
+                "y": prev["y"] + (next_box["y"] - prev["y"]) * factor,
+                "width": prev["width"] + (next_box["width"] - prev["width"]) * factor,
+                "height": prev["height"] + (next_box["height"] - prev["height"]) * factor,
+            }
+        smoothed.append({**tracking[i], "bbox": next_box})
+    return smoothed
 
 
 def _build_crop_tracking(scene: SceneContext, fps: float = 2.0) -> list[dict[str, Any]]:

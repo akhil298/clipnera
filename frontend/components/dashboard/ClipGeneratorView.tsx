@@ -611,31 +611,31 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
             {selectedClip && (
               <div className="relative mx-auto w-56 aspect-[9/16] rounded-2xl bg-black border-2 border-neutral-800 shadow-xl overflow-hidden flex flex-col justify-between p-3">
                 {/* Video Preview with Play Overlay */}
-                <div className="absolute inset-0">
-                  {selectedClip.presignedUrl ? (
-                     <>
-                       <video
-                         src={selectedClip.presignedUrl}
-                         autoPlay={isPlayingClip}
-                         muted
-                         loop
-                         playsInline
-                         poster={selectedClip.posterUrl || safeProject.posterUrl}
-                         className="w-full h-full object-cover"
-                         onPlay={() => setIsPlayingClip(true)}
-                         onPause={() => setIsPlayingClip(false)}
-                         onError={() => {
-                           console.error('Clip preview failed to load:', selectedClip.presignedUrl);
-                           setIsPlayingClip(false);
-                         }}
-                       />
-                       {!isPlayingClip && selectedClip.posterUrl && (
-                         <img
-                           src={selectedClip.posterUrl}
-                           alt={selectedClip.title}
-                           className="absolute inset-0 w-full h-full object-cover opacity-40"
-                         />
-                       )}
+                 <div className="absolute inset-0">
+                   {selectedClip.presignedUrl ? (
+                      <>
+                        <video
+                          src={selectedClip.presignedUrl}
+                          autoPlay={isPlayingClip}
+                          muted
+                          loop
+                          playsInline
+                          poster={selectedClip.posterUrl || ''}
+                          className="w-full h-full object-cover"
+                          onPlay={() => setIsPlayingClip(true)}
+                          onPause={() => setIsPlayingClip(false)}
+                          onError={() => {
+                            console.error('Clip preview failed to load:', selectedClip.presignedUrl);
+                            setIsPlayingClip(false);
+                          }}
+                        />
+                        {!isPlayingClip && selectedClip.posterUrl && (
+                          <img
+                            src={selectedClip.posterUrl}
+                            alt={selectedClip.title}
+                            className="absolute inset-0 w-full h-full object-cover opacity-40"
+                          />
+                        )}
                        {!isPlayingClip && (
                          <div className="absolute inset-0 flex items-center justify-center">
                            <button

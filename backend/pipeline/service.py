@@ -711,16 +711,30 @@ class PipelineOrchestrator:
                     continue
                 try:
                     clip_transcript = json.loads(clip.transcript or "[]") if clip.transcript else None
-                    transcript_to_use = clip_transcript or transcript_segments
+                    transcript_to_use = transcript_segments
+
+                    effective_style = "default"
+                    if getattr(clip, "subtitle_style_id", None):
+                        stored_style = await repo.get_subtitle_style(clip.subtitle_style_id, self.user_id)
+                        if stored_style:
+                            effective_style = stored_style.style_type
+
                     log.info(
                         "Burning subtitles for clip",
-                        extra={"project_id": self.project_id, "clip_id": clip.id, "title": clip.title},
+                        extra={
+                            "project_id": self.project_id,
+                            "clip_id": clip.id,
+                            "title": clip.title,
+                            "style_type": effective_style,
+                            "subtitle_style_id": getattr(clip, "subtitle_style_id", None),
+                            "transcript_source": "full_pipeline" if transcript_to_use is transcript_segments else "clip_local",
+                        },
                     )
                     burned_path = await styling.burn_subtitles(
                         video_path=clip.local_path,
                         clip_start=clip.start_time,
                         clip_end=clip.end_time,
-                        style_type="default",
+                        style_type=effective_style,
                         title_text=clip.title,
                         enable_watermark=self.watermark_enabled,
                         transcript_segments=transcript_to_use,
