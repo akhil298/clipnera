@@ -15,6 +15,7 @@ DEFAULT_OUTPUT_DIMENSIONS = {
     "4:5": (1080, 1350),
     "16:9": (1920, 1080),
 }
+MAX_TRACKING_POINTS = 100
 
 
 def parse_aspect_ratio(aspect_ratio: str) -> tuple[float, float]:
@@ -324,6 +325,9 @@ def _build_crop_tracking(scene: SceneContext, fps: float = 2.0) -> list[dict[str
     if duration <= 0.0:
         duration = 5.0
     n_points = max(2, int(duration * fps))
+    if n_points > MAX_TRACKING_POINTS:
+        fps = MAX_TRACKING_POINTS / duration
+        n_points = MAX_TRACKING_POINTS
     step = duration / max(1, n_points - 1)
     tracking: list[dict[str, Any]] = []
     for i in range(n_points):
