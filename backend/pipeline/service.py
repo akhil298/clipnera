@@ -643,6 +643,12 @@ class PipelineOrchestrator:
             transcript_segments=self._transcript_segments(context),
             candidate_visual_analysis=candidate_visual_analysis,
             output_aspect_ratios=self.output_aspect_ratios,
+            progress_callback=lambda message, percent, _: self._notify(
+                message,
+                percent,
+                step=PipelineStepType.ASPECT_RATIO_RENDER.value,
+                step_status="running",
+            ),
         )
         self._notify("Aspect-ratio crops calculated", 100)
         return {"rendered_clips": rendered_clips}

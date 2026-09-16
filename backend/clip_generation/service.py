@@ -456,6 +456,7 @@ class ClipService:
         transcript_segments: list[dict[str, Any]] | None = None,
         candidate_visual_analysis: dict[str, list[dict[str, Any]]] | None = None,
         output_aspect_ratios: list[str] | None = None,
+        progress_callback: Any | None = None,
     ) -> list[dict[str, Any]]:
         video_info = await self._ffmpeg.get_video_info(video_path)
         streams = video_info.get("streams") or []
@@ -476,6 +477,8 @@ class ClipService:
         ratios = output_aspect_ratios or self._content_ai.default_aspect_ratios()
         rendered: list[dict[str, Any]] = []
         render_errors: list[str] = []
+        total_outputs = max(1, len(clips) * len(ratios))
+        completed_outputs = 0
 
         log.info(
             "Starting clip rendering",
@@ -527,6 +530,13 @@ class ClipService:
 
             for aspect_ratio, output_config in output_formats.items():
                 output_path = self._output_path(project_id, clip_id, aspect_ratio)
+                completed_outputs += 1
+                if progress_callback:
+                    await self._notify(
+                        progress_callback,
+                        f"Rendering clip {index + 1}/{len(clips)} ({aspect_ratio})...",
+                        min(99, 40 + int((completed_outputs - 1) * 55 / total_outputs)),
+                    )
                 
                 log.info(
                     ">>> [CUT START] clip=%s idx=%s ratio=%s | start=%ss end=%ss duration=%ss target=%sx%s",
@@ -550,6 +560,17 @@ class ClipService:
                 )
                 
                 cut_start_time = time.time()
+                heartbeat_task = None
+                if progress_callback:
+                    heartbeat_task = asyncio.create_task(
+                        self._render_progress_heartbeat(
+                            progress_callback,
+                            index=index,
+                            total_clips=len(clips),
+                            aspect_ratio=aspect_ratio,
+                            percent=min(99, 40 + int((completed_outputs - 1) * 55 / total_outputs)),
+                        )
+                    )
                 try:
                     await self._ffmpeg.crop_with_tracking(
                         input_path=video_path,
@@ -586,6 +607,12 @@ class ClipService:
                                 "duration": round(duration, 3),
                             },
                         )
+                        if progress_callback:
+                            await self._notify(
+                                progress_callback,
+                                f"Rendered clip {index + 1}/{len(clips)} ({aspect_ratio})",
+                                min(99, 40 + int(completed_outputs * 55 / total_outputs)),
+                            )
                     else:
                         output_files[aspect_ratio] = ""
                         log.error(
@@ -615,6 +642,13 @@ class ClipService:
                         },
                     )
                     output_files[aspect_ratio] = ""
+                finally:
+                    if heartbeat_task:
+                        heartbeat_task.cancel()
+                        try:
+                            await heartbeat_task
+                        except asyncio.CancelledError:
+                            pass
 
             clip_copy["transcript"] = self._clip_transcript(transcript_segments=transcript_segments, start=start, end=end)
             clip_copy["scores"] = self._clip_scores(clip_copy, frames)
@@ -1052,3 +1086,21 @@ class ClipService:
                     await result
             except Exception as exc:
                 log.debug(f"Progress notify failed: {exc}")
+
+    async def _render_progress_heartbeat(
+        self,
+        callback: Any,
+        index: int,
+        total_clips: int,
+        aspect_ratio: str,
+        percent: int,
+    ) -> None:
+        started = time.monotonic()
+        while True:
+            await asyncio.sleep(10)
+            elapsed = int(time.monotonic() - started)
+            await self._notify(
+                callback,
+                f"Rendering clip {index + 1}/{total_clips} ({aspect_ratio})... {elapsed}s elapsed",
+                percent,
+            )
