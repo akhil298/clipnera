@@ -519,7 +519,7 @@ class ClipService:
             if frames and frames[0].get("scene_changes") is None and frames:
                 first_frame = frames[0]
                 scene_changes = first_frame.get("scene_changes")
-            output_formats = self._content_ai.build_smart_output_formats(
+            output_formats = await self._content_ai.build_smart_output_formats(
                 frames, source_width, source_height, ratios,
                 content_category=content_category,
                 transcript_segments=transcript_segments,

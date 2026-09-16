@@ -102,7 +102,7 @@ class ContentIntelligenceService:
             frame_interval=frame_interval,
         )
 
-    def build_smart_output_formats(
+    async def build_smart_output_formats(
         self,
         frame_analyses: list[dict],
         source_width: int,
@@ -114,7 +114,7 @@ class ContentIntelligenceService:
         video_path: str | None = None,
     ) -> dict[str, dict[str, Any]]:
         ratios = aspect_ratios or self.default_aspect_ratios()
-        return build_smart_output_formats(
+        return await build_smart_output_formats(
             frame_analyses=frame_analyses,
             source_width=source_width,
             source_height=source_height,
@@ -125,7 +125,7 @@ class ContentIntelligenceService:
             video_path=video_path,
         )
 
-    def build_output_formats(
+    async def build_output_formats(
         self,
         frame_analyses: list[dict[str, Any]],
         source_width: int,
@@ -136,7 +136,7 @@ class ContentIntelligenceService:
         scene_changes: list[float] | None = None,
         video_path: str | None = None,
     ) -> dict[str, dict[str, Any]]:
-        return self.build_smart_output_formats(
+        return await self.build_smart_output_formats(
             frame_analyses=frame_analyses,
             source_width=source_width,
             source_height=source_height,

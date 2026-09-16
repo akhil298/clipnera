@@ -17,7 +17,8 @@ class FakeGroq:
         return json.dumps(self.payload)
 
 
-def test_smart_output_formats_with_scene_changes() -> None:
+@pytest.mark.asyncio
+async def test_smart_output_formats_with_scene_changes() -> None:
     frames = [
         {
             "timestamp": 10.0,
@@ -49,7 +50,7 @@ def test_smart_output_formats_with_scene_changes() -> None:
         },
     ]
 
-    outputs = build_smart_output_formats(
+    outputs = await build_smart_output_formats(
         frames, 1920, 1080,
         aspect_ratios=["9:16", "16:9"],
         content_category="unknown",

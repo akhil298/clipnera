@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 import math
 from typing import Any
 
@@ -130,17 +129,15 @@ def _ensure_analyzers():
     return LayoutAnalyzer, ContentImportanceAnalyzer, CropStrategySelector, SceneContext
 
 
-def _extract_opencv_frames(video_path: str, duration: float):
+async def _extract_opencv_frames(video_path: str, duration: float):
     try:
         from content_intelligence.opencv_analyzer import OpenCVAnalyzer
         analyzer = OpenCVAnalyzer()
-        try:
-            asyncio.get_running_loop()
-        except RuntimeError:
-            return asyncio.run(analyzer.extract_frames(video_path, duration))
-
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            return executor.submit(asyncio.run, analyzer.extract_frames(video_path, duration)).result()
+        if duration <= 0:
+            return None
+        interval = analyzer._frame_interval or max(2.0, duration / analyzer._max_frames)
+        timestamps = [i * interval for i in range(analyzer._max_frames) if i * interval < duration]
+        return await asyncio.to_thread(analyzer._extract_frames_sync, video_path, timestamps)
     except Exception as exc:
         log.warning("OpenCV frame extraction failed: %s", exc)
         return None
@@ -178,7 +175,7 @@ def _opencv_frame_supplement(frame_analyses: list[dict[str, Any]], frames: list[
         return frame_analyses
 
 
-def build_smart_output_formats(
+async def build_smart_output_formats(
     frame_analyses: list[dict[str, Any]],
     source_width: int,
     source_height: int,
@@ -199,7 +196,7 @@ def build_smart_output_formats(
     if video_path and frames:
         try:
             duration = max(0.0, max(float(f.get("timestamp", 0.0)) for f in frames) + 5.0)
-            opencv_frames = _extract_opencv_frames(video_path, duration)
+            opencv_frames = await _extract_opencv_frames(video_path, duration)
             if opencv_frames:
                 log.info("OpenCV preprocessing frames extracted: %d", len(opencv_frames))
                 if not scene_changes:
