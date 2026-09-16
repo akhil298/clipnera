@@ -27,8 +27,13 @@ class HighlightDetector:
         max_clips_per_hour = float(settings.get("max_clips_per_hour") or MAX_CLIPS_PER_HOUR)
 
         candidates = await self._detect_with_llm(transcript_segments, analysis, duration, category, min_clip_duration, max_clip_duration)
+        if not candidates and transcript_segments:
+            log.warning("LLM returned no highlights; falling back to transcript-based clip detection")
+            candidates = self._detect_from_transcript(transcript_segments, category, min_clip_duration)
+            candidates = [self._cap_candidate(c, duration, min_clip_duration, max_clip_duration) for c in candidates]
+
         if not candidates:
-            log.warning("LLM returned no highlights; returning empty clip list instead of code-generated fallback")
+            log.warning("LLM and fallback both returned no highlights; returning empty clip list")
             return []
 
         explicit_min = "min_clip_duration" in settings
@@ -107,6 +112,7 @@ Transcript:
 JSON schema:
 {{"moments":[{{"start_time":0.0,"end_time":0.0,"title":"...","reason":"...","score":0.0,"scores":{{"relevance":0.0,"importance":0.0,"emotional_impact":0.0,"information_value":0.0,"standalone_context":0.0,"social_media_value":0.0,"current_relevance":0.0}},"speakers":["Speaker 1"]}}]}}
 """
+        raw_response = None
         try:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(2),
@@ -119,10 +125,15 @@ JSON schema:
                         {"role": "system", "content": "You select high-value, factual, standalone video moments. Return valid JSON only."},
                         {"role": "user", "content": prompt},
                     ], temperature=0.2, max_tokens=2200)
+                    raw_response = response
                     data = self._parse_json(response)
                     break
         except Exception as exc:
-            log.warning(f"LLM highlight detection failed: {exc}")
+            log.warning(
+                "LLM highlight detection failed: %s",
+                exc,
+                extra={"raw_response": raw_response},
+            )
             return []
 
         candidates = []

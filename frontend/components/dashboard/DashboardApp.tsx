@@ -40,6 +40,24 @@ const getTabFromPathname = (pathname: string): TabType => {
   return 'dashboard';
 };
 
+const extractYouTubeThumbnail = (url: string): string => {
+  try {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+      /^([a-zA-Z0-9_-]{11})$/,
+    ];
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) {
+        return `https://img.youtube.com/vi/${match[1]}/maxresdefault.jpg`;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return '';
+};
+
 const getDashboardPath = (
   tab: TabType,
   projectId?: string,
@@ -200,6 +218,7 @@ export default function DashboardApp() {
           const clips = (project.clips || []).map(mapBackendClip);
           const processing = ['processing', 'pending', 'uploaded'].includes(project.status) ||
             Boolean(pipelineStatus && !pipelineStatus.is_completed && !pipelineStatus.error && pipelineStatus.steps?.length);
+          const youtubeThumbnail = extractYouTubeThumbnail(project.source_url || '');
           return {
             id: project.id,
             title: project.title,
@@ -214,7 +233,7 @@ export default function DashboardApp() {
             duration: project.duration_seconds || 0,
             sourceType: 'youtube_url' as const,
             videoUrl: '',
-            posterUrl: clips[0]?.posterUrl || '',
+            posterUrl: clips[0]?.posterUrl || youtubeThumbnail || '',
             uploadedAt: project.created_at || new Date().toISOString(),
             syncStatus: project.status === 'uploaded' ? 'synced' as const : 'syncing' as const,
             offlineAvailable: project.status === 'uploaded',
