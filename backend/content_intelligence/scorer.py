@@ -90,15 +90,24 @@ class ClipScorer:
         "hack", "lifehack", "hack", "new", "breaking", "alert",
     ]
 
-    async def score(self, highlights: list[dict], analysis: dict) -> list[dict]:
+    MIN_CLIP_DURATION = 20.0
+    MAX_CLIP_DURATION = 60.0
+    OPTIMAL_CLIP_DURATION = 32.0
+
+    async def score(self, highlights: list[dict], analysis: dict, clip_settings: dict[str, Any] | None = None) -> list[dict]:
         category = analysis.get("classification", {}).get("category", "unknown")
         engagement_factor = CATEGORY_ENGAGEMENT_FACTORS.get(category, 1.0)
+        settings = clip_settings or {}
+
+        min_clip_duration = float(settings.get("min_clip_duration") or self.MIN_CLIP_DURATION)
+        max_clip_duration = float(settings.get("max_clip_duration") or self.MAX_CLIP_DURATION)
+        optimal_clip_duration = float(settings.get("optimal_clip_duration") or self.OPTIMAL_CLIP_DURATION)
 
         scored = []
         for h in highlights:
             base_score = h.get("score", 0.3)
-            duration = h.get("end_time", 0) - h.get("start_time", 0)
-            duration_factor = min(1.0, (duration - MIN_CLIP_DURATION) / 45.0 + 0.7)
+            duration = max(0.0, h.get("end_time", 0) - h.get("start_time", 0))
+            duration_factor = self._duration_factor(duration, min_clip_duration, optimal_clip_duration, max_clip_duration)
             transcript_excerpt = h.get("transcript_excerpt", "").lower()
             signal_hits = sum(1 for sig in ENGAGEMENT_SIGNALS if sig in transcript_excerpt)
             signal_factor = min(1.0, 0.5 + signal_hits * 0.15)
@@ -125,6 +134,16 @@ class ClipScorer:
 
         scored.sort(key=lambda x: x.get("score", 0), reverse=True)
         return scored
+
+    @classmethod
+    def _duration_factor(cls, duration: float, min_duration: float = MIN_CLIP_DURATION, optimal_duration: float = OPTIMAL_CLIP_DURATION, max_duration: float = MAX_CLIP_DURATION) -> float:
+        if duration <= min_duration:
+            return 0.7
+        if duration <= optimal_duration:
+            return 0.7 + 0.3 * ((duration - min_duration) / max(1.0, optimal_duration - min_duration))
+        if duration <= max_duration:
+            return 1.0 - 0.3 * ((duration - optimal_duration) / max(1.0, max_duration - optimal_duration))
+        return 0.4
 
     @classmethod
     def _compute_virality_scores(

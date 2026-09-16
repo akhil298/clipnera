@@ -9,6 +9,7 @@ from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt,
 log = get_logger(__name__)
 
 MIN_CLIP_DURATION = 20.0
+MAX_CLIP_DURATION = 60.0
 MAX_CLIPS_PER_HOUR = 6.0
 
 
@@ -16,16 +17,22 @@ class HighlightDetector:
     def __init__(self, text_client: Any | None = None) -> None:
         self._text_client = text_client
 
-    async def detect(self, video_path: str, transcript_segments: list[dict], analysis: dict) -> list[dict]:
+    async def detect(self, video_path: str, transcript_segments: list[dict], analysis: dict, clip_settings: dict[str, Any] | None = None) -> list[dict]:
         duration = self._probe_duration(video_path)
         category = analysis.get("classification", {}).get("category", "unknown")
         frame_analysis = analysis.get("frame_analysis", {})
+        settings = clip_settings or {}
+
+        min_clip_duration = float(settings.get("min_clip_duration") or MIN_CLIP_DURATION)
+        max_clip_duration = float(settings.get("max_clip_duration") or MAX_CLIP_DURATION)
+        max_clips_per_hour = float(settings.get("max_clips_per_hour") or MAX_CLIPS_PER_HOUR)
 
         if self._text_client and transcript_segments:
-            candidates = await self._detect_with_llm(transcript_segments, analysis, duration, category)
+            candidates = await self._detect_with_llm(transcript_segments, analysis, duration, category, min_clip_duration, max_clip_duration)
             if candidates:
-                candidates = self._merge_overlapping(candidates, MIN_CLIP_DURATION)
-                max_clips = int((duration / 3600.0) * MAX_CLIPS_PER_HOUR) + 1
+                candidates = self._merge_overlapping(candidates, min_clip_duration, max_clip_duration)
+                candidates = [self._cap_candidate(c, duration, min_clip_duration, max_clip_duration) for c in candidates]
+                max_clips = int((duration / 3600.0) * max_clips_per_hour) + 1
                 candidates = sorted(candidates, key=lambda item: item.get("score", 0), reverse=True)[:max_clips]
                 for i, candidate in enumerate(candidates):
                     candidate["id"] = f"highlight_{i}"
@@ -34,15 +41,38 @@ class HighlightDetector:
 
         candidates: list[dict] = []
         if transcript_segments:
-            candidates.extend(self._detect_from_transcript(transcript_segments, category))
-        candidates.extend(self._detect_from_scenes(frame_analysis, duration, category))
-        candidates = self._merge_overlapping(candidates, MIN_CLIP_DURATION)
-        max_clips = int((duration / 3600.0) * MAX_CLIPS_PER_HOUR) + 1
+            candidates.extend(self._detect_from_transcript(transcript_segments, category, min_clip_duration))
+        candidates.extend(self._detect_from_scenes(frame_analysis, duration, category, min_clip_duration))
+        candidates = [self._cap_candidate(c, duration, min_clip_duration, max_clip_duration) for c in candidates]
+        candidates = self._merge_overlapping(candidates, min_clip_duration, max_clip_duration)
+        max_clips = int((duration / 3600.0) * max_clips_per_hour) + 1
         candidates = candidates[:max_clips]
 
         for i, candidate in enumerate(candidates):
             candidate["id"] = f"highlight_{i}"
             candidate["content_category"] = category
+
+        log.info(
+            "Highlight detection complete",
+            extra={
+                "video_duration": round(duration, 2),
+                "min_clip_duration": min_clip_duration,
+                "max_clip_duration": max_clip_duration,
+                "max_clips_per_hour": max_clips_per_hour,
+                "selected_clips": len(candidates),
+                "clip_ranges": [
+                    {
+                        "id": c.get("id", f"highlight_{idx}"),
+                        "start": round(c.get("start_time", 0), 2),
+                        "end": round(c.get("end_time", 0), 2),
+                        "duration": round(c.get("end_time", 0) - c.get("start_time", 0), 2),
+                        "score": round(c.get("score", 0), 2),
+                        "reasons": c.get("reasons", []),
+                    }
+                    for idx, c in enumerate(candidates)
+                ],
+            },
+        )
 
         return candidates
 
@@ -52,6 +82,8 @@ class HighlightDetector:
         analysis: dict[str, Any],
         duration: float,
         category: str,
+        min_clip_duration: float = MIN_CLIP_DURATION,
+        max_clip_duration: float = MAX_CLIP_DURATION,
     ) -> list[dict[str, Any]]:
         transcript = "\n".join(
             f"[{float(segment.get('start', 0.0)):.3f}-{float(segment.get('end', 0.0)):.3f}] "
@@ -59,7 +91,7 @@ class HighlightDetector:
             for segment in transcript_segments
         )
         research = analysis.get("topic_research", {})
-        prompt = f"""Select the best standalone video clips from this transcript. Return only valid JSON as an object with a "moments" array.
+        prompt = f"""Select the best standalone short-form video clips from this transcript. Return only valid JSON as an object with a "moments" array.
 
 Video category: {category}
 Video duration: {duration:.3f} seconds
@@ -67,7 +99,12 @@ Main topic: {research.get('title', '')}
 Topics: {', '.join(research.get('topics', []))}
 Current relevance: {research.get('current_relevance', '')}
 
-Score each moment for news relevance, importance, emotional impact, information value, standalone context, social-media value, and current relevance. Prefer concise moments between 20 and 90 seconds. Use exact transcript timestamps and do not invent content.
+REQUIREMENTS:
+- Each clip must be between {min_clip_duration:.0f} and {max_clip_duration:.0f} seconds.
+- Do NOT return the full video or anything close to the full duration.
+- Prefer the strongest hooks, arguments, or emotional moments.
+- Each moment must start and end at exact transcript timestamps.
+- Do not invent content outside the transcript.
 
 Transcript:
 {transcript}
@@ -99,13 +136,40 @@ JSON schema:
                 start = min(duration, max(0.0, float(item.get("start_time", 0.0))))
                 end = min(duration, max(start, float(item.get("end_time", start))))
             except (TypeError, ValueError):
+                log.debug(
+                    "Skipped LLM moment",
+                    extra={
+                        "moment": item,
+                        "reason": "invalid_timestamps",
+                    },
+                )
                 continue
-            if end - start < MIN_CLIP_DURATION:
+            if end - start < min_clip_duration:
+                log.debug(
+                    "Skipped LLM moment",
+                    extra={
+                        "start": round(start, 2),
+                        "end": round(end, 2),
+                        "duration": round(end - start, 2),
+                        "reason": "below_min_duration",
+                    },
+                )
                 continue
+            start, end = self._cap_duration(start, end, duration, min_clip_duration, max_clip_duration)
             snapped_start, snapped_end = self._snap_boundaries(start, end, transcript_segments, duration)
             start, end = snapped_start, snapped_end
-            if end - start < MIN_CLIP_DURATION:
+            if end - start < min_clip_duration:
+                log.debug(
+                    "Skipped LLM moment",
+                    extra={
+                        "start": round(start, 2),
+                        "end": round(end, 2),
+                        "duration": round(end - start, 2),
+                        "reason": "below_min_duration_after_snap",
+                    },
+                )
                 continue
+            start, end = self._cap_duration(start, end, duration, min_clip_duration, max_clip_duration)
             excerpt = " ".join(
                 segment.get("text", "")
                 for segment in transcript_segments
@@ -136,7 +200,15 @@ JSON schema:
                 "speakers": speakers,
                 "reasons": ["llm_selected"],
             })
-        return candidates
+        log.debug(
+            "LLM highlight detection complete",
+            extra={
+                "llm_moments_returned": len(data.get("moments", [])),
+                "candidates_kept": len(candidates),
+                "candidates_skipped": len(data.get("moments", [])) - len(candidates),
+            },
+        )
+        return [self._cap_candidate(c, duration, min_clip_duration, max_clip_duration) for c in candidates]
 
     @staticmethod
     def _score(value: Any) -> float:
@@ -152,6 +224,22 @@ JSON schema:
             return snap_clip_to_words(start, end, segments, duration)
         except Exception:
             return start, end
+
+    @staticmethod
+    def _cap_duration(start: float, end: float, duration: float, min_clip_duration: float = MIN_CLIP_DURATION, max_clip_duration: float = MAX_CLIP_DURATION) -> tuple[float, float]:
+        end = min(end, start + max_clip_duration)
+        end = min(end, duration)
+        start = max(0.0, min(start, end - min_clip_duration))
+        return start, end
+
+    def _cap_candidate(self, candidate: dict, duration: float, min_clip_duration: float = MIN_CLIP_DURATION, max_clip_duration: float = MAX_CLIP_DURATION) -> dict:
+        start = float(candidate.get("start_time", 0.0))
+        end = float(candidate.get("end_time", start))
+        capped_start, capped_end = self._cap_duration(start, end, duration, min_clip_duration, max_clip_duration)
+        candidate = dict(candidate)
+        candidate["start_time"] = round(capped_start, 3)
+        candidate["end_time"] = round(capped_end, 3)
+        return candidate
 
     @staticmethod
     def _parse_json(text: str) -> dict[str, Any]:
@@ -170,7 +258,7 @@ JSON schema:
         except json.JSONDecodeError:
             return {}
 
-    def _detect_from_transcript(self, segments: list[dict], category: str) -> list[dict]:
+    def _detect_from_transcript(self, segments: list[dict], category: str, min_clip_duration: float = MIN_CLIP_DURATION) -> list[dict]:
         candidates = []
         speaker_turns: list[dict] = []
         current_speaker = None
@@ -184,13 +272,25 @@ JSON schema:
             text = seg.get("text", "").strip()
 
             if speaker != current_speaker:
-                if current_speaker is not None and (current_end - current_start) >= MIN_CLIP_DURATION:
+                if current_speaker is not None and (current_end - current_start) >= min_clip_duration:
                     speaker_turns.append({
                         "start": current_start,
                         "end": current_end,
                         "speaker": current_speaker,
                         "text": "",
                     })
+                else:
+                    if current_speaker is not None:
+                        log.debug(
+                            "Skipped short speaker turn",
+                            extra={
+                                "speaker": current_speaker,
+                                "start": round(current_start, 2),
+                                "end": round(current_end, 2),
+                                "duration": round(current_end - current_start, 2),
+                                "reason": "below_min_duration",
+                            },
+                        )
                 current_speaker = speaker
                 current_start = start
                 current_end = end
@@ -200,13 +300,24 @@ JSON schema:
             if current_start is not None:
                 current_end = max(current_end, end)
 
-        if current_speaker is not None and current_end - current_start >= MIN_CLIP_DURATION:
+        if current_speaker is not None and current_end - current_start >= min_clip_duration:
             speaker_turns.append({
                 "start": current_start,
                 "end": current_end,
                 "speaker": current_speaker,
                 "text": "",
             })
+        elif current_speaker is not None:
+            log.debug(
+                "Skipped short speaker turn",
+                extra={
+                    "speaker": current_speaker,
+                    "start": round(current_start, 2),
+                    "end": round(current_end, 2),
+                    "duration": round(current_end - current_start, 2),
+                    "reason": "below_min_duration",
+                },
+            )
 
         keywords = self._category_keywords(category)
         for turn in speaker_turns:
@@ -218,26 +329,58 @@ JSON schema:
             score = self._transcript_score(turn_text, keywords)
             if score > 0.1:
                 candidates.append({
-                    "start_time": turn["start"],
-                    "end_time": turn["end"],
+                    "start_time": round(turn["start"], 3),
+                    "end_time": round(turn["end"], 3),
                     "score": score,
                     "transcript_excerpt": turn_text[:300],
                     "speakers": [turn["speaker"]],
                     "reasons": ["speaker_turn", "keyword_match"],
                 })
+            else:
+                log.debug(
+                    "Skipped speaker turn",
+                    extra={
+                        "speaker": turn.get("speaker"),
+                        "start": round(turn.get("start", 0), 2),
+                        "end": round(turn.get("end", 0), 2),
+                        "score": round(score, 2),
+                        "reason": "low_keyword_score",
+                    },
+                )
+
+        log.debug(
+            "Transcript highlight detection complete",
+            extra={
+                "speaker_turns_found": len(speaker_turns),
+                "candidates_kept": len(candidates),
+                "candidates_skipped": len(speaker_turns) - len(candidates),
+            },
+        )
 
         return candidates
 
-    def _detect_from_scenes(self, frame_analysis: dict, duration: float, category: str) -> list[dict]:
+    def _detect_from_scenes(self, frame_analysis: dict, duration: float, category: str, min_clip_duration: float = MIN_CLIP_DURATION) -> list[dict]:
         candidates = []
         scene_changes = frame_analysis.get("scene_changes", [])
         if not scene_changes:
+            log.debug("No scene changes available for highlight detection")
             return candidates
 
+        skipped = 0
         for i in range(len(scene_changes) - 1):
             start = scene_changes[i]
             end = scene_changes[i + 1]
-            if end - start < MIN_CLIP_DURATION:
+            if end - start < min_clip_duration:
+                skipped += 1
+                log.debug(
+                    "Skipped scene segment",
+                    extra={
+                        "start": round(start, 2),
+                        "end": round(end, 2),
+                        "duration": round(end - start, 2),
+                        "reason": "below_min_duration",
+                    },
+                )
                 continue
             candidates.append({
                 "start_time": start,
@@ -248,9 +391,18 @@ JSON schema:
                 "reasons": ["scene_boundary"],
             })
 
+        log.debug(
+            "Scene highlight detection complete",
+            extra={
+                "scene_count": len(scene_changes),
+                "candidates_kept": len(candidates),
+                "candidates_skipped": skipped,
+            },
+        )
+
         return candidates
 
-    def _merge_overlapping(self, candidates: list[dict], min_duration: float) -> list[dict]:
+    def _merge_overlapping(self, candidates: list[dict], min_duration: float, max_clip_duration: float = MAX_CLIP_DURATION) -> list[dict]:
         if not candidates:
             return []
 
@@ -261,17 +413,58 @@ JSON schema:
         for next_c in candidates[1:]:
             curr_end = current.get("end_time", 0)
             next_start = next_c.get("start_time", 0)
-            if next_start <= curr_end and (next_c.get("end_time", 0) - current.get("start_time", 0)) <= 120:
-                current["end_time"] = max(curr_end, next_c.get("end_time", 0))
+            merged_end = max(curr_end, next_c.get("end_time", 0))
+            merged_duration = merged_end - current.get("start_time", 0)
+            if next_start <= curr_end and merged_duration <= max_clip_duration:
+                log.debug(
+                    "Merged overlapping clips",
+                    extra={
+                        "current_start": round(current.get("start_time", 0), 2),
+                        "current_end": round(current.get("end_time", 0), 2),
+                        "next_start": round(next_c.get("start_time", 0), 2),
+                        "next_end": round(next_c.get("end_time", 0), 2),
+                        "merged_end": round(merged_end, 2),
+                    },
+                )
+                current["end_time"] = merged_end
                 current["score"] = max(current.get("score", 0), next_c.get("score", 0))
                 current["reasons"] = list(set(current.get("reasons", []) + next_c.get("reasons", [])))
             else:
                 if current.get("end_time", 0) - current.get("start_time", 0) >= min_duration:
                     merged.append(current)
+                else:
+                    log.debug(
+                        "Skipped merged clip",
+                        extra={
+                            "start": round(current.get("start_time", 0), 2),
+                            "end": round(current.get("end_time", 0), 2),
+                            "duration": round(current.get("end_time", 0) - current.get("start_time", 0), 2),
+                            "reason": "below_min_duration_after_merge",
+                        },
+                    )
                 current = next_c
 
         if current.get("end_time", 0) - current.get("start_time", 0) >= min_duration:
             merged.append(current)
+        else:
+            log.debug(
+                "Skipped merged clip",
+                extra={
+                    "start": round(current.get("start_time", 0), 2),
+                    "end": round(current.get("end_time", 0), 2),
+                    "duration": round(current.get("end_time", 0) - current.get("start_time", 0), 2),
+                    "reason": "below_min_duration_after_merge",
+                },
+            )
+
+        log.debug(
+            "Merge complete",
+            extra={
+                "input_count": len(candidates),
+                "output_count": len(merged),
+                "merged_count": len(candidates) - len(merged),
+            },
+        )
 
         return merged
 

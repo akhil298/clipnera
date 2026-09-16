@@ -143,6 +143,7 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
             "hum_filter": True,
         })
         watermark_enabled = body.get("watermark_enabled", True)
+        clip_settings = body.get("clip_settings") if isinstance(body.get("clip_settings"), dict) else None
 
         plan_repo = PlanRepository(session)
         sub_repo = UserSubscriptionRepository(session)
@@ -195,6 +196,7 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
             progress_callback=_progress_callback_factory(project_id),
             watermark_enabled=watermark_enabled,
             output_aspect_ratios=output_aspect_ratios,
+            clip_settings=clip_settings,
         )
 
         _active_orchestrators[project_id] = orchestrator

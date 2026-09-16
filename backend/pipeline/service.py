@@ -47,6 +47,7 @@ class PipelineOrchestrator:
         watermark_enabled: bool = True,
         output_aspect_ratios: list[str] | None = None,
         resume: bool = False,
+        clip_settings: Optional[dict] = None,
     ) -> None:
         log.info(
             "Pipeline orchestrator initialized",
@@ -67,6 +68,7 @@ class PipelineOrchestrator:
         self.progress_callback = progress_callback
         self.watermark_enabled = watermark_enabled
         self.output_aspect_ratios = output_aspect_ratios or self._default_aspect_ratios()
+        self.clip_settings = clip_settings or {}
         self._resume = resume
         self._youtube = YouTubeService()
         self._audio_extractor = AudioExtractionService()
@@ -578,6 +580,7 @@ class PipelineOrchestrator:
             candidate_visual_analysis=bounding_result.get("candidate_visual_analysis", {}),
             rendered_clips=aspect_result.get("rendered_clips"),
             output_aspect_ratios=self.output_aspect_ratios,
+            clip_settings=self.clip_settings,
         )
         log.info(
             "Clip generation complete",

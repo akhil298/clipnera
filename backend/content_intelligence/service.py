@@ -67,6 +67,7 @@ class ContentIntelligenceService:
         transcript_segments: list[dict],
         analysis: dict,
         progress_callback: Callable[[str, int, str | None], None] | None = None,
+        clip_settings: dict[str, Any] | None = None,
     ) -> list[dict]:
         if progress_callback:
             await self._notify(progress_callback, "Detecting highlight segments...", 50)
@@ -75,6 +76,7 @@ class ContentIntelligenceService:
             video_path=video_path,
             transcript_segments=transcript_segments,
             analysis=analysis,
+            clip_settings=clip_settings,
         )
 
         if progress_callback:
@@ -82,8 +84,8 @@ class ContentIntelligenceService:
 
         return highlights
 
-    async def score_highlights(self, highlights: list[dict], analysis: dict) -> list[dict]:
-        return await self._scorer.score(highlights, analysis)
+    async def score_highlights(self, highlights: list[dict], analysis: dict, clip_settings: dict[str, Any] | None = None) -> list[dict]:
+        return await self._scorer.score(highlights, analysis, clip_settings=clip_settings)
 
     async def generate_metadata_for_clips(self, clips: list[dict]) -> list[dict]:
         return await self._metadata_gen.generate_batch(clips)

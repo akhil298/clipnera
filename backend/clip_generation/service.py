@@ -320,6 +320,7 @@ class ClipService:
         candidate_visual_analysis: dict[str, list[dict[str, Any]]] | None = None,
         rendered_clips: list[dict[str, Any]] | None = None,
         output_aspect_ratios: list[str] | None = None,
+        clip_settings: dict[str, Any] | None = None,
     ) -> dict:
         project = await self._get_project(project_id, user_id)
         video_path = project.local_path
@@ -354,10 +355,11 @@ class ClipService:
                 transcript_segments=transcript_segments,
                 analysis=analysis,
                 progress_callback=progress_callback,
+                clip_settings=clip_settings,
             )
 
         if scored_highlights is None:
-            scored_highlights = await self._content_ai.score_highlights(highlights, analysis)
+            scored_highlights = await self._content_ai.score_highlights(highlights, analysis, clip_settings=clip_settings)
 
         if final_clips is None:
             if progress_callback:
@@ -368,7 +370,7 @@ class ClipService:
         if not final_clips and transcript_segments:
             if progress_callback:
                 await self._notify(progress_callback, "No AI highlights found, creating clips from transcript...", 78)
-            final_clips = self._create_fallback_clips(transcript_segments, video_metadata.get("duration", 0))
+            final_clips = self._create_fallback_clips(transcript_segments, video_metadata.get("duration", 0), clip_settings=clip_settings)
 
         if candidate_visual_analysis is None:
             if progress_callback:
@@ -390,6 +392,7 @@ class ClipService:
                 transcript_segments=transcript_segments,
                 candidate_visual_analysis=candidate_visual_analysis,
                 output_aspect_ratios=output_aspect_ratios,
+                clip_settings=clip_settings,
             )
 
         if progress_callback:
@@ -457,6 +460,7 @@ class ClipService:
         candidate_visual_analysis: dict[str, list[dict[str, Any]]] | None = None,
         output_aspect_ratios: list[str] | None = None,
         progress_callback: Any | None = None,
+        clip_settings: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         video_info = await self._ffmpeg.get_video_info(video_path)
         streams = video_info.get("streams") or []
@@ -931,15 +935,17 @@ class ClipService:
             await self._notify(progress_callback, "Transcription complete", 100)
         return list(segments)
 
-    def _create_fallback_clips(self, transcript_segments: list[dict], video_duration: float) -> list[dict]:
+    def _create_fallback_clips(self, transcript_segments: list[dict], video_duration: float, clip_settings: dict[str, Any] | None = None) -> list[dict]:
         """Create fallback clips from transcript segments when AI highlight detection fails."""
         if not transcript_segments:
             return []
         
         clips = []
-        MIN_CLIP_DURATION = 20.0
-        MAX_CLIP_DURATION = 90.0
-        TARGET_DURATION = 45.0
+        settings = clip_settings or {}
+        MIN_CLIP_DURATION = float(settings.get("min_clip_duration") or 20.0)
+        MAX_CLIP_DURATION = float(settings.get("max_clip_duration") or 60.0)
+        TARGET_DURATION = float(settings.get("target_clip_duration") or 32.0)
+        MAX_CLIPS = int(settings.get("max_clips") or max(1, (video_duration / 3600.0) * 6 + 1 if video_duration > 0 else 10))
         
         current_clip_start = None
         current_clip_text = ""
@@ -1005,8 +1011,7 @@ class ClipService:
             })
         
         # Limit to reasonable number of clips
-        max_clips = int((video_duration / 3600.0) * 6) + 1 if video_duration > 0 else 10
-        return clips[:max_clips]
+        return clips[:MAX_CLIPS]
 
     def _serialize_style(self, style: SubtitleStyle) -> dict:
         return {
