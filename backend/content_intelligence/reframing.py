@@ -16,6 +16,7 @@ DEFAULT_OUTPUT_DIMENSIONS = {
     "16:9": (1920, 1080),
 }
 MAX_TRACKING_POINTS = 100
+MAX_TOTAL_TRACKING_POINTS = 120
 
 
 def parse_aspect_ratio(aspect_ratio: str) -> tuple[float, float]:
@@ -303,6 +304,7 @@ async def build_smart_output_formats(
                 ),
                 fps=2.0,
             )
+        tracking = _subsample_tracking(tracking, MAX_TOTAL_TRACKING_POINTS)
         initial_crop = tracking[0]["bbox"] if tracking else {
             "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0,
         }
@@ -315,6 +317,23 @@ async def build_smart_output_formats(
             "target_height": target_height,
         }
     return outputs
+
+
+def _subsample_tracking(tracking: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    if len(tracking) <= limit:
+        return tracking
+    step = max(1, len(tracking) / limit)
+    indices = [int(round(i * step)) for i in range(limit)]
+    indices = [min(i, len(tracking) - 1) for i in indices]
+    seen: set[int] = set()
+    subsampled: list[dict[str, Any]] = []
+    for i in indices:
+        if i not in seen:
+            seen.add(i)
+            subsampled.append(tracking[i])
+    if subsampled[-1] is not tracking[-1]:
+        subsampled.append(tracking[-1])
+    return subsampled
 
 
 def _build_crop_tracking(scene: SceneContext, fps: float = 2.0) -> list[dict[str, Any]]:
