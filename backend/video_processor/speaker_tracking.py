@@ -23,11 +23,21 @@ from video_processor.geometry import Box
 
 log = get_logger(__name__)
 
-# Faces closer than this across consecutive samples are the same person.
-TRACK_MATCH_IOU = 0.3
-# A track must appear in at least this fraction of the frames it could have
-# appeared in before it is trusted as a real participant.
-MIN_TRACK_PRESENCE = 0.2
+# Faces overlapping more than this across consecutive samples are the same person.
+TRACK_MATCH_IOU = 0.2
+# Frames are sampled about twice a second, far enough apart that a person can
+# move clear of their previous box, so proximity is also accepted: a detection
+# within this multiple of the face width is treated as the same person.
+TRACK_MATCH_DISTANCE_RATIO = 1.5
+# A track must appear in at least this fraction of the sampled frames to count as
+# a participant. Detection flickers, so this is deliberately forgiving.
+MIN_TRACK_PRESENCE = 0.08
+# ...but a lone detection is noise, not a person, so a track also needs this many
+# observations before it can displace or accompany a real speaker.
+MIN_TRACK_SAMPLES = 2
+# Fragmented tracks whose typical positions sit this close together, relative to
+# face width, describe one person and are merged.
+TRACK_MERGE_DISTANCE_RATIO = 1.0
 # Mouth-motion below this is treated as a closed mouth.
 SILENT_MOTION_THRESHOLD = 2.0
 
@@ -136,25 +146,90 @@ def build_tracks(
             match.samples.append(FaceSample(timestamp=timestamp, face=face, mouth_motion=motion))
 
     expected = max(1, len(frames))
-    kept = [t for t in tracks if len(t.samples) / expected >= MIN_TRACK_PRESENCE]
+    merged = merge_fragmented_tracks(tracks)
+    kept = [
+        t for t in merged
+        if len(t.samples) >= MIN_TRACK_SAMPLES and len(t.samples) / expected >= MIN_TRACK_PRESENCE
+    ]
     log.info(
-        "Speaker tracks built: %d candidate(s), %d kept (from %d sampled frame(s))",
-        len(tracks), len(kept), len(frames),
+        "Speaker tracks built: %d candidate(s), %d after merge, %d kept (from %d sampled frame(s))",
+        len(tracks), len(merged), len(kept), len(frames),
     )
+    if merged and not kept:
+        log.warning(
+            "All %d track(s) fell below the presence threshold; falling back to the longest",
+            len(merged),
+        )
+        kept = [max(merged, key=lambda t: len(t.samples))]
     return kept
 
 
+def _center_distance(a: Box, b: Box) -> float:
+    ax, ay = a.center
+    bx, by = b.center
+    return ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5
+
+
 def _best_track(tracks: list[SpeakerTrack], box: Box, claimed: set[int]) -> SpeakerTrack | None:
+    """Closest existing track for a detection, by overlap or proximity.
+
+    Overlap alone is too strict at this sample rate: a speaker who shifts
+    between samples produces boxes that barely intersect, which split one person
+    into many short tracks that are then all discarded as too brief.
+    """
     best: SpeakerTrack | None = None
-    best_iou = TRACK_MATCH_IOU
+    best_score = 0.0
     for track in tracks:
         if track.track_id in claimed or not track.samples:
             continue
-        iou = track.samples[-1].face.box.intersection_over_union(box)
-        if iou > best_iou:
+        previous = track.samples[-1].face.box
+        iou = previous.intersection_over_union(box)
+        reach = max(previous.width, box.width) * TRACK_MATCH_DISTANCE_RATIO
+        distance = _center_distance(previous, box)
+        if iou >= TRACK_MATCH_IOU:
+            score = 1.0 + iou
+        elif distance <= reach:
+            score = 1.0 - distance / max(1e-6, reach)
+        else:
+            continue
+        if score > best_score:
             best = track
-            best_iou = iou
+            best_score = score
     return best
+
+
+def _median_center(track: SpeakerTrack) -> tuple[float, float]:
+    xs = sorted(s.face.box.center[0] for s in track.samples)
+    ys = sorted(s.face.box.center[1] for s in track.samples)
+    mid = len(xs) // 2
+    return xs[mid], ys[mid]
+
+
+def merge_fragmented_tracks(tracks: list[SpeakerTrack]) -> list[SpeakerTrack]:
+    """Combine tracks that describe the same person in the same place.
+
+    A detector that flickers produces several partial tracks for one speaker;
+    left separate, each falls under the presence threshold and the speaker is
+    lost entirely.
+    """
+    merged: list[SpeakerTrack] = []
+    for track in sorted(tracks, key=lambda t: len(t.samples), reverse=True):
+        cx, cy = _median_center(track)
+        width = max(s.face.box.width for s in track.samples)
+        target = None
+        for candidate in merged:
+            ox, oy = _median_center(candidate)
+            reach = max(width, max(s.face.box.width for s in candidate.samples))
+            if ((cx - ox) ** 2 + (cy - oy) ** 2) ** 0.5 <= reach * TRACK_MERGE_DISTANCE_RATIO:
+                target = candidate
+                break
+        if target is None:
+            merged.append(track)
+            continue
+        by_timestamp = {s.timestamp: s for s in target.samples}
+        by_timestamp.update({s.timestamp: s for s in track.samples if s.timestamp not in by_timestamp})
+        target.samples = sorted(by_timestamp.values(), key=lambda s: s.timestamp)
+    return merged
 
 
 def speech_intervals(transcript_segments: list[dict[str, Any]]) -> list[tuple[float, float]]:

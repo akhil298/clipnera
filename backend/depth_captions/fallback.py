@@ -69,7 +69,6 @@ class FallbackRenderer:
                 clip_end=clip_end,
                 style_type="bold_captions",
                 transcript_segments=segments_for_styling,
-                word_snapping=True,
             )
             
             # Copy to output directory

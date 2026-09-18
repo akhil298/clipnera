@@ -7,6 +7,7 @@ from typing import Any
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from core.logging_config import get_logger
+from subtitle_styling.emoji_catalog import catalog_prompt_block, sanitize_ai_cues
 
 log = get_logger(__name__)
 
@@ -69,10 +70,25 @@ class MetadataGenerator:
  Transcript excerpt: "{excerpt}"
 
  Requirements:
- - Title: max 60 chars, catchy, high CTR
+ - Title: ONE short sentence, max 60 chars, catchy, high CTR. It is burned as a
+   static headline above the moving captions, so it must read on its own and
+   must NOT be a fragment of the transcript.
  - Description: 1-2 sentences, 100-200 chars
  - Hashtags: 3-5 relevant hashtags
- - Return JSON: {{"title": "...", "description": "...", "hashtags": ["..."]}}
+ - emoji_cues: 4-10 pairs mapping a word that is actually SPOKEN in the excerpt
+   to one emoji id. Rules, all mandatory:
+     * "keyword" must be a single lowercase word from the excerpt, no punctuation.
+     * "emoji" must be an id copied EXACTLY from the allowed list below.
+       Never invent an id and never output an emoji character.
+     * Pick the id whose meaning matches that word; skip the word if none fits.
+     * One cue per word, no duplicate keywords.
+
+ Allowed emoji ids (the ONLY permitted values for "emoji"):
+{catalog_prompt_block()}
+
+ Return JSON only:
+ {{"title": "...", "description": "...", "hashtags": ["..."],
+   "emoji_cues": [{{"keyword": "...", "emoji": "..."}}]}}
  """
 
         try:
@@ -86,7 +102,7 @@ class MetadataGenerator:
                     response = await self._text_client.chat([
                         {"role": "system", "content": "You are a social media expert specializing in YouTube Shorts metadata. Always return valid JSON only."},
                         {"role": "user", "content": prompt},
-                    ], temperature=0.7, max_tokens=300)
+                    ], temperature=0.7, max_tokens=900)
         except Exception as exc:
             log.warning(f"Metadata generation failed after retries: {exc}")
             return self._fallback_metadata(clip)
@@ -101,6 +117,9 @@ class MetadataGenerator:
         clip_copy["description"] = data.get("description", self._default_description(clip))
         clip_copy["hashtags"] = data.get("hashtags", random.sample(HASHTAG_POOLS.get(category, HASHTAG_POOLS["unknown"]), min(3, len(HASHTAG_POOLS.get(category, HASHTAG_POOLS["unknown"])))))
         clip_copy["suggested_emoji"] = EMOJI_MAP.get(category, "\ud83c\udf1f")
+        # Anything the model invented is dropped here rather than rendered, so
+        # the burner only ever sees emojis that exist in the catalog.
+        clip_copy["ai_emoji_cues"] = sanitize_ai_cues(data.get("emoji_cues"))
         return clip_copy
 
     def _fallback_metadata(self, clip: dict) -> dict:
@@ -111,6 +130,8 @@ class MetadataGenerator:
         clip_copy["description"] = self._default_description(clip)
         clip_copy["hashtags"] = random.sample(HASHTAG_POOLS.get(category, HASHTAG_POOLS["unknown"]), 3)
         clip_copy["suggested_emoji"] = EMOJI_MAP.get(category, "\ud83c\udf1f")
+        # No cues: the static keyword map in emoji_annotator still applies.
+        clip_copy["ai_emoji_cues"] = []
         return clip_copy
 
     def _default_title(self, clip: dict, category: str) -> str:

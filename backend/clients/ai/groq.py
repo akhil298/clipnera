@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
 from groq import AsyncGroq
@@ -17,14 +18,48 @@ log = get_logger(__name__)
 
 DEFAULT_MODEL = "llama-3.1-8b-instant"
 
-# llama-3.1-8b-instant context window. Input + output must fit inside this.
-MODEL_CONTEXT_TOKENS = 8192
-# Groq free tier throughput ceiling for this model (tokens per minute).
-FREE_TIER_TOKENS_PER_MINUTE = 6000
-# Groq free tier request ceiling (requests per minute).
-FREE_TIER_REQUESTS_PER_MINUTE = 30
+
+@dataclass(frozen=True)
+class ModelProfile:
+    """Per-model limits. Free-tier ceilings differ by model, and a reasoning
+    model spends part of its output budget on tokens it never returns."""
+
+    context_tokens: int
+    tokens_per_minute: int
+    requests_per_minute: int
+    reasoning: bool = False
+
+
+# Unknown models get conservative limits rather than optimistic ones, so a model
+# swap degrades into slower calls instead of silent truncation.
+FALLBACK_PROFILE = ModelProfile(context_tokens=8192, tokens_per_minute=6000, requests_per_minute=30)
+
+MODEL_PROFILES: dict[str, ModelProfile] = {
+    "llama-3.1-8b-instant": ModelProfile(8192, 6000, 30),
+    "llama-3.3-70b-versatile": ModelProfile(32768, 12000, 30),
+    "openai/gpt-oss-20b": ModelProfile(131072, 8000, 30, reasoning=True),
+    "openai/gpt-oss-120b": ModelProfile(131072, 8000, 30, reasoning=True),
+}
+
+# A reasoning model emits hidden reasoning tokens before any content. Below this
+# ceiling the budget is consumed entirely by reasoning and the reply comes back
+# empty with finish_reason="length".
+MIN_REASONING_OUTPUT_TOKENS = 2048
+
 # Headroom for the chat template, role markers and estimation error.
 TOKEN_ESTIMATE_SAFETY_MARGIN = 256
+
+
+def get_profile(model: str | None = None) -> ModelProfile:
+    name = (model or getattr(settings, "GROQ_MODEL", DEFAULT_MODEL) or DEFAULT_MODEL).strip()
+    return MODEL_PROFILES.get(name, FALLBACK_PROFILE)
+
+
+def effective_max_tokens(requested: int, model: str | None = None) -> int:
+    """Raise the output cap to something a reasoning model can actually use."""
+    if get_profile(model).reasoning:
+        return max(requested, MIN_REASONING_OUTPUT_TOKENS)
+    return requested
 
 
 def estimate_tokens(text: str) -> int:
@@ -36,15 +71,17 @@ def _messages_tokens(messages: list[dict[str, Any]]) -> int:
     return sum(estimate_tokens(str(m.get("content", ""))) for m in messages)
 
 
-def input_token_budget(max_output_tokens: int) -> int:
+def input_token_budget(max_output_tokens: int, model: str | None = None) -> int:
     """Largest prompt we may send, given the reply we have asked for.
 
     Bounded by both the model context window and the free-tier per-minute
     ceiling, since a single request larger than the TPM limit can never
     succeed no matter how long we wait.
     """
-    context_budget = MODEL_CONTEXT_TOKENS - max_output_tokens - TOKEN_ESTIMATE_SAFETY_MARGIN
-    throughput_budget = FREE_TIER_TOKENS_PER_MINUTE - max_output_tokens - TOKEN_ESTIMATE_SAFETY_MARGIN
+    profile = get_profile(model)
+    output = effective_max_tokens(max_output_tokens, model)
+    context_budget = profile.context_tokens - output - TOKEN_ESTIMATE_SAFETY_MARGIN
+    throughput_budget = profile.tokens_per_minute - output - TOKEN_ESTIMATE_SAFETY_MARGIN
     return max(512, min(context_budget, throughput_budget))
 
 
@@ -120,11 +157,19 @@ class Groq(BaseAI):
     ``content_intelligence.transcript_windows``.
     """
 
-    _limiter = _TokenBucket(FREE_TIER_TOKENS_PER_MINUTE, FREE_TIER_REQUESTS_PER_MINUTE)
+    _limiters: dict[str, _TokenBucket] = {}
+
+    @classmethod
+    def _limiter_for(cls, model: str) -> _TokenBucket:
+        if model not in cls._limiters:
+            profile = get_profile(model)
+            cls._limiters[model] = _TokenBucket(profile.tokens_per_minute, profile.requests_per_minute)
+        return cls._limiters[model]
 
     def __init__(self, api_key: str | None = None, model: str | None = None, timeout: float = 60.0) -> None:
         self.api_key = (api_key or getattr(settings, "GROQ_API_KEY", "") or "").strip()
         self.model = model or getattr(settings, "GROQ_MODEL", DEFAULT_MODEL)
+        self.profile = get_profile(self.model)
         if not self.api_key:
             log.warning("Groq API key is missing; Groq-backed steps will fail or fall back.")
         self._client = AsyncGroq(
@@ -132,20 +177,21 @@ class Groq(BaseAI):
             timeout=timeout,
         )
         log.info(
-            "Groq client initialized: model=%s, timeout=%ss, api_key_configured=%s",
+            "Groq client initialized: model=%s context=%d tpm=%d reasoning=%s api_key_configured=%s",
             self.model,
-            timeout,
+            self.profile.context_tokens,
+            self.profile.tokens_per_minute,
+            self.profile.reasoning,
             bool(self.api_key),
         )
 
-    @staticmethod
-    def _fit_messages(messages: list[dict[str, Any]], max_output_tokens: int) -> list[dict[str, Any]]:
+    def _fit_messages(self, messages: list[dict[str, Any]], max_output_tokens: int) -> list[dict[str, Any]]:
         """Trim the prompt to the budget, dropping whole older turns first.
 
         A single over-budget message is clipped from its *end* and marked, so a
         truncated prompt is visible downstream instead of looking complete.
         """
-        budget = input_token_budget(max_output_tokens)
+        budget = input_token_budget(max_output_tokens, self.model)
         total = _messages_tokens(messages)
         if total <= budget:
             return messages
@@ -179,7 +225,15 @@ class Groq(BaseAI):
         return system_msgs + kept
 
     async def chat(self, messages: list[dict[str, Any]], **kwargs: Any) -> str:
-        max_output_tokens = int(kwargs.get("max_tokens") or 1024)
+        requested = int(kwargs.get("max_tokens") or 1024)
+        max_output_tokens = effective_max_tokens(requested, self.model)
+        if max_output_tokens != requested:
+            log.info(
+                "Raised max_tokens %d -> %d for reasoning model %s; a smaller budget is "
+                "consumed by reasoning and returns empty content",
+                requested, max_output_tokens, self.model,
+            )
+        kwargs["max_tokens"] = max_output_tokens
         fitted = self._fit_messages(messages, max_output_tokens)
         estimated_input = _messages_tokens(fitted)
 
@@ -195,7 +249,7 @@ class Groq(BaseAI):
         ):
             with attempt:
                 attempt_number = attempt.retry_state.attempt_number
-                await self._limiter.acquire(estimated_input + max_output_tokens)
+                await self._limiter_for(self.model).acquire(estimated_input + max_output_tokens)
                 log.info("Groq API request hit: mode=chat, model=%s, attempt=%d", self.model, attempt_number)
                 try:
                     response = await self._client.chat.completions.create(
@@ -206,9 +260,15 @@ class Groq(BaseAI):
                     )
                     content = response.choices[0].message.content or ""
                     finish_reason = getattr(response.choices[0], "finish_reason", None)
-                    if finish_reason == "length":
+                    if finish_reason == "length" and not content:
+                        log.error(
+                            "Groq returned no content: model=%s spent all %d output token(s) before "
+                            "emitting any. Raise max_tokens or use a non-reasoning model.",
+                            self.model, max_output_tokens,
+                        )
+                    elif finish_reason == "length":
                         log.warning(
-                            "Groq response hit the output token cap: model=%s, max_tokens=%d, response_chars=%d",
+                            "Groq response truncated at the output token cap: model=%s, max_tokens=%d, chars=%d",
                             self.model, max_output_tokens, len(content),
                         )
                     log.info(
@@ -232,9 +292,10 @@ class Groq(BaseAI):
         raise RuntimeError("Unreachable")
 
     async def stream_chat(self, messages: list[dict[str, Any]], **kwargs: Any) -> AsyncIterator[str]:
-        max_output_tokens = int(kwargs.get("max_tokens") or 1024)
+        max_output_tokens = effective_max_tokens(int(kwargs.get("max_tokens") or 1024), self.model)
+        kwargs["max_tokens"] = max_output_tokens
         fitted = self._fit_messages(messages, max_output_tokens)
-        await self._limiter.acquire(_messages_tokens(fitted) + max_output_tokens)
+        await self._limiter_for(self.model).acquire(_messages_tokens(fitted) + max_output_tokens)
 
         log.info("Groq API call started: mode=stream, model=%s, messages=%d", self.model, len(fitted))
         payload = {"model": self.model, "messages": fitted, "stream": True, **kwargs}

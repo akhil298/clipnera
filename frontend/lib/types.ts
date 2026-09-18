@@ -1,5 +1,6 @@
 ﻿export type AspectRatio = '9:16' | '1:1' | '16:9';
-export type CaptionPreset = 'hormozi' | 'mrbeast' | 'neon' | 'cyberpunk' | 'minimal' | 'karaoke_yellow' | 'sunset' | 'bold_captions' | 'tiny' | 'micro';
+import type { CaptionPreset } from '@/lib/utils/captionStyles.generated';
+export type { CaptionPreset };
 export type LayoutMode = 'single_speaker' | 'split_screen' | 'screen_share_focus';
 
 export interface AudioEnhancementConfig {
@@ -286,6 +287,7 @@ export interface PipelineStep {
 
 export interface PipelineStatus {
   project_id: string;
+  status?: 'not_started' | 'pending' | 'running' | 'completed' | 'error';
   current_step: string;
   is_completed: boolean;
   error: string | null;

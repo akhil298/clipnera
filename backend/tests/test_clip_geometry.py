@@ -86,7 +86,10 @@ class TestCropTrackingExpressions:
             {"timestamp": 2.0, "bbox": Box(0.5, 0.0, 0.3, 1.0).as_dict()},
         ]
         x, _ = crop_tracking_expressions(tracking, 1920, 1080, 608, 1080)
-        assert "if(lt(t," in x and "clip(" in x
+        # Flat sum of clamped ramps; the old nested if() form exceeded FFmpeg's
+        # expression limit. Interpolation accuracy is covered in
+        # tests/test_crop_expressions.py.
+        assert "clip(" in x and "if(" not in x
 
     def test_clamps_within_frame(self) -> None:
         tracking = [{"timestamp": 0.0, "bbox": Box(0.99, 0.0, 0.3, 1.0).as_dict()}]

@@ -1,5 +1,6 @@
-import { BrandKit, PipelineProgressEvent, PipelineStatus, ViralClip, CaptionConfig, WordTimestamp } from '@/lib/types';
+import { BrandKit, PipelineProgressEvent, PipelineStatus, ViralClip, CaptionConfig, TranscriptSegment, WordTimestamp } from '@/lib/types';
 import { getToken, clearAuth, setAuth } from '@/lib/auth';
+import { emojiForKeyword } from '@/lib/data/emojiCatalog.generated';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
@@ -173,7 +174,25 @@ export interface BackendClip {
   local_path: string | null;
   status: string;
   burned_presigned_url: string | null;
-  transcript: Array<{ start: number; end: number; text: string; speaker?: string }>;
+  transcript: Array<{
+    start: number;
+    end: number;
+    text: string;
+    speaker?: string;
+    words?: Array<{ start: number; end: number; word: string }>;
+  }>;
+  /**
+   * Word-level captions already rebased onto the clip's own timeline (the
+   * rendered mp4 starts at 0, `transcript` carries absolute source times).
+   */
+  captions?: Array<{
+    text: string;
+    start: number;
+    end: number;
+    speaker?: string;
+    emoji?: string;
+    emphasis?: boolean;
+  }>;
   created_at: string | null;
 }
 
@@ -227,6 +246,93 @@ const DEFAULT_CAPTION_CONFIG: CaptionConfig = {
   shadowIntensity: 0.8,
 };
 
+/**
+ * Build the editor's transcript segments on the clip's own timeline.
+ *
+ * Every timestamp the player compares against `video.currentTime` has to be
+ * clip-relative. The backend's `captions` field already is; `transcript` is
+ * not, so the fallback path rebases it by the clip's start. Getting this wrong
+ * is silent — captions simply never appear, because the playhead (0..duration)
+ * is never inside a word window measured in source-video seconds.
+ */
+function buildTranscriptSegments(clip: BackendClip): TranscriptSegment[] {
+  const clipStart = clip.start_time || 0;
+  const SPEAKER_COLOR = '#38bdf8';
+
+  if (clip.captions && clip.captions.length > 0) {
+    // One segment per speaker run keeps the transcript panel readable while
+    // the caption overlay works off the flattened word list either way.
+    const segments: TranscriptSegment[] = [];
+    clip.captions.forEach((caption, index) => {
+      const word: WordTimestamp = {
+        id: `${clip.id}-w-${index}`,
+        text: caption.text,
+        start: caption.start,
+        end: caption.end,
+        highlighted: caption.emphasis ?? false,
+        emoji: caption.emoji,
+      };
+      const speaker = caption.speaker || 'Speaker';
+      const last = segments[segments.length - 1];
+      if (last && last.speaker === speaker && caption.start - last.end < 1.5) {
+        last.words.push(word);
+        last.end = caption.end;
+        last.text = `${last.text} ${caption.text}`;
+        return;
+      }
+      segments.push({
+        id: `${clip.id}-seg-${segments.length}`,
+        speaker,
+        speakerColor: SPEAKER_COLOR,
+        start: caption.start,
+        end: caption.end,
+        text: caption.text,
+        words: [word],
+      });
+    });
+    return segments;
+  }
+
+  return (clip.transcript || []).map((seg, segIdx) => {
+    const segStart = (seg.start || 0) - clipStart;
+    const segEnd = (seg.end || 0) - clipStart;
+    const tokens = (seg.text || '').split(/\s+/).filter(Boolean);
+
+    // Real word timings when Whisper gave us them; otherwise spread the
+    // segment's words evenly across it, which is approximate but in sync.
+    // Emoji come from the same catalog the backend annotates with, so this
+    // path previews the same emoji the export would burn in.
+    const words: WordTimestamp[] = seg.words?.length
+      ? seg.words.map((word, wordIdx) => ({
+          id: `${clip.id}-w-${segIdx}-${wordIdx}`,
+          text: word.word.trim(),
+          start: Math.max(0, word.start - clipStart),
+          end: Math.max(0, word.end - clipStart),
+          emoji: emojiForKeyword(word.word) ?? undefined,
+        }))
+      : tokens.map((token, wordIdx) => {
+          const step = (segEnd - segStart) / Math.max(1, tokens.length);
+          return {
+            id: `${clip.id}-w-${segIdx}-${wordIdx}`,
+            text: token,
+            start: Math.max(0, segStart + wordIdx * step),
+            end: Math.max(0, segStart + (wordIdx + 1) * step),
+            emoji: emojiForKeyword(token) ?? undefined,
+          };
+        });
+
+    return {
+      id: `${clip.id}-seg-${segIdx}`,
+      speaker: seg.speaker || 'Speaker',
+      speakerColor: SPEAKER_COLOR,
+      start: Math.max(0, segStart),
+      end: Math.max(0, segEnd),
+      text: seg.text || '',
+      words,
+    };
+  });
+}
+
 export function mapBackendClip(clip: BackendClip): ViralClip {
   const viralityScore = Math.round(clip.score ?? 50);
   const hookScore = typeof clip.scores?.hook_score === 'number'
@@ -257,34 +363,13 @@ export function mapBackendClip(clip: BackendClip): ViralClip {
     keywords: [],
     emojiHighlights: [],
     autoBrollKeywords: [],
-    transcriptSegments: (clip.transcript || []).map((seg, segIdx) => {
-      const words: WordTimestamp[] = (seg.text || '')
-        .split(/\s+/)
-        .filter(Boolean)
-        .map((word, wordIdx) => {
-          const segDuration = (seg.end || 0) - (seg.start || 0);
-          const wordDuration = segDuration / Math.max(1, (seg.text || '').split(/\s+/).filter(Boolean).length);
-          return {
-            id: `${clip.id}-w-${segIdx}-${wordIdx}`,
-            text: word,
-            start: Math.max(0, (seg.start || 0) + wordIdx * wordDuration),
-            end: Math.max(0, (seg.start || 0) + (wordIdx + 1) * wordDuration),
-          };
-        });
-      return {
-        id: `${clip.id}-seg-${segIdx}`,
-        speaker: seg.speaker || 'Speaker',
-        speakerColor: '#38bdf8',
-        start: seg.start || 0,
-        end: seg.end || 0,
-        text: seg.text || '',
-        words,
-      };
-    }),
+    transcriptSegments: buildTranscriptSegments(clip),
     bRollOverlays: [],
     soundEffects: [],
     captionConfig: DEFAULT_CAPTION_CONFIG,
-    autoZoom: { enabled: true, frequency: 'subtle', scale: 1.1 },
+    // Off by default: the render pipeline applies no zoom, so leaving it on
+    // made the preview show motion the exported file never has.
+    autoZoom: { enabled: false, frequency: 'subtle', scale: 1.1 },
     autoReframe: { mode: 'center', speakerCropX: 0.5, speakerSmoothing: 0.5 },
     socialOptimization: {
       hashtags: [],

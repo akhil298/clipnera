@@ -54,7 +54,7 @@ class TestTemplates:
 
     def test_get_template_podcast_professional(self):
         template = get_template("podcast")
-        assert template["font_family"] == "Arial"
+        assert template["font_family"] == "DejaVu Sans"
         assert template["max_words_per_line"] == 5
 
     def test_get_all_templates(self):
@@ -66,17 +66,17 @@ class TestTemplates:
         assert "tiktok" in all_templates
         assert "neon" in all_templates
         assert "podcast" in all_templates
-        assert len(all_templates) == 7
+        assert len(all_templates) == len(CAPTION_TEMPLATES)
 
     def test_get_template_names(self):
         names = get_template_names()
         assert isinstance(names, list)
         assert "default" in names
-        assert len(names) == 7
+        assert len(names) == len(CAPTION_TEMPLATES)
 
     def test_get_template_info(self):
         info = get_template_info()
-        assert len(info) == 7
+        assert len(info) == len(CAPTION_TEMPLATES)
         for item in info:
             assert "id" in item
             assert "name" in item
@@ -89,7 +89,10 @@ class TestTemplates:
                 assert key in template or key in TEMPLATE_DEFAULTS
 
     def test_all_templates_have_required_fields(self):
+        # Templates declare only what makes them distinct; shared values come
+        # from TEMPLATE_DEFAULTS, so assert against the merged result.
         required = ["name", "description", "font_family", "font_size", "font_color", "highlight_color"]
-        for name, template in CAPTION_TEMPLATES.items():
+        for name in CAPTION_TEMPLATES:
+            template = get_template(name)
             for field in required:
                 assert field in template, f"Template '{name}' missing '{field}'"

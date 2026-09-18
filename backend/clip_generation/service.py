@@ -92,7 +92,6 @@ class ClipService:
             title_text=clip.title,
             enable_watermark=burn_request.get("enable_watermark", True),
             transcript_segments=transcript_segments,
-            word_snapping=burn_request.get("word_snapping", True),
         )
 
         s3_key = f"clips/{user_id}/{clip.project_id}/{clip_id}_burned.mp4"
@@ -224,7 +223,6 @@ class ClipService:
                             title_text=clip.title,
                             enable_watermark=watermark_enabled,
                             transcript_segments=clip_transcript,
-                            word_snapping=True,
                             ai_cues=ai_cues if enable_emoji else None,
                         )
 
@@ -655,16 +653,92 @@ class ClipService:
 
     @staticmethod
     def _clip_transcript(transcript_segments: list[dict[str, Any]], start: float, end: float) -> list[dict[str, Any]]:
-        return [
-            {
-                "start": float(segment.get("start", 0.0)),
-                "end": float(segment.get("end", 0.0)),
+        """Slice the transcript to a clip, keeping absolute source timestamps.
+
+        Timings stay absolute because the ASS generator rebases them against
+        clip_start itself; rebasing here would double-subtract the offset.
+
+        Word timings are carried through. Dropping them (as this used to) made
+        every downstream consumer fall back to whole-segment lines: the burner
+        lost word-level karaoke, and the editor had nothing to sync against.
+        """
+        sliced: list[dict[str, Any]] = []
+        for segment in transcript_segments:
+            seg_start = float(segment.get("start", 0.0))
+            seg_end = float(segment.get("end", 0.0))
+            if seg_end <= start or seg_start >= end:
+                continue
+
+            entry: dict[str, Any] = {
+                "start": seg_start,
+                "end": seg_end,
                 "text": str(segment.get("text", "")),
-                **({"speaker": segment["speaker"]} if segment.get("speaker") else {}),
             }
-            for segment in transcript_segments
-            if float(segment.get("end", 0.0)) > start and float(segment.get("start", 0.0)) < end
-        ]
+            if segment.get("speaker"):
+                entry["speaker"] = segment["speaker"]
+
+            words = []
+            for word in segment.get("words") or []:
+                w_start = float(word.get("start", 0.0))
+                w_end = float(word.get("end", w_start))
+                if w_end <= start or w_start >= end:
+                    continue
+                text = str(word.get("word", word.get("text", ""))).strip()
+                if not text:
+                    continue
+                words.append({"start": w_start, "end": w_end, "word": text})
+            if words:
+                entry["words"] = words
+            sliced.append(entry)
+        return sliced
+
+    @staticmethod
+    def _clip_captions(
+        transcript: list[dict[str, Any]],
+        start: float,
+        end: float,
+        ai_cues: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Word-level captions on the *clip's own* timeline, for the editor.
+
+        The rendered mp4 starts at zero while `transcript` carries absolute
+        source timestamps, so a player comparing its currentTime against the
+        stored transcript never matches a single word. Rebasing belongs here,
+        once, next to the burner's own rebasing - not in each client.
+        """
+        from subtitle_styling.emoji_annotator import annotate_caption_words
+
+        duration = max(0.0, end - start)
+        words: list[dict[str, Any]] = []
+        for segment in transcript:
+            raw_words = segment.get("words") or [
+                {
+                    "start": segment.get("start", 0.0),
+                    "end": segment.get("end", 0.0),
+                    "word": segment.get("text", ""),
+                }
+            ]
+            for word in raw_words:
+                w_start = float(word.get("start", 0.0))
+                w_end = float(word.get("end", w_start))
+                text = str(word.get("word", word.get("text", ""))).strip()
+                if not text or w_end <= start or w_start >= end:
+                    continue
+                words.append({
+                    "text": text,
+                    "start": round(min(max(0.0, w_start - start), duration), 3),
+                    "end": round(min(max(0.0, w_end - start), duration), 3),
+                    "speaker": segment.get("speaker") or "Speaker",
+                })
+
+        words.sort(key=lambda w: w["start"])
+        emoji_by_index, emphasis_indices = annotate_caption_words(words, ai_cues)
+        for index, word in enumerate(words):
+            if index in emoji_by_index:
+                word["emoji"] = emoji_by_index[index]
+            if index in emphasis_indices:
+                word["emphasis"] = True
+        return words
 
     @staticmethod
     def _clip_scores(clip: dict[str, Any], frames: list[dict[str, Any]]) -> dict[str, float]:
@@ -858,9 +932,12 @@ class ClipService:
     def _serialize_clip(self, clip: GeneratedClip | None) -> dict | None:
         if not clip:
             return None
+        analysis = self._loads(clip.analysis_json, {})
+        transcript = self._loads(clip.transcript, [])
+        ai_cues = analysis.get("clip", {}).get("ai_emoji_cues", []) if isinstance(analysis, dict) else []
         return {
             "video_id": clip.project_id,
-            "clip_id": self._loads(clip.analysis_json, {}).get("clip", {}).get("clip_id", clip.id),
+            "clip_id": analysis.get("clip", {}).get("clip_id", clip.id),
             "id": clip.id,
             "project_id": clip.project_id,
             "user_id": clip.user_id,
@@ -874,7 +951,7 @@ class ClipService:
                 "end": clip.end_time,
                 "duration": clip.duration_seconds,
             },
-            "reason": self._loads(clip.analysis_json, {}).get("clip", {}).get("reason", "") if clip.analysis_json else "",
+            "reason": analysis.get("clip", {}).get("reason", ""),
             "score": clip.score,
             "scores": self._loads(clip.scores, {}),
             "content_category": clip.content_category,
@@ -885,13 +962,16 @@ class ClipService:
             "subtitle_style_id": clip.subtitle_style_id,
             "burned_subtitle_path": clip.burned_subtitle_path,
             "burned_presigned_url": clip.burned_presigned_url,
-            "transcript": self._loads(clip.transcript, []),
+            "transcript": transcript,
+            # Absolute-time transcript above, clip-relative words below: the
+            # player needs the latter, the burner needs the former.
+            "captions": self._clip_captions(transcript, clip.start_time, clip.end_time, ai_cues),
             "visual_analysis": self._loads(clip.visual_analysis, []),
             "bounding_boxes": self._loads(clip.bounding_boxes, []),
             "crop_tracking": self._loads(clip.crop_tracking, {}),
             "output_formats": self._loads(clip.output_formats, {}),
             "output_files": self._loads(clip.output_files, {}),
-            "analysis_json": self._loads(clip.analysis_json, {}),
+            "analysis_json": analysis,
             "created_at": clip.created_at.isoformat() if clip.created_at else None,
         }
 

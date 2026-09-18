@@ -213,10 +213,12 @@ class AssGenerator:
         if title and title.strip():
             from subtitle_styling.emoji_annotator import inject_collection_emojis
             styled_title = inject_collection_emojis(title.strip(), emoji_collection)
-            show_for = min(4.0, clip_duration)
+            # The title is the clip's static headline, so it holds for the whole
+            # clip; only the word captions below it move. It used to vanish after
+            # four seconds, which read as a glitch rather than a headline.
             lines.append(
-                f"Dialogue: 1,{ass_time(0)},{ass_time(show_for)},Title,,0,0,0,,"
-                f"{{\\fad(200,300)}}{escape_ass(styled_title)}"
+                f"Dialogue: 1,{ass_time(0)},{ass_time(max(0.0, clip_duration))},Title,,0,0,0,,"
+                f"{{\\fad(200,0)}}{escape_ass(styled_title)}"
             )
 
         if not transcript_words:

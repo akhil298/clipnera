@@ -21,6 +21,11 @@ def face_at(x: float, y: float, size: float = 0.2) -> Face:
     return Face(box=box, confidence=0.9, mouth=Box(x + size / 4, y + size * 0.62, size / 2, size / 4))
 
 
+@pytest.fixture(scope="module")
+def cutter() -> ClipCutter:
+    return ClipCutter()
+
+
 def track_with(track_id: int, box: Box, motions: list[float], start: float = 0.0) -> SpeakerTrack:
     face = Face(box=box, confidence=0.9, mouth=box)
     return SpeakerTrack(
@@ -92,10 +97,6 @@ class TestActiveSpeaker:
 
 
 class TestLayoutClassification:
-    @pytest.fixture
-    def cutter(self) -> ClipCutter:
-        return ClipCutter()
-
     def test_no_faces_is_no_subject(self, cutter: ClipCutter) -> None:
         assert cutter._classify_layout([], "podcast_interview") == "no_subject"
 
@@ -140,3 +141,54 @@ class TestLayoutClassification:
         ]
         for layout in layouts:
             assert cutter._strategy_for(layout) in {"follow_speaker", "cover_subjects", "center"}
+
+
+class TestFragmentationRecovery:
+    """Regression: a flickering detector produced many short tracks, every one
+    fell below the presence threshold, and the clip reported no subject at all
+    then fell back to a centre crop."""
+
+    def frames(self, n: int):
+        return [(float(i) * 0.5, np.zeros((64, 64, 3), dtype=np.uint8)) for i in range(n)]
+
+    def test_drifting_speaker_stays_one_track(self) -> None:
+        """A speaker who drifts between samples must not split into many tracks."""
+        n = 40
+        # Moves steadily right; consecutive boxes barely overlap.
+        faces = [[face_at(0.30 + 0.004 * i, 0.4, 0.18)] for i in range(n)]
+        tracks = build_tracks(self.frames(n), faces)
+        assert len(tracks) == 1
+        assert len(tracks[0].samples) == n
+
+    def test_flickering_detection_is_merged(self) -> None:
+        n = 40
+        faces = []
+        for i in range(n):
+            # Detector drops the face every third frame and jitters otherwise.
+            if i % 3 == 0:
+                faces.append([])
+            else:
+                jitter = 0.01 if i % 2 else -0.01
+                faces.append([face_at(0.40 + jitter, 0.40 + jitter, 0.18)])
+        tracks = build_tracks(self.frames(n), faces)
+        assert len(tracks) == 1, f"expected one speaker, got {len(tracks)}"
+
+    def test_two_separated_people_stay_separate(self) -> None:
+        n = 30
+        faces = [[face_at(0.05, 0.4, 0.15), face_at(0.75, 0.4, 0.15)] for _ in range(n)]
+        tracks = build_tracks(self.frames(n), faces)
+        assert len(tracks) == 2
+
+    def test_never_returns_empty_when_faces_were_seen(self) -> None:
+        """Even a brief detection beats reporting no subject and centre-cropping."""
+        n = 40
+        faces: list[list[Face]] = [[] for _ in range(n)]
+        for i in (10, 11):
+            faces[i] = [face_at(0.4, 0.4, 0.18)]
+        tracks = build_tracks(self.frames(n), faces)
+        assert len(tracks) == 1
+
+    def test_genuinely_no_faces_returns_nothing(self) -> None:
+        n = 20
+        tracks = build_tracks(self.frames(n), [[] for _ in range(n)])
+        assert tracks == []

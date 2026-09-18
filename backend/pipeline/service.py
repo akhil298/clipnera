@@ -17,6 +17,7 @@ from audio.enhancement.schema import AudioEnhanceRequest
 from transcription.service import WhisperXTranscriptionService
 from transcription.schema import TranscriptionRequest
 from clip.repository import ClipRepository
+from clip.model import ProjectStatus
 from clip_generation.service import ClipService
 from depth_captions.pipeline import create_depth_captions_job
 from depth_captions.schema import DepthCaptionRequest, StylePreset, DepthMode, TranscriptSegment
@@ -750,7 +751,6 @@ class PipelineOrchestrator:
                         title_text=clip.title,
                         enable_watermark=self.watermark_enabled,
                         transcript_segments=transcript_to_use,
-                        word_snapping=True,
                     )
                     burned.append({
                         "clip_id": clip.id,
@@ -907,7 +907,11 @@ class PipelineOrchestrator:
                 if state:
                     await repo.update_step_status(state.id, step, StepStatus.FAILED, message=error)
         except Exception as exc:
-            log.debug(f"Failed to update step status to failed: {exc}")
+            log.error(
+                f"Could not persist FAILED status for step {step.value}: {exc}",
+                extra={"project_id": self.project_id, "step": step.value},
+                exc_info=True,
+            )
 
     async def _mark_pipeline_completed(self) -> None:
         try:
@@ -916,10 +920,16 @@ class PipelineOrchestrator:
                 repo = PipelineRepository(session)
                 last_step = self.selected_steps[-1] if self.selected_steps else PipelineStepType.CLIP_GENERATION
                 await repo.update_pipeline_current_step(self.project_id, last_step, is_completed=True)
+            await self._set_project_status(ProjectStatus.COMPLETED)
         except Exception as exc:
-            log.error(f"Failed to mark pipeline completed: project={self.project_id} error={exc}")
+            log.error(f"Failed to mark pipeline completed: project={self.project_id} error={exc}", exc_info=True)
 
     async def _mark_pipeline_failed(self, error: str) -> None:
+        """Record a terminal failure.
+
+        `is_completed` stays False: it means "finished successfully", and clients
+        check it before `error`, so setting it here made a failed run report success.
+        """
         try:
             from pipeline.repository import PipelineRepository
             async with AsyncSessionLocal() as session:
@@ -927,10 +937,21 @@ class PipelineOrchestrator:
                 state = await repo.get_pipeline(self.project_id)
                 if state:
                     state.error = error
-                    state.is_completed = True
-                    await repo._session.commit()
+                    state.is_completed = False
+                    await session.commit()
+                else:
+                    log.error(f"No pipeline state to mark failed: project={self.project_id}")
+            await self._set_project_status(ProjectStatus.FAILED)
         except Exception as exc:
-            log.error(f"Failed to mark pipeline failed: project={self.project_id} error={exc}")
+            log.error(f"Failed to mark pipeline failed: project={self.project_id} error={exc}", exc_info=True)
+
+    async def _set_project_status(self, status: ProjectStatus) -> None:
+        try:
+            from clip.repository import ClipRepository
+            async with AsyncSessionLocal() as session:
+                await ClipRepository(session).update_project_status(self.project_id, status)
+        except Exception as exc:
+            log.error(f"Failed to set project status to {status.value}: project={self.project_id} error={exc}")
 
     def _notify(
         self, message: str, percent: int, step: Optional[str] = None, step_status: Optional[str] = None

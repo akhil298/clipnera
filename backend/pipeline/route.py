@@ -106,6 +106,15 @@ async def _run_pipeline(orchestrator: PipelineOrchestrator, project_id: str, use
             entry = _progress_store.get(project_id, {"status": "idle", "percent": 0, "message": ""})
             entry.update({"status": "error", "percent": 0, "message": str(exc), "step_status": "failed"})
             _progress_store[project_id] = entry
+
+        # orchestrator.run() persists the failure itself, but it can also raise
+        # before reaching that point (or while persisting) — make sure the DB
+        # reflects the failure so /status does not report a stale running job.
+        try:
+            await orchestrator._mark_pipeline_failed(str(exc))
+        except Exception as mark_exc:
+            log.error(f"Could not persist pipeline failure: project={project_id} error={mark_exc}")
+
         if credit_refund_callback:
             await credit_refund_callback()
 
@@ -278,8 +287,18 @@ async def pipeline_status(project_id: str, user: CurrentUserDep):
                         "finished_at": log_entry.finished_at.isoformat() if log_entry.finished_at else None,
                     })
 
+                if state.error:
+                    overall = "error"
+                elif state.is_completed:
+                    overall = "completed"
+                elif any(s["status"] == "running" for s in steps):
+                    overall = "running"
+                else:
+                    overall = "pending"
+
                 return {
                     "project_id": project_id,
+                    "status": overall,
                     "current_step": state.current_step,
                     "is_completed": state.is_completed,
                     "error": state.error,

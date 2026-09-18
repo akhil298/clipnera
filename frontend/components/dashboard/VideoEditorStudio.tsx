@@ -59,13 +59,12 @@ interface VideoEditorStudioProps {
   onScheduleClip: (clip: ViralClip) => void;
 }
 
-export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
-  clip,
-  onUpdateClip,
-  onBackToGenerator,
-  onScheduleClip,
-}) => {
-  if (!clip) {
+// The studio holds a large amount of hook state derived from `clip`, so the
+// "no clip" case is handled by this thin wrapper. Bailing out inside the studio
+// itself would mean its hooks only appear once a clip arrives, which React
+// reports as an internal static-flag mismatch.
+export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = (props) => {
+  if (!props.clip) {
     return (
       <div className="flex items-center justify-center h-[60vh] text-neutral-400 text-sm">
         No clip selected. Select a clip from the generator to open the editor.
@@ -73,6 +72,15 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
     );
   }
 
+  return <VideoEditorStudioContent {...props} clip={props.clip} />;
+};
+
+const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
+  clip,
+  onUpdateClip,
+  onBackToGenerator,
+  onScheduleClip,
+}) => {
   const applyEmojiCollection = (text: string): string => {
     if (!captionConfig.emojiCollection) return text;
     const collection = getEmojiCollection(captionConfig.emojiCollection);
@@ -133,6 +141,30 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
   const lastTimeRef = useRef<number>(0);
   const playedSfxSet = useRef<Set<string>>(new Set());
   const videoRef = useRef<HTMLVideoElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+
+  // Caption sizes in CaptionConfig are authored against a 1080px-tall frame
+  // (that is how the backend templates define them). The preview stage is a few
+  // hundred pixels tall, so text has to be scaled down by the same ratio or the
+  // preview shows captions roughly twice the size the export will burn in.
+  const CAPTION_REFERENCE_HEIGHT = 1080;
+  const [stageHeight, setStageHeight] = useState(0);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      setStageHeight(entry.contentRect.height);
+    });
+    observer.observe(stage);
+    setStageHeight(stage.getBoundingClientRect().height);
+    return () => observer.disconnect();
+  }, []);
+
+  const previewScale = stageHeight > 0 ? stageHeight / CAPTION_REFERENCE_HEIGHT : 0.3;
+  const captionFontPx = Math.max(9, captionConfig.fontSize * previewScale);
+  // Matches the ASS Title style, which is sized at 4.4% of frame height.
+  const titleFontPx = Math.max(9, stageHeight * 0.044) || 14;
 
   useEffect(() => {
     lastTimeRef.current = performance.now();
@@ -174,7 +206,10 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
   }, [safeClip.presignedUrl, safeClip.posterUrl, safeClip.duration]);
 
   // Flattened words list for text-based editor & sync
-  const allWords: WordTimestamp[] = transcriptSegments.flatMap((s) => s.words || []);
+  const allWords: WordTimestamp[] = React.useMemo(
+    () => transcriptSegments.flatMap((s) => s.words || []),
+    [transcriptSegments],
+  );
 
   // Update parent when safeClip settings change
   const syncChangesToParent = () => {
@@ -192,7 +227,13 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
     });
   };
 
-  // Playback timer loop
+  // Playhead loop.
+  //
+  // When a video is loaded its own clock is the source of truth, sampled every
+  // frame. The previous loop integrated wall-clock deltas instead, so the
+  // caption playhead drifted away from the audio on every dropped frame, buffer
+  // stall or seek — captions slowly fell out of sync with the speech.
+  // The wall-clock path only remains for clips with no video to play.
   useEffect(() => {
     if (!isPlaying) {
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
@@ -201,33 +242,41 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
 
     lastTimeRef.current = performance.now();
 
+    const fireSoundEffects = (time: number) => {
+      soundEffects.forEach((sfx) => {
+        const key = `${sfx.id}-${Math.floor(time * 2)}`;
+        if (
+          Math.abs(sfx.time - time) < 0.15 &&
+          !playedSfxSet.current.has(key) &&
+          !isMuted
+        ) {
+          playedSfxSet.current.add(key);
+          sfxEngine.playEffect(sfx.type, sfx.volume);
+        }
+      });
+    };
+
     const loop = (now: number) => {
       const delta = (now - lastTimeRef.current) / 1000;
       lastTimeRef.current = now;
 
-      setCurrentTime((prev) => {
-        const nextTime = prev + delta * playbackSpeed;
-        if (nextTime >= duration) {
-          setIsPlaying(false);
-          playedSfxSet.current.clear();
-          return 0;
-        }
-
-        // Trigger sound effects at current timestamp
-        soundEffects.forEach((sfx) => {
-          const key = `${sfx.id}-${Math.floor(nextTime * 2)}`;
-          if (
-            Math.abs(sfx.time - nextTime) < 0.15 &&
-            !playedSfxSet.current.has(key) &&
-            !isMuted
-          ) {
-            playedSfxSet.current.add(key);
-            sfxEngine.playEffect(sfx.type, sfx.volume);
+      const video = videoRef.current;
+      if (video && !video.paused && !Number.isNaN(video.currentTime)) {
+        const time = video.currentTime;
+        fireSoundEffects(time);
+        setCurrentTime(time);
+      } else {
+        setCurrentTime((prev) => {
+          const nextTime = prev + delta * playbackSpeed;
+          if (nextTime >= duration) {
+            setIsPlaying(false);
+            playedSfxSet.current.clear();
+            return 0;
           }
+          fireSoundEffects(nextTime);
+          return nextTime;
         });
-
-        return nextTime;
-      });
+      }
 
       animationFrameRef.current = requestAnimationFrame(loop);
     };
@@ -239,21 +288,72 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
     };
   }, [isPlaying, duration, playbackSpeed, soundEffects, isMuted]);
 
-  // Find active words at current playhead
-  const currentActiveWords = allWords.filter(
-    (w) => currentTime >= w.start - 0.2 && currentTime <= w.end + 0.3
-  );
+  // Captions flow as short phrases, mirroring the ASS burner's grouping, so
+  // the preview shows the same line breaks the exported video will have.
+  const captionGroups = React.useMemo(() => {
+    const maxWords = Math.max(1, captionConfig.maxWordsPerLine);
+    const GAP_BREAK = 0.6; // a pause this long starts a new line
+    const groups: WordTimestamp[][] = [];
+    let current: WordTimestamp[] = [];
+    for (const word of allWords) {
+      const previous = current[current.length - 1];
+      if (current.length >= maxWords || (previous && word.start - previous.end > GAP_BREAK)) {
+        groups.push(current);
+        current = [];
+      }
+      current.push(word);
+    }
+    if (current.length) groups.push(current);
+    return groups;
+  }, [allWords, captionConfig.maxWordsPerLine]);
+
+  // The line on screen right now: the group containing the playhead, else the
+  // one just spoken, so a paused playhead between words still shows context.
+  const activeCaptionGroup = React.useMemo(() => {
+    let candidate: WordTimestamp[] | null = null;
+    for (const group of captionGroups) {
+      const start = group[0].start;
+      const end = group[group.length - 1].end;
+      if (currentTime >= start && currentTime <= end + 0.35) return group;
+      if (start <= currentTime) candidate = group;
+      else break;
+    }
+    return candidate;
+  }, [captionGroups, currentTime]);
+
+  const currentActiveWords = activeCaptionGroup ?? [];
 
   // Active B-Roll overlay
   const activeBRoll = bRollOverlays.find(
     (b) => currentTime >= b.start && currentTime <= b.start + b.duration
   );
 
-  // Calculate dynamic auto-zoom scale
-  const isAutoZoomActive =
-    autoZoomConfig.enabled &&
-    (Math.floor(currentTime * 1.5) % 3 === 0 ||
-      currentActiveWords.some((w) => w.highlighted));
+  // Auto-zoom punch-ins, derived from the emphasis words the backend marked.
+  //
+  // This used to be `Math.floor(currentTime * 1.5) % 3 === 0`, a timer that
+  // snapped the whole frame in and out every two seconds regardless of what
+  // was being said — the "zooming in and out" in the player. Zoom now only
+  // happens on a real punch word, and each hold lasts long enough to read.
+  const zoomHolds = React.useMemo(() => {
+    if (!autoZoomConfig.enabled) return [] as Array<{ start: number; end: number }>;
+    const MIN_HOLD = 1.2;
+    const MIN_GAP = 2.5;
+    const holds: Array<{ start: number; end: number }> = [];
+    for (const word of allWords) {
+      if (!word.highlighted) continue;
+      const last = holds[holds.length - 1];
+      if (last && word.start - last.end < MIN_GAP) {
+        last.end = Math.max(last.end, word.end + MIN_HOLD / 2);
+        continue;
+      }
+      holds.push({ start: word.start, end: Math.max(word.end, word.start + MIN_HOLD) });
+    }
+    return holds;
+  }, [allWords, autoZoomConfig.enabled]);
+
+  const isAutoZoomActive = zoomHolds.some(
+    (hold) => currentTime >= hold.start && currentTime <= hold.end
+  );
   const currentZoomScale = isAutoZoomActive ? autoZoomConfig.scale : 1.0;
 
   // Handle filler word removal
@@ -465,6 +565,7 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
         <div className="lg:col-span-7 flex flex-col items-center space-y-4">
           {/* Vertical Video Stage */}
           <div
+            ref={stageRef}
             className={`relative rounded-2xl bg-black border-2 border-neutral-800 shadow-2xl overflow-hidden flex items-center justify-center select-none transition-all duration-300 ${
               aspectRatio === '9:16'
                 ? 'w-[280px] sm:w-[320px] aspect-[9/16]'
@@ -475,7 +576,7 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
           >
             {/* Raw Video / Animated Background Stream */}
             <div
-              className="absolute inset-0 transition-transform duration-300 ease-out flex items-center justify-center overflow-hidden"
+              className="absolute inset-0 transition-transform duration-700 ease-in-out flex items-center justify-center overflow-hidden"
               style={{
                 transform: `scale(${currentZoomScale})`,
               }}
@@ -529,6 +630,25 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
               </div>
             )}
 
+            {/* Static Title Layer — one sentence, pinned to the top for the
+                whole clip. Mirrors the ASS "Title" style in the burned export. */}
+            {safeClip.title?.trim() && (
+              <div className="absolute inset-x-4 top-[7%] z-30 pointer-events-none flex justify-center text-center">
+                <p
+                  className="px-2.5 py-1.5 rounded-lg bg-black/45 backdrop-blur-[2px] font-extrabold leading-snug text-white"
+                  style={{
+                    fontFamily: captionConfig.fontFamily,
+                    fontSize: `${titleFontPx}px`,
+                    textShadow: '0 2px 8px rgba(0,0,0,0.9)',
+                  }}
+                >
+                  {captionConfig.emojisEnabled
+                    ? applyEmojiCollection(safeClip.title)
+                    : safeClip.title}
+                </p>
+              </div>
+            )}
+
             {/* Dynamic Kinetic Subtitles Canvas Layer */}
             <div
               className="absolute inset-x-4 z-30 pointer-events-none flex flex-col items-center justify-center text-center transition-all"
@@ -551,7 +671,9 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                   }}
                 >
                   <p
-                    className={`font-black tracking-tight leading-tight uppercase transition-all duration-100 ${
+                    className={`font-black tracking-tight leading-tight transition-all duration-100 ${
+                      captionConfig.uppercase ? 'uppercase' : ''
+                    } ${
                       captionConfig.animation === 'bounce'
                         ? 'animate-bounce'
                         : captionConfig.animation === 'pop'
@@ -560,7 +682,7 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                     }`}
                     style={{
                       fontFamily: captionConfig.fontFamily,
-                      fontSize: `${captionConfig.fontSize}px`,
+                      fontSize: `${captionFontPx}px`,
                       color: captionConfig.textColor,
                       textShadow:
                         captionConfig.shadowIntensity > 0
@@ -595,21 +717,13 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                     })}
                   </p>
                 </div>
-              ) : (
-                /* Fallback preview phrase when paused between timestamps */
-                <div
-                  className="inline-block p-2 rounded-xl bg-black/70 backdrop-blur-sm border border-neutral-700/50 shadow-xl"
-                  style={{
-                    fontFamily: captionConfig.fontFamily,
-                    fontSize: `${captionConfig.fontSize}px`,
-                    color: captionConfig.textColor,
-                  }}
-                >
-                  <span style={{ color: captionConfig.highlightColor }}>
-                    {applyEmojiCollection(safeClip.title || 'Your caption')}
-                  </span>
+              ) : allWords.length === 0 ? (
+                /* No word timings at all — say so instead of echoing the title,
+                   which previously made a broken transcript look like captions. */
+                <div className="inline-block px-3 py-1.5 rounded-lg bg-black/70 border border-neutral-700/50 text-[10px] text-neutral-400">
+                  No transcript yet for this clip
                 </div>
-              )}
+              ) : null}
             </div>
 
             {/* Social Platform UI Mockup Overlays */}
@@ -1417,7 +1531,8 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = ({
                       Dynamic Kinetic Auto-Zoom
                     </span>
                     <span className="text-[10px] text-neutral-400">
-                      Zooms in on punch words to reset viewer attention
+                      Preview only — zooms in on punch words. Not applied to the
+                      exported file yet.
                     </span>
                   </div>
                   <input

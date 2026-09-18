@@ -5,7 +5,8 @@ import pytest
 from content_intelligence.word_snapper import snap_clip_to_words
 from subtitle_styling.emoji_annotator import annotate_caption_words, build_emoji_lookup
 from subtitle_styling.phrase_segmenter import segment_for_captions, segment_phrases
-from subtitle_styling.service import SubtitleStylingService, STYLE_PRESETS
+from subtitle_styling.service import SubtitleStylingService
+from subtitle_styling.templates import CAPTION_TEMPLATES
 from clip_generation.model import SocialPlatform, SOCIAL_PLATFORM_DEFAULTS
 
 
@@ -146,12 +147,10 @@ class TestSubtitleStylingService:
         assert "minimal" in types
 
     def test_style_presets_dict(self):
-        assert "bold_captions" in STYLE_PRESETS
-        assert "karaoke" in STYLE_PRESETS
-        assert "minimal" in STYLE_PRESETS
-        assert "boxed" in STYLE_PRESETS
-        assert "neon" in STYLE_PRESETS
-        assert "typewriter" in STYLE_PRESETS
+        # "karaoke" and "boxed" are legacy ids that now resolve through
+        # LEGACY_STYLE_ALIASES rather than existing as templates of their own.
+        for style in ("bold_captions", "minimal", "neon", "typewriter", "karaoke_yellow", "hormozi"):
+            assert style in CAPTION_TEMPLATES
 
 
 class TestWordSnapping:

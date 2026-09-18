@@ -56,9 +56,11 @@ export function usePipelineProgress(
     try {
       const status = await pipelineApi.getStatus(projectId);
       setSteps(status.steps || []);
-      if (status.is_completed || status.error) {
+      if (status.error) {
         setIsProcessing(false);
-        if (status.error) setError(status.error);
+        setError(status.error);
+      } else if (status.is_completed) {
+        setIsProcessing(false);
       } else if (status.steps && status.steps.length > 0) {
         setIsProcessing(true);
       }

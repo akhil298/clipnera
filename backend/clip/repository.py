@@ -41,6 +41,14 @@ class ClipRepository:
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def update_project_status(self, project_id: str, status: ProjectStatus) -> None:
+        stmt = select(VideoProject).where(VideoProject.id == project_id)
+        result = await self._session.execute(stmt)
+        project = result.scalar_one_or_none()
+        if project:
+            project.status = status
+            await self._session.commit()
+
     async def update_project_s3(
         self, project_id: str, s3_key: str, s3_bucket: str, presigned_url: str,
         file_size: int, duration: int, status: ProjectStatus, local_path: str | None = None

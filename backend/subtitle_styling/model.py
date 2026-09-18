@@ -10,35 +10,41 @@ from sqlalchemy.orm import Mapped, mapped_column
 from core.database import Base
 
 
-class SubtitleStyleType(str, enum.Enum):
-    BOLD_CAPTIONS = "bold_captions"
-    KARAOKE = "karaoke"
-    MINIMAL = "minimal"
-    BOXED = "boxed"
-    NEON = "neon"
-    TYPEWRITER = "typewriter"
-    DEFAULT = "default"
-    HORMOZI = "hormozi"
-    MRBEAST = "mrbeast"
-    TIKTOK = "tiktok"
-    PODCAST = "podcast"
+# Style ids retired in favour of the canonical template list, kept so rows and
+# API calls written before the consolidation still resolve to something sensible.
+LEGACY_STYLE_ALIASES: dict[str, str] = {
+    "karaoke": "karaoke_yellow",
+    "boxed": "hormozi",
+}
 
-    @classmethod
-    def is_template(cls, style_type: str) -> bool:
-        return style_type in ("default", "hormozi", "mrbeast", "tiktok", "podcast")
 
-    @classmethod
-    def to_template(cls, style_type: str) -> str:
-        mapping = {
-            "bold_captions": "default",
-            "karaoke": "default",
-            "boxed": "hormozi",
-            "neon": "neon",
-            "minimal": "minimal",
-            "typewriter": "minimal",
-            "podcast": "podcast",
-        }
-        return mapping.get(style_type, style_type)
+class SubtitleStyleType:
+    """Resolves caption style ids against the canonical template list.
+
+    Previously an enum holding a subset of the available styles, with a hand
+    written mapping that had no entry for most of the ids the UI could send, so
+    those styles silently rendered as Default.
+    """
+
+    @staticmethod
+    def is_template(style_type: str) -> bool:
+        from subtitle_styling.templates import has_template
+
+        return has_template(SubtitleStyleType.to_template(style_type))
+
+    @staticmethod
+    def to_template(style_type: str) -> str:
+        from subtitle_styling.templates import has_template
+
+        if has_template(style_type):
+            return style_type
+        return LEGACY_STYLE_ALIASES.get(style_type, "default")
+
+    @staticmethod
+    def values() -> list[str]:
+        from subtitle_styling.templates import get_template_names
+
+        return get_template_names()
 
 
 class SubtitleStyle(Base):

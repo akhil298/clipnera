@@ -62,6 +62,7 @@ class WhisperXTranscriptionService(TranscriptionService):
                         request.model_size,
                         device="cpu",
                         compute_type="int8",
+                        cpu_threads=self._cpu_threads(),
                     ),
                 )
                 self._model_cache[model_key] = model
@@ -114,8 +115,9 @@ class WhisperXTranscriptionService(TranscriptionService):
                     log.warning(f"Chunk audio file missing or empty: {chunk_audio}")
                     continue
 
-                segments_iter, info = await asyncio.to_thread(
-                    model.transcribe,
+                segments_list, info = await asyncio.to_thread(
+                    self._transcribe_sync,
+                    model,
                     chunk_audio,
                     language=language,
                     beam_size=5,
@@ -124,19 +126,17 @@ class WhisperXTranscriptionService(TranscriptionService):
                     word_timestamps=True,
                 )
 
-                segments_list = list(segments_iter)
-
                 if not segments_list:
                     log.warning(f"No segments found for chunk {idx} with VAD, retrying without VAD...")
-                    segments_iter, info = await asyncio.to_thread(
-                        model.transcribe,
+                    segments_list, info = await asyncio.to_thread(
+                        self._transcribe_sync,
+                        model,
                         chunk_audio,
                         language=language,
                         beam_size=3,
                         vad_filter=False,
                         word_timestamps=True,
                     )
-                    segments_list = list(segments_iter)
 
                 if not language and info.language:
                     language = info.language
@@ -189,15 +189,16 @@ class WhisperXTranscriptionService(TranscriptionService):
         if not all_segments and os.path.exists(audio_path):
             log.warning("All chunks returned 0 segments, attempting full-file transcription without chunking...")
             try:
-                segments_iter, info = await asyncio.to_thread(
-                    model.transcribe,
+                segments_list, info = await asyncio.to_thread(
+                    self._transcribe_sync,
+                    model,
                     audio_path,
                     language=language,
                     beam_size=3,
                     vad_filter=False,
                     word_timestamps=True,
                 )
-                for seg in segments_iter:
+                for seg in segments_list:
                     all_segments.append({
                         "start": seg.start,
                         "end": seg.end,
@@ -262,6 +263,31 @@ class WhisperXTranscriptionService(TranscriptionService):
             "warnings": [],
             "checkpoint_path": checkpoint_path,
         }
+
+    @staticmethod
+    def _cpu_threads() -> int:
+        """Leave at least one core free so the API event loop stays responsive.
+
+        Defaults to (cores - 1); override with WHISPER_CPU_THREADS.
+        """
+        override = os.getenv("WHISPER_CPU_THREADS")
+        if override:
+            try:
+                return max(1, int(override))
+            except ValueError:
+                log.warning(f"Invalid WHISPER_CPU_THREADS={override!r}, ignoring")
+        return max(1, (os.cpu_count() or 2) - 1)
+
+    @staticmethod
+    def _transcribe_sync(model: Any, audio_path: str, **kwargs: Any) -> tuple[list, Any]:
+        """Transcribe AND drain the segment generator inside the worker thread.
+
+        faster-whisper returns a lazy generator: the decoding happens on iteration,
+        not in transcribe(). Consuming it on the event loop thread blocks every
+        other request for the length of the chunk.
+        """
+        segments_iter, info = model.transcribe(audio_path, **kwargs)
+        return list(segments_iter), info
 
     def _try_load_diarizer(self) -> Callable | None:
         try:

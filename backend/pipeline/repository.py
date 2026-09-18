@@ -42,9 +42,20 @@ class PipelineRepository:
         return state
 
     async def get_pipeline(self, project_id: str) -> PipelineState | None:
-        stmt = select(PipelineState).where(PipelineState.project_id == project_id)
+        """Return the most recent pipeline state for a project.
+
+        create_pipeline() inserts a new row per /start, so a restarted project has
+        several. scalar_one_or_none() raised MultipleResultsFound on those, which
+        made every status read — including the one reporting a failure — blow up.
+        """
+        stmt = (
+            select(PipelineState)
+            .where(PipelineState.project_id == project_id)
+            .order_by(desc(PipelineState.created_at))
+            .limit(1)
+        )
         result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def get_step_logs(self, pipeline_id: str) -> list[PipelineStepLog]:
         stmt = (

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -11,80 +12,10 @@ from core.logging_config import get_logger
 from core.exceptions import CustomException
 from video_processor.ffmpeg_service import FFmpegService
 from subtitle_styling.ass_generator import AssGenerator, build_ass_file
-from subtitle_styling.templates import get_template_info, get_template_names
+from subtitle_styling.templates import get_template, get_template_info, get_template_names
 from subtitle_styling.phrase_segmenter import segment_phrases, segment_for_captions
-from content_intelligence.word_snapper import snap_clip_to_words
 
 log = get_logger(__name__)
-
-STYLE_PRESETS = {
-    "bold_captions": {
-        "font": "Arial",
-        "font_size": 24,
-        "font_color": "white",
-        "stroke_color": "black",
-        "stroke_width": 2,
-        "box": True,
-        "box_color": "black@0.5",
-        "box_border_width": 8,
-        "alignment": 2,
-        "margin_v": 40,
-    },
-    "karaoke": {
-        "font": "Arial",
-        "font_size": 28,
-        "font_color": "yellow",
-        "stroke_color": "black",
-        "stroke_width": 3,
-        "box": False,
-        "alignment": 2,
-        "margin_v": 50,
-    },
-    "minimal": {
-        "font": "Arial",
-        "font_size": 20,
-        "font_color": "white",
-        "stroke_color": "black",
-        "stroke_width": 1,
-        "box": False,
-        "alignment": 2,
-        "margin_v": 30,
-    },
-    "boxed": {
-        "font": "Arial",
-        "font_size": 22,
-        "font_color": "white",
-        "stroke_color": "white",
-        "stroke_width": 0,
-        "box": True,
-        "box_color": "black@0.8",
-        "box_border_width": 10,
-        "alignment": 2,
-        "margin_v": 45,
-    },
-    "neon": {
-        "font": "Arial",
-        "font_size": 26,
-        "font_color": "#00ffcc",
-        "stroke_color": "#00ffcc",
-        "stroke_width": 2,
-        "box": False,
-        "alignment": 2,
-        "margin_v": 40,
-        "shadow": True,
-    },
-    "typewriter": {
-        "font": "Courier New",
-        "font_size": 20,
-        "font_color": "#e0e0e0",
-        "stroke_color": "black",
-        "stroke_width": 1,
-        "box": False,
-        "alignment": 2,
-        "margin_v": 30,
-    },
-}
-
 
 class SubtitleStylingService:
     def __init__(self) -> None:
@@ -102,7 +33,6 @@ class SubtitleStylingService:
         title_text: Optional[str] = None,
         enable_watermark: bool = True,
         transcript_segments: Optional[list[dict]] = None,
-        word_snapping: bool = True,
         ai_cues: Optional[list[dict[str, Any]]] = None,
     ) -> str:
         # Extract animation_speed and emoji_collection from custom_config if provided
@@ -119,9 +49,8 @@ class SubtitleStylingService:
         if self._is_template_style(style_type) and transcript_segments is not None:
             return await self._burn_with_ass(
                 video_path, clip_start, clip_end, style_type, title_text,
-                enable_watermark, transcript_segments, word_snapping, ai_cues,
-                animation_speed,
-                emoji_collection,
+                enable_watermark, transcript_segments, ai_cues,
+                animation_speed, emoji_collection,
             )
         return await self._burn_with_srt(
             video_path, clip_start, clip_end, style_type, custom_config,
@@ -142,7 +71,6 @@ class SubtitleStylingService:
         title_text: Optional[str],
         enable_watermark: bool,
         transcript_segments: list[dict],
-        word_snapping: bool,
         ai_cues: Optional[list[dict[str, Any]]] = None,
         animation_speed: float = 1.0,
         emoji_collection: Optional[str] = None,
@@ -161,38 +89,39 @@ class SubtitleStylingService:
         width = int(stream.get("width", 1080))
         height = int(stream.get("height", 1920))
 
-        effective_start = clip_start
-        effective_end = clip_end
-
-        if word_snapping:
-            snapped = snap_clip_to_words(clip_start, clip_end, transcript_segments, clip_end - clip_start)
-            effective_start, effective_end = snapped
-            effective_end = min(effective_end, clip_end)
-
-        if effective_end - effective_start < 0.1:
-            effective_start, effective_end = clip_start, clip_end
-
-        ass_path = build_ass_file(
-            transcript_words=self._extract_words_for_ass(transcript_segments),
-            clip_start=effective_start,
-            clip_end=effective_end,
-            style_id=template_name,
-            width=width,
-            height=height,
-            title=title_text,
-            ai_cues=ai_cues,
-            animation_speed=animation_speed,
-            emoji_collection=emoji_collection,
-        )
+        # video_path is the already-cut clip, whose timeline starts at zero,
+        # while clip_start/clip_end are absolute positions in the source video.
+        # The offset belongs in the ASS timings only; applying it to FFmpeg as
+        # well seeks past the end of the clip and loses subtitle sync entirely.
+        duration = max(0.0, clip_end - clip_start)
+        if duration <= 0:
+            raise CustomException(
+                message="Cannot burn subtitles into a zero-length clip",
+                code="INVALID_CLIP_RANGE", status_code=400,
+            )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = os.path.join(tmpdir, f"burned_{Path(video_path).stem}.mp4")
-            duration = effective_end - effective_start
+            # The subtitles filter receives the bare filename and runs with cwd
+            # set here, to dodge Windows drive-letter escaping in the filter
+            # string, so the .ass file has to be written into this directory.
+            ass_path = build_ass_file(
+                transcript_words=self._extract_words_for_ass(transcript_segments),
+                clip_start=clip_start,
+                clip_end=clip_end,
+                style_id=template_name,
+                width=width,
+                height=height,
+                title=title_text,
+                ai_cues=ai_cues,
+                animation_speed=animation_speed,
+                emoji_collection=emoji_collection,
+                output_path=os.path.join(tmpdir, "captions.ass"),
+            )
 
             async def _burn() -> None:
                 cmd = self._build_ass_cmd(
-                    video_path, output_path, ass_path, effective_start, duration,
-                    enable_watermark, width, height, tmpdir,
+                    video_path, output_path, ass_path, duration, enable_watermark, tmpdir,
                 )
                 proc = await asyncio.create_subprocess_exec(
                     *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=tmpdir
@@ -211,7 +140,6 @@ class SubtitleStylingService:
                 raise CustomException(message="Burned video not created", code="BURN_IN_FAILED", status_code=500)
 
             final_path = os.path.join(tempfile.gettempdir(), f"burned_{Path(video_path).name}")
-            import shutil
             shutil.copy2(output_path, final_path)
             return final_path
 
@@ -240,18 +168,16 @@ class SubtitleStylingService:
         video_path: str,
         output_path: str,
         ass_path: str,
-        clip_start: float,
         duration: float,
         enable_watermark: bool,
-        width: int,
-        height: int,
         work_dir: str,
     ) -> list[str]:
         static_dir = Path(__file__).resolve().parent.parent / "static"
         watermark_path = static_dir / "watermark.png"
         has_watermark = enable_watermark and watermark_path.exists()
 
-        inputs = ["-ss", str(clip_start), "-i", video_path]
+        # No -ss: the input is already the trimmed clip.
+        inputs = ["-i", video_path]
         if has_watermark:
             inputs.extend(["-i", str(watermark_path)])
 
@@ -295,7 +221,13 @@ class SubtitleStylingService:
         title_text: Optional[str],
         enable_watermark: bool,
     ) -> str:
-        config = {**STYLE_PRESETS.get(style_type, STYLE_PRESETS["bold_captions"])}
+        """Burn SRT subtitles using a force_style preset.
+
+        As with the ASS path, ``video_path`` is the already-cut clip, so the
+        clip offset is applied to the subtitle timings only and never as an
+        FFmpeg seek.
+        """
+        config = self._srt_config_from_template(style_type)
         if custom_config:
             config.update(custom_config)
 
@@ -307,65 +239,40 @@ class SubtitleStylingService:
             output_path = os.path.join(tmpdir, f"burned_{Path(video_path).stem}.mp4")
             filter_str = self._build_ass_filter(config)
             srt_path = self._generate_srt(subtitles or [], clip_start, output_dir=tmpdir)
-            srt_file = os.path.basename(srt_path)
-            escaped_srt = srt_file.replace(":", "\\:").replace("'", "\\'")
+            escaped_srt = os.path.basename(srt_path).replace(":", r"\:").replace("'", r"\'")
 
-            if enable_watermark:
-                watermark_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "watermark.png")
-                if os.path.exists(watermark_path):
-                    inputs = ["-ss", str(clip_start), "-i", video_path, "-i", watermark_path]
-                    filter_parts = [f"[0:v]subtitles={escaped_srt}:force_style='{filter_str}'"]
-                    if title_text:
-                        safe_title = title_text.replace("'", "\\'").replace(":", "\\:")
-                        filter_parts.append(f"drawtext=text='{safe_title}':fontcolor=white:fontsize=36:box=1:boxcolor=black@0.5:boxborderw=8:x=(w-text_w)/2:y=20")
-                    filter_parts.append("[1:v]overlay=x=W-w-10:y=10")
-                    vf = ",".join(filter_parts)
-                    cmd = [
-                        "ffmpeg", "-y",
-                        *inputs,
-                        "-t", str(duration),
-                        "-filter_complex", vf,
-                        "-map", "0:a?",
-                        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-                        "-c:a", "aac", "-b:a", "128k",
-                        "-movflags", "+faststart",
-                        output_path,
-                    ]
-                else:
-                    log.warning(f"Watermark file not found: {watermark_path}")
-                    inputs = ["-ss", str(clip_start), "-i", video_path]
-                    filters = [f"subtitles={escaped_srt}:force_style='{filter_str}'"]
-                    if title_text:
-                        safe_title = title_text.replace("'", "\\'").replace(":", "\\:")
-                        filters.append(f"drawtext=text='{safe_title}':fontcolor=white:fontsize=36:box=1:boxcolor=black@0.5:boxborderw=8:x=(w-text_w)/2:y=20")
-                    vf = ",".join(filters)
-                    cmd = [
-                        "ffmpeg", "-y",
-                        *inputs,
-                        "-t", str(duration),
-                        "-vf", vf,
-                        "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-                        "-c:a", "aac", "-b:a", "128k",
-                        "-movflags", "+faststart",
-                        output_path,
-                    ]
-            else:
-                inputs = ["-ss", str(clip_start), "-i", video_path]
-                filters = [f"subtitles={escaped_srt}:force_style='{filter_str}'"]
-                if title_text:
-                    safe_title = title_text.replace("'", "\\'").replace(":", "\\:")
-                    filters.append(f"drawtext=text='{safe_title}':fontcolor=white:fontsize=36:box=1:boxcolor=black@0.5:boxborderw=8:x=(w-text_w)/2:y=20")
-                vf = ",".join(filters)
-                cmd = [
-                    "ffmpeg", "-y",
-                    *inputs,
-                    "-t", str(duration),
-                    "-vf", vf,
-                    "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-                    "-c:a", "aac", "-b:a", "128k",
-                    "-movflags", "+faststart",
-                    output_path,
-                ]
+            watermark_path = Path(__file__).resolve().parent.parent / "static" / "watermark.png"
+            has_watermark = enable_watermark and watermark_path.exists()
+            if enable_watermark and not has_watermark:
+                log.warning("Watermark requested but file not found: %s", watermark_path)
+
+            filters = [f"subtitles={escaped_srt}:force_style='{filter_str}'"]
+            if title_text:
+                safe_title = title_text.replace("'", r"\'").replace(":", r"\:")
+                filters.append(
+                    f"drawtext=text='{safe_title}':fontcolor=white:fontsize=36:"
+                    "box=1:boxcolor=black@0.5:boxborderw=8:x=(w-text_w)/2:y=20"
+                )
+
+            # No -ss: the input is already the trimmed clip.
+            inputs = ["-i", video_path]
+            if has_watermark:
+                inputs.extend(["-i", str(watermark_path)])
+                filters.insert(0, "[0:v]")
+                filters.append("[1:v]overlay=x=W-w-10:y=10")
+
+            filter_arg = "-filter_complex" if has_watermark else "-vf"
+            cmd = [
+                "ffmpeg", "-y",
+                *inputs,
+                "-t", str(duration),
+                filter_arg, ",".join(filters),
+                *(["-map", "0:a?"] if has_watermark else []),
+                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+                "-c:a", "aac", "-b:a", "128k",
+                "-movflags", "+faststart",
+                output_path,
+            ]
 
             proc = await asyncio.create_subprocess_exec(
                 *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=tmpdir
@@ -378,7 +285,9 @@ class SubtitleStylingService:
             if not os.path.exists(output_path):
                 raise CustomException(message="Burned video not created", code="BURN_IN_FAILED", status_code=500)
 
-            return output_path
+            final_path = os.path.join(tempfile.gettempdir(), f"burned_srt_{Path(video_path).name}")
+            shutil.copy2(output_path, final_path)
+            return final_path
 
     def _generate_srt(self, subtitles: list[dict], clip_start: float, output_dir: str | None = None) -> str:
         import tempfile
@@ -407,6 +316,30 @@ class SubtitleStylingService:
         secs = int(seconds % 60)
         millis = int((seconds - int(seconds)) * 1000)
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
+
+    @staticmethod
+    def _srt_config_from_template(style_type: str) -> dict:
+        """Map a caption template onto SRT force_style fields.
+
+        The SRT path is the fallback used when no word timings are available;
+        deriving it from the same template keeps a style recognisable instead of
+        silently becoming a different one.
+        """
+        from subtitle_styling.model import SubtitleStyleType
+
+        template = get_template(SubtitleStyleType.to_template(style_type))
+        return {
+            "font": template["font_family"],
+            "font_size": template["font_size"],
+            "font_color": template["font_color"],
+            "stroke_color": template["stroke_color"],
+            "stroke_width": template["stroke_width"],
+            "box": bool(template["background"]),
+            "box_color": template["background_color"],
+            "shadow": bool(template["shadow"]),
+            "alignment": 2,
+            "margin_v": max(10, int((1.0 - template["position_y"]) * 400)),
+        }
 
     def _build_ass_filter(self, config: dict) -> str:
         parts = []
@@ -444,23 +377,17 @@ class SubtitleStylingService:
         return f"{a}{b}{g}{r}".upper()
 
     async def get_style_presets(self) -> list[dict]:
-        presets = []
-        for style_type, config in STYLE_PRESETS.items():
-            presets.append({
-                "style_type": style_type,
-                "name": style_type.replace("_", " ").title(),
-                "config": config,
-                "uses_ass": False,
-            })
-        for template_name in get_template_names():
-            template = get_template_info()
-            presets.append({
-                "style_type": template_name,
-                "name": next(t["name"] for t in get_template_info() if t["id"] == template_name),
-                "config": {},
+        """Every caption style, as the picker should show them."""
+        return [
+            {
+                "style_type": item["id"],
+                "name": item["name"],
+                "description": item["description"],
+                "config": get_template(item["id"]),
                 "uses_ass": True,
-            })
-        return presets
+            }
+            for item in get_template_info()
+        ]
 
     async def get_caption_templates(self) -> list[dict[str, Any]]:
         return get_template_info()

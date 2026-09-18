@@ -18,7 +18,7 @@ def snap_clip_to_words(
     end: float,
     words: list[dict[str, Any]],
     video_duration: float,
-    min_duration: float = DEFAULT_MIN_DURATION,
+    min_duration: float | None = None,
     max_duration: float = DEFAULT_MAX_DURATION,
     search_window: float = DEFAULT_SEARCH_WINDOW,
     max_lead: float = DEFAULT_MAX_LEAD,
@@ -29,13 +29,29 @@ def snap_clip_to_words(
     LLMs and segment detectors are bad at millisecond precision; word timestamps
     from Whisper are ground truth. Cuts land in pauses instead of mid-word.
 
-    words: [{'start','end','text'}, ...] sorted by start (or Whisper segments
-    with word-level timestamps).
-    Returns (start, end); falls back to the input if snapping cannot satisfy
-    the duration bounds.
+    ``words`` is ``[{'start','end','text'}, ...]`` or Whisper segments carrying
+    word-level timestamps. ``video_duration`` is the duration of the media the
+    timestamps refer to, not the length of the clip.
+
+    ``min_duration`` is strict when passed: if snapping cannot produce a clip
+    that long, the original bounds are returned unchanged. Left unset it is
+    advisory, so subtitle alignment on a short clip still gets snapped bounds
+    instead of silently falling back to unsnapped input.
+
+    Returns ``(start, end)``, always inside ``[0, video_duration]``.
     """
-    original = (round(float(start), 3), round(float(end), 3))
-    if not words:
+    duration_limit = max(0.0, float(video_duration))
+    start = min(max(0.0, float(start)), duration_limit)
+    end = min(max(start, float(end)), duration_limit)
+    original = (round(start, 3), round(end, 3))
+
+    strict_min = min_duration is not None
+    required_min = float(min_duration) if strict_min else 0.0
+    if max_duration > 0:
+        # A minimum above the maximum can never be satisfied; the cap wins.
+        required_min = min(required_min, max_duration)
+
+    if not words or end <= start:
         return original
 
     flat_words = _flatten_words(words)
@@ -45,45 +61,44 @@ def snap_clip_to_words(
     starts = sorted(w["start"] for w in flat_words)
     ends = sorted(w["end"] for w in flat_words)
 
-    new_start = float(start)
+    new_start = start
     start_candidates = [s for s in starts if abs(s - new_start) <= search_window]
     if start_candidates:
         word_start = min(start_candidates, key=lambda s: abs(s - new_start))
         prev_ends = [e for e in ends if e <= word_start]
-        if prev_ends:
-            gap = max(0.0, word_start - max(prev_ends))
-            lead = min(max_lead, gap / 2.0)
-        else:
-            lead = max_lead
+        lead = min(max_lead, max(0.0, word_start - max(prev_ends)) / 2.0) if prev_ends else max_lead
         new_start = max(0.0, word_start - lead)
 
-    new_end = float(end)
+    new_end = end
     end_candidates = [e for e in ends if abs(e - new_end) <= search_window]
     if end_candidates:
         word_end = min(end_candidates, key=lambda e: abs(e - new_end))
         next_starts = [s for s in starts if s >= word_end]
-        if next_starts:
-            gap = max(0.0, min(next_starts) - word_end)
-            tail = min(max_tail, gap / 2.0)
-        else:
-            tail = max_tail
-        new_end = min(float(video_duration), word_end + tail)
+        tail = min(max_tail, max(0.0, min(next_starts) - word_end) / 2.0) if next_starts else max_tail
+        new_end = min(duration_limit, word_end + tail)
 
-    if new_end - new_start < min_duration:
-        target = new_start + min_duration
+    if required_min > 0 and new_end - new_start < required_min:
+        target = new_start + required_min
         later = sorted(e for e in ends if e >= target)
         if later and later[0] - new_start <= max_duration:
-            new_end = min(float(video_duration), later[0] + 0.2)
-        else:
+            new_end = min(duration_limit, later[0] + 0.2)
+        elif strict_min:
+            # The caller demanded a length the transcript cannot supply.
+            log.debug(
+                "Word snapping could not reach min_duration=%.2fs; keeping original bounds",
+                required_min,
+            )
             return original
 
-    if new_end - new_start > max_duration:
+    if max_duration > 0 and new_end - new_start > max_duration:
         target = new_start + max_duration
         earlier = [e for e in ends if new_start < e <= target]
         new_end = max(earlier) + 0.2 if earlier else target
-        new_end = min(new_end, new_start + max_duration, float(video_duration))
+        new_end = min(new_end, new_start + max_duration, duration_limit)
 
-    if new_end <= new_start or new_end - new_start < min_duration:
+    if new_end <= new_start:
+        return original
+    if strict_min and new_end - new_start < required_min:
         return original
 
     return (round(new_start, 3), round(new_end, 3))

@@ -16,6 +16,10 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
+from core.logging_config import get_logger
+
+log = get_logger(__name__)
+
 SUPPORTED_ASPECT_RATIOS: tuple[str, ...] = ("9:16", "1:1", "4:5", "16:9")
 
 DEFAULT_OUTPUT_DIMENSIONS: dict[str, tuple[int, int]] = {
@@ -205,6 +209,27 @@ def union_box(boxes: list[Box]) -> Box | None:
     return Box(x=left, y=top, width=max(1e-6, right - left), height=max(1e-6, bottom - top))
 
 
+# FFmpeg's expression evaluator rejects graphs beyond a few thousand characters
+# ("Failed to configure input pad on Parsed_crop_0"), which silently demoted long
+# clips to a centred crop. Measured failure begins between 2.4k and 3.7k chars, so
+# the path is subsampled to stay well inside that.
+MAX_CROP_EXPRESSION_CHARS = 2000
+
+
+def _subsample_points(points: list[tuple[float, "Box"]], limit: int) -> list[tuple[float, "Box"]]:
+    """Evenly thin a tracking path, always keeping the first and last point."""
+    if len(points) <= limit or limit < 2:
+        return points
+    step = (len(points) - 1) / (limit - 1)
+    thinned = [points[min(len(points) - 1, round(i * step))] for i in range(limit)]
+    thinned[-1] = points[-1]
+    deduped: list[tuple[float, "Box"]] = []
+    for point in thinned:
+        if not deduped or point[0] > deduped[-1][0]:
+            deduped.append(point)
+    return deduped
+
+
 def crop_tracking_expressions(
     crop_tracking: list[dict[str, Any]],
     source_width: int,
@@ -214,9 +239,17 @@ def crop_tracking_expressions(
 ) -> tuple[str, str]:
     """Build FFmpeg ``crop`` x/y expressions that pan between tracking points.
 
-    Timestamps must already be relative to the start of the output clip. Points
-    are linearly interpolated and clamped to the frame, so the crop window can
-    never run off the edge of the source.
+    Timestamps must already be relative to the start of the output clip.
+
+    The path is expressed as a flat sum of clamped linear ramps rather than
+    nested ``if()`` calls:
+
+        x(t) = x0 + sum_i slope_i * clip(t - t_i, 0, dt_i)
+
+    Each term contributes its segment's change once ``t`` passes it and nothing
+    before, which reproduces piecewise-linear interpolation with no nesting. The
+    nested form grew one level per point and FFmpeg failed to parse it beyond
+    roughly a minute of tracking, falling back to a centred crop.
     """
     max_x = max(0, source_width - crop_width)
     max_y = max(0, source_height - crop_height)
@@ -233,6 +266,16 @@ def crop_tracking_expressions(
         return static
     points.sort(key=lambda item: item[0])
 
+    # Roughly 31 characters per segment term; keep both axes inside the budget.
+    max_points = max(2, MAX_CROP_EXPRESSION_CHARS // 31)
+    if len(points) > max_points:
+        original = len(points)
+        points = _subsample_points(points, max_points)
+        log.info(
+            "Subsampled crop tracking from %d to %d point(s) to stay within FFmpeg's expression limit",
+            original, len(points),
+        )
+
     def axis_expression(axis: str) -> str:
         scale = source_width if axis == "x" else source_height
         limit = max_x if axis == "x" else max_y
@@ -240,23 +283,19 @@ def crop_tracking_expressions(
         def value_at(box: Box) -> float:
             return (box.x if axis == "x" else box.y) * scale
 
-        if len(points) == 1:
-            return f"clip({value_at(points[0][1]):.3f},0,{limit})"
+        base = value_at(points[0][1])
+        if len(points) == 1 or limit <= 0:
+            return f"clip({base:.3f},0,{limit})"
 
-        segments: list[tuple[float, str]] = []
+        terms: list[str] = [f"{base:.3f}"]
         for (start_time, start_box), (end_time, end_box) in zip(points, points[1:]):
-            start_value = value_at(start_box)
-            end_value = value_at(end_box)
-            span = max(end_time - start_time, 1e-6)
-            segments.append((
-                end_time,
-                f"clip({start_value:.3f}+({end_value - start_value:.3f})"
-                f"*(t-{start_time:.3f})/{span:.3f},0,{limit})",
-            ))
+            span = max(end_time - start_time, 1e-3)
+            delta = value_at(end_box) - value_at(start_box)
+            if abs(delta) < 1e-6:
+                continue
+            slope = delta / span
+            terms.append(f"{slope:+.5f}*clip(t-{start_time:.3f},0,{span:.3f})")
 
-        expression = f"clip({value_at(points[-1][1]):.3f},0,{limit})"
-        for timestamp, segment in reversed(segments):
-            expression = f"if(lt(t,{timestamp:.3f}),{segment},{expression})"
-        return expression
+        return f"clip({''.join(terms)},0,{limit})"
 
     return axis_expression("x"), axis_expression("y")

@@ -240,16 +240,16 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         const interval = setInterval(async () => {
           try {
             const status = await pipelineApi.getStatus(projectId!);
-            if (status.is_completed) {
-              clearInterval(interval);
-              setProcessingStep(5);
-              setProcessingLogs((prev) => [...prev, 'Pipeline completed successfully!']);
-              resolve(true);
-            } else if (status.error) {
+            if (status.error) {
               clearInterval(interval);
               setPipelineError(status.error);
               setProcessingLogs((prev) => [...prev, `Pipeline error: ${status.error}`]);
               resolve(false);
+            } else if (status.is_completed) {
+              clearInterval(interval);
+              setProcessingStep(5);
+              setProcessingLogs((prev) => [...prev, 'Pipeline completed successfully!']);
+              resolve(true);
             } else {
               setProcessingLogs((prev) => {
                 const last = prev[prev.length - 1] || '';
