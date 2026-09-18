@@ -12,7 +12,6 @@ from content_intelligence.analyzer import FrameAnalyzer
 from content_intelligence.classifier import ContentClassifier
 from content_intelligence.highlighter import HighlightDetector
 from content_intelligence.metadata_gen import MetadataGenerator
-from content_intelligence.reframing import build_smart_output_formats
 from content_intelligence.research import TopicResearcher
 from content_intelligence.scorer import ClipScorer
 
@@ -89,93 +88,6 @@ class ContentIntelligenceService:
 
     async def generate_metadata_for_clips(self, clips: list[dict]) -> list[dict]:
         return await self._metadata_gen.generate_batch(clips)
-
-    async def analyze_candidate_clips(
-        self,
-        video_path: str,
-        clips: list[dict],
-        max_frames_per_clip: int = 8,
-        frame_interval: float = 2.0,
-    ) -> dict[str, list[dict]]:
-        return await self._analyzer.analyze_candidate_clips(
-            video_path,
-            clips,
-            max_frames_per_clip=max_frames_per_clip,
-            frame_interval=frame_interval,
-        )
-
-    async def build_smart_output_formats(
-        self,
-        frame_analyses: list[dict],
-        source_width: int,
-        source_height: int,
-        aspect_ratios: list[str] | None = None,
-        content_category: str = "unknown",
-        transcript_segments: list[dict[str, Any]] | None = None,
-        scene_changes: list[float] | None = None,
-        video_path: str | None = None,
-    ) -> dict[str, dict[str, Any]]:
-        ratios = aspect_ratios or self.default_aspect_ratios()
-        return await build_smart_output_formats(
-            frame_analyses=frame_analyses,
-            source_width=source_width,
-            source_height=source_height,
-            aspect_ratios=ratios,
-            content_category=content_category,
-            transcript_segments=transcript_segments,
-            scene_changes=scene_changes,
-            video_path=video_path,
-        )
-
-    async def build_output_formats(
-        self,
-        frame_analyses: list[dict[str, Any]],
-        source_width: int,
-        source_height: int,
-        aspect_ratios: list[str] | None = None,
-        content_category: str = "unknown",
-        transcript_segments: list[dict[str, Any]] | None = None,
-        scene_changes: list[float] | None = None,
-        video_path: str | None = None,
-    ) -> dict[str, dict[str, Any]]:
-        return await self.build_smart_output_formats(
-            frame_analyses=frame_analyses,
-            source_width=source_width,
-            source_height=source_height,
-            aspect_ratios=aspect_ratios,
-            content_category=content_category,
-            transcript_segments=transcript_segments,
-            scene_changes=scene_changes,
-            video_path=video_path,
-        )
-
-    def analyze_layouts(
-        self,
-        frame_analyses: list[dict[str, Any]],
-        scene_changes: list[float] | None = None,
-        content_category: str = "unknown",
-    ) -> list[dict[str, Any]]:
-        try:
-            from content_intelligence.layout_analyzer import LayoutAnalyzer
-        except Exception as exc:
-            log.warning("LayoutAnalyzer unavailable: %s", exc)
-            return []
-        analyzer = LayoutAnalyzer()
-        decisions = analyzer.analyze_scenes(
-            frames=frame_analyses,
-            scene_changes=scene_changes,
-            content_category=content_category,
-        )
-        return [
-            {
-                "layout": d.layout,
-                "confidence": d.confidence,
-                "scene_start": d.scene_start,
-                "scene_end": d.scene_end,
-                "evidence": d.evidence,
-            }
-            for d in decisions
-        ]
 
     @staticmethod
     def default_aspect_ratios() -> list[str]:

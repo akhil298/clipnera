@@ -1,5 +1,43 @@
 import logging
 import logging.config
+import os
+
+# Attributes the stdlib puts on every LogRecord. Anything outside this set was
+# passed by the caller via extra={...} and is worth printing.
+_STANDARD_RECORD_KEYS = frozenset(
+    logging.LogRecord("", 0, "", 0, "", (), None).__dict__.keys()
+) | {"asctime", "message", "taskName"}
+
+# Long values are truncated so one log line stays one line.
+_MAX_VALUE_CHARS = 200
+
+
+class ContextFormatter(logging.Formatter):
+    """Renders ``extra={...}`` fields after the message as ``key=value`` pairs.
+
+    The previous formatter dropped them silently, so the structured context
+    attached throughout the pipeline never reached the log output and every line
+    read as a bare status string.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        base = super().format(record)
+        context = self._context(record)
+        return f"{base} | {context}" if context else base
+
+    @staticmethod
+    def _context(record: logging.LogRecord) -> str:
+        parts: list[str] = []
+        for key, value in record.__dict__.items():
+            if key in _STANDARD_RECORD_KEYS or key.startswith("_"):
+                continue
+            text = str(value)
+            if len(text) > _MAX_VALUE_CHARS:
+                text = f"{text[:_MAX_VALUE_CHARS]}...({len(text)} chars)"
+            if any(c in text for c in " \t="):
+                text = f'"{text}"'
+            parts.append(f"{key}={text}")
+        return " ".join(parts)
 
 
 def setup_logging() -> None:
@@ -14,10 +52,10 @@ def setup_logging() -> None:
 
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(
-        logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
+        ContextFormatter("%(asctime)s %(levelname)-8s %(name)-28s %(message)s")
     )
     root_logger.addHandler(console_handler)
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(logging.DEBUG if os.getenv("APP_DEBUG", "").lower() in ("1", "true") else logging.INFO)
 
     for logger_name in [
         "sqlalchemy",

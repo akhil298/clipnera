@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import os
+import time
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -92,6 +92,7 @@ class PipelineOrchestrator:
 
     async def run(self) -> dict:
         results: dict[str, Any] = {}
+        pipeline_started = time.monotonic()
         step_order = [
             PipelineStepType.AUDIO_EXTRACTION,
             PipelineStepType.AI_NOISE_CANCELLATION,
@@ -100,7 +101,6 @@ class PipelineOrchestrator:
             PipelineStepType.VISUAL_ANALYSIS,
             PipelineStepType.CONTENT_CLASSIFICATION,
             PipelineStepType.HIGHLIGHT_DETECTION,
-            PipelineStepType.BOUNDING_BOX_DETECTION,
             PipelineStepType.SCORING,
             PipelineStepType.METADATA_GENERATION,
             PipelineStepType.ASPECT_RATIO_RENDER,
@@ -151,33 +151,56 @@ class PipelineOrchestrator:
 
                 await asyncio.sleep(0)
 
+                position = self.selected_steps.index(step) + 1 if step in self.selected_steps else 0
+                total = len(self.selected_steps)
+                step_started = time.monotonic()
+                log.info(
+                    "STEP %d/%d START %s",
+                    position, total, step.value,
+                    extra={"project_id": self.project_id, "step": step.value},
+                )
+
                 try:
                     await self._mark_step_running(step)
                     result = await self._execute_step(step, results)
                     results[step.value] = result
                     await self._mark_step_completed(step, result)
-                except Exception as exc:
-                    log.error(
-                        "Pipeline step failed",
+                    log.info(
+                        "STEP %d/%d OK    %s in %.1fs — %s",
+                        position, total, step.value, time.monotonic() - step_started,
+                        self._summarize_step(step, result),
                         extra={
                             "project_id": self.project_id,
-                            "user_id": self.user_id,
                             "step": step.value,
-                            "error": str(exc),
-                            "error_type": type(exc).__name__,
+                            "elapsed_seconds": round(time.monotonic() - step_started, 2),
                         },
+                    )
+                except Exception as exc:
+                    log.error(
+                        "STEP %d/%d FAIL  %s after %.1fs: %s",
+                        position, total, step.value, time.monotonic() - step_started, exc,
+                        extra={
+                            "project_id": self.project_id,
+                            "step": step.value,
+                            "error_type": type(exc).__name__,
+                            "elapsed_seconds": round(time.monotonic() - step_started, 2),
+                        },
+                        exc_info=True,
                     )
                     await self._mark_step_failed(step, str(exc))
                     raise
                 await asyncio.sleep(0)
 
             log.info(
-                "Pipeline finished",
+                "PIPELINE %s — %d/%d step(s) in %.1fs",
+                "CANCELLED" if self._cancel else "COMPLETE",
+                len(results), len(self.selected_steps),
+                time.monotonic() - pipeline_started,
                 extra={
                     "project_id": self.project_id,
                     "user_id": self.user_id,
-                    "completed_steps": list(results.keys()),
-                    "canceled": self._cancel,
+                    "completed_steps": ",".join(results.keys()),
+                    "elapsed_seconds": round(time.monotonic() - pipeline_started, 2),
                 },
             )
             if self._cancel:
@@ -189,61 +212,74 @@ class PipelineOrchestrator:
             raise
         return results
 
+    @staticmethod
+    def _summarize_step(step: PipelineStepType, result: Any) -> str:
+        """One-line outcome per step, so the log says what a step produced.
+
+        Previously every step logged only "Completed <name>", which said nothing
+        about whether it had actually found anything.
+        """
+        if not isinstance(result, dict):
+            return "done"
+        try:
+            if step == PipelineStepType.AUDIO_EXTRACTION:
+                extraction = result.get("extraction_result", {})
+                return f"{extraction.get('duration_seconds', 0):.0f}s audio"
+            if step == PipelineStepType.TRANSCRIPTION:
+                transcription = result.get("transcription_result")
+                if hasattr(transcription, "model_dump"):
+                    transcription = transcription.model_dump()
+                segments = (transcription or {}).get("segments", []) if isinstance(transcription, dict) else []
+                speakers = {s.get("speaker") for s in segments if s.get("speaker")}
+                return f"{len(segments)} segment(s), {len(speakers)} speaker(s)"
+            if step == PipelineStepType.TOPIC_RESEARCH:
+                research = result.get("topic_research", {})
+                return f"topic={research.get('title', 'unknown')!r}"
+            if step == PipelineStepType.CONTENT_CLASSIFICATION:
+                return f"category={result.get('classification', {}).get('category', 'unknown')}"
+            if step == PipelineStepType.HIGHLIGHT_DETECTION:
+                return f"{len(result.get('highlights', []))} highlight(s)"
+            if step == PipelineStepType.SCORING:
+                return f"{len(result.get('scored_highlights', []))} scored"
+            if step == PipelineStepType.METADATA_GENERATION:
+                return f"{len(result.get('final_clips', []))} clip(s) planned"
+            if step == PipelineStepType.ASPECT_RATIO_RENDER:
+                rendered = result.get("rendered_clips", []) or []
+                files = sum(1 for c in rendered for path in (c.get("output_files") or {}).values() if path)
+                return f"{len(rendered)} clip(s), {files} file(s)"
+            if step == PipelineStepType.CLIP_GENERATION:
+                return f"{result.get('clips_generated', 0)} clip(s) saved"
+            if step == PipelineStepType.BURN_IN_EXPORT:
+                return f"{len(result.get('burned_clips', []))} burned"
+        except Exception:  # never let logging break the pipeline
+            return "done"
+        return "done"
+
     async def _execute_step(self, step: PipelineStepType, context: dict) -> Any:
         log.info(
             "Executing pipeline step",
             extra={"project_id": self.project_id, "step": step.value},
         )
-        if step == PipelineStepType.DOWNLOAD:
-            print(f"----------------------------------{step.value} --------------------------")
-            return await self._step_download()
-        if step == PipelineStepType.AUDIO_EXTRACTION:
-            print(f"----------------------------------{step.value} --------------------------")
-
-            return await self._step_audio_extraction(context)
-        if step == PipelineStepType.AI_NOISE_CANCELLATION:
-            print(f"----------------------------------{step.value} --------------------------")
-
-            return await self._step_ai_noise_cancellation(context)
-        if step == PipelineStepType.TRANSCRIPTION:
-            print(f"----------------------------------{step.value} --------------------------")   
-            return await self._step_transcription(context)
-        if step == PipelineStepType.TOPIC_RESEARCH:
-            print(f"----------------------------------{step.value} --------------------------")
-            return await self._step_topic_research(context)
-        if step == PipelineStepType.VISUAL_ANALYSIS:
-            print(f"----------------------------------{step.value} --------------------------")
-            return await self._step_visual_analysis(context)
-        if step == PipelineStepType.CONTENT_CLASSIFICATION:
-            print(f"----------------------------------{step.value} --------------------------")
-            return await self._step_content_classification(context)
-        if step == PipelineStepType.HIGHLIGHT_DETECTION:
-            print(f"----------------------------------{step.value} --------------------------")   
-            return await self._step_highlight_detection(context)
-        if step == PipelineStepType.BOUNDING_BOX_DETECTION:
-            print(f"----------------------------------{step.value} --------------------------")
-            return await self._step_bounding_box_detection(context)
-        if step == PipelineStepType.SCORING:
-            print(f"----------------------------------{step.value} --------------------------")
-            return await self._step_scoring(context)
-        if step == PipelineStepType.METADATA_GENERATION:
-            print(f"----------------------------------{step.value} --------------------------")
-            return await self._step_metadata_generation(context)
-        if step == PipelineStepType.ASPECT_RATIO_RENDER:
-            print(f"----------------------------------{step.value} --------------------------")
-            return await self._step_aspect_ratio_render(context)
-        if step == PipelineStepType.CLIP_GENERATION:
-            print(f"----------------------------------{step.value} --------------------------")
-            return await self._step_clip_generation(context)
-        if step == PipelineStepType.SUBTITLE_STYLING:
-            print(f"----------------------------------{step.value} --------------------------")
-            return await self._step_subtitle_styling(context)
-        if step == PipelineStepType.BURN_IN_EXPORT:
-            print(f"----------------------------------{step.value} --------------------------")
-            return await self._step_burn_in_export(context)
-        # if step == PipelineStepType.DEPTH_CAPTIONS:
-        #     return await self._step_depth_captions(context)
-        raise ValueError(f"Unknown pipeline step: {step.value}")
+        handlers = {
+            PipelineStepType.AUDIO_EXTRACTION: self._step_audio_extraction,
+            PipelineStepType.AI_NOISE_CANCELLATION: self._step_ai_noise_cancellation,
+            PipelineStepType.TRANSCRIPTION: self._step_transcription,
+            PipelineStepType.TOPIC_RESEARCH: self._step_topic_research,
+            PipelineStepType.VISUAL_ANALYSIS: self._step_visual_analysis,
+            PipelineStepType.CONTENT_CLASSIFICATION: self._step_content_classification,
+            PipelineStepType.HIGHLIGHT_DETECTION: self._step_highlight_detection,
+            PipelineStepType.SCORING: self._step_scoring,
+            PipelineStepType.METADATA_GENERATION: self._step_metadata_generation,
+            PipelineStepType.ASPECT_RATIO_RENDER: self._step_aspect_ratio_render,
+            PipelineStepType.CLIP_GENERATION: self._step_clip_generation,
+            PipelineStepType.SUBTITLE_STYLING: self._step_subtitle_styling,
+            PipelineStepType.BURN_IN_EXPORT: self._step_burn_in_export,
+            PipelineStepType.DEPTH_CAPTIONS: self._step_depth_captions,
+        }
+        handler = handlers.get(step)
+        if handler is None:
+            raise ValueError(f"Unknown pipeline step: {step.value}")
+        return await handler(context)
 
     async def _step_audio_extraction(self, context: dict) -> dict:
         # Get video path from project (download already completed before pipeline start)
@@ -566,7 +602,6 @@ class PipelineOrchestrator:
         highlight_result = context.get(PipelineStepType.HIGHLIGHT_DETECTION.value, {})
         score_result = context.get(PipelineStepType.SCORING.value, {})
         meta_result = context.get(PipelineStepType.METADATA_GENERATION.value, {})
-        bounding_result = context.get(PipelineStepType.BOUNDING_BOX_DETECTION.value, {})
         aspect_result = context.get(PipelineStepType.ASPECT_RATIO_RENDER.value, {})
         result = await self._clip_service.generate_clips_for_project(
             self.project_id,
@@ -577,7 +612,6 @@ class PipelineOrchestrator:
             highlights=highlight_result.get("highlights", []),
             scored_highlights=score_result.get("scored_highlights", []),
             final_clips=meta_result.get("final_clips", []),
-            candidate_visual_analysis=bounding_result.get("candidate_visual_analysis", {}),
             rendered_clips=aspect_result.get("rendered_clips"),
             output_aspect_ratios=self.output_aspect_ratios,
             clip_settings=self.clip_settings,
@@ -610,31 +644,10 @@ class PipelineOrchestrator:
         raw = getattr(get_settings(), "DEFAULT_OUTPUT_ASPECT_RATIOS", "9:16,1:1,4:5,16:9")
         return [item.strip() for item in raw.split(",") if item.strip()]
 
-    async def _step_bounding_box_detection(self, context: dict) -> dict:
-        self._notify("Detecting subjects and bounding boxes...", 40)
-        highlight_result = context.get(PipelineStepType.HIGHLIGHT_DETECTION.value, {})
-        highlights = highlight_result.get("highlights", [])
-        video_path = await self._project_video_path()
-        if not video_path or not Path(video_path).exists():
-            raise ValueError("Missing video path for bounding box detection")
-
-        from content_intelligence.service import ContentIntelligenceService
-        service = ContentIntelligenceService()
-        candidate_visual_analysis = await service.analyze_candidate_clips(
-            video_path,
-            highlights,
-            max_frames_per_clip=get_settings().CANDIDATE_MAX_FRAMES,
-            frame_interval=get_settings().CANDIDATE_FRAME_INTERVAL,
-        )
-        self._notify(f"Analyzed bounding boxes for {len(highlights)} clips", 100)
-        return {"candidate_visual_analysis": candidate_visual_analysis}
-
     async def _step_aspect_ratio_render(self, context: dict) -> dict:
         self._notify("Calculating aspect-ratio crops...", 40)
         meta_result = context.get(PipelineStepType.METADATA_GENERATION.value, {})
         final_clips = meta_result.get("final_clips", [])
-        bounding_result = context.get(PipelineStepType.BOUNDING_BOX_DETECTION.value, {})
-        candidate_visual_analysis = bounding_result.get("candidate_visual_analysis", {})
         video_path = await self._project_video_path()
         if not video_path or not Path(video_path).exists():
             raise ValueError("Missing video path for aspect-ratio rendering")
@@ -644,7 +657,6 @@ class PipelineOrchestrator:
             video_path=video_path,
             clips=final_clips,
             transcript_segments=self._transcript_segments(context),
-            candidate_visual_analysis=candidate_visual_analysis,
             output_aspect_ratios=self.output_aspect_ratios,
             progress_callback=lambda message, percent, _: self._notify(
                 message,

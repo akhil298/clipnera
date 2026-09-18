@@ -25,6 +25,30 @@ log = get_logger(__name__)
 
 pipeline = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
+# Clip generation only. Subtitle styling and burn-in run at export time, once the
+# user has chosen a style, so the generated clips stay style-agnostic.
+DEFAULT_PIPELINE_STEPS = [
+    "audio_extraction",
+    "ai_noise_cancellation",
+    "transcription",
+    "topic_research",
+    "visual_analysis",
+    "content_classification",
+    "highlight_detection",
+    "scoring",
+    "metadata_generation",
+    "aspect_ratio_render",
+    "clip_generation",
+]
+
+DEFAULT_AUDIO_CONFIG = {
+    "ai_denoise": True,
+    "noise_suppression_strength": 90,
+    "de_reverb": True,
+    "vocal_clarity_eq": True,
+    "hum_filter": True,
+}
+
 _progress_store: dict[str, dict[str, Any]] = {}
 _active_orchestrators: dict[str, PipelineOrchestrator] = {}
 _progress_lock = asyncio.Lock()
@@ -117,31 +141,11 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
             )
 
         body = body or {}
-        default_steps = [
-            "audio_extraction",
-            "ai_noise_cancellation",
-            "transcription",
-            "topic_research",
-            "visual_analysis",
-            "content_classification",
-            "highlight_detection",
-            "bounding_box_detection",
-            "scoring",
-            "metadata_generation",
-            "aspect_ratio_render",
-            "clip_generation",
-            "depth_captions",
-        ]
-        # Only use single aspect ratio (9:16) - user can export others later
-        selected_steps = [PipelineStepType.resolve(s) for s in body.get("steps", default_steps)]
+        # Subtitles are burned at export time from the style the user picks, so
+        # caption steps are deliberately absent from the default run.
+        selected_steps = [PipelineStepType.resolve(s) for s in body.get("steps", DEFAULT_PIPELINE_STEPS)]
         output_aspect_ratios = ["9:16"]  # Single aspect ratio for faster processing
-        audio_config = body.get("audio_config", {
-            "ai_denoise": True,
-            "noise_suppression_strength": 90,
-            "de_reverb": True,
-            "vocal_clarity_eq": True,
-            "hum_filter": True,
-        })
+        audio_config = body.get("audio_config", DEFAULT_AUDIO_CONFIG)
         watermark_enabled = body.get("watermark_enabled", True)
         clip_settings = body.get("clip_settings") if isinstance(body.get("clip_settings"), dict) else None
 
@@ -335,32 +339,11 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
             raise CustomException(message="Pipeline not found", code="NOT_FOUND", status_code=404)
 
         body = body or {}
-        default_steps = [
-            "audio_extraction",
-            "ai_noise_cancellation",
-            "transcription",
-            "topic_research",
-            "visual_analysis",
-            "content_classification",
-            "highlight_detection",
-            "bounding_box_detection",
-            "scoring",
-            "metadata_generation",
-            "aspect_ratio_render",
-            "clip_generation",
-            "depth_captions",
-        ]
-        # Only use single aspect ratio (9:16) - user can export others later
-        selected_steps = [PipelineStepType.resolve(s) for s in body.get("steps", default_steps)]
+        selected_steps = [PipelineStepType.resolve(s) for s in body.get("steps", DEFAULT_PIPELINE_STEPS)]
         output_aspect_ratios = ["9:16"]  # Single aspect ratio for faster processing
-        audio_config = body.get("audio_config", {
-            "ai_denoise": True,
-            "noise_suppression_strength": 90,
-            "de_reverb": True,
-            "vocal_clarity_eq": True,
-            "hum_filter": True,
-        })
+        audio_config = body.get("audio_config", DEFAULT_AUDIO_CONFIG)
         watermark_enabled = body.get("watermark_enabled", True)
+        clip_settings = body.get("clip_settings") if isinstance(body.get("clip_settings"), dict) else None
 
         plan_repo = PlanRepository(session)
         sub_repo = UserSubscriptionRepository(session)
@@ -411,6 +394,7 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
             progress_callback=_progress_callback_factory(project_id),
             watermark_enabled=watermark_enabled,
             output_aspect_ratios=output_aspect_ratios,
+            clip_settings=clip_settings,
             resume=True,
         )
 

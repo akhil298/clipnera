@@ -509,7 +509,6 @@ export const DEFAULT_PIPELINE_STEPS = [
   'visual_analysis',
   'content_classification',
   'highlight_detection',
-  'bounding_box_detection',
   'scoring',
   'metadata_generation',
   'aspect_ratio_render',
@@ -614,6 +613,56 @@ export const pipelineApi = {
       body: JSON.stringify({ steps, audio_config: audioConfig, output_aspect_ratios: outputAspectRatios }),
     }),
 };
+
+/**
+ * Waits for a YouTube download to finish, then starts the AI pipeline.
+ *
+ * `POST /pipeline/start` rejects with 409 VIDEO_NOT_READY until the project is
+ * marked UPLOADED with a known duration, so starting the pipeline immediately
+ * after kicking off a download is a race. Every ingest entry point goes through
+ * this helper so the handoff is done the same way in one place.
+ */
+export function startPipelineWhenReady(
+  projectId: string,
+  options: {
+    steps?: string[];
+    audioConfig?: Record<string, any>;
+    onDownloadProgress?: (progress: DownloadProgress) => void;
+    signal?: { cancelled: boolean };
+  } = {},
+): Promise<{ project_id: string; status: string; selected_steps: string[]; credits_deducted: number }> {
+  const { steps = DEFAULT_PIPELINE_STEPS, audioConfig = {}, onDownloadProgress, signal } = options;
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      unsubscribe();
+      fn();
+    };
+
+    const unsubscribe = clipApi.subscribeDownloadProgress(
+      projectId,
+      (progress) => {
+        onDownloadProgress?.(progress);
+        if (signal?.cancelled) {
+          finish(() => reject(new Error('Cancelled')));
+          return;
+        }
+        if (progress.status === 'done') {
+          finish(() => {
+            pipelineApi.start(projectId, steps, audioConfig).then(resolve).catch(reject);
+          });
+        } else if (progress.status === 'error') {
+          finish(() => reject(new Error(progress.message || 'Download failed')));
+        }
+      },
+      (err) => finish(() => reject(err)),
+    );
+  });
+}
 
 export interface CreateBrandKitPayload {
   brand_name: string;

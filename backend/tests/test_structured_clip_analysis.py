@@ -3,7 +3,6 @@ from __future__ import annotations
 import pytest
 
 from content_intelligence.highlighter import HighlightDetector
-from content_intelligence.reframing import build_smart_output_formats
 from content_intelligence.research import TopicResearcher
 
 
@@ -15,54 +14,6 @@ class FakeGroq:
         import json
 
         return json.dumps(self.payload)
-
-
-@pytest.mark.asyncio
-async def test_smart_output_formats_with_scene_changes() -> None:
-    frames = [
-        {
-            "timestamp": 10.0,
-            "subjects": [
-                {
-                    "label": "Speaker",
-                    "confidence": 0.95,
-                    "is_speaker": True,
-                    "bounding_box": {"x": 0.25, "y": 0.1, "width": 0.3, "height": 0.8},
-                }
-            ],
-            "faces": [],
-            "objects": [],
-            "description": "Single speaker",
-        },
-        {
-            "timestamp": 14.0,
-            "subjects": [
-                {
-                    "label": "Speaker",
-                    "confidence": 0.95,
-                    "is_speaker": True,
-                    "bounding_box": {"x": 0.55, "y": 0.1, "width": 0.3, "height": 0.8},
-                }
-            ],
-            "faces": [],
-            "objects": [],
-            "description": "Single speaker moving",
-        },
-    ]
-
-    outputs = await build_smart_output_formats(
-        frames, 1920, 1080,
-        aspect_ratios=["9:16", "16:9"],
-        content_category="unknown",
-        scene_changes=[0.0, 16.0],
-        video_path=None,
-    )
-
-    assert "9:16" in outputs
-    assert "16:9" in outputs
-    assert outputs["9:16"]["tracking"] is True
-    assert outputs["16:9"]["tracking"] is False
-    assert outputs["9:16"]["crop"]["height"] == 1.0
 
 
 @pytest.mark.asyncio

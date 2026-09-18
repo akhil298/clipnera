@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { VideoProject, ViralClip } from '@/lib/types';
 import { analyzeVideoSource } from '@/lib/utils/urlParser';
-import { clipApi, YouTubeMetadataResponse } from '@/lib/api';
+import { clipApi, YouTubeMetadataResponse, startPipelineWhenReady } from '@/lib/api';
 import { StatsSkeleton } from '@/components/skeletons';
 import confetti from 'canvas-confetti';
 
@@ -109,11 +109,11 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
       ? analyzeVideoSource(quickYtUrl, { title: ytMeta.title, channelTitle: ytMeta.channel_title })
       : analyzeVideoSource(quickYtUrl);
 
+    let newProjectId = `proj-${Date.now()}`;
     try {
       const result = await clipApi.downloadYoutube(quickYtUrl);
       const videoId = result?.id;
-
-      const newProjectId = videoId || `proj-${Date.now()}`;
+      newProjectId = videoId || newProjectId;
 
       const newProj: VideoProject = {
         id: newProjectId,
@@ -141,52 +141,46 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
 
       onCreateFolder(newProj);
 
-      if (videoId) {
-        const unsubscribe = clipApi.subscribeDownloadProgress(
-          videoId,
-          (progress) => {
-            const percent = Math.min(100, Math.round(progress.percent || 0));
-            setLocalProcessingProgress((prev) => ({ ...prev, [newProjectId]: percent }));
-            if (onUpdateProject) {
-              onUpdateProject(newProjectId, {
-                processingProgress: percent,
-                processingStatus: progress.status === 'error' ? 'failed' : 'processing',
-              });
-            }
-            if (progress.status === 'done' || progress.status === 'error') {
-              unsubscribe();
-              setLocalProcessingProgress((prev) => {
-                const next = { ...prev };
-                delete next[newProjectId];
-                return next;
-              });
-              if (onUpdateProject) {
-                onUpdateProject(newProjectId, {
-                  processingProgress: 100,
-                  processingStatus: progress.status === 'error' ? 'failed' : 'completed',
-                  syncStatus: 'synced',
-                  offlineAvailable: true,
-                });
-              }
-            }
-          },
-          (err) => {
-            console.error('Progress subscription error:', err);
-            setLocalProcessingProgress((prev) => {
-              const next = { ...prev };
-              delete next[newProjectId];
-              return next;
-            });
-            if (onUpdateProject) {
-              onUpdateProject(newProjectId, {
-                processingStatus: 'failed',
-              });
-            }
-          }
-        );
+      if (!videoId) {
+        throw new Error('Download did not return a project id');
       }
+
+      const clearLocalProgress = () =>
+        setLocalProcessingProgress((prev) => {
+          const next = { ...prev };
+          delete next[newProjectId];
+          return next;
+        });
+
+      // Download first, then the AI pipeline. Without this second half the
+      // project sat at "processing" forever and never produced any clips.
+      startPipelineWhenReady(videoId, {
+        onDownloadProgress: (progress) => {
+          const percent = Math.min(100, Math.round(progress.percent || 0));
+          setLocalProcessingProgress((prev) => ({ ...prev, [newProjectId]: percent }));
+          onUpdateProject?.(newProjectId, {
+            processingProgress: percent,
+            processingStatus: 'processing',
+          });
+        },
+      })
+        .then(() => {
+          clearLocalProgress();
+          onUpdateProject?.(newProjectId, {
+            processingProgress: 0,
+            processingStatus: 'processing',
+            syncStatus: 'synced',
+            offlineAvailable: true,
+          });
+        })
+        .catch((err) => {
+          console.error('Pipeline start failed:', err);
+          clearLocalProgress();
+          onUpdateProject?.(newProjectId, { processingStatus: 'failed' });
+        });
     } catch (err) {
       console.error('Download initiation failed:', err);
+      onUpdateProject?.(newProjectId, { processingStatus: 'failed' });
     } finally {
       setIsIngesting(false);
       setQuickYtUrl('');
@@ -541,7 +535,9 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
             className={`group rounded-2xl border transition-all flex flex-col justify-between overflow-hidden shadow-lg relative ${
               isSelected
                 ? 'bg-neutral-900 border-amber-500/60 ring-1 ring-amber-500/30'
-                : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900'
+                : project.processingStatus === 'processing'
+                  ? 'bg-neutral-900 border-neutral-800 hover:border-neutral-700'
+                  : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900'
             } ${(project.processingStatus === 'processing') ? 'ring-1 ring-amber-500/40' : ''}`}
           >
             {/* Thumbnail background during processing */}
@@ -552,11 +548,16 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
               />
             )}
 
+            {/* Permanent dark overlay so UI stays readable over thumbnail */}
+            {project.processingStatus === 'processing' && (
+              <div className="absolute inset-0 bg-black/80 pointer-events-none" />
+            )}
+
             {/* Loading overlay: dark gradient sweep from left to right */}
             {project.processingStatus === 'processing' && (
               <>
                 <div
-                  className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/70 to-black/40 pointer-events-none transition-all duration-500 ease-out"
+                  className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/80 to-black/60 pointer-events-none transition-all duration-500 ease-out"
                   style={{ width: `${localProcessingProgress[project.id] ?? project.processingProgress ?? 0}%`, left: 0 }}
                 />
                 <div
@@ -721,9 +722,11 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                             : 'cursor-pointer hover:border-amber-400/60'
                         }`}
                       >
-                        {(clip.posterUrl || project.posterUrl) ? (
+                        {/* The clip's own frame only — never the project thumbnail,
+                            which would show the same image for every clip. */}
+                        {clip.posterUrl ? (
                           <img
-                            src={clip.posterUrl || project.posterUrl}
+                            src={clip.posterUrl}
                             alt={clip.title}
                             className="w-full h-full object-cover group-hover/clip:scale-105 transition-transform duration-300"
                           />

@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from content_intelligence.reframing import crop_tracking_expressions
+from video_processor.geometry import crop_tracking_expressions, target_crop_size
 
 from core.logging_config import get_logger
 from core.exceptions import CustomException
@@ -198,123 +198,98 @@ class FFmpegService:
         source_width: int | None = None,
         source_height: int | None = None,
     ) -> None:
-        crop_start_time = time.time()
-        
-        log.info(
-            "FFmpeg crop_with_tracking STARTED",
-            extra={
-                "input_path": input_path,
-                "output_path": output_path,
-                "start_time": start_time,
-                "duration": duration,
-                "target_width": target_width,
-                "target_height": target_height,
-                "source_width": source_width,
-                "source_height": source_height,
-                "crop_tracking_points": len(crop_tracking) if crop_tracking else 0,
-            },
-        )
+        """Cut [start_time, start_time+duration] and pan-crop to the target size.
+
+        Emits one INFO line per render; the filter graph and full command are
+        DEBUG, since a tracked crop expression runs to several thousand
+        characters and drowns the rest of the pipeline log.
+        """
+        started = time.time()
 
         if duration is None:
             duration = await self.probe_duration(input_path)
-            log.info("Probed video duration", extra={"duration": duration, "input_path": input_path})
-        
-        crop_tracking = crop_tracking or []
         if duration <= 0 or target_width <= 0 or target_height <= 0:
             raise CustomException(message="Invalid crop render parameters", code="INVALID_CROP_RENDER", status_code=400)
 
-        info = await self.get_video_info(input_path)
-        streams = info.get("streams") or []
-        stream = next((item for item in streams if item.get("codec_type") == "video"), streams[0] if streams else {})
-        source_width = int(source_width or stream.get("width", 0) or 0)
-        source_height = int(source_height or stream.get("height", 0) or 0)
+        crop_tracking = crop_tracking or []
+
+        if not source_width or not source_height:
+            info = await self.get_video_info(input_path)
+            streams = info.get("streams") or []
+            stream = next((item for item in streams if item.get("codec_type") == "video"), streams[0] if streams else {})
+            source_width = int(source_width or stream.get("width", 0) or 0)
+            source_height = int(source_height or stream.get("height", 0) or 0)
         if not source_width or not source_height:
             raise CustomException(message="Source video dimensions are unavailable", code="VIDEO_DIMENSIONS_UNAVAILABLE", status_code=400)
 
-        log.info(
-            "Source video info",
-            extra={
-                "source_width": source_width,
-                "source_height": source_height,
-                "source_aspect_ratio": round(source_width / source_height, 3),
-                "target_width": target_width,
-                "target_height": target_height,
-                "target_aspect_ratio": round(target_width / target_height, 3),
-            },
-        )
+        crop_width, crop_height = target_crop_size(source_width, source_height, f"{target_width}:{target_height}")
 
-        target_ratio = target_width / target_height
-        source_ratio = source_width / source_height
-        if source_ratio > target_ratio:
-            crop_height = source_height
-            crop_width = int(round(crop_height * target_ratio))
-        else:
-            crop_width = source_width
-            crop_height = int(round(crop_width / target_ratio))
-        crop_width -= crop_width % 2
-        crop_height -= crop_height % 2
-        crop_width = max(2, crop_width)
-        crop_height = max(2, crop_height)
-
-        log.info(
-            "Crop dimensions calculated",
-            extra={
-                "crop_width": crop_width,
-                "crop_height": crop_height,
-                "crop_area_ratio": round((crop_width * crop_height) / (source_width * source_height), 3),
-            },
-        )
-
+        # Tracking timestamps are absolute; the filter graph runs on the cut clip.
         relative_tracking = [
             {**point, "timestamp": max(0.0, float(point.get("timestamp", 0.0)) - start_time)}
             for point in crop_tracking
         ]
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
+
         x_expression, y_expression = crop_tracking_expressions(
-            relative_tracking,
-            source_width,
-            source_height,
-            crop_width,
-            crop_height,
+            relative_tracking, source_width, source_height, crop_width, crop_height,
         )
-        x_expression = x_expression.replace(",", "\\,")
-        y_expression = y_expression.replace(",", "\\,")
         video_filter = (
-            f"crop={crop_width}:{crop_height}:{x_expression}:{y_expression},"
+            f"crop={crop_width}:{crop_height}:"
+            f"{x_expression.replace(',', chr(92) + ',')}:{y_expression.replace(',', chr(92) + ',')},"
             f"scale={target_width}:{target_height}:flags=lanczos"
         )
-        
-        log.info(
-            "FFmpeg filter graph built",
-            extra={
-                "video_filter": video_filter,
-                "x_expression": x_expression[:200] + "..." if len(x_expression) > 200 else x_expression,
-                "y_expression": y_expression[:200] + "..." if len(y_expression) > 200 else y_expression,
-            },
-        )
-
-        end_time = start_time + duration
-        log.info(
-            ">>> [CUT START] video clip | start=%ss end=%ss duration=%ss target=%sx%s source=%sx%s tracking_points=%s",
-            round(start_time, 3), round(end_time, 3), round(duration, 3),
-            target_width, target_height, source_width, source_height,
-            len(crop_tracking) if crop_tracking else 0,
-            extra={
-                "input_path": input_path,
-                "output_path": output_path,
-                "start_time": round(start_time, 3),
-                "end_time": round(end_time, 3),
-                "duration": round(duration, 3),
-                "target_width": target_width,
-                "target_height": target_height,
-                "source_width": source_width,
-                "source_height": source_height,
-                "crop_tracking_points": len(crop_tracking) if crop_tracking else 0,
-            },
-        )
+        log.debug("Crop filter graph", extra={"video_filter": video_filter})
 
         encoder_args = await self._get_encoder_args()
+        returncode, stderr = await self._run_ffmpeg(
+            input_path, output_path, start_time, duration, video_filter, encoder_args
+        )
+
+        if returncode != 0:
+            log.warning(
+                "Tracked crop failed, retrying centred: %s",
+                stderr[-200:],
+                extra={"output_path": output_path},
+            )
+            output_file.unlink(missing_ok=True)
+            fallback_filter = (
+                f"crop={crop_width}:{crop_height}:(iw-{crop_width})/2:(ih-{crop_height})/2,"
+                f"scale={target_width}:{target_height}:flags=lanczos"
+            )
+            returncode, fallback_stderr = await self._run_ffmpeg(
+                input_path, output_path, start_time, duration, fallback_filter, encoder_args
+            )
+            if returncode != 0 or not output_file.exists() or output_file.stat().st_size == 0:
+                raise CustomException(
+                    message=f"Tracked crop and centred fallback failed: {(fallback_stderr or stderr)[-300:]}",
+                    code="TRACKED_CROP_FAILED",
+                    status_code=500,
+                )
+
+        size_mb = output_file.stat().st_size / (1024 * 1024) if output_file.exists() else 0.0
+        log.info(
+            "Rendered %.2fs %dx%d in %.1fs (%.2fMB)",
+            duration, target_width, target_height, time.time() - started, size_mb,
+            extra={
+                "output_path": output_path,
+                "start_time": round(start_time, 3),
+                "end_time": round(start_time + duration, 3),
+                "crop": f"{crop_width}x{crop_height}",
+                "tracking_points": len(crop_tracking),
+            },
+        )
+
+    async def _run_ffmpeg(
+        self,
+        input_path: str,
+        output_path: str,
+        start_time: float,
+        duration: float,
+        video_filter: str,
+        encoder_args: list[str],
+    ) -> tuple[int, str]:
         cmd = [
             "ffmpeg", "-y",
             "-ss", str(start_time), "-i", input_path,
@@ -325,124 +300,12 @@ class FFmpegService:
             "-movflags", "+faststart",
             output_path,
         ]
-
-        log.info(
-            "Executing FFmpeg command (tracked crop)",
-            extra={
-                "cmd": " ".join(cmd[:4]) + " ... " + " ".join(cmd[-3:]),
-                "full_cmd": " ".join(cmd),
-                "start_time": start_time,
-                "duration": duration,
-            },
+        log.debug("Running FFmpeg", extra={"cmd": " ".join(cmd)})
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
-
-        ffmpeg_start = time.time()
-        proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         _, stderr = await proc.communicate()
-        ffmpeg_elapsed = time.time() - ffmpeg_start
-
-        if proc.returncode != 0:
-            tracked_error = stderr.decode("utf-8", errors="ignore")[-500:]
-            log.warning(
-                "Tracked crop failed, retrying with centered crop",
-                extra={
-                    "error": tracked_error,
-                    "ffmpeg_elapsed_seconds": round(ffmpeg_elapsed, 2),
-                    "return_code": proc.returncode,
-                },
-            )
-            try:
-                output_file.unlink(missing_ok=True)
-            except OSError:
-                pass
-
-            fallback_filter = (
-                f"crop={crop_width}:{crop_height}:(iw-{crop_width})/2:(ih-{crop_height})/2,"
-                f"scale={target_width}:{target_height}:flags=lanczos"
-            )
-            fallback_cmd = [
-                "ffmpeg", "-y",
-                "-ss", str(start_time), "-i", input_path,
-                "-t", str(duration),
-                "-vf", fallback_filter,
-                *encoder_args,
-                "-c:a", "aac", "-b:a", "128k",
-                "-movflags", "+faststart",
-                output_path,
-            ]
-            
-            log.info(
-                "Executing FFmpeg fallback command (centered crop)",
-                extra={
-                    "fallback_filter": fallback_filter,
-                    "cmd": " ".join(fallback_cmd[:4]) + " ... " + " ".join(fallback_cmd[-3:]),
-                },
-            )
-            
-            fallback_start = time.time()
-            fallback_proc = await asyncio.create_subprocess_exec(
-                *fallback_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            _, fallback_stderr = await fallback_proc.communicate()
-            fallback_elapsed = time.time() - fallback_start
-            
-            if fallback_proc.returncode == 0 and output_file.exists() and output_file.stat().st_size > 0:
-                total_elapsed = time.time() - crop_start_time
-                log.info(
-                    "<<< [CUT OK] video clip (centered crop fallback) | start=%ss end=%ss duration=%ss size=%sMB ffmpeg=%ss total=%ss",
-                    round(start_time, 3), round(end_time, 3), round(duration, 3),
-                    round(output_file.stat().st_size / (1024 * 1024), 2),
-                    round(fallback_elapsed, 2), round(total_elapsed, 2),
-                    extra={
-                        "input_path": input_path,
-                        "output_path": output_path,
-                        "start_time": round(start_time, 3),
-                        "end_time": round(end_time, 3),
-                        "duration": round(duration, 3),
-                        "fallback_elapsed_seconds": round(fallback_elapsed, 2),
-                        "total_elapsed_seconds": round(total_elapsed, 2),
-                        "file_size_bytes": output_file.stat().st_size,
-                        "file_size_mb": round(output_file.stat().st_size / (1024 * 1024), 2),
-                    },
-                )
-                return
-
-            fallback_error = fallback_stderr.decode("utf-8", errors="ignore")[-500:]
-            total_elapsed = time.time() - crop_start_time
-            log.error(
-                "Both tracked crop and centered fallback FAILED",
-                extra={
-                    "tracked_error": tracked_error,
-                    "fallback_error": fallback_error,
-                    "total_elapsed_seconds": round(total_elapsed, 2),
-                },
-            )
-            raise CustomException(
-                message=f"Tracked crop and centered fallback failed: {fallback_error or tracked_error}",
-                code="TRACKED_CROP_FAILED",
-                status_code=500,
-            )
-        
-        total_elapsed = time.time() - crop_start_time
-        file_size = output_file.stat().st_size if output_file.exists() else 0
-        log.info(
-            "<<< [CUT OK] video clip | start=%ss end=%ss duration=%ss size=%sMB ffmpeg=%ss total=%ss",
-            round(start_time, 3), round(end_time, 3), round(duration, 3),
-            round(file_size / (1024 * 1024), 2), round(ffmpeg_elapsed, 2), round(total_elapsed, 2),
-            extra={
-                "input_path": input_path,
-                "output_path": output_path,
-                "start_time": round(start_time, 3),
-                "end_time": round(end_time, 3),
-                "duration": round(duration, 3),
-                "file_size_bytes": file_size,
-                "file_size_mb": round(file_size / (1024 * 1024), 2),
-                "ffmpeg_elapsed_seconds": round(ffmpeg_elapsed, 2),
-                "total_elapsed_seconds": round(total_elapsed, 2),
-            },
-        )
+        return proc.returncode, stderr.decode("utf-8", errors="ignore")
 
     async def concat_segments(self, segment_paths: list[str], output_path: str) -> None:
         list_file = output_path + ".concat.txt"

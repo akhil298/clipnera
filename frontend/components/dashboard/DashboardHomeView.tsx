@@ -27,7 +27,7 @@ import {
   FolderOpen
 } from 'lucide-react';
 import { VideoProject, ViralClip, UserProfile, TabType, Workspace } from '@/lib/types';
-import { clipApi, pipelineApi, analyticsApi, DEFAULT_PIPELINE_STEPS, mapBackendClip } from '@/lib/api';
+import { clipApi, pipelineApi, analyticsApi, startPipelineWhenReady, mapBackendClip } from '@/lib/api';
 import { StatsSkeleton } from '@/components/skeletons';
 
 interface DashboardHomeViewProps {
@@ -146,27 +146,23 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
 
       onSelectProject(newProject);
 
-      const unsubDownload = clipApi.subscribeDownloadProgress(
-        projectId,
-        (progress) => {
+      // Wait for the download to finish before starting; the pipeline rejects
+      // with 409 VIDEO_NOT_READY until the project is marked UPLOADED.
+      await startPipelineWhenReady(projectId, {
+        audioConfig: {
+          aiDenoise: true,
+          noiseSuppressionStrength: 90,
+          deReverb: true,
+          vocalClarityEq: true,
+          humFilter: true,
+        },
+        onDownloadProgress: (progress) => {
           if (progress.status === 'done') {
             setQuickStatus('Download complete! Starting AI pipeline...');
-          } else if (progress.status === 'error') {
-            setQuickStatus(`Download failed: ${progress.message || 'Unknown error'}`);
-            setIsQuickProcessing(false);
+          } else {
+            setQuickStatus(`Downloading video... ${Math.round(progress.percent || 0)}%`);
           }
         },
-        () => {
-          setQuickStatus('Download stream error, continuing...');
-        }
-      );
-
-      await pipelineApi.start(projectId, DEFAULT_PIPELINE_STEPS, {
-        aiDenoise: true,
-        noiseSuppressionStrength: 90,
-        deReverb: true,
-        vocalClarityEq: true,
-        humFilter: true,
       });
 
       setQuickStatus('AI pipeline running...');
@@ -190,13 +186,11 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
               .finally(() => {
                 setIsQuickProcessing(false);
                 unsubPipeline();
-                unsubDownload?.();
               });
           } else if (progress.status === 'error') {
             setQuickStatus(`Pipeline error: ${progress.message}`);
             setIsQuickProcessing(false);
             unsubPipeline();
-            unsubDownload?.();
           }
         },
         () => {

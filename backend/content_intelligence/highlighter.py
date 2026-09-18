@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
+from clients.ai.groq import input_token_budget
+from content_intelligence.transcript_windows import (
+    TranscriptWindow,
+    allocate_per_window,
+    build_transcript_windows,
+    deduplicate_moments,
+)
 from core.logging_config import get_logger
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -11,6 +19,12 @@ log = get_logger(__name__)
 MIN_CLIP_DURATION = 20.0
 MAX_CLIP_DURATION = 60.0
 MAX_CLIPS_PER_HOUR = 12.0
+
+# Output cap per window. Each moment costs roughly 120 tokens of JSON, so this
+# comfortably covers the handful of moments we ask any single window for.
+WINDOW_MAX_OUTPUT_TOKENS = 1400
+# Tokens reserved for the instruction block wrapped around each window.
+PROMPT_OVERHEAD_TOKENS = 500
 
 
 class HighlightDetector:
@@ -25,8 +39,12 @@ class HighlightDetector:
         min_clip_duration = float(settings.get("min_clip_duration") or MIN_CLIP_DURATION)
         max_clip_duration = float(settings.get("max_clip_duration") or MAX_CLIP_DURATION)
         max_clips_per_hour = float(settings.get("max_clips_per_hour") or MAX_CLIPS_PER_HOUR)
+        max_clips = self._max_clips(duration, max_clips_per_hour, settings.get("max_clips"))
 
-        candidates = await self._detect_with_llm(transcript_segments, analysis, duration, category, min_clip_duration, max_clip_duration)
+        candidates = await self._detect_with_llm(
+            transcript_segments, analysis, duration, category,
+            min_clip_duration, max_clip_duration, target_clips=max_clips,
+        )
         if not candidates and transcript_segments:
             log.warning("LLM returned no highlights; falling back to transcript-based clip detection")
             candidates = self._detect_from_transcript(transcript_segments, category, min_clip_duration)
@@ -43,7 +61,6 @@ class HighlightDetector:
             effective_max = max_clip_duration if explicit_max else 0.0
             candidates = self._enforce_duration_bounds(candidates, duration, effective_min, effective_max)
 
-        max_clips = max(1, int((duration / 3600.0) * max_clips_per_hour))
         candidates = sorted(candidates, key=lambda item: item.get("score", 0), reverse=True)[:max_clips]
 
         for i, candidate in enumerate(candidates):
@@ -83,31 +100,90 @@ class HighlightDetector:
         category: str,
         min_clip_duration: float = MIN_CLIP_DURATION,
         max_clip_duration: float = MAX_CLIP_DURATION,
+        target_clips: int = 10,
     ) -> list[dict[str, Any]]:
-        transcript = "\n".join(
-            f"[{float(segment.get('start', 0.0)):.3f}-{float(segment.get('end', 0.0)):.3f}] "
-            f"{segment.get('speaker') or 'Unknown speaker'}: {segment.get('text', '')}"
-            for segment in transcript_segments
+        """Ask the model for highlights across the whole transcript.
+
+        The transcript is split into windows that fit the model's input budget
+        and each is scored independently, because a long transcript sent as one
+        prompt is truncated to its tail and every clip then comes from the end
+        of the video.
+        """
+        budget = input_token_budget(WINDOW_MAX_OUTPUT_TOKENS) - PROMPT_OVERHEAD_TOKENS
+        windows = build_transcript_windows(transcript_segments, budget_tokens=budget)
+        if not windows:
+            log.warning("No usable transcript segments for highlight detection")
+            return []
+
+        per_window = allocate_per_window(target_clips, len(windows))
+        log.info(
+            "LLM highlight detection over %d window(s): budget=%d tokens, requesting %d moment(s) per window",
+            len(windows), budget, per_window,
         )
+
+        collected: list[dict[str, Any]] = []
+        failed_windows = 0
+        for window in windows:
+            moments = await self._detect_in_window(
+                window=window,
+                analysis=analysis,
+                duration=duration,
+                category=category,
+                min_clip_duration=min_clip_duration,
+                max_clip_duration=max_clip_duration,
+                max_moments=per_window,
+            )
+            if moments is None:
+                failed_windows += 1
+                continue
+            collected.extend(
+                self._build_candidate(item, transcript_segments, window, duration)
+                for item in moments
+            )
+
+        candidates = [c for c in collected if c is not None]
+        if failed_windows:
+            log.warning("LLM highlight detection failed for %d/%d window(s)", failed_windows, len(windows))
+
+        deduped = deduplicate_moments(candidates)
+        log.info(
+            "LLM highlight detection complete: windows=%d, raw=%d, deduped=%d",
+            len(windows), len(candidates), len(deduped),
+        )
+        return deduped
+
+    async def _detect_in_window(
+        self,
+        window: TranscriptWindow,
+        analysis: dict[str, Any],
+        duration: float,
+        category: str,
+        min_clip_duration: float,
+        max_clip_duration: float,
+        max_moments: int,
+    ) -> list[dict[str, Any]] | None:
+        """Return the model's moments for one window, or None if the call failed."""
         research = analysis.get("topic_research", {})
-        prompt = f"""Select the best standalone short-form video clips from this transcript. Return only valid JSON as an object with a "moments" array.
+        prompt = f"""Select the best standalone short-form video clips from this transcript excerpt. Return only valid JSON as an object with a "moments" array.
 
 Video category: {category}
-Video duration: {duration:.3f} seconds
+Full video duration: {duration:.3f} seconds
+This excerpt covers {window.start:.3f}s to {window.end:.3f}s (part {window.index + 1}).
 Main topic: {research.get('title', '')}
 Topics: {', '.join(research.get('topics', []))}
 Current relevance: {research.get('current_relevance', '')}
 
 REQUIREMENTS:
+- Return at most {max_moments} moments, the strongest ones only.
 - Each clip must be between {min_clip_duration:.0f} and {max_clip_duration:.0f} seconds.
-- Do NOT return the full video or anything close to the full duration.
+- Timestamps are absolute seconds within the full video, copied exactly from the lines below.
+- Every moment must lie inside {window.start:.3f}s to {window.end:.3f}s.
 - Prefer the strongest hooks, arguments, or emotional moments.
-- Each moment must start and end at exact transcript timestamps.
+- Each clip must make sense on its own, without the surrounding video.
 - Do not invent content outside the transcript.
-- Return as many distinct moments as possible, up to a reasonable number for a video of this length.
 
 Transcript:
-{transcript}
+{window.text}
 
 JSON schema:
 {{"moments":[{{"start_time":0.0,"end_time":0.0,"title":"...","reason":"...","score":0.0,"scores":{{"relevance":0.0,"importance":0.0,"emotional_impact":0.0,"information_value":0.0,"standalone_context":0.0,"social_media_value":0.0,"current_relevance":0.0}},"speakers":["Speaker 1"]}}]}}
@@ -121,74 +197,97 @@ JSON schema:
                 reraise=True,
             ):
                 with attempt:
-                    response = await self._text_client.chat([
+                    raw_response = await self._text_client.chat([
                         {"role": "system", "content": "You select high-value, factual, standalone video moments. Return valid JSON only."},
                         {"role": "user", "content": prompt},
-                    ], temperature=0.2, max_tokens=2200)
-                    raw_response = response
-                    data = self._parse_json(response)
+                    ], temperature=0.2, max_tokens=WINDOW_MAX_OUTPUT_TOKENS)
+                    data = self._parse_json(raw_response)
                     break
         except Exception as exc:
             log.warning(
-                "LLM highlight detection failed: %s",
-                exc,
+                "LLM highlight detection failed for window %d (%.1fs-%.1fs): %s",
+                window.index, window.start, window.end, exc,
                 extra={"raw_response": raw_response},
             )
-            return []
+            return None
 
-        candidates = []
-        for item in data.get("moments", []) if isinstance(data.get("moments"), list) else []:
-            try:
-                start = min(duration, max(0.0, float(item.get("start_time", 0.0))))
-                end = min(duration, max(start, float(item.get("end_time", start))))
-            except (TypeError, ValueError):
-                log.debug(
-                    "Skipped LLM moment",
-                    extra={
-                        "moment": item,
-                        "reason": "invalid_timestamps",
-                    },
-                )
-                continue
-            excerpt = " ".join(
-                segment.get("text", "")
-                for segment in transcript_segments
-                if float(segment.get("end", 0.0)) > start and float(segment.get("start", 0.0)) < end
-            ).strip()
-            speakers = list(dict.fromkeys(
-                segment.get("speaker")
-                for segment in transcript_segments
-                if segment.get("speaker") and float(segment.get("end", 0.0)) > start and float(segment.get("start", 0.0)) < end
-            ))
-            scores = item.get("scores", {}) if isinstance(item.get("scores"), dict) else {}
-            candidates.append({
-                "start_time": round(start, 3),
-                "end_time": round(end, 3),
-                "score": min(1.0, max(0.0, float(item.get("score", 0.5)))),
-                "title": str(item.get("title", "")),
-                "reason": str(item.get("reason", "")),
-                "scores": {
-                    "relevance": self._score(scores.get("relevance")),
-                    "importance": self._score(scores.get("importance")),
-                    "emotional_impact": self._score(scores.get("emotional_impact")),
-                    "information_value": self._score(scores.get("information_value")),
-                    "standalone_context": self._score(scores.get("standalone_context")),
-                    "social_media_value": self._score(scores.get("social_media_value")),
-                    "current_relevance": self._score(scores.get("current_relevance")),
-                },
-                "transcript_excerpt": excerpt[:1000],
-                "speakers": speakers,
-                "reasons": ["llm_selected"],
-            })
-        log.debug(
-            "LLM highlight detection complete",
-            extra={
-                "llm_moments_returned": len(data.get("moments", [])),
-                "candidates_kept": len(candidates),
-                "candidates_skipped": len(data.get("moments", [])) - len(candidates),
+        moments = data.get("moments")
+        if not isinstance(moments, list):
+            log.warning(
+                "LLM returned no moments array for window %d (%.1fs-%.1fs)",
+                window.index, window.start, window.end,
+                extra={"raw_response": (raw_response or "")[:500]},
+            )
+            return []
+        return moments
+
+    def _build_candidate(
+        self,
+        item: dict[str, Any],
+        transcript_segments: list[dict[str, Any]],
+        window: TranscriptWindow,
+        duration: float,
+    ) -> dict[str, Any] | None:
+        if not isinstance(item, dict):
+            return None
+        try:
+            start = min(duration, max(0.0, float(item.get("start_time", 0.0))))
+            end = min(duration, max(start, float(item.get("end_time", start))))
+        except (TypeError, ValueError):
+            log.debug("Skipped LLM moment", extra={"moment": item, "reason": "invalid_timestamps"})
+            return None
+        if end <= start:
+            log.debug("Skipped LLM moment", extra={"moment": item, "reason": "empty_span"})
+            return None
+
+        excerpt = " ".join(
+            segment.get("text", "")
+            for segment in transcript_segments
+            if float(segment.get("end", 0.0)) > start and float(segment.get("start", 0.0)) < end
+        ).strip()
+        speakers = list(dict.fromkeys(
+            segment.get("speaker")
+            for segment in transcript_segments
+            if segment.get("speaker") and float(segment.get("end", 0.0)) > start and float(segment.get("start", 0.0)) < end
+        ))
+        scores = item.get("scores", {}) if isinstance(item.get("scores"), dict) else {}
+        return {
+            "start_time": round(start, 3),
+            "end_time": round(end, 3),
+            "score": min(1.0, max(0.0, self._score(item.get("score"), default=0.5))),
+            "title": str(item.get("title", "")),
+            "reason": str(item.get("reason", "")),
+            "scores": {
+                "relevance": self._score(scores.get("relevance")),
+                "importance": self._score(scores.get("importance")),
+                "emotional_impact": self._score(scores.get("emotional_impact")),
+                "information_value": self._score(scores.get("information_value")),
+                "standalone_context": self._score(scores.get("standalone_context")),
+                "social_media_value": self._score(scores.get("social_media_value")),
+                "current_relevance": self._score(scores.get("current_relevance")),
             },
-        )
-        return candidates
+            "transcript_excerpt": excerpt[:1000],
+            "speakers": speakers,
+            "reasons": ["llm_selected"],
+            "source_window": window.index,
+        }
+
+    @staticmethod
+    def _max_clips(duration: float, max_clips_per_hour: float, explicit: Any = None) -> int:
+        """How many clips to keep for a video of this length.
+
+        The per-hour rate is rounded up rather than truncated, so a short video
+        still yields a usable set instead of the one or two clips that integer
+        truncation produced.
+        """
+        if explicit:
+            try:
+                return max(1, int(explicit))
+            except (TypeError, ValueError):
+                log.debug("Ignoring invalid max_clips setting: %r", explicit)
+        if duration <= 0:
+            return 3
+        return max(3, math.ceil((duration / 3600.0) * max_clips_per_hour))
 
     @staticmethod
     def _enforce_duration_bounds(candidates: list[dict], duration: float, min_clip_duration: float, max_clip_duration: float) -> list[dict]:
@@ -206,11 +305,11 @@ JSON schema:
         return enforced
 
     @staticmethod
-    def _score(value: Any) -> float:
+    def _score(value: Any, default: float = 0.0) -> float:
         try:
             return min(1.0, max(0.0, float(value)))
         except (TypeError, ValueError):
-            return 0.0
+            return default
 
     @staticmethod
     def _snap_boundaries(start: float, end: float, segments: list[dict], duration: float) -> tuple[float, float]:

@@ -16,7 +16,9 @@ from core.config import get_settings
 from core.database import AsyncSessionLocal
 from core.exceptions import CustomException
 from core.logging_config import get_logger
+from video_processor.clip_cutter import ClipCutter, CutRequest
 from video_processor.ffmpeg_service import FFmpegService
+from video_processor.geometry import SUPPORTED_ASPECT_RATIOS, output_dimensions
 
 settings = get_settings()
 log = get_logger(__name__)
@@ -141,8 +143,6 @@ class ClipService:
         if not video_path or not Path(video_path).exists():
             raise CustomException(message="Video file not found on disk", code="VIDEO_MISSING", status_code=404)
 
-        video_metadata = await self._video_metadata(video_path)
-
         async with AsyncSessionLocal() as session:
             repo = ClipRepository(session)
             clips = await repo.list_clips(project_id, user_id)
@@ -155,7 +155,6 @@ class ClipService:
             sorted_clips = sorted_clips[:max_clips]
 
         transcript_segments = []
-        analysis_json = {}
         for clip in sorted_clips:
             if clip.transcript:
                 transcript_segments = json.loads(clip.transcript) if clip.transcript else []
@@ -166,18 +165,12 @@ class ClipService:
         from subtitle_styling.service import SubtitleStylingService
         styling = SubtitleStylingService()
 
-        from content_intelligence.service import ContentIntelligenceService
-        content_ai = ContentIntelligenceService()
-
         exported_clips: list[dict] = []
         total_exports = len(sorted_clips) * len(platforms)
         completed = 0
 
         for clip in sorted_clips:
             clip_transcript = json.loads(clip.transcript) if clip.transcript else transcript_segments
-            parsed_va = json.loads(clip.visual_analysis or "{}")
-            if isinstance(parsed_va, list):
-                parsed_va = {str(clip.id): parsed_va}
 
             for platform_name in platforms:
                 platform = self._validate_platform(platform_name)
@@ -204,7 +197,6 @@ class ClipService:
                         "duration": max(0.0, min(clip.duration_seconds, float(platform_max_duration))),
                     }],
                     transcript_segments=clip_transcript,
-                    candidate_visual_analysis=parsed_va,
                     output_aspect_ratios=[aspect_ratio],
                 )
 
@@ -317,7 +309,6 @@ class ClipService:
         highlights: list[dict[str, Any]] | None = None,
         scored_highlights: list[dict[str, Any]] | None = None,
         final_clips: list[dict[str, Any]] | None = None,
-        candidate_visual_analysis: dict[str, list[dict[str, Any]]] | None = None,
         rendered_clips: list[dict[str, Any]] | None = None,
         output_aspect_ratios: list[str] | None = None,
         clip_settings: dict[str, Any] | None = None,
@@ -372,16 +363,6 @@ class ClipService:
                 await self._notify(progress_callback, "No AI highlights found, creating clips from transcript...", 78)
             final_clips = self._create_fallback_clips(transcript_segments, video_metadata.get("duration", 0), clip_settings=clip_settings)
 
-        if candidate_visual_analysis is None:
-            if progress_callback:
-                await self._notify(progress_callback, "Analyzing candidate clip frames...", 80)
-            candidate_visual_analysis = await self._content_ai.analyze_candidate_clips(
-                video_path,
-                final_clips,
-                max_frames_per_clip=settings.CANDIDATE_MAX_FRAMES,
-                frame_interval=settings.CANDIDATE_FRAME_INTERVAL,
-            )
-
         if rendered_clips is None:
             if progress_callback:
                 await self._notify(progress_callback, f"Rendering {len(final_clips)} clips...", 88)
@@ -390,7 +371,6 @@ class ClipService:
                 video_path=video_path,
                 clips=final_clips,
                 transcript_segments=transcript_segments,
-                candidate_visual_analysis=candidate_visual_analysis,
                 output_aspect_ratios=output_aspect_ratios,
                 clip_settings=clip_settings,
             )
@@ -457,42 +437,25 @@ class ClipService:
         video_path: str,
         clips: list[dict[str, Any]],
         transcript_segments: list[dict[str, Any]] | None = None,
-        candidate_visual_analysis: dict[str, list[dict[str, Any]]] | None = None,
         output_aspect_ratios: list[str] | None = None,
         progress_callback: Any | None = None,
         clip_settings: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        video_info = await self._ffmpeg.get_video_info(video_path)
-        streams = video_info.get("streams") or []
-        stream = next((item for item in streams if item.get("codec_type") == "video"), streams[0] if streams else {})
-        if not stream or not stream.get("width") or not stream.get("height"):
-            raise CustomException(message="Source video dimensions are unavailable", code="VIDEO_DIMENSIONS_UNAVAILABLE", status_code=400)
-
-        source_width = int(stream["width"])
-        source_height = int(stream["height"])
+        """Cut every clip, delegating framing and rendering to ClipCutter."""
         transcript_segments = list(transcript_segments or [])
-        candidate_visual_analysis = candidate_visual_analysis or {}
-        _fallback_frames: list[dict[str, Any]] = []
-        if isinstance(candidate_visual_analysis, list):
-            _fallback_frames = candidate_visual_analysis
-            candidate_visual_analysis = {}
         if isinstance(output_aspect_ratios, str):
             output_aspect_ratios = [item.strip() for item in output_aspect_ratios.split(",") if item.strip()]
-        ratios = output_aspect_ratios or self._content_ai.default_aspect_ratios()
+        ratios = [r for r in (output_aspect_ratios or self._content_ai.default_aspect_ratios()) if r in SUPPORTED_ASPECT_RATIOS]
+        if not ratios:
+            ratios = list(SUPPORTED_ASPECT_RATIOS)
+
+        cutter = ClipCutter()
         rendered: list[dict[str, Any]] = []
         render_errors: list[str] = []
-        total_outputs = max(1, len(clips) * len(ratios))
-        completed_outputs = 0
 
         log.info(
-            "Starting clip rendering",
-            extra={
-                "project_id": project_id,
-                "total_clips": len(clips),
-                "aspect_ratios": ratios,
-                "source_width": source_width,
-                "source_height": source_height,
-            },
+            "Rendering %d clip(s) for project %s into %s",
+            len(clips), project_id, ", ".join(ratios),
         )
 
         for index, clip in enumerate(clips):
@@ -501,186 +464,54 @@ class ClipService:
             clip_copy["clip_id"] = clip_id
             start = float(clip_copy.get("start_time", clip_copy.get("start", 0.0)))
             end = float(clip_copy.get("end_time", clip_copy.get("end", start)))
-            duration = max(0.0, end - start)
-            
-            log.info(
-                "Processing clip",
-                extra={
-                    "project_id": project_id,
-                    "clip_index": index,
-                    "clip_id": clip_id,
-                    "title": clip_copy.get("title", ""),
-                    "start_time": start,
-                    "end_time": end,
-                    "duration": duration,
-                    "score": clip_copy.get("score", 0),
-                },
-            )
 
-            frames = list(candidate_visual_analysis.get(clip_id) or candidate_visual_analysis.get(str(index)) or _fallback_frames or [])
-            content_category = clip_copy.get("content_category", "unknown")
-            scene_changes = None
-            if frames and frames[0].get("scene_changes") is None and frames:
-                first_frame = frames[0]
-                scene_changes = first_frame.get("scene_changes")
-            output_formats = await self._content_ai.build_smart_output_formats(
-                frames, source_width, source_height, ratios,
-                content_category=content_category,
-                transcript_segments=transcript_segments,
-                scene_changes=scene_changes,
-                video_path=video_path,
-            )
-            output_files: dict[str, str] = {}
-
-            for aspect_ratio, output_config in output_formats.items():
-                output_path = self._output_path(project_id, clip_id, aspect_ratio)
-                completed_outputs += 1
-                if progress_callback:
-                    await self._notify(
-                        progress_callback,
-                        f"Rendering clip {index + 1}/{len(clips)} ({aspect_ratio})...",
-                        min(99, 40 + int((completed_outputs - 1) * 55 / total_outputs)),
-                    )
-                
-                log.info(
-                    ">>> [CUT START] clip=%s idx=%s ratio=%s | start=%ss end=%ss duration=%ss target=%sx%s",
-                    clip_id, index, aspect_ratio,
-                    round(start, 3), round(end, 3), round(duration, 3),
-                    int(output_config["target_width"]), int(output_config["target_height"]),
-                    extra={
-                        "project_id": project_id,
-                        "clip_id": clip_id,
-                        "clip_index": index,
-                        "aspect_ratio": aspect_ratio,
-                        "input_path": video_path,
-                        "output_path": str(output_path),
-                        "start_time": round(start, 3),
-                        "end_time": round(end, 3),
-                        "duration": round(duration, 3),
-                        "target_width": int(output_config["target_width"]),
-                        "target_height": int(output_config["target_height"]),
-                        "crop_tracking_points": len(output_config.get("crop_tracking", [])),
-                    },
+            if progress_callback:
+                await self._notify(
+                    progress_callback,
+                    f"Cutting clip {index + 1}/{len(clips)}...",
+                    min(99, 40 + int(index * 55 / max(1, len(clips)))),
                 )
-                
-                cut_start_time = time.time()
-                heartbeat_task = None
-                if progress_callback:
-                    heartbeat_task = asyncio.create_task(
-                        self._render_progress_heartbeat(
-                            progress_callback,
-                            index=index,
-                            total_clips=len(clips),
-                            aspect_ratio=aspect_ratio,
-                            percent=min(99, 40 + int((completed_outputs - 1) * 55 / total_outputs)),
-                        )
-                    )
-                try:
-                    await self._ffmpeg.crop_with_tracking(
-                        input_path=video_path,
-                        output_path=str(output_path),
-                        start_time=start,
-                        duration=duration,
-                        crop_tracking=output_config.get("crop_tracking", []),
-                        target_width=int(output_config["target_width"]),
-                        target_height=int(output_config["target_height"]),
-                        source_width=source_width,
-                        source_height=source_height,
-                    )
-                    cut_elapsed = time.time() - cut_start_time
-                    
-                    if output_path.exists() and output_path.stat().st_size > 0:
-                        file_size = output_path.stat().st_size
-                        output_files[aspect_ratio] = str(output_path)
-                        log.info(
-                            "<<< [CUT OK] clip=%s idx=%s ratio=%s | start=%ss end=%ss duration=%ss size=%sMB elapsed=%ss",
-                            clip_id, index, aspect_ratio,
-                            round(start, 3), round(end, 3), round(duration, 3),
-                            round(file_size / (1024 * 1024), 2), round(cut_elapsed, 2),
-                            extra={
-                                "project_id": project_id,
-                                "clip_id": clip_id,
-                                "clip_index": index,
-                                "aspect_ratio": aspect_ratio,
-                                "output_path": str(output_path),
-                                "file_size_bytes": file_size,
-                                "file_size_mb": round(file_size / (1024 * 1024), 2),
-                                "elapsed_seconds": round(cut_elapsed, 2),
-                                "start_time": round(start, 3),
-                                "end_time": round(end, 3),
-                                "duration": round(duration, 3),
-                            },
-                        )
-                        if progress_callback:
-                            await self._notify(
-                                progress_callback,
-                                f"Rendered clip {index + 1}/{len(clips)} ({aspect_ratio})",
-                                min(99, 40 + int(completed_outputs * 55 / total_outputs)),
-                            )
-                    else:
-                        output_files[aspect_ratio] = ""
-                        log.error(
-                            "Clip cut produced empty file",
-                            extra={
-                                "project_id": project_id,
-                                "clip_id": clip_id,
-                                "aspect_ratio": aspect_ratio,
-                                "output_path": str(output_path),
-                                "elapsed_seconds": round(cut_elapsed, 2),
-                            },
-                        )
-                except Exception as exc:
-                    cut_elapsed = time.time() - cut_start_time
-                    error_message = str(exc) or type(exc).__name__
-                    render_errors.append(f"clip={clip_id} format={aspect_ratio}: {error_message}")
-                    log.exception(
-                        "Clip cut failed",
-                        extra={
-                            "project_id": project_id,
-                            "clip_id": clip_id,
-                            "aspect_ratio": aspect_ratio,
-                            "error": error_message,
-                            "elapsed_seconds": round(cut_elapsed, 2),
-                            "start_time": start,
-                            "duration": duration,
-                        },
-                    )
-                    output_files[aspect_ratio] = ""
-                finally:
-                    if heartbeat_task:
-                        heartbeat_task.cancel()
-                        try:
-                            await heartbeat_task
-                        except asyncio.CancelledError:
-                            pass
 
-            clip_copy["transcript"] = self._clip_transcript(transcript_segments=transcript_segments, start=start, end=end)
-            clip_copy["scores"] = self._clip_scores(clip_copy, frames)
-            clip_copy["visual_analysis"] = frames
-            clip_copy["bounding_boxes"] = self._bounding_boxes(frames)
-            clip_copy["crop_tracking"] = {
-                aspect_ratio: output_formats[aspect_ratio].get("crop_tracking", [])
-                for aspect_ratio in output_formats
+            request = CutRequest(
+                source_path=video_path,
+                output_dir=self._output_dir / self._safe_name(project_id),
+                clip_id=clip_id,
+                start=start,
+                end=end,
+                aspect_ratios=ratios,
+                content_category=str(clip_copy.get("content_category", "unknown")),
+                transcript_segments=transcript_segments,
+            )
+            result = await cutter.cut(request)
+            render_errors.extend(f"clip={clip_id} {err}" for err in result.errors)
+
+            clip_copy["transcript"] = self._clip_transcript(transcript_segments, start, end)
+            clip_copy["scores"] = self._clip_scores(clip_copy, [])
+            clip_copy["visual_analysis"] = result.faces
+            clip_copy["bounding_boxes"] = result.faces
+            clip_copy["crop_tracking"] = result.crop_tracking
+            clip_copy["output_files"] = result.output_files
+            clip_copy["output_formats"] = {
+                ratio: {
+                    "target_width": output_dimensions(ratio)[0],
+                    "target_height": output_dimensions(ratio)[1],
+                    "layout": result.layout,
+                    "strategy": result.strategy,
+                    "speaker_count": result.speaker_count,
+                }
+                for ratio in ratios
             }
-            clip_copy["output_formats"] = output_formats
-            clip_copy["output_files"] = output_files
-            clip_copy["duration"] = duration
+            clip_copy["duration"] = result.duration
+            clip_copy["layout"] = result.layout
             clip_copy["reason"] = str(clip_copy.get("reason") or clip_copy.get("description") or "")
             rendered.append(clip_copy)
 
-        rendered_count = sum(
-            1
-            for clip in rendered
-            for output_path in (clip.get("output_files") or {}).values()
-            if output_path and Path(output_path).exists() and Path(output_path).stat().st_size > 0
-        )
-        if rendered and rendered_count == 0 and render_errors:
+        if rendered and not any(c.get("output_files", {}).values() for c in rendered):
             raise CustomException(
-                message=f"All clip renders failed. First FFmpeg error: {render_errors[0]}",
+                message=f"All clip renders failed. First error: {render_errors[0] if render_errors else 'unknown'}",
                 code="CLIP_RENDER_FAILED",
                 status_code=500,
             )
-
         return rendered
 
     async def _save_rendered_clips(
@@ -1024,16 +855,6 @@ class ClipService:
             "created_at": style.created_at.isoformat() if style.created_at else None,
         }
 
-    def _local_to_url(self, local_path: str | None) -> str | None:
-        """Convert a local clip file path to a static URL fallback."""
-        if not local_path:
-            return None
-        try:
-            rel = Path(local_path).resolve().relative_to(Path(settings.CLIP_OUTPUT_DIR).resolve())
-            return f"/static/clips/{rel.as_posix()}"
-        except (ValueError, OSError):
-            return None
-
     def _serialize_clip(self, clip: GeneratedClip | None) -> dict | None:
         if not clip:
             return None
@@ -1057,7 +878,7 @@ class ClipService:
             "score": clip.score,
             "scores": self._loads(clip.scores, {}),
             "content_category": clip.content_category,
-            "presigned_url": clip.presigned_url or self._local_to_url(clip.local_path),
+            "presigned_url": clip.presigned_url,
             "poster_url": clip.poster_url,
             "local_path": clip.local_path,
             "status": clip.status,
