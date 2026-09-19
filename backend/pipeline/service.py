@@ -75,7 +75,10 @@ class PipelineOrchestrator:
         self.audio_config = audio_config or {}
         self.progress_callback = progress_callback
         self.watermark_enabled = watermark_enabled
-        self.output_aspect_ratios = output_aspect_ratios or self._default_aspect_ratios()
+        # Empty means "decide from the content category", which is only known
+        # once classification has run -- so it stays empty here and the clip
+        # service resolves it at render time.
+        self.output_aspect_ratios = list(output_aspect_ratios or [])
         self.clip_settings = clip_settings or {}
         # Decides which AI provider every text step runs on. Resolved once at
         # the route from the user's active subscription, so a plan change
@@ -688,12 +691,6 @@ class PipelineOrchestrator:
         if isinstance(result, dict):
             return list(result.get("segments", []) or [])
         return list(getattr(result, "segments", []) or [])
-
-    def _default_aspect_ratios(self) -> list[str]:
-        from core.config import get_settings
-
-        raw = getattr(get_settings(), "DEFAULT_OUTPUT_ASPECT_RATIOS", "9:16,1:1,4:5,16:9")
-        return [item.strip() for item in raw.split(",") if item.strip()]
 
     async def _step_aspect_ratio_render(self, context: dict) -> dict:
         self._notify("Calculating aspect-ratio crops...", 40)

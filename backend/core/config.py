@@ -57,7 +57,10 @@ class BaseConfig(BaseSettings):
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.0-flash"
 
-    DEFAULT_OUTPUT_ASPECT_RATIOS: str = "9:16,1:1,4:5,16:9"
+    # Pins every clip to these shapes regardless of content. Left empty -- the
+    # default -- the content category decides (see CATEGORY_ASPECT_RATIOS), so
+    # a gaming clip is cut 9:16 only instead of in all four shapes.
+    DEFAULT_OUTPUT_ASPECT_RATIOS: str = ""
     CLIP_OUTPUT_DIR: str = "./generated_clips"
     FRAME_ANALYSIS_INTERVAL: float = 5.0
     CANDIDATE_FRAME_INTERVAL: float = 2.0

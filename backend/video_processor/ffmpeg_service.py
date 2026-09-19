@@ -242,6 +242,43 @@ class FFmpegService:
         )
         log.debug("Crop filter graph", extra={"video_filter": video_filter})
 
+        # A crop that covers the whole frame at the source's own size changes
+        # nothing, so re-encoding it only costs time -- a 39s 1080p clip took
+        # 114s to produce a file identical in content to a stream copy. Copying
+        # needs the output size to match the source too, since a copy cannot
+        # scale.
+        if (
+            crop_width >= source_width
+            and crop_height >= source_height
+            and target_width == source_width
+            and target_height == source_height
+        ):
+            returncode, stderr = await self._run_ffmpeg_copy(
+                input_path, output_path, start_time, duration
+            )
+            if returncode == 0 and output_file.exists() and output_file.stat().st_size > 0:
+                size_mb = output_file.stat().st_size / (1024 * 1024)
+                log.info(
+                    "Copied %.2fs %dx%d in %.1fs (%.2fMB)",
+                    duration, target_width, target_height, time.time() - started, size_mb,
+                    extra={
+                        "output_path": output_path,
+                        "start_time": round(start_time, 3),
+                        "end_time": round(start_time + duration, 3),
+                        "crop": "none",
+                        "tracking_points": len(crop_tracking),
+                    },
+                )
+                return
+            # Copying can fail on sources whose keyframes do not line up with
+            # the cut; fall through and encode rather than lose the clip.
+            log.warning(
+                "Stream copy failed, re-encoding: %s",
+                (stderr or "")[-200:],
+                extra={"output_path": output_path},
+            )
+            output_file.unlink(missing_ok=True)
+
         encoder_args = await self._get_encoder_args()
         returncode, stderr = await self._run_ffmpeg(
             input_path, output_path, start_time, duration, video_filter, encoder_args
@@ -280,6 +317,36 @@ class FFmpegService:
                 "tracking_points": len(crop_tracking),
             },
         )
+
+    async def _run_ffmpeg_copy(
+        self,
+        input_path: str,
+        output_path: str,
+        start_time: float,
+        duration: float,
+    ) -> tuple[int, str]:
+        """Cut without re-encoding, for when no crop or scale is needed.
+
+        Seeking is done after ``-i`` so the cut lands on the requested second
+        rather than the nearest preceding keyframe; with ``-c copy`` an input
+        seek would silently shift the clip by up to a keyframe interval.
+        """
+        cmd = [
+            "ffmpeg", "-y", "-nostdin",
+            "-i", input_path,
+            "-ss", str(start_time),
+            "-t", str(duration),
+            "-c", "copy",
+            "-avoid_negative_ts", "make_zero",
+            "-movflags", "+faststart",
+            output_path,
+        ]
+        log.debug("Running FFmpeg (stream copy)", extra={"cmd": " ".join(cmd)})
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        _, stderr = await proc.communicate()
+        return proc.returncode, stderr.decode("utf-8", errors="ignore")
 
     async def _run_ffmpeg(
         self,

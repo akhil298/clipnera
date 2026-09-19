@@ -18,6 +18,7 @@ from core.exceptions import CustomException
 from core.logging_config import get_logger
 from video_processor.clip_cutter import ClipCutter, CutRequest
 from video_processor.ffmpeg_service import FFmpegService
+from content_intelligence.service import FALLBACK_ASPECT_RATIOS
 from video_processor.geometry import SUPPORTED_ASPECT_RATIOS, output_dimensions
 
 settings = get_settings()
@@ -519,9 +520,17 @@ class ClipService:
         transcript_segments = list(transcript_segments or [])
         if isinstance(output_aspect_ratios, str):
             output_aspect_ratios = [item.strip() for item in output_aspect_ratios.split(",") if item.strip()]
-        ratios = [r for r in (output_aspect_ratios or self._content_ai.default_aspect_ratios()) if r in SUPPORTED_ASPECT_RATIOS]
+        # A caller-supplied list is honoured exactly; only the fallback consults
+        # the content category, which the clips all share by this point.
+        if not output_aspect_ratios:
+            category = next(
+                (str(c.get("content_category")) for c in clips if c.get("content_category")),
+                "unknown",
+            )
+            output_aspect_ratios = self._content_ai.default_aspect_ratios(category)
+        ratios = [r for r in output_aspect_ratios if r in SUPPORTED_ASPECT_RATIOS]
         if not ratios:
-            ratios = list(SUPPORTED_ASPECT_RATIOS)
+            ratios = list(FALLBACK_ASPECT_RATIOS)
 
         render_errors: list[str] = []
 

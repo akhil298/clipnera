@@ -605,18 +605,28 @@ export const DEFAULT_PIPELINE_STEPS = [
   'aspect_ratio_render',
   'clip_generation',
 ];
-const DEFAULT_OUTPUT_ASPECT_RATIOS = ['9:16', '1:1', '4:5', '16:9'];
-
+/**
+ * Shapes to render, when the user has picked some.
+ *
+ * Left undefined the backend decides from the video's content category -- a
+ * gaming clip is cut 9:16 only, a tutorial 9:16 and 16:9. Sending all four
+ * regardless, as this used to, quadrupled render time to produce files nothing
+ * read. Only pass a list when the user actually chose one.
+ */
 export const pipelineApi = {
   start: (
     projectId: string,
     steps: string[] = DEFAULT_PIPELINE_STEPS,
     audioConfig: Record<string, any> = {},
-    outputAspectRatios: string[] = DEFAULT_OUTPUT_ASPECT_RATIOS,
+    outputAspectRatios?: string[],
   ) =>
     authedRequest<{ project_id: string; status: string; selected_steps: string[]; credits_deducted: number }>(`/pipeline/start/${projectId}`, {
       method: 'POST',
-      body: JSON.stringify({ steps, audio_config: audioConfig, output_aspect_ratios: outputAspectRatios }),
+      body: JSON.stringify({
+        steps,
+        audio_config: audioConfig,
+        ...(outputAspectRatios?.length ? { output_aspect_ratios: outputAspectRatios } : {}),
+      }),
     }),
   subscribeProgress: (
     projectId: string,
@@ -706,11 +716,15 @@ export const pipelineApi = {
     projectId: string,
     steps: string[] = DEFAULT_PIPELINE_STEPS,
     audioConfig: Record<string, any> = {},
-    outputAspectRatios: string[] = DEFAULT_OUTPUT_ASPECT_RATIOS,
+    outputAspectRatios?: string[],
   ) =>
     authedRequest<{ project_id: string; status: string; selected_steps: string[]; credits_deducted: number }>(`/pipeline/resume/${projectId}`, {
       method: 'POST',
-      body: JSON.stringify({ steps, audio_config: audioConfig, output_aspect_ratios: outputAspectRatios }),
+      body: JSON.stringify({
+        steps,
+        audio_config: audioConfig,
+        ...(outputAspectRatios?.length ? { output_aspect_ratios: outputAspectRatios } : {}),
+      }),
     }),
 };
 

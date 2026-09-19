@@ -130,8 +130,43 @@ class TestAnthropicRequestShape:
             max_tokens=500, json_mode=True, json_schema=MOMENTS_JSON_SCHEMA,
         )
         assert captured["output_config"]["format"]["type"] == "json_schema"
-        assert captured["output_config"]["format"]["schema"] is MOMENTS_JSON_SCHEMA
+        sent = captured["output_config"]["format"]["schema"]
+        # Sanitized, not the constant itself: the API rejects numeric range
+        # keywords, so they are stripped on the way out while the shared
+        # constant keeps them for the providers and tests that want them.
+        assert sent["properties"]["moments"]["items"]["required"] ==             MOMENTS_JSON_SCHEMA["properties"]["moments"]["items"]["required"]
         assert captured["output_config"]["effort"]
+
+    @pytest.mark.asyncio
+    async def test_range_keywords_are_stripped_from_the_sent_schema(self):
+        # The API answers 400 "For 'number' type, properties maximum, minimum
+        # are not supported", which used to fail the call and silently drop the
+        # step to its heuristic fallback.
+        client, captured = _capturing_anthropic('{"moments": []}')
+        await client.chat(
+            [{"role": "user", "content": "hi"}],
+            max_tokens=500, json_mode=True, json_schema=MOMENTS_JSON_SCHEMA,
+        )
+        score = captured["output_config"]["format"]["schema"]["properties"]["moments"]["items"]["properties"]["score"]
+        assert "minimum" not in score and "maximum" not in score
+        # The bound still reaches the model, as prose the API accepts.
+        assert "minimum: 0" in score["description"]
+        assert "maximum: 1" in score["description"]
+        # The shared constant is not mutated.
+        assert MOMENTS_JSON_SCHEMA["properties"]["moments"]["items"]["properties"]["score"]["maximum"] == 1
+
+    @pytest.mark.asyncio
+    async def test_classification_schema_survives_sanitizing(self):
+        client, captured = _capturing_anthropic('{"category": "tech"}')
+        await client.chat(
+            [{"role": "user", "content": "hi"}],
+            max_tokens=300, json_mode=True, json_schema=CLASSIFICATION_JSON_SCHEMA,
+        )
+        sent = captured["output_config"]["format"]["schema"]
+        assert "minimum" not in sent["properties"]["confidence"]
+        # The enum is supported and must survive untouched.
+        assert sent["properties"]["category"]["enum"] == list(CONTENT_TAXONOMY)
+        assert sent["required"] == CLASSIFICATION_JSON_SCHEMA["required"]
 
     @pytest.mark.asyncio
     async def test_system_prompt_is_cached(self):

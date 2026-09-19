@@ -103,6 +103,14 @@ def _apply_entitlements(
     downgraded user's existing presets keep working at their new tier instead of
     erroring; an outright unusable request (no permitted ratio) still raises.
     """
+    # An empty request means "decide from the content category later", which is
+    # not over-reach and must not 403; the renderer clamps its own choice to the
+    # plan. Only a request that named ratios, none of them permitted, is refused.
+    if not output_aspect_ratios:
+        return [], (True if entitlements.watermark_forced else watermark_enabled), _clamp_clip_settings(
+            entitlements, clip_settings
+        )
+
     allowed_ratios = [r for r in output_aspect_ratios if entitlements.allows_aspect_ratio(r)]
     if not allowed_ratios:
         raise CustomException(
@@ -123,6 +131,11 @@ def _apply_entitlements(
     # A forced watermark cannot be switched off by the client.
     effective_watermark = True if entitlements.watermark_forced else watermark_enabled
 
+    return allowed_ratios, effective_watermark, _clamp_clip_settings(entitlements, clip_settings)
+
+
+def _clamp_clip_settings(entitlements, clip_settings: dict | None) -> dict:
+    """Clamp clip count to the plan's cap and refuse styles it does not include."""
     settings = dict(clip_settings or {})
     requested_clips = settings.get("max_clips")
     cap = entitlements.max_clips_per_video
@@ -141,25 +154,23 @@ def _apply_entitlements(
             code="CAPTION_STYLE_NOT_ENTITLED",
             status_code=403,
         )
-
-    return allowed_ratios, effective_watermark, settings
-
-
-DEFAULT_OUTPUT_ASPECT_RATIOS = ["9:16", "1:1", "4:5", "16:9"]
+    return settings
 
 
 def _resolve_aspect_ratios(raw: Any) -> list[str]:
-    """Validate the requested output formats, falling back to the full set.
+    """Validate the requested output formats; empty means "let the pipeline pick".
 
-    This used to be hardcoded to ["9:16"], which silently dropped the other
-    three formats the client asked for.
+    An empty list is passed through rather than filled in here, so the renderer
+    can choose from the video's content category -- naming every ratio at this
+    point rendered four files per clip for content published in one shape. A
+    client that does name ratios still gets exactly those.
     """
     from video_processor.geometry import SUPPORTED_ASPECT_RATIOS
 
     if isinstance(raw, str):
         raw = [item.strip() for item in raw.split(",")]
     if not isinstance(raw, list) or not raw:
-        return list(DEFAULT_OUTPUT_ASPECT_RATIOS)
+        return []
 
     resolved: list[str] = []
     for item in raw:
@@ -168,7 +179,7 @@ def _resolve_aspect_ratios(raw: Any) -> list[str]:
             resolved.append(ratio)
         elif ratio and ratio not in SUPPORTED_ASPECT_RATIOS:
             log.warning("Ignoring unsupported aspect ratio: %s", ratio)
-    return resolved or list(DEFAULT_OUTPUT_ASPECT_RATIOS)
+    return resolved
 
 
 DEFAULT_AUDIO_CONFIG = {

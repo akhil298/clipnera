@@ -17,6 +17,33 @@ from content_intelligence.scorer import ClipScorer
 
 log = get_logger(__name__)
 
+# Which shapes each kind of content is actually posted in. Rendering every
+# supported ratio for every clip quadrupled encode time to produce files nobody
+# asked for, so a clip is now cut only in the shapes its category is published
+# in. Categories absent here fall back to ``FALLBACK_ASPECT_RATIOS``.
+CATEGORY_ASPECT_RATIOS: dict[str, tuple[str, ...]] = {
+    # Shorts-native: 16:9 gameplay does not survive a square crop.
+    "gaming": ("9:16",),
+    # Talking heads read well in the square feed as well as vertical.
+    "podcast_interview": ("9:16", "1:1"),
+    "news_politics": ("9:16", "1:1"),
+    # Long-form audiences are on YouTube, so landscape earns its render.
+    "tutorial_educational": ("9:16", "16:9"),
+    "tech": ("9:16", "16:9"),
+    "music": ("9:16", "16:9"),
+    "sports": ("9:16", "16:9"),
+    # 4:5 is the tallest shape the Instagram feed allows.
+    "fitness_health": ("9:16", "4:5"),
+    "food": ("9:16", "4:5"),
+    # Pure short-form.
+    "comedy": ("9:16",),
+    "reaction": ("9:16",),
+    "vlog": ("9:16",),
+    "unknown": ("9:16",),
+}
+
+FALLBACK_ASPECT_RATIOS: tuple[str, ...] = ("9:16",)
+
 
 class ContentIntelligenceService:
     def __init__(self, is_pro: bool = False) -> None:
@@ -101,11 +128,24 @@ class ContentIntelligenceService:
         return await self._metadata_gen.generate_batch(clips)
 
     @staticmethod
-    def default_aspect_ratios() -> list[str]:
+    def default_aspect_ratios(content_category: str | None = None) -> list[str]:
+        """Shapes to render when the caller did not name any.
+
+        ``DEFAULT_OUTPUT_ASPECT_RATIOS`` still wins when a deployment sets it,
+        which is what pins a machine to one shape for local work and A/B runs.
+        Left unset, the category decides, so a gaming clip is not also cut
+        square and landscape for nobody.
+        """
         from core.config import get_settings
 
-        raw = getattr(get_settings(), "DEFAULT_OUTPUT_ASPECT_RATIOS", "9:16,1:1,4:5,16:9")
-        return [item.strip() for item in raw.split(",") if item.strip()]
+        raw = (getattr(get_settings(), "DEFAULT_OUTPUT_ASPECT_RATIOS", "") or "").strip()
+        if raw:
+            configured = [item.strip() for item in raw.split(",") if item.strip()]
+            if configured:
+                return configured
+
+        category = (content_category or "unknown").strip().lower()
+        return list(CATEGORY_ASPECT_RATIOS.get(category, FALLBACK_ASPECT_RATIOS))
 
     async def _research_topic(self, video_path: str, transcript_segments: list[dict]) -> dict:
         return await self._researcher.research(video_path, transcript_segments)

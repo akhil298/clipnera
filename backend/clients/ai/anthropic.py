@@ -74,6 +74,44 @@ def input_token_budget(max_output_tokens: int, model: str | None = None) -> int:
     return max(4_096, ceiling - max_output_tokens - TOKEN_ESTIMATE_SAFETY_MARGIN)
 
 
+# ``output_config.format.schema`` accepts a subset of JSON Schema: numeric range
+# keywords are rejected outright with a 400 ("For 'number' type, properties
+# maximum, minimum are not supported"), which used to fail the whole call and
+# drop the step to its heuristic fallback. They are stripped here and restated
+# in the field's description, so the model still sees the intended range while
+# the request stays valid. Callers keep one schema constant that works on every
+# provider.
+_UNSUPPORTED_SCHEMA_KEYWORDS = (
+    "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum",
+    "multipleOf", "minLength", "maxLength", "pattern",
+    "minItems", "maxItems", "uniqueItems",
+)
+
+
+def sanitize_schema(node: Any) -> Any:
+    """Return ``node`` with keywords the API rejects removed, recursively."""
+    if isinstance(node, list):
+        return [sanitize_schema(item) for item in node]
+    if not isinstance(node, dict):
+        return node
+
+    cleaned: dict[str, Any] = {}
+    dropped: list[str] = []
+    for key, value in node.items():
+        if key in _UNSUPPORTED_SCHEMA_KEYWORDS:
+            dropped.append(f"{key}: {value}")
+            continue
+        cleaned[key] = sanitize_schema(value)
+
+    if dropped:
+        # Keep the constraint visible to the model even though the API will not
+        # enforce it.
+        note = "Constraints: " + ", ".join(dropped) + "."
+        existing = cleaned.get("description")
+        cleaned["description"] = f"{existing} {note}".strip() if existing else note
+    return cleaned
+
+
 class Anthropic(BaseAI):
     """Claude chat client used interchangeably with ``clients.ai.groq.Groq``."""
 
@@ -139,7 +177,7 @@ class Anthropic(BaseAI):
             # The API enforces this: the reply cannot come back malformed or
             # missing a required field, which is the whole reason to prefer
             # Claude for the steps whose output the pipeline parses.
-            output_config["format"] = {"type": "json_schema", "schema": json_schema}
+            output_config["format"] = {"type": "json_schema", "schema": sanitize_schema(json_schema)}
         request["output_config"] = output_config
         request.update(kwargs)
 
