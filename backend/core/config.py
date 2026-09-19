@@ -31,11 +31,11 @@ class BaseConfig(BaseSettings):
     SECRET_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
-    # Text provider for the pipeline: "auto" | "groq" | "anthropic".
+    # Text provider for the pipeline: "auto" | "groq" | "".
     # "auto" decides per user -- pro plans get Anthropic (1M context,
     # schema-enforced JSON), free plans get Groq's free tier. Naming a provider
     # pins every run to it, which is what local work and A/B runs want.
-    AI_PROVIDER: str = "auto"
+    AI_PROVIDER: str = "anthropic"
 
     # Emails always treated as paid, whatever the subscription table says.
     # For founders, staff and demo accounts. Comma-separated, case-insensitive.
