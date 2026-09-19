@@ -25,8 +25,9 @@ log = get_logger(__name__)
 
 pipeline = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
-# Clip generation only. Subtitle styling and burn-in run at export time, once the
-# user has chosen a style, so the generated clips stay style-agnostic.
+# Clip generation plus a burn-in pass so a default run yields captioned clips.
+# Re-styling later goes through /subtitle-styling/burn/{clip_id}, which replaces
+# the burned track with the style the user picks.
 DEFAULT_PIPELINE_STEPS = [
     "audio_extraction",
     "ai_noise_cancellation",
@@ -39,6 +40,9 @@ DEFAULT_PIPELINE_STEPS = [
     "metadata_generation",
     "aspect_ratio_render",
     "clip_generation",
+    # Without this the pipeline produced clips with no captions at all, because
+    # nothing else in a default run ever calls the burner.
+    "burn_in_export",
 ]
 
 # Steps the orchestrator can actually run. A request naming anything else --
@@ -84,6 +88,87 @@ def _resolve_steps(requested: list[str]) -> list[PipelineStepType]:
             status_code=400,
         )
     return resolved
+
+
+def _apply_entitlements(
+    entitlements,
+    output_aspect_ratios: list[str],
+    watermark_enabled: bool,
+    clip_settings: dict | None,
+) -> tuple[list[str], bool, dict | None]:
+    """Clamp a run request to what the caller's plan permits.
+
+    Enforced here rather than only in the UI, because hiding a control does not
+    stop a crafted request. Over-reach is clamped rather than rejected, so a
+    downgraded user's existing presets keep working at their new tier instead of
+    erroring; an outright unusable request (no permitted ratio) still raises.
+    """
+    allowed_ratios = [r for r in output_aspect_ratios if entitlements.allows_aspect_ratio(r)]
+    if not allowed_ratios:
+        raise CustomException(
+            message=(
+                f"Your {entitlements.plan} plan supports "
+                f"{', '.join(entitlements.aspect_ratios)}. Upgrade to export other formats."
+            ),
+            code="ASPECT_RATIO_NOT_ENTITLED",
+            status_code=403,
+        )
+    if len(allowed_ratios) != len(output_aspect_ratios):
+        log.info(
+            "Dropped aspect ratios not covered by plan %s: %s",
+            entitlements.plan,
+            sorted(set(output_aspect_ratios) - set(allowed_ratios)),
+        )
+
+    # A forced watermark cannot be switched off by the client.
+    effective_watermark = True if entitlements.watermark_forced else watermark_enabled
+
+    settings = dict(clip_settings or {})
+    requested_clips = settings.get("max_clips")
+    cap = entitlements.max_clips_per_video
+    if not isinstance(requested_clips, int) or requested_clips <= 0:
+        settings["max_clips"] = cap
+    else:
+        settings["max_clips"] = min(requested_clips, cap)
+
+    style = settings.get("caption_style") or settings.get("style_type")
+    if style and not entitlements.allows_caption_style(str(style)):
+        raise CustomException(
+            message=(
+                f"The '{style}' caption style requires a paid plan. "
+                "Upgrade to unlock the full caption library."
+            ),
+            code="CAPTION_STYLE_NOT_ENTITLED",
+            status_code=403,
+        )
+
+    return allowed_ratios, effective_watermark, settings
+
+
+DEFAULT_OUTPUT_ASPECT_RATIOS = ["9:16", "1:1", "4:5", "16:9"]
+
+
+def _resolve_aspect_ratios(raw: Any) -> list[str]:
+    """Validate the requested output formats, falling back to the full set.
+
+    This used to be hardcoded to ["9:16"], which silently dropped the other
+    three formats the client asked for.
+    """
+    from video_processor.geometry import SUPPORTED_ASPECT_RATIOS
+
+    if isinstance(raw, str):
+        raw = [item.strip() for item in raw.split(",")]
+    if not isinstance(raw, list) or not raw:
+        return list(DEFAULT_OUTPUT_ASPECT_RATIOS)
+
+    resolved: list[str] = []
+    for item in raw:
+        ratio = str(item).strip()
+        if ratio in SUPPORTED_ASPECT_RATIOS and ratio not in resolved:
+            resolved.append(ratio)
+        elif ratio and ratio not in SUPPORTED_ASPECT_RATIOS:
+            log.warning("Ignoring unsupported aspect ratio: %s", ratio)
+    return resolved or list(DEFAULT_OUTPUT_ASPECT_RATIOS)
 
 
 DEFAULT_AUDIO_CONFIG = {
@@ -198,7 +283,7 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
         # Subtitles are burned at export time from the style the user picks, so
         # caption steps are deliberately absent from the default run.
         selected_steps = _resolve_steps(body.get("steps", DEFAULT_PIPELINE_STEPS))
-        output_aspect_ratios = ["9:16"]  # Single aspect ratio for faster processing
+        output_aspect_ratios = _resolve_aspect_ratios(body.get("output_aspect_ratios"))
         audio_config = body.get("audio_config", DEFAULT_AUDIO_CONFIG)
         watermark_enabled = body.get("watermark_enabled", True)
         clip_settings = body.get("clip_settings") if isinstance(body.get("clip_settings"), dict) else None
@@ -209,9 +294,31 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
         ledger_repo = CreditLedgerRepository(session)
         subscription_service = SubscriptionService(plan_repo, sub_repo, tx_repo, ledger_repo)
 
+        # Which AI provider this run uses. Resolved once, here, so the whole
+        # run is consistent even if the plan changes while it is in flight.
+        entitlements = await subscription_service.get_entitlements(user["user_id"])
+        is_pro = entitlements.pro_ai_provider
+        log.info(
+            "Pipeline provider tier resolved: project=%s user=%s plan=%s is_pro=%s",
+            project_id, user["user_id"], entitlements.plan, is_pro,
+        )
+
+        output_aspect_ratios, watermark_enabled, clip_settings = _apply_entitlements(
+            entitlements, output_aspect_ratios, watermark_enabled, clip_settings
+        )
+
         duration_seconds = project.duration_seconds or 0
         if duration_seconds <= 0:
             raise CustomException(message="Video duration not available. Please wait for download to complete.", code="DURATION_UNAVAILABLE", status_code=400)
+        if duration_seconds > entitlements.max_upload_duration_seconds:
+            raise CustomException(
+                message=(
+                    f"This video is {duration_seconds // 60} minutes. Your {entitlements.plan} plan "
+                    f"supports up to {entitlements.max_upload_duration_seconds // 60} minutes per video."
+                ),
+                code="DURATION_NOT_ENTITLED",
+                status_code=403,
+            )
 
         await pipeline_repo.create_pipeline(project_id, selected_steps)
 
@@ -255,6 +362,7 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
             watermark_enabled=watermark_enabled,
             output_aspect_ratios=output_aspect_ratios,
             clip_settings=clip_settings,
+            is_pro=is_pro,
         )
 
         _active_orchestrators[project_id] = orchestrator
@@ -268,6 +376,7 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
             "output_aspect_ratios": output_aspect_ratios,
             "watermark_enabled": watermark_enabled,
             "credits_deducted": credit_cost,
+            "is_pro": is_pro,
         }
 
 
@@ -301,6 +410,77 @@ async def pipeline_progress(project_id: str, user: CurrentUserDep):
             await asyncio.sleep(1)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+def _serialize_step(log_entry) -> dict[str, Any]:
+    return {
+        "step": log_entry.step,
+        "status": log_entry.status,
+        "progress_percent": log_entry.progress_percent,
+        "message": log_entry.message,
+        "artifact_path": log_entry.artifact_path,
+        "started_at": log_entry.started_at.isoformat() if log_entry.started_at else None,
+        "finished_at": log_entry.finished_at.isoformat() if log_entry.finished_at else None,
+    }
+
+
+def _overall_status(state, steps: list[dict[str, Any]]) -> str:
+    if state.error:
+        return "error"
+    if state.is_completed:
+        return "completed"
+    if any(s["status"] == "running" for s in steps):
+        return "running"
+    return "pending"
+
+
+@pipeline.post("/status/batch")
+async def pipeline_status_batch(body: dict[str, Any], user: CurrentUserDep):
+    """Status for many projects in one round trip.
+
+    The dashboard previously issued one GET /status/{id} per project on load.
+    Those calls share a semaphore and a 15-connection pool, so a user with a
+    dozen projects queued them and every other request -- including the ones
+    behind a button click -- waited on the pool. This answers the whole list
+    with three queries regardless of project count.
+    """
+    project_ids = body.get("project_ids") or []
+    if not isinstance(project_ids, list):
+        raise CustomException(message="project_ids must be a list", code="INVALID_BODY", status_code=400)
+    project_ids = [str(pid) for pid in project_ids][:200]
+    if not project_ids:
+        return {"statuses": {}}
+
+    async with AsyncSessionLocal() as session:
+        clip_repo = ClipRepository(session)
+        pipeline_repo = PipelineRepository(session)
+
+        owned = await clip_repo.list_projects(user["user_id"])
+        owned_ids = {p.id for p in owned} & set(project_ids)
+        if not owned_ids:
+            return {"statuses": {}}
+
+        states = await pipeline_repo.get_latest_pipelines(list(owned_ids))
+        logs_by_pipeline = await pipeline_repo.get_step_logs_for_pipelines(
+            [state.id for state in states.values()]
+        )
+
+        statuses: dict[str, Any] = {}
+        for project_id in owned_ids:
+            state = states.get(project_id)
+            if not state:
+                statuses[project_id] = {"project_id": project_id, "status": "not_started", "steps": []}
+                continue
+            steps = [_serialize_step(entry) for entry in logs_by_pipeline.get(state.id, [])]
+            statuses[project_id] = {
+                "project_id": project_id,
+                "status": _overall_status(state, steps),
+                "current_step": state.current_step,
+                "is_completed": state.is_completed,
+                "error": state.error,
+                "steps": steps,
+            }
+        return {"statuses": statuses}
 
 
 @pipeline.get("/status/{project_id}")
@@ -404,7 +584,7 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
 
         body = body or {}
         selected_steps = _resolve_steps(body.get("steps", DEFAULT_PIPELINE_STEPS))
-        output_aspect_ratios = ["9:16"]  # Single aspect ratio for faster processing
+        output_aspect_ratios = _resolve_aspect_ratios(body.get("output_aspect_ratios"))
         audio_config = body.get("audio_config", DEFAULT_AUDIO_CONFIG)
         watermark_enabled = body.get("watermark_enabled", True)
         clip_settings = body.get("clip_settings") if isinstance(body.get("clip_settings"), dict) else None
@@ -415,9 +595,24 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
         ledger_repo = CreditLedgerRepository(session)
         subscription_service = SubscriptionService(plan_repo, sub_repo, tx_repo, ledger_repo)
 
+        entitlements = await subscription_service.get_entitlements(user["user_id"])
+        is_pro = entitlements.pro_ai_provider
+        output_aspect_ratios, watermark_enabled, clip_settings = _apply_entitlements(
+            entitlements, output_aspect_ratios, watermark_enabled, clip_settings
+        )
+
         duration_seconds = project.duration_seconds or 0
         if duration_seconds <= 0:
             raise CustomException(message="Video duration not available.", code="DURATION_UNAVAILABLE", status_code=400)
+        if duration_seconds > entitlements.max_upload_duration_seconds:
+            raise CustomException(
+                message=(
+                    f"This video is {duration_seconds // 60} minutes. Your {entitlements.plan} plan "
+                    f"supports up to {entitlements.max_upload_duration_seconds // 60} minutes per video."
+                ),
+                code="DURATION_NOT_ENTITLED",
+                status_code=403,
+            )
 
         credit_cost = subscription_service.calculate_video_credit_cost(duration_seconds)
         try:
@@ -459,6 +654,7 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
             watermark_enabled=watermark_enabled,
             output_aspect_ratios=output_aspect_ratios,
             clip_settings=clip_settings,
+            is_pro=is_pro,
             resume=True,
         )
 
@@ -471,6 +667,7 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
             "output_aspect_ratios": output_aspect_ratios,
             "watermark_enabled": watermark_enabled,
             "credits_deducted": credit_cost,
+            "is_pro": is_pro,
         }
 
 

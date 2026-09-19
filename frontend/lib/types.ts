@@ -1,4 +1,4 @@
-﻿export type AspectRatio = '9:16' | '1:1' | '16:9';
+﻿export type AspectRatio = '9:16' | '1:1' | '4:5' | '16:9';
 import type { CaptionPreset } from '@/lib/utils/captionStyles.generated';
 export type { CaptionPreset };
 export type LayoutMode = 'single_speaker' | 'split_screen' | 'screen_share_focus';

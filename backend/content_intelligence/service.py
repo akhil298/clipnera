@@ -5,7 +5,7 @@ import json
 from typing import Any, Callable
 from uuid import uuid4
 
-from clients.ai.groq import Groq
+from clients.ai import get_text_client
 from core.database import AsyncSessionLocal
 from core.logging_config import get_logger
 from content_intelligence.analyzer import FrameAnalyzer
@@ -19,14 +19,21 @@ log = get_logger(__name__)
 
 
 class ContentIntelligenceService:
-    def __init__(self) -> None:
-        self._groq = Groq()
-        self._researcher = TopicResearcher(self._groq)
-        self._classifier = ContentClassifier(self._groq)
+    def __init__(self, is_pro: bool = False) -> None:
+        # One client per step, not per service: STEP_POLICY pins the mechanical
+        # steps to the free provider whatever the user pays, so spend lands on
+        # the calls where being right actually matters. AI_PROVIDER can pin
+        # everything to one provider for local work and A/B runs.
+        self._is_pro = is_pro
+        self._researcher = TopicResearcher(get_text_client(is_pro=is_pro, step="topic_research"))
+        self._classifier = ContentClassifier(get_text_client(is_pro=is_pro, step="classification"))
         self._analyzer = FrameAnalyzer()
-        self._highlighter = HighlightDetector(self._groq)
+        self._highlighter = HighlightDetector(get_text_client(is_pro=is_pro, step="highlight_detection"))
         self._scorer = ClipScorer()
-        self._metadata_gen = MetadataGenerator(self._groq)
+        self._metadata_gen = MetadataGenerator(
+            get_text_client(is_pro=is_pro, step="titles"),
+            cue_client=get_text_client(is_pro=is_pro, step="emoji_cues"),
+        )
 
     async def analyze_project(
         self,
@@ -58,6 +65,10 @@ class ContentIntelligenceService:
 
         await self._persist_analysis(project_id, analysis)
         return analysis
+
+    @property
+    def is_pro(self) -> bool:
+        return self._is_pro
 
     async def detect_highlights(
         self,

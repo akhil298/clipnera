@@ -4,7 +4,6 @@ import json
 import math
 from typing import Any
 
-from clients.ai.groq import input_token_budget
 from content_intelligence.transcript_windows import (
     TranscriptWindow,
     allocate_per_window,
@@ -18,14 +17,15 @@ log = get_logger(__name__)
 
 MIN_CLIP_DURATION = 20.0
 MAX_CLIP_DURATION = 60.0
-# Clips kept per hour of source. Short-form tools are expected to surface a
-# shelf of options, not a single pick, so this is a ceiling on density rather
-# than a target; scoring still decides which ones survive. Roughly one clip per
-# minute, which is the density a competitive short-form tool returns.
-MAX_CLIPS_PER_HOUR = 60.0
+# Clips kept per hour of source. A ceiling on density rather than a target;
+# scoring still decides which ones survive. One per three minutes is around
+# what a competitive short-form tool returns, and past that the extra clips are
+# mostly weaker variants nobody publishes -- while every one of them costs a
+# metadata call.
+MAX_CLIPS_PER_HOUR = 20.0
 # No matter how short the video, offer at least this many candidates, as long
 # as the transcript can supply them.
-MIN_CLIPS = 8
+MIN_CLIPS = 5
 # Two kept clips should not start within this many seconds of each other, so a
 # model that fixates on one passage cannot fill the whole result set.
 MIN_CLIP_SPACING_SECONDS = 15.0
@@ -39,6 +39,51 @@ WINDOW_MAX_OUTPUT_TOKENS = 2600
 # list produces padding and risks truncating the reply; a higher target is met
 # by having more windows, not longer answers.
 MAX_MOMENTS_PER_WINDOW = 10
+
+# Enforced server-side by providers that support schema-constrained output, so
+# the reply cannot come back missing a field or with the wrong type. Providers
+# without it fall back to the prompt's schema block plus tolerant parsing.
+_SCORE = {"type": "number", "minimum": 0, "maximum": 1}
+MOMENTS_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "moments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "start_time": {"type": "number", "minimum": 0},
+                    "end_time": {"type": "number", "minimum": 0},
+                    "title": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "score": _SCORE,
+                    "scores": {
+                        "type": "object",
+                        "properties": {
+                            "relevance": _SCORE,
+                            "importance": _SCORE,
+                            "emotional_impact": _SCORE,
+                            "information_value": _SCORE,
+                            "standalone_context": _SCORE,
+                            "social_media_value": _SCORE,
+                            "current_relevance": _SCORE,
+                        },
+                        "required": [
+                            "relevance", "importance", "emotional_impact", "information_value",
+                            "standalone_context", "social_media_value", "current_relevance",
+                        ],
+                        "additionalProperties": False,
+                    },
+                    "speakers": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["start_time", "end_time", "title", "reason", "score", "scores", "speakers"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["moments"],
+    "additionalProperties": False,
+}
 # Tokens reserved for the instruction block wrapped around each window.
 PROMPT_OVERHEAD_TOKENS = 500
 
@@ -56,6 +101,20 @@ _FALLBACK_ENGAGEMENT_SIGNALS = (
 class HighlightDetector:
     def __init__(self, text_client: Any | None = None) -> None:
         self._text_client = text_client
+
+    def _input_token_budget(self) -> int:
+        """Prompt budget for one window, from the configured provider.
+
+        Falls back to a conservative figure when the client predates the
+        contract, so a custom or stubbed client still works.
+        """
+        getter = getattr(self._text_client, "input_token_budget", None)
+        if callable(getter):
+            try:
+                return int(getter(WINDOW_MAX_OUTPUT_TOKENS))
+            except Exception as exc:
+                log.warning("Provider did not report a token budget (%s); using the default", exc)
+        return 4096
 
     async def detect(self, video_path: str, transcript_segments: list[dict], analysis: dict, clip_settings: dict[str, Any] | None = None) -> list[dict]:
         duration = self._probe_duration(video_path)
@@ -140,7 +199,10 @@ class HighlightDetector:
         prompt is truncated to its tail and every clip then comes from the end
         of the video.
         """
-        budget = input_token_budget(WINDOW_MAX_OUTPUT_TOKENS) - PROMPT_OVERHEAD_TOKENS
+        # Sized against the configured provider, not a hard-coded one: Groq's
+        # free tier forces several small windows, while a 1M-context provider
+        # takes the whole transcript in a single request.
+        budget = self._input_token_budget() - PROMPT_OVERHEAD_TOKENS
         windows = build_transcript_windows(transcript_segments, budget_tokens=budget)
         if not windows:
             log.warning("No usable transcript segments for highlight detection")
@@ -241,7 +303,8 @@ JSON schema:
                     raw_response = await self._text_client.chat([
                         {"role": "system", "content": "You select high-value, factual, standalone video moments. Return valid JSON only."},
                         {"role": "user", "content": prompt},
-                    ], temperature=0.2, max_tokens=WINDOW_MAX_OUTPUT_TOKENS, json_mode=True)
+                    ], temperature=0.2, max_tokens=WINDOW_MAX_OUTPUT_TOKENS,
+                        json_mode=True, json_schema=MOMENTS_JSON_SCHEMA)
                     data = self._parse_json(raw_response)
                     break
         except Exception as exc:

@@ -18,7 +18,7 @@ import { NotificationsDrawer } from './NotificationsDrawer';
 import { AuthModal } from './AuthModal';
 import { PlanSelectionModal } from './PlanSelectionModal';
 import { PaymentModal } from './PaymentModal';
-import { VideoProject, ViralClip, TabType, UserProfile, Workspace, AppNotification, PipelineStep } from '@/lib/types';
+import { VideoProject, ViralClip, TabType, UserProfile, Workspace, AppNotification, PipelineStep, PipelineStatus } from '@/lib/types';
 import { DashboardSkeleton } from '@/components/skeletons';
 import { userApi, workspaceApi, authApi, pipelineApi, subscriptionApi, clipApi, mapBackendClip } from '@/lib/api';
 import { isAuthenticated, clearAuth } from '@/lib/auth';
@@ -208,13 +208,12 @@ export default function DashboardApp() {
             membersCount: ws.member_count,
           }))
         );
-        const loadedProjects = await Promise.all(projectResponse.projects.map(async (project) => {
-          let pipelineStatus: any = null;
-          try {
-            pipelineStatus = await pipelineApi.getStatus(project.id);
-          } catch {
-            // Projects without a pipeline are still valid folders.
-          }
+        // Build a project from its row plus (optionally) its pipeline status.
+        // Status is applied separately so the list can paint before it arrives.
+        const buildProject = (
+          project: (typeof projectResponse.projects)[number],
+          pipelineStatus: PipelineStatus | null,
+        ): VideoProject => {
           const clips = (project.clips || []).map(mapBackendClip);
           // The pipeline's own view wins when there is one. Going by
           // project.status alone left a project whose run had finished but
@@ -224,7 +223,7 @@ export default function DashboardApp() {
           const processing = failed
             ? false
             : hasPipeline
-              ? !pipelineStatus.is_completed
+              ? !pipelineStatus!.is_completed
               : ['processing', 'pending', 'uploaded'].includes(project.status);
           const completedSteps = (pipelineStatus?.steps || []).filter(
             (step: PipelineStep) => step.status === 'completed' || step.status === 'skipped',
@@ -232,7 +231,7 @@ export default function DashboardApp() {
           const progress = pipelineStatus?.is_completed
             ? 100
             : hasPipeline
-              ? Math.round((completedSteps / pipelineStatus.steps.length) * 100)
+              ? Math.round((completedSteps / pipelineStatus!.steps.length) * 100)
               : 0;
           const youtubeThumbnail = extractYouTubeThumbnail(project.source_url || '');
           return {
@@ -260,13 +259,35 @@ export default function DashboardApp() {
               ? 'failed' as const
               : processing ? 'processing' as const : 'completed' as const,
           } satisfies VideoProject;
-        }));
-        setProjects(loadedProjects);
+        };
+
+        // Paint the list from the project rows alone. Previously this awaited
+        // one status request per project before rendering anything, so the
+        // dashboard stayed blank until the slowest of N requests came back.
+        const baseProjects = projectResponse.projects.map((project) => buildProject(project, null));
+        setProjects(baseProjects);
         const initialProject = routeProjectId
-          ? loadedProjects.find((project) => project.id === routeProjectId)
-          : loadedProjects[0];
+          ? baseProjects.find((project) => project.id === routeProjectId)
+          : baseProjects[0];
         if (initialProject) {
           setActiveProject(initialProject);
+        }
+
+        // Then refine with real pipeline state in a single batched request.
+        if (baseProjects.length > 0) {
+          try {
+            const { statuses } = await pipelineApi.getStatusBatch(baseProjects.map((p) => p.id));
+            if (cancelled) return;
+            const refined = projectResponse.projects.map((project) =>
+              buildProject(project, statuses[project.id] ?? null),
+            );
+            setProjects(refined);
+            setActiveProject((prev) =>
+              prev ? refined.find((p) => p.id === prev.id) ?? prev : prev,
+            );
+          } catch {
+            // The list is already usable without pipeline detail.
+          }
         }
       } catch (err) {
         if (err instanceof Error && err.message.startsWith('Unauthorized:')) {
@@ -283,72 +304,89 @@ export default function DashboardApp() {
   }, [isAuthed]);
 
   useEffect(() => {
-    if (!activeProject?.id || activeProject.processingStatus === 'failed') return;
+    const projectId = activeProject?.id;
+    if (!projectId || activeProject.processingStatus === 'failed') return;
+
     let cancelled = false;
-    let intervalId: NodeJS.Timeout | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let clipsFetchRequested = false;
 
-    const fetchStatus = async () => {
+    const loadClipsOnce = async () => {
+      if (clipsFetchRequested) return;
+      clipsFetchRequested = true;
       try {
-        const status = await pipelineApi.getStatus(activeProject.id);
+        const clipResponse = await clipApi.listClips(projectId);
         if (cancelled) return;
-        setPipelineSteps(status.steps || []);
-
-        if (!status.is_completed && !status.error) {
-          if (!status.steps || status.steps.length === 0) return;
-
-          const allPending = status.steps.every((s) => s.status === 'pending');
-          if (allPending) return;
-
-          const runningStep = status.steps.find((s) => s.status === 'running');
-          const stepCount = status.steps.length;
-          const completedCount = status.steps.filter(
-            (s) => s.status === 'completed' || s.status === 'skipped'
-          ).length;
-          const runningPercent = runningStep?.progress_percent ?? 0;
-          const overallPercent = Math.round(
-            ((completedCount + runningPercent / 100) / stepCount) * 100
-          );
-
-          handleUpdateProject(activeProject.id, {
-            processingProgress: overallPercent,
-            processingStatus: overallPercent >= 100 ? 'completed' : 'processing',
-          });
-        } else {
-          handleUpdateProject(activeProject.id, {
-            processingProgress: 100,
-            processingStatus: status.error ? 'failed' : 'completed',
-          });
-
-          if (!status.error && !clipsFetchRequested) {
-            clipsFetchRequested = true;
-            try {
-              const clipResponse = await clipApi.listClips(activeProject.id);
-              if (cancelled) return;
-              const mappedClips = (clipResponse.clips || []).map(mapBackendClip);
-              handleUpdateProject(activeProject.id, { clips: mappedClips });
-              if (mappedClips.length > 0) {
-                setSelectedClip(mappedClips[0]);
-              }
-            } catch (clipErr) {
-              console.error('Failed to fetch clips:', clipErr);
-            }
-          }
-
-          if (intervalId) clearInterval(intervalId);
+        const mappedClips = (clipResponse.clips || []).map(mapBackendClip);
+        handleUpdateProject(projectId, { clips: mappedClips });
+        if (mappedClips.length > 0) {
+          setSelectedClip((prev) => prev ?? mappedClips[0]);
         }
+      } catch (clipErr) {
+        console.error('Failed to fetch clips:', clipErr);
+      }
+    };
+
+    // A finished project has nothing left to watch. This used to keep polling
+    // every 3s for the life of the page, holding a DB connection each time and
+    // slowing down every other request behind it.
+    if (activeProject.processingStatus === 'completed') {
+      if (activeProject.clips.length === 0) void loadClipsOnce();
+      return;
+    }
+
+    const applyStatus = (status: PipelineStatus): boolean => {
+      setPipelineSteps(status.steps || []);
+
+      if (!status.is_completed && !status.error) {
+        if (!status.steps || status.steps.length === 0) return false;
+        if (status.steps.every((s) => s.status === 'pending')) return false;
+
+        const runningStep = status.steps.find((s) => s.status === 'running');
+        const stepCount = status.steps.length;
+        const completedCount = status.steps.filter(
+          (s) => s.status === 'completed' || s.status === 'skipped'
+        ).length;
+        const runningPercent = runningStep?.progress_percent ?? 0;
+        const overallPercent = Math.round(
+          ((completedCount + runningPercent / 100) / stepCount) * 100
+        );
+
+        handleUpdateProject(projectId, {
+          processingProgress: overallPercent,
+          processingStatus: overallPercent >= 100 ? 'completed' : 'processing',
+        });
+        return false;
+      }
+
+      handleUpdateProject(projectId, {
+        processingProgress: 100,
+        processingStatus: status.error ? 'failed' : 'completed',
+      });
+      if (!status.error) void loadClipsOnce();
+      return true;
+    };
+
+    // Poll only while the run is live, and stop as soon as it settles. Backed
+    // off from 3s so a long encode does not hammer the pool for its duration.
+    const POLL_MS = 5000;
+    const tick = async () => {
+      try {
+        const status = await pipelineApi.getStatus(projectId);
+        if (cancelled) return;
+        if (applyStatus(status)) return;
       } catch {
         if (cancelled) return;
         setPipelineSteps([]);
       }
+      if (!cancelled) timeoutId = setTimeout(tick, POLL_MS);
     };
 
-    fetchStatus();
-    intervalId = setInterval(fetchStatus, 3000);
+    void tick();
 
     return () => {
       cancelled = true;
-      if (intervalId) clearInterval(intervalId);
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [activeProject?.id]);
 

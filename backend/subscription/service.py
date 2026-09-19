@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 
 from subscription.model import Plan, UserSubscription, PaymentTransaction, CreditLedger, PlanSlug, SubscriptionStatus, PaymentStatus
+from subscription.entitlements import Entitlements, entitlements_for
 from subscription.repository import (
     PlanRepository,
     UserSubscriptionRepository,
@@ -16,6 +17,11 @@ from core.logging_config import get_logger
 log = get_logger(__name__)
 
 CREDIT_COST_PER_2_MINUTES = 1
+
+
+# Plans that buy the higher-quality AI path. Listed explicitly so adding a tier
+# is a deliberate decision rather than anything that merely is not "free".
+PAID_PLAN_SLUGS = frozenset({PlanSlug.PRO.value, PlanSlug.PRO_PLUS.value})
 
 
 class SubscriptionService:
@@ -30,6 +36,41 @@ class SubscriptionService:
 
     async def get_user_subscription(self, user_id: str) -> UserSubscription | None:
         return await self._sub_repo.get_active_by_user(user_id)
+
+    async def is_pro_user(self, user_id: str) -> bool:
+        """Whether this user is on a paid plan right now.
+
+        Decides which AI provider their runs use, so it errs toward False: a
+        lookup failure or a lapsed subscription gives the free provider, which
+        still produces clips, rather than silently billing paid inference to
+        someone who is not paying for it.
+        """
+        return (await self.get_entitlements(user_id)).pro_ai_provider
+
+    async def get_user_plan_slug(self, user_id: str) -> str:
+        """The user's current plan slug, or "free" when there is no active one.
+
+        Errs toward free for the same reason is_pro_user does: a lookup failure
+        must not hand out paid capabilities.
+        """
+        try:
+            subscription = await self._sub_repo.get_active_by_user(user_id)
+        except Exception as exc:
+            log.warning("Could not read subscription for user=%s (%s); treating as free", user_id, exc)
+            return PlanSlug.FREE.value
+        if not subscription:
+            return PlanSlug.FREE.value
+
+        plan = await self._plan_repo.get_by_id(subscription.plan_id)
+        if not plan:
+            log.warning("Subscription %s references a missing plan; treating as free", subscription.id)
+            return PlanSlug.FREE.value
+        return str(getattr(plan.slug, "value", plan.slug))
+
+    async def get_entitlements(self, user_id: str) -> Entitlements:
+        """Capabilities this user currently has. Used by the API and enforced
+        by the pipeline routes, so the UI and the server agree on one table."""
+        return entitlements_for(await self.get_user_plan_slug(user_id))
 
     async def get_user_credit_balance(self, user_id: str) -> int:
         return await self._ledger_repo.get_latest_balance(user_id)

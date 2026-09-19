@@ -10,11 +10,26 @@ from core.logging_config import get_logger
 
 log = get_logger(__name__)
 
+
 CONTENT_TAXONOMY = [
     "gaming", "podcast_interview", "tutorial_educational", "vlog",
     "comedy", "reaction", "music", "news_politics", "tech",
     "fitness_health", "food", "sports", "unknown",
 ]
+
+# The category drives framing, hashtags and scoring, so an out-of-taxonomy
+# value is a real failure. The enum makes one impossible where enforced.
+CLASSIFICATION_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "category": {"type": "string", "enum": list(CONTENT_TAXONOMY)},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "keywords": {"type": "array", "items": {"type": "string"}},
+        "reasoning": {"type": "string"},
+    },
+    "required": ["category", "confidence", "keywords", "reasoning"],
+    "additionalProperties": False,
+}
 
 CLASSIFICATION_PROMPT = """You are a content classification assistant. Given a video's title, description, and transcript keywords, determine the most appropriate content category from the following list:
  - gaming
@@ -39,7 +54,6 @@ CLASSIFICATION_PROMPT = """You are a content classification assistant. Given a v
  Current relevance: {current_relevance}
  Keywords: {keywords}
  """
-
 
 class ContentClassifier:
     def __init__(self, text_client: Any) -> None:
@@ -73,7 +87,7 @@ class ContentClassifier:
                     response = await self._text_client.chat([
                         {"role": "system", "content": "You are a content classification assistant. Always return valid JSON."},
                         {"role": "user", "content": prompt},
-                    ], temperature=0.1, max_tokens=300, json_mode=True)
+                    ], temperature=0.1, max_tokens=300, json_mode=True, json_schema=CLASSIFICATION_JSON_SCHEMA)
                     result = self._parse_json(response)
                     category = result.get("category", "unknown")
                     if category not in CONTENT_TAXONOMY:

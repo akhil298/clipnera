@@ -66,6 +66,43 @@ class PipelineRepository:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_latest_pipelines(self, project_ids: list[str]) -> dict[str, PipelineState]:
+        """Most recent PipelineState for each project, in one query.
+
+        The dashboard used to call get_pipeline() once per project, which turned a
+        project list into N round trips and saturated the connection pool.
+        """
+        if not project_ids:
+            return {}
+        stmt = (
+            select(PipelineState)
+            .where(PipelineState.project_id.in_(project_ids))
+            .order_by(PipelineState.project_id, desc(PipelineState.created_at))
+        )
+        result = await self._session.execute(stmt)
+        latest: dict[str, PipelineState] = {}
+        for state in result.scalars().all():
+            # Ordered newest-first per project, so the first row wins.
+            latest.setdefault(state.project_id, state)
+        return latest
+
+    async def get_step_logs_for_pipelines(
+        self, pipeline_ids: list[str]
+    ) -> dict[str, list[PipelineStepLog]]:
+        """Step logs for several pipelines at once, grouped by pipeline id."""
+        if not pipeline_ids:
+            return {}
+        stmt = (
+            select(PipelineStepLog)
+            .where(PipelineStepLog.pipeline_id.in_(pipeline_ids))
+            .order_by(PipelineStepLog.created_at.asc())
+        )
+        result = await self._session.execute(stmt)
+        grouped: dict[str, list[PipelineStepLog]] = {}
+        for entry in result.scalars().all():
+            grouped.setdefault(entry.pipeline_id, []).append(entry)
+        return grouped
+
     async def get_step_logs_for_pipeline(self, project_id: str) -> list[PipelineStepLog]:
         stmt = (
             select(PipelineStepLog)

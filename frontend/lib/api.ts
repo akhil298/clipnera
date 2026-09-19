@@ -685,6 +685,15 @@ export const pipelineApi = {
   },
   getStatus: (projectId: string) =>
     authedRequest<PipelineStatus>(`/pipeline/status/${projectId}`),
+  /**
+   * Status for many projects in one request. Loading the dashboard used to fire
+   * one getStatus per project and block the whole list on the slowest of them.
+   */
+  getStatusBatch: (projectIds: string[]) =>
+    authedRequest<{ statuses: Record<string, PipelineStatus> }>(`/pipeline/status/batch`, {
+      method: 'POST',
+      body: JSON.stringify({ project_ids: projectIds }),
+    }),
   cancel: (projectId: string) =>
     authedRequest<{ project_id: string; status: string }>(`/pipeline/cancel/${projectId}`, {
       method: 'POST',

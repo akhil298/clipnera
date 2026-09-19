@@ -8,6 +8,31 @@ from core.logging_config import get_logger
 
 log = get_logger(__name__)
 
+# Enforced server-side where the provider supports it, so the research block
+# always carries every field the classifier and highlight prompt read.
+_STR_LIST = {"type": "array", "items": {"type": "string"}}
+RESEARCH_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "summary": {"type": "string"},
+        "topics": _STR_LIST,
+        "entities": _STR_LIST,
+        "important_statements": _STR_LIST,
+        "events": _STR_LIST,
+        "key_moments": _STR_LIST,
+        "context_required": _STR_LIST,
+        "current_relevance": {"type": "string"},
+        "research_queries": _STR_LIST,
+        "sources": _STR_LIST,
+    },
+    "required": [
+        "title", "summary", "topics", "entities", "important_statements", "events",
+        "key_moments", "context_required", "current_relevance", "research_queries", "sources",
+    ],
+    "additionalProperties": False,
+}
+
 
 class TopicResearcher:
     def __init__(self, text_client: Any) -> None:
@@ -45,7 +70,7 @@ If the video mentions a prime minister or another public official reacting to so
             response = await self._text_client.chat([
                 {"role": "system", "content": "You are a factual video research assistant. Return valid JSON only."},
                 {"role": "user", "content": prompt},
-            ], temperature=0.1, max_tokens=1800, json_mode=True)
+            ], temperature=0.1, max_tokens=1800, json_mode=True, json_schema=RESEARCH_JSON_SCHEMA)
             data = self._parse_json(response)
         except Exception as exc:
             log.warning(f"Groq topic research failed: {exc}")

@@ -95,10 +95,13 @@ async def list_projects(user: CurrentUserDep):
         clip_repo = ClipRepository(session)
         clip_gen_repo = ClipGenRepository(session)
         projects = await clip_repo.list_projects(user["user_id"])
+        clips_by_project = await clip_gen_repo.list_clips_for_projects(
+            [p.id for p in projects], user["user_id"]
+        )
 
         result = []
         for p in projects:
-            clips = await clip_gen_repo.list_clips(p.id, user["user_id"])
+            clips = clips_by_project.get(p.id, [])
             result.append({
                 "id": p.id,
                 "title": p.title,

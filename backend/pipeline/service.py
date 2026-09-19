@@ -53,6 +53,7 @@ class PipelineOrchestrator:
         output_aspect_ratios: list[str] | None = None,
         resume: bool = False,
         clip_settings: Optional[dict] = None,
+        is_pro: bool = False,
     ) -> None:
         log.info(
             "Pipeline orchestrator initialized",
@@ -63,6 +64,7 @@ class PipelineOrchestrator:
                 "selected_steps": [s.value for s in selected_steps],
                 "watermark_enabled": watermark_enabled,
                 "resume": resume,
+                "is_pro": is_pro,
             },
         )
         self.project_id = project_id
@@ -74,12 +76,16 @@ class PipelineOrchestrator:
         self.watermark_enabled = watermark_enabled
         self.output_aspect_ratios = output_aspect_ratios or self._default_aspect_ratios()
         self.clip_settings = clip_settings or {}
+        # Decides which AI provider every text step runs on. Resolved once at
+        # the route from the user's active subscription, so a plan change
+        # mid-run cannot switch providers half way through.
+        self.is_pro = is_pro
         self._resume = resume
         self._youtube = YouTubeService()
         self._audio_extractor = AudioExtractionService()
         self._audio_service = AudioService()
         self._transcription_service = WhisperXTranscriptionService()
-        self._clip_service = ClipService()
+        self._clip_service = ClipService(is_pro=is_pro)
         self._cancel = False
         self._local_path: str | None = None
         self._step_statuses: dict[str, str] = {}
@@ -463,7 +469,7 @@ class PipelineOrchestrator:
         )
 
         from content_intelligence.service import ContentIntelligenceService
-        service = ContentIntelligenceService()
+        service = ContentIntelligenceService(is_pro=self.is_pro)
 
         video_path = await self._project_video_path()
         if not video_path or not Path(video_path).exists():
@@ -513,7 +519,7 @@ class PipelineOrchestrator:
         classification = analysis.get("classification")
         if not classification:
             from content_intelligence.service import ContentIntelligenceService
-            service = ContentIntelligenceService()
+            service = ContentIntelligenceService(is_pro=self.is_pro)
             classification = await service._classifier.classify(topic.get("topic_research", {}), segments)
         log.info(
             "Content classification complete",
@@ -540,7 +546,7 @@ class PipelineOrchestrator:
         analysis = topic.get("analysis", {})
 
         from content_intelligence.service import ContentIntelligenceService
-        service = ContentIntelligenceService()
+        service = ContentIntelligenceService(is_pro=self.is_pro)
 
         highlights = await service.detect_highlights(
             project_id=self.project_id,
@@ -570,7 +576,7 @@ class PipelineOrchestrator:
         analysis = topic.get("analysis", {})
 
         from content_intelligence.service import ContentIntelligenceService
-        service = ContentIntelligenceService()
+        service = ContentIntelligenceService(is_pro=self.is_pro)
 
         scored = await service.score_highlights(highlights, analysis, clip_settings=self.clip_settings)
         log.info(
@@ -590,7 +596,7 @@ class PipelineOrchestrator:
         )
 
         from content_intelligence.service import ContentIntelligenceService
-        service = ContentIntelligenceService()
+        service = ContentIntelligenceService(is_pro=self.is_pro)
 
         final_clips = await service.generate_metadata_for_clips(scored)
         log.info(

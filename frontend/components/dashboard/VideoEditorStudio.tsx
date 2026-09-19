@@ -572,6 +572,8 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                 ? 'w-[280px] sm:w-[320px] aspect-[9/16]'
                 : aspectRatio === '1:1'
                 ? 'w-[320px] sm:w-[360px] aspect-square'
+                : aspectRatio === '4:5'
+                ? 'w-[300px] sm:w-[340px] aspect-[4/5]'
                 : 'w-full aspect-video'
             }`}
           >
@@ -587,7 +589,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                    ref={videoRef}
                    src={safeClip.presignedUrl}
                    poster={safeClip.posterUrl || ''}
-                   className="w-full h-full object-cover object-center"
+                   className="w-full h-full object-contain object-center"
                    muted={isMuted}
                    playsInline
                    preload="metadata"
@@ -1514,8 +1516,8 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                 <label className="text-xs text-neutral-400 block mb-1.5">
                   Output Format:
                 </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['9:16', '1:1', '16:9'] as AspectRatio[]).map((ratio) => (
+                <div className="grid grid-cols-2 gap-2">
+                  {(['9:16', '1:1', '4:5', '16:9'] as AspectRatio[]).map((ratio) => (
                     <button
                       key={ratio}
                       onClick={() => setAspectRatio(ratio)}
@@ -1525,7 +1527,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                           : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-300'
                       }`}
                     >
-                      {ratio} {ratio === '9:16' ? 'Vertical' : ratio === '1:1' ? 'Square' : 'Wide'}
+                      {ratio} {ratio === '9:16' ? 'Vertical' : ratio === '1:1' ? 'Square' : ratio === '4:5' ? 'Portrait' : 'Wide'}
                     </button>
                   ))}
                 </div>

@@ -11,6 +11,31 @@ from subtitle_styling.emoji_catalog import catalog_prompt_block, sanitize_ai_cue
 
 log = get_logger(__name__)
 
+# Enforced where supported. emoji ids are still sanitised afterwards against
+# the catalog, since a schema can require a string but not a valid id.
+METADATA_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "hashtags": {"type": "array", "items": {"type": "string"}},
+        "emoji_cues": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "keyword": {"type": "string"},
+                    "emoji": {"type": "string"},
+                },
+                "required": ["keyword", "emoji"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["title", "description", "hashtags", "emoji_cues"],
+    "additionalProperties": False,
+}
+
 HASHTAG_POOLS = {
     "gaming": ["#gaming", "#gamer", "#gameplay", "#gamingclips", "#videogames", "#gamingshorts", "#twitch", "#streamer"],
     "podcast_interview": ["#podcast", "#interview", "#talk", "#podcasts", "#interviewclip", "#conversation", "#podcastclips"],
@@ -44,26 +69,88 @@ EMOJI_MAP = {
 }
 
 
+DEFAULT_EMOJI = "\ud83c\udf1f"
+
+
+# The title and description the tier's model writes, and the emoji cues the
+# cheap model looks up. Kept apart so the 306-token emoji catalog -- which only
+# the cue call needs -- never rides the paid call, and so the highest-volume
+# work in the pipeline can sit on the free provider whatever the user pays.
+TITLE_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "hashtags": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["title", "description", "hashtags"],
+    "additionalProperties": False,
+}
+
+CUES_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "emoji_cues": METADATA_JSON_SCHEMA["properties"]["emoji_cues"],
+    },
+    "required": ["emoji_cues"],
+    "additionalProperties": False,
+}
+
+
 class MetadataGenerator:
-    def __init__(self, text_client: Any) -> None:
+    """Writes the headline burned into a clip and the emoji its captions show.
+
+    Two calls per clip rather than one: the title is copywriting and follows the
+    user's tier, while the cues are a lookup against a fixed list and always run
+    on the cheap provider. Splitting them also keeps the emoji catalog out of
+    the title prompt entirely.
+    """
+
+    def __init__(self, text_client: Any, cue_client: Any | None = None) -> None:
         self._text_client = text_client
+        # Falls back to the same client, so a caller that predates the split
+        # still works -- it just pays the tier's price for the cue call too.
+        self._cue_client = cue_client or text_client
 
     async def generate_batch(self, clips: list[dict]) -> list[dict]:
-        tasks = [self._generate_for_clip(c) for c in clips]
         results = []
-        for task in tasks:
+        for clip in clips:
             try:
-                results.append(await task)
+                results.append(await self._generate_for_clip(clip))
             except Exception as exc:
                 log.warning(f"Metadata generation failed for clip: {exc}")
-                results.append(self._fallback_metadata(clips[len(results)]))
+                results.append(self._fallback_metadata(clip))
         return results
 
     async def _generate_for_clip(self, clip: dict) -> dict:
-        excerpt = clip.get("transcript_excerpt", "")[:500]
         category = clip.get("content_category", "unknown")
-        score = clip.get("score", 50)
+        clip_copy = dict(clip)
 
+        title_data = await self._generate_title(clip, category)
+        clip_copy["title"] = title_data.get("title") or self._default_title(clip, category)
+        clip_copy["description"] = title_data.get("description") or self._default_description(clip)
+        hashtags = title_data.get("hashtags")
+        if not hashtags:
+            pool = HASHTAG_POOLS.get(category, HASHTAG_POOLS["unknown"])
+            hashtags = random.sample(pool, min(3, len(pool)))
+        clip_copy["hashtags"] = hashtags
+        clip_copy["suggested_emoji"] = EMOJI_MAP.get(category, DEFAULT_EMOJI)
+
+        # Cue failure must not cost the clip its title, so it is caught here
+        # rather than failing the whole clip: captions still render from the
+        # static keyword map in emoji_annotator.
+        try:
+            cues = await self._generate_cues(clip)
+        except Exception as exc:
+            log.warning(f"Emoji cue generation failed, falling back to the static map: {exc}")
+            cues = []
+        clip_copy["ai_emoji_cues"] = cues
+        return clip_copy
+
+    async def _generate_title(self, clip: dict, category: str) -> dict:
+        """Headline, description and hashtags. No emoji catalog in this prompt."""
+        excerpt = clip.get("transcript_excerpt", "")[:500]
+        score = clip.get("score", 50)
         prompt = f"""Generate a YouTube Shorts title and description for a clip.
  Category: {category}
  Score (out of 100): {score}
@@ -75,22 +162,10 @@ class MetadataGenerator:
    must NOT be a fragment of the transcript.
  - Description: 1-2 sentences, 100-200 chars
  - Hashtags: 3-5 relevant hashtags
- - emoji_cues: 4-10 pairs mapping a word that is actually SPOKEN in the excerpt
-   to one emoji id. Rules, all mandatory:
-     * "keyword" must be a single lowercase word from the excerpt, no punctuation.
-     * "emoji" must be an id copied EXACTLY from the allowed list below.
-       Never invent an id and never output an emoji character.
-     * Pick the id whose meaning matches that word; skip the word if none fits.
-     * One cue per word, no duplicate keywords.
-
- Allowed emoji ids (the ONLY permitted values for "emoji"):
-{catalog_prompt_block()}
 
  Return JSON only:
- {{"title": "...", "description": "...", "hashtags": ["..."],
-   "emoji_cues": [{{"keyword": "...", "emoji": "..."}}]}}
+ {{"title": "...", "description": "...", "hashtags": ["..."]}}
  """
-
         try:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(3),
@@ -102,25 +177,53 @@ class MetadataGenerator:
                     response = await self._text_client.chat([
                         {"role": "system", "content": "You are a social media expert specializing in YouTube Shorts metadata. Always return valid JSON only."},
                         {"role": "user", "content": prompt},
-                    ], temperature=0.7, max_tokens=900, json_mode=True)
+                    ], temperature=0.7, max_tokens=500, json_mode=True, json_schema=TITLE_JSON_SCHEMA)
         except Exception as exc:
-            log.warning(f"Metadata generation failed after retries: {exc}")
-            return self._fallback_metadata(clip)
+            log.warning(f"Title generation failed after retries: {exc}")
+            return {}
+        try:
+            return json.loads(self._extract_json(response))
+        except Exception:
+            return {}
 
+    async def _generate_cues(self, clip: dict) -> list[dict]:
+        """Map spoken words to emoji ids. Always the cheap provider."""
+        excerpt = clip.get("transcript_excerpt", "")[:500]
+        prompt = f"""Map words spoken in this transcript excerpt to emoji ids.
+ Transcript excerpt: "{excerpt}"
+
+ Return 4-10 pairs. Rules, all mandatory:
+   * "keyword" must be a single lowercase word from the excerpt, no punctuation.
+   * "emoji" must be an id copied EXACTLY from the allowed list below.
+     Never invent an id and never output an emoji character.
+   * Pick the id whose meaning matches that word; skip the word if none fits.
+   * One cue per word, no duplicate keywords.
+
+ Allowed emoji ids (the ONLY permitted values for "emoji"):
+{catalog_prompt_block()}
+
+ Return JSON only:
+ {{"emoji_cues": [{{"keyword": "...", "emoji": "..."}}]}}
+ """
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(2),
+            wait=wait_exponential(multiplier=1, min=1, max=5),
+            retry=retry_if_exception_type(Exception),
+            reraise=True,
+        ):
+            with attempt:
+                response = await self._cue_client.chat([
+                    {"role": "system", "content": "You map spoken words to emoji ids from a fixed list. Return valid JSON only."},
+                    {"role": "user", "content": prompt},
+                ], temperature=0.3, max_tokens=500, json_mode=True, json_schema=CUES_JSON_SCHEMA)
         try:
             data = json.loads(self._extract_json(response))
         except Exception:
-            data = {}
-
-        clip_copy = dict(clip)
-        clip_copy["title"] = data.get("title", self._default_title(clip, category))
-        clip_copy["description"] = data.get("description", self._default_description(clip))
-        clip_copy["hashtags"] = data.get("hashtags", random.sample(HASHTAG_POOLS.get(category, HASHTAG_POOLS["unknown"]), min(3, len(HASHTAG_POOLS.get(category, HASHTAG_POOLS["unknown"])))))
-        clip_copy["suggested_emoji"] = EMOJI_MAP.get(category, "\ud83c\udf1f")
+            return []
         # Anything the model invented is dropped here rather than rendered, so
         # the burner only ever sees emojis that exist in the catalog.
-        clip_copy["ai_emoji_cues"] = sanitize_ai_cues(data.get("emoji_cues"))
-        return clip_copy
+        return sanitize_ai_cues(data.get("emoji_cues"))
+
 
     def _fallback_metadata(self, clip: dict) -> dict:
         category = clip.get("content_category", "unknown")

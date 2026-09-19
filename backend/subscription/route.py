@@ -22,7 +22,10 @@ from subscription.schema import (
     CreditLedgerResponse,
     UserCreditsResponse,
     CreditTopupRequest,
+    EntitlementsResponse,
+    PlanCatalogEntry,
 )
+from subscription.entitlements import entitlements_for
 from subscription.model import PlanSlug
 from core.database import get_db
 from core.exceptions import CustomException
@@ -70,6 +73,41 @@ async def get_my_subscription(current_user: CurrentUserDep, service: Subscriptio
         subscription_status=sub.status.value,
         current_period_end=sub.current_period_end,
     )
+
+
+@router.get("/entitlements", response_model=EntitlementsResponse)
+async def get_my_entitlements(current_user: CurrentUserDep, service: SubscriptionServiceDep):
+    """What the caller's plan allows. The UI reads this instead of deciding
+    tier rules for itself, so both sides stay in step."""
+    ent = await service.get_entitlements(current_user["user_id"])
+    return EntitlementsResponse(**ent.to_dict())
+
+
+@router.get("/catalog", response_model=list[PlanCatalogEntry])
+async def get_plan_catalog(current_user: CurrentUserDep, service: SubscriptionServiceDep):
+    """Every active plan with the capabilities it grants, for the upgrade view."""
+    plans = await service.list_plans()
+    current_slug = await service.get_user_plan_slug(current_user["user_id"])
+
+    catalog: list[PlanCatalogEntry] = []
+    for plan in plans:
+        slug = str(getattr(plan.slug, "value", plan.slug))
+        ent = entitlements_for(slug)
+        catalog.append(
+            PlanCatalogEntry(
+                id=plan.id,
+                name=plan.name,
+                slug=slug,
+                credit_minutes=plan.credit_minutes,
+                price_monthly=float(plan.price_monthly),
+                currency=plan.currency,
+                features=[f.strip() for f in (plan.features or "").split(",") if f.strip()],
+                entitlements=EntitlementsResponse(**ent.to_dict()),
+                is_current=(slug == current_slug),
+            )
+        )
+    catalog.sort(key=lambda entry: entry.price_monthly)
+    return catalog
 
 
 @router.post("/activate-free", response_model=UserCreditsResponse)

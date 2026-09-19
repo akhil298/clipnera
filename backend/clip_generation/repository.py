@@ -43,6 +43,30 @@ class ClipRepository:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
+    async def list_clips_for_projects(
+        self, project_ids: list[str], user_id: str
+    ) -> dict[str, list[GeneratedClip]]:
+        """Clips for several projects in one query, grouped by project id.
+
+        GET /clips/projects called list_clips() per project, so listing the
+        dashboard cost one round trip per project on top of the project query.
+        """
+        if not project_ids:
+            return {}
+        stmt = (
+            select(GeneratedClip)
+            .where(
+                GeneratedClip.project_id.in_(project_ids),
+                GeneratedClip.user_id == user_id,
+            )
+            .order_by(desc(GeneratedClip.score))
+        )
+        result = await self._session.execute(stmt)
+        grouped: dict[str, list[GeneratedClip]] = {}
+        for clip in result.scalars().all():
+            grouped.setdefault(clip.project_id, []).append(clip)
+        return grouped
+
     async def update_clip(self, clip_id: str, user_id: str, **kwargs) -> GeneratedClip | None:
         clip = await self.get_clip(clip_id, user_id)
         if not clip:

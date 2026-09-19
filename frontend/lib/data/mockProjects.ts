@@ -1,76 +1,11 @@
-﻿import { VideoProject, CaptionPreset } from '@/lib/types';
+﻿import { VideoProject } from '@/lib/types';
 
 export const LANDING_SAMPLE_PROJECTS: VideoProject[] = [];
 
-export const CAPTION_PRESETS = [
-  {
-    id: 'hormozi' as const,
-    name: 'Hormozi Viral',
-    description: 'Bold uppercase, yellow/green highlights with dark backdrop',
-    badge: 'Popular',
-    font: 'Syne',
-    previewTextColor: '#ffffff',
-    previewHighlight: '#facc15',
-    bg: '#000000',
-  },
-  {
-    id: 'mrbeast' as const,
-    name: 'MrBeast Pop',
-    description: 'High energy electric blue + bright red punch text',
-    badge: 'High CTR',
-    font: 'Plus Jakarta Sans',
-    previewTextColor: '#ffffff',
-    previewHighlight: '#38bdf8',
-    bg: '#0f172a',
-  },
-  {
-    id: 'karaoke_yellow' as const,
-    name: 'Karaoke Beat',
-    description: 'Word-by-word active bouncing fill sync',
-    badge: 'Top Watchtime',
-    font: 'Syne',
-    previewTextColor: '#94a3b8',
-    previewHighlight: '#facc15',
-    bg: '#18181b',
-  },
-  {
-    id: 'cyberpunk' as const,
-    name: 'Cyber Neon',
-    description: 'Neon cyan with purple ambient glow',
-    badge: 'Tech / Gaming',
-    font: 'JetBrains Mono',
-    previewTextColor: '#e0f2fe',
-    previewHighlight: '#38bdf8',
-    bg: '#020617',
-  },
-  {
-    id: 'minimal' as const,
-    name: 'Clean Minimal',
-    description: 'Understated elegant typography for luxury & podcasts',
-    badge: 'Aesthetic',
-    font: 'Plus Jakarta Sans',
-    previewTextColor: '#ffffff',
-    previewHighlight: '#e2e8f0',
-    bg: 'transparent',
-  },
-  {
-    id: 'neon' as const,
-    name: 'Neon Glow',
-    description: 'Vibrant pink and green neon effect',
-    badge: 'Trending',
-    font: 'Syne',
-    previewTextColor: '#ffffff',
-    previewHighlight: '#f0abfc',
-    bg: '#000000',
-  },
-  {
-    id: 'sunset' as const,
-    name: 'Sunset Warm',
-    description: 'Warm orange and red gradient highlights',
-    badge: 'Lifestyle',
-    font: 'Syne',
-    previewTextColor: '#ffffff',
-    previewHighlight: '#fb923c',
-    bg: '#1c1917',
-  },
-];
+/**
+ * Re-exported from the single derived list so the upload modal, the brand kit
+ * and the editor all offer the same styles. This used to be a third hand-written
+ * copy that had drifted from both the backend templates and captionPresets.ts.
+ */
+export { CAPTION_PRESETS } from '@/lib/data/captionPresets';
+export type { CaptionPresetStyle } from '@/lib/data/captionPresets';

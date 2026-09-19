@@ -16,7 +16,9 @@ from .base import BaseAI
 settings = get_settings()
 log = get_logger(__name__)
 
-DEFAULT_MODEL = "llama-3.1-8b-instant"
+# llama-3.1-8b-instant and llama-3.3-70b-versatile were decommissioned on
+# 2026-08-16 and moved to Enterprise-only, so neither is a usable default.
+DEFAULT_MODEL = "openai/gpt-oss-20b"
 
 
 @dataclass(frozen=True)
@@ -35,10 +37,11 @@ class ModelProfile:
 FALLBACK_PROFILE = ModelProfile(context_tokens=8192, tokens_per_minute=6000, requests_per_minute=30)
 
 MODEL_PROFILES: dict[str, ModelProfile] = {
-    "llama-3.1-8b-instant": ModelProfile(8192, 6000, 30),
-    "llama-3.3-70b-versatile": ModelProfile(32768, 12000, 30),
+    # Free-tier ceilings. The developer tier raises TPM to 250K at the same
+    # per-token price, which is the single biggest throughput lever here.
     "openai/gpt-oss-20b": ModelProfile(131072, 8000, 30, reasoning=True),
     "openai/gpt-oss-120b": ModelProfile(131072, 8000, 30, reasoning=True),
+    "qwen/qwen3.6-27b": ModelProfile(131072, 8000, 30),
 }
 
 # A reasoning model emits hidden reasoning tokens before any content. Below this
@@ -196,6 +199,10 @@ class Groq(BaseAI):
             bool(self.api_key),
         )
 
+    def input_token_budget(self, max_output_tokens: int) -> int:
+        """Largest prompt to send, given the reply we asked for."""
+        return input_token_budget(max_output_tokens, self.model)
+
     def _fit_messages(self, messages: list[dict[str, Any]], max_output_tokens: int) -> list[dict[str, Any]]:
         """Trim the prompt to the budget, dropping whole older turns first.
 
@@ -243,6 +250,9 @@ class Groq(BaseAI):
         instead of handing the caller "" to parse.
         """
         json_mode = bool(kwargs.pop("json_mode", False))
+        # Groq has no schema-enforced output; the schema is Anthropic-only and
+        # would be rejected as an unknown parameter here.
+        kwargs.pop("json_schema", None)
         content = await self._chat_once(messages, json_mode=json_mode, **kwargs)
         if content.strip():
             return content

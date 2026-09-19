@@ -49,11 +49,11 @@ def _json_dumps(value: Any) -> str:
 
 
 class ClipService:
-    def __init__(self) -> None:
+    def __init__(self, is_pro: bool = False) -> None:
         self._ffmpeg = FFmpegService()
         self._s3 = S3()
         self._bucket = settings.S3_BUCKET_NAME
-        self._content_ai = ContentIntelligenceService()
+        self._content_ai = ContentIntelligenceService(is_pro=is_pro)
         self._output_dir = Path(settings.CLIP_OUTPUT_DIR)
 
     async def list_clips(self, project_id: str, user_id: str) -> list[dict]:

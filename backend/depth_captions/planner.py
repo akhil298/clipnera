@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from core.logging_config import get_logger
 from core.exceptions import CustomException
-from clients.ai.groq import Groq
+from clients.ai import get_text_client
 from depth_captions.schema import (
     EditPlan,
     CaptionSegment,
@@ -31,7 +31,7 @@ log = get_logger(__name__)
 
 class LLMPlanner:
     def __init__(self) -> None:
-        self._groq = Groq()
+        self._groq = get_text_client()
 
     async def generate_edit_plan(
         self,

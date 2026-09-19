@@ -130,7 +130,10 @@ class AssGenerator:
     ) -> str:
         template = get_template(style_id)
 
-        font_size_em = template["font_size"] * height / 1080.0
+        # Templates are authored against a 1080-wide vertical frame. Scaling by
+        # height made the same template 1.78x larger on 9:16 (h=1920) than on
+        # 16:9 (h=1080); width is the stable axis across 9:16, 1:1 and 4:5.
+        font_size_em = template["font_size"] * width / 1080.0
         font_size = ass_font_size(font_size_em)
 
         caption_x = round(width / 2)
