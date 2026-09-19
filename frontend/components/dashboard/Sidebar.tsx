@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
 import { Skeleton } from '@/components/skeletons';
-import { useEntitlements, planLabel, isPaidPlan } from '@/hooks/useEntitlements';
+import { useEntitlements, planLabel, isPaidPlan, daysUntilRenewal } from '@/hooks/useEntitlements';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -59,6 +59,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [foldersExpanded, setFoldersExpanded] = useState(true);
   const { entitlements } = useEntitlements();
+  const renewalDays = daysUntilRenewal(entitlements.current_period_end);
   const activeWorkspace = workspaces.find((w) => w.id === user.activeWorkspaceId) || workspaces[0];
 
   const primaryNavItems = [
@@ -432,7 +433,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               />
             </div>
             <div className="flex items-center justify-between text-[10px] text-neutral-400 pt-0.5">
-              <span>Resets in 12 days</span>
+              <span>
+                {renewalDays === null
+                  ? 'No active billing period'
+                  : renewalDays === 0
+                  ? 'Resets today'
+                  : `Resets in ${renewalDays} day${renewalDays === 1 ? '' : 's'}`}
+              </span>
               <button
                 onClick={() => handleNavClick('settings')}
                 className="text-amber-400 hover:underline font-semibold"

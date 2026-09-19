@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { VideoProject, CaptionPreset, AudioEnhancementConfig, DownloadProgress } from '@/lib/types';
 import { CAPTION_PRESETS } from '@/lib/data/mockProjects';
+import { useEntitlements, canUseCaptionStyle } from '@/hooks/useEntitlements';
+import { ProLockBadge, UpgradeHint } from './ProLockBadge';
 import { analyzeVideoSource } from '@/lib/utils/urlParser';
 import { clipApi, pipelineApi, YouTubeMetadataResponse } from '@/lib/api';
 import { PipelineProgressTracker } from './PipelineProgressTracker';
@@ -39,6 +41,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [customFolderName, setCustomFolderName] = useState('Alex Hormozi — $100M Leads Masterclass');
 
   const [captionPreset, setCaptionPreset] = useState<CaptionPreset>('hormozi');
+  const { entitlements, promptUpgrade } = useEntitlements();
+
   const [autoBroll, setAutoBroll] = useState(true);
   const [autoSfx, setAutoSfx] = useState(true);
   const [removeFillers, setRemoveFillers] = useState(true);
@@ -589,35 +593,52 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     <span>Viral Style & Captions Setup</span>
                   </h3>
                   <span className="text-[11px] text-amber-400 font-medium">
-                    Auto-Reframed 9:16
+                    Auto-Reframed {entitlements.aspect_ratios.join(' · ')}
                   </span>
                 </div>
 
                 <div className="space-y-1.5">
                   <label className="text-xs text-neutral-400">Caption Typography & Animation:</label>
                   <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                    {CAPTION_PRESETS.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => setCaptionPreset(p.id)}
-                        className={`p-2 rounded-xl border text-left transition-all ${
-                          captionPreset === p.id
-                            ? 'bg-neutral-800 border-amber-400 ring-1 ring-amber-400/30'
-                            : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-white truncate">
-                            {p.name}
-                          </span>
-                        </div>
-                        <div className="mt-1.5 p-1 rounded bg-black/60 text-center font-extrabold text-[10px] truncate" style={{ color: p.previewHighlight }}>
-                          {p.name.split(' ')[0]} VIRAL
-                        </div>
-                      </button>
-                    ))}
+                    {CAPTION_PRESETS.map((p) => {
+                      const unlocked = canUseCaptionStyle(entitlements, p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() =>
+                            unlocked
+                              ? setCaptionPreset(p.id)
+                              : promptUpgrade(`The ${p.name} caption style`)
+                          }
+                          aria-disabled={!unlocked}
+                          className={`p-2 rounded-xl border text-left transition-all ${
+                            captionPreset === p.id && unlocked
+                              ? 'bg-neutral-800 border-amber-400 ring-1 ring-amber-400/30'
+                              : unlocked
+                              ? 'bg-neutral-950 border-neutral-800 hover:border-neutral-700'
+                              : 'bg-neutral-950/60 border-neutral-800/60 opacity-70 hover:border-amber-400/40 hover:opacity-100'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[11px] font-bold text-white truncate">
+                              {p.name}
+                            </span>
+                            {!unlocked && <ProLockBadge feature={`The ${p.name} style`} />}
+                          </div>
+                          <div className="mt-1.5 p-1 rounded bg-black/60 text-center font-extrabold text-[10px] truncate" style={{ color: p.previewHighlight }}>
+                            {p.name.split(' ')[0]} VIRAL
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
+                  {entitlements.caption_styles !== null && (
+                    <UpgradeHint
+                      message={`${entitlements.caption_styles.length} of ${CAPTION_PRESETS.length} caption styles included on your plan.`}
+                      onUpgrade={() => promptUpgrade('The full caption library')}
+                    />
+                  )}
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-3">

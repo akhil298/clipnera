@@ -842,6 +842,10 @@ export interface EntitlementsResponse {
   pro_ai_provider: boolean;
   priority_rendering: boolean;
   max_upload_duration_seconds: number;
+  credit_minutes_total: number;
+  credit_minutes_remaining: number;
+  current_period_end: string | null;
+  subscription_status: string;
 }
 
 export interface PlanCatalogEntry {

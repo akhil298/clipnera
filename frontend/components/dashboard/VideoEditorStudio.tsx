@@ -130,6 +130,22 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
   const [autoZoomConfig, setAutoZoomConfig] = useState(safeClip.autoZoom);
   const [autoReframeConfig, setAutoReframeConfig] = useState(safeClip.autoReframe);
   const [bRollOverlays, setBRollOverlays] = useState<BRollOverlay[]>(safeClip.bRollOverlays || []);
+
+  // A plan change (or a clip saved on a higher tier) can leave a selection the
+  // current plan cannot use. Fall back instead of letting the export fail at
+  // the API with a 403 the user cannot act on from here.
+  useEffect(() => {
+    if (!canUseAspectRatio(entitlements, aspectRatio)) {
+      setAspectRatio((entitlements.aspect_ratios[0] as AspectRatio) ?? '9:16');
+    }
+  }, [entitlements, aspectRatio]);
+
+  useEffect(() => {
+    if (!canUseCaptionStyle(entitlements, captionConfig.preset)) {
+      const fallback = entitlements.caption_styles?.[0];
+      if (fallback) setCaptionConfig({ ...getCaptionConfig(fallback as CaptionPreset) });
+    }
+  }, [entitlements, captionConfig.preset]);
   const [soundEffects, setSoundEffects] = useState<SoundEffect[]>(safeClip.soundEffects || []);
   const [transcriptSegments, setTranscriptSegments] = useState(safeClip.transcriptSegments || []);
   const [audioEnhanceConfig, setAudioEnhanceConfig] = useState<AudioEnhancementConfig>(

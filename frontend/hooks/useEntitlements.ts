@@ -24,6 +24,19 @@ export const FREE_TIER_FALLBACK: EntitlementsResponse = {
   pro_ai_provider: false,
   priority_rendering: false,
   max_upload_duration_seconds: 1800,
+  credit_minutes_total: 0,
+  credit_minutes_remaining: 0,
+  current_period_end: null,
+  subscription_status: 'none',
+};
+
+/** Days until the credit quota resets, or null when there is no active period. */
+export const daysUntilRenewal = (isoDate: string | null): number | null => {
+  if (!isoDate) return null;
+  const end = new Date(isoDate).getTime();
+  if (Number.isNaN(end)) return null;
+  const days = Math.ceil((end - Date.now()) / 86_400_000);
+  return days >= 0 ? days : null;
 };
 
 export interface EntitlementsContextValue {
