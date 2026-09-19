@@ -79,8 +79,17 @@ async def get_my_subscription(current_user: CurrentUserDep, service: Subscriptio
 async def get_my_entitlements(current_user: CurrentUserDep, service: SubscriptionServiceDep):
     """What the caller's plan allows. The UI reads this instead of deciding
     tier rules for itself, so both sides stay in step."""
-    ent = await service.get_entitlements(current_user["user_id"])
-    return EntitlementsResponse(**ent.to_dict())
+    user_id = current_user["user_id"]
+    ent = await service.get_entitlements(user_id)
+    sub = await service.get_user_subscription(user_id)
+    balance = await service.get_user_credit_balance(user_id)
+    return EntitlementsResponse(
+        **ent.to_dict(),
+        credit_minutes_total=sub.plan.credit_minutes if sub else 0,
+        credit_minutes_remaining=balance,
+        current_period_end=sub.current_period_end if sub else None,
+        subscription_status=sub.status.value if sub else "none",
+    )
 
 
 @router.get("/catalog", response_model=list[PlanCatalogEntry])

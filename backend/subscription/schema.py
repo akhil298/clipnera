@@ -98,6 +98,12 @@ class EntitlementsResponse(BaseModel):
     pro_ai_provider: bool
     priority_rendering: bool
     max_upload_duration_seconds: int
+    # Billing context, so the UI can show a real renewal date and quota instead
+    # of a hardcoded placeholder.
+    credit_minutes_total: int = 0
+    credit_minutes_remaining: int = 0
+    current_period_end: Optional[datetime] = None
+    subscription_status: str = "none"
 
 
 class PlanCatalogEntry(BaseModel):
