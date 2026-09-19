@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shutil
 import time
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -226,7 +227,40 @@ class PipelineOrchestrator:
         except Exception as exc:
             await self._mark_pipeline_failed(str(exc))
             raise
+        finally:
+            # Local renders are a scratch area only. Later steps (subtitle
+            # burn-in, social export) read the cut files off disk, so cleanup
+            # cannot happen at upload time; it happens here, once the run is
+            # over, on success, failure and cancellation alike.
+            await self._cleanup_local_clips()
         return results
+
+    async def _cleanup_local_clips(self) -> None:
+        """Delete this project's local render directory after the run.
+
+        Everything worth keeping is in S3 by now. Failing to clean up must never
+        fail the pipeline, so all errors here are logged and swallowed.
+        """
+        from core.config import get_settings
+
+        try:
+            safe_project = "".join(
+                c if c.isalnum() or c in ("-", "_") else "_" for c in self.project_id
+            )
+            output_dir = Path(get_settings().CLIP_OUTPUT_DIR) / safe_project
+            if not output_dir.exists():
+                return
+            freed = sum(f.stat().st_size for f in output_dir.rglob("*") if f.is_file())
+            await asyncio.to_thread(shutil.rmtree, output_dir, True)
+            log.info(
+                "Cleaned up local clip renders, freed %.1fMB",
+                freed / (1024 * 1024),
+                extra={"project_id": self.project_id, "path": str(output_dir)},
+            )
+        except Exception as exc:
+            log.warning(
+                "Local clip cleanup failed: project=%s error=%s", self.project_id, exc
+            )
 
     @staticmethod
     def _summarize_step(step: PipelineStepType, result: Any) -> str:

@@ -23,6 +23,82 @@ from video_processor.geometry import SUPPORTED_ASPECT_RATIOS, output_dimensions
 settings = get_settings()
 log = get_logger(__name__)
 
+# How many clips may be cut at once. Each cut runs its own FFmpeg encode, which
+# is already multi-threaded, so a small number keeps the cores busy without the
+# encodes starving each other.
+MAX_CONCURRENT_CUTS = 3
+
+
+class _CutProgress:
+    """Tracks how many clips are cutting, done, failed and still queued.
+
+    With clips running concurrently a bare index no longer says anything useful
+    about progress, so state is kept per clip and reported as counts. Mutation
+    happens from several tasks at once, hence the lock.
+    """
+
+    def __init__(self, total: int, notify: Callable[[str, int], Any]) -> None:
+        self._total = total
+        self._notify = notify
+        self._running: dict[str, float] = {}
+        self._done = 0
+        self._failed = 0
+        self._lock = asyncio.Lock()
+
+    @property
+    def _queued(self) -> int:
+        return max(0, self._total - self._done - self._failed - len(self._running))
+
+    def _percent(self) -> int:
+        finished = self._done + self._failed
+        # Cutting occupies the 40-95 band of the overall pipeline progress bar.
+        return min(95, 40 + int(finished * 55 / max(1, self._total)))
+
+    def _line(self) -> str:
+        # Counts successes, not merely finished work: a failed clip is reported
+        # in its own segment so "Cut 5/5" can never include one that failed.
+        parts = [f"Cut {self._done}/{self._total} clips"]
+        if self._running:
+            now = time.monotonic()
+            active = ", ".join(
+                f"{clip_id} ({int(now - started)}s)"
+                for clip_id, started in sorted(self._running.items(), key=lambda kv: kv[1])
+            )
+            parts.append(f"cutting {active}")
+        if self._queued:
+            parts.append(f"{self._queued} queued")
+        if self._failed:
+            parts.append(f"{self._failed} failed")
+        return " | ".join(parts)
+
+    async def mark_running(self, clip_id: str) -> None:
+        async with self._lock:
+            self._running[clip_id] = time.monotonic()
+            line, percent = self._line(), self._percent()
+        await self._notify(line, percent)
+
+    async def mark_done(self, clip_id: str) -> None:
+        async with self._lock:
+            self._running.pop(clip_id, None)
+            self._done += 1
+            line, percent = self._line(), self._percent()
+        await self._notify(line, percent)
+
+    async def mark_failed(self, clip_id: str) -> None:
+        async with self._lock:
+            self._running.pop(clip_id, None)
+            self._failed += 1
+            line, percent = self._line(), self._percent()
+        await self._notify(line, percent)
+
+    async def notify_summary(self) -> None:
+        async with self._lock:
+            if self._failed:
+                line = f"Cut {self._done}/{self._total} clips, {self._failed} failed"
+            else:
+                line = f"Cut all {self._done} clips"
+        await self._notify(line, 95)
+
 
 def _sanitize_str(s: str | None) -> str | None:
     if s is None:
@@ -447,28 +523,28 @@ class ClipService:
         if not ratios:
             ratios = list(SUPPORTED_ASPECT_RATIOS)
 
-        cutter = ClipCutter()
-        rendered: list[dict[str, Any]] = []
         render_errors: list[str] = []
 
         log.info(
-            "Rendering %d clip(s) for project %s into %s",
-            len(clips), project_id, ", ".join(ratios),
+            "Rendering %d clip(s) for project %s into %s (max %d at a time)",
+            len(clips), project_id, ", ".join(ratios), MAX_CONCURRENT_CUTS,
         )
 
-        for index, clip in enumerate(clips):
+        async def notify_status(message: str, percent: int) -> None:
+            if progress_callback:
+                await self._notify(progress_callback, message, percent)
+
+        # Two clips at a time: each FFmpeg encode already uses several cores, so
+        # more workers than this just makes them contend for the same CPU.
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_CUTS)
+        tracker = _CutProgress(total=len(clips), notify=notify_status)
+
+        async def cut_one(index: int, clip: dict[str, Any]) -> dict[str, Any]:
             clip_copy = dict(clip)
             clip_id = str(clip_copy.get("clip_id") or clip_copy.get("id") or f"clip_{index + 1:03d}")
             clip_copy["clip_id"] = clip_id
             start = float(clip_copy.get("start_time", clip_copy.get("start", 0.0)))
             end = float(clip_copy.get("end_time", clip_copy.get("end", start)))
-
-            if progress_callback:
-                await self._notify(
-                    progress_callback,
-                    f"Cutting clip {index + 1}/{len(clips)}...",
-                    min(99, 40 + int(index * 55 / max(1, len(clips)))),
-                )
 
             request = CutRequest(
                 source_path=video_path,
@@ -480,7 +556,26 @@ class ClipService:
                 content_category=str(clip_copy.get("content_category", "unknown")),
                 transcript_segments=transcript_segments,
             )
-            result = await cutter.cut(request)
+
+            async with semaphore:
+                await tracker.mark_running(clip_id)
+                try:
+                    # A cutter per clip, not one shared: ClipCutter's
+                    # FaceDetector reconfigures the underlying cv2 model per
+                    # frame size, and detection runs in a worker thread, so two
+                    # concurrent clips sharing one would race on that model.
+                    result = await ClipCutter().cut(request)
+                except BaseException:
+                    await tracker.mark_failed(clip_id)
+                    raise
+
+            # A clip that rendered no file at all is a failure to the user even
+            # though cut() returned normally, so count it as one.
+            if result.rendered:
+                await tracker.mark_done(clip_id)
+            else:
+                await tracker.mark_failed(clip_id)
+
             render_errors.extend(f"clip={clip_id} {err}" for err in result.errors)
 
             clip_copy["transcript"] = self._clip_transcript(transcript_segments, start, end)
@@ -502,7 +597,26 @@ class ClipService:
             clip_copy["duration"] = result.duration
             clip_copy["layout"] = result.layout
             clip_copy["reason"] = str(clip_copy.get("reason") or clip_copy.get("description") or "")
-            rendered.append(clip_copy)
+            return clip_copy
+
+        # gather preserves input order regardless of completion order, so the
+        # returned clips stay in the ranking the caller sorted them into.
+        outcomes = await asyncio.gather(
+            *(cut_one(index, clip) for index, clip in enumerate(clips)),
+            return_exceptions=True,
+        )
+
+        rendered: list[dict[str, Any]] = []
+        for index, outcome in enumerate(outcomes):
+            if isinstance(outcome, BaseException):
+                clip_id = str(clips[index].get("clip_id") or clips[index].get("id") or f"clip_{index + 1:03d}")
+                # One clip blowing up must not lose the clips that did render.
+                log.error("Clip cut failed: clip=%s error=%s", clip_id, outcome)
+                render_errors.append(f"clip={clip_id} {outcome}")
+                continue
+            rendered.append(outcome)
+
+        await tracker.notify_summary()
 
         if rendered and not any(c.get("output_files", {}).values() for c in rendered):
             raise CustomException(
@@ -542,9 +656,10 @@ class ClipService:
                 presigned_url = None
                 s3_key = None
                 poster_url = None
+                s3_keys: dict[str, str] = {}
                 if local_path and Path(local_path).exists():
-                    presigned_url, s3_key, poster_url = await self._upload_clip_and_thumbnail(
-                        local_path, clip_id, user_id, project_id
+                    presigned_url, s3_key, poster_url, s3_keys = await self._upload_clip_and_thumbnail(
+                        local_path, clip_id, user_id, project_id, output_files
                     )
                 saved_clip = await repo.create_clip(
                     project_id=project_id,
@@ -569,10 +684,14 @@ class ClipService:
                     crop_tracking=_json_dumps(clip.get("crop_tracking", {})),
                     output_formats=_json_dumps(clip.get("output_formats", {})),
                     output_files=_json_dumps(output_files),
-                    analysis_json=_json_dumps(clip_analysis),
+                    analysis_json=_json_dumps({**clip_analysis, "s3_keys": s3_keys}),
                 )
                 saved.append(saved_clip)
             return saved
+
+    def _clip_s3_prefix(self, user_id: str, project_id: str, clip_id: str) -> str:
+        """Every artefact for one clip lives under one prefix, its own folder."""
+        return f"clips/{user_id}/{project_id}/{self._safe_name(clip_id)}"
 
     async def _upload_clip_and_thumbnail(
         self,
@@ -580,39 +699,78 @@ class ClipService:
         clip_id: str,
         user_id: str,
         project_id: str,
-    ) -> tuple[str | None, str | None, str | None]:
-        """Upload clip video and thumbnail to S3, returning (presigned_url, s3_key, poster_url)."""
-        s3_key = f"clips/{user_id}/{project_id}/{clip_id}.mp4"
+        output_files: dict[str, str] | None = None,
+    ) -> tuple[str | None, str | None, str | None, dict[str, str]]:
+        """Upload every rendered aspect ratio plus a poster frame to S3.
+
+        Returns ``(presigned_url, s3_key, poster_url, s3_keys_by_ratio)`` where
+        the presigned url and key refer to ``local_path`` (the primary ratio).
+        Previously only the primary ratio was uploaded, so the other ratios
+        existed solely on the local disk and were lost with it.
+        """
+        prefix = self._clip_s3_prefix(user_id, project_id, clip_id)
         s3_bucket = self._bucket
         try:
             self._s3.create_bucket(s3_bucket)
         except Exception:
             pass
 
-        presigned_url = None
-        poster_url = None
-        try:
-            with open(local_path, "rb") as f:
-                file_bytes = f.read()
-            self._s3.put_object(s3_bucket, s3_key, file_bytes)
-            presigned_url = self._s3.generate_presigned_url(s3_bucket, s3_key, expires_in=3600)
-        except Exception as exc:
-            log.warning(f"S3 upload failed for clip: clip={clip_id} error={exc}")
-            s3_key = None
+        # Upload every rendered ratio, not just the primary one. Keyed by ratio
+        # so one clip's folder holds 9x16.mp4, 1x1.mp4 and so on side by side.
+        uploads: dict[str, str] = dict(output_files or {})
+        if local_path and not any(
+            path == local_path for path in uploads.values()
+        ):
+            uploads.setdefault("primary", local_path)
 
-        if presigned_url:
+        s3_keys: dict[str, str] = {}
+        primary_key: str | None = None
+        presigned_url: str | None = None
+
+        for ratio, path in uploads.items():
+            if not path or not Path(path).exists():
+                continue
+            key = f"{prefix}/{ratio.replace(':', 'x')}.mp4"
+            try:
+                await asyncio.to_thread(
+                    self._s3.upload_file, s3_bucket, key, path, "video/mp4"
+                )
+            except Exception as exc:
+                log.warning(
+                    "S3 upload failed: clip=%s ratio=%s error=%s", clip_id, ratio, exc
+                )
+                continue
+            s3_keys[ratio] = key
+            if path == local_path:
+                primary_key = key
+
+        if primary_key:
+            try:
+                presigned_url = self._s3.generate_presigned_url(
+                    s3_bucket, primary_key, expires_in=3600
+                )
+            except Exception as exc:
+                log.warning("Presign failed: clip=%s error=%s", clip_id, exc)
+
+        poster_url = None
+        if primary_key and local_path:
             thumbnail_path = str(Path(local_path).with_suffix(".jpg"))
             try:
                 await self._ffmpeg.extract_frame(local_path, 0.5, thumbnail_path)
-                thumb_key = f"clips/{user_id}/{project_id}/{clip_id}_thumb.jpg"
-                with open(thumbnail_path, "rb") as f:
-                    thumb_bytes = f.read()
-                self._s3.put_object(s3_bucket, thumb_key, thumb_bytes)
-                poster_url = self._s3.generate_presigned_url(s3_bucket, thumb_key, expires_in=3600)
+                thumb_key = f"{prefix}/thumbnail.jpg"
+                await asyncio.to_thread(
+                    self._s3.upload_file, s3_bucket, thumb_key, thumbnail_path, "image/jpeg"
+                )
+                s3_keys["thumbnail"] = thumb_key
+                poster_url = self._s3.generate_presigned_url(
+                    s3_bucket, thumb_key, expires_in=3600
+                )
             except Exception as exc:
                 log.warning(f"Thumbnail extraction failed: clip={clip_id} error={exc}")
+            finally:
+                Path(thumbnail_path).unlink(missing_ok=True)
 
-        return presigned_url, s3_key, poster_url
+        return presigned_url, primary_key, poster_url, s3_keys
 
     async def _video_metadata(self, video_path: str) -> dict[str, Any]:
         info = await self._ffmpeg.get_video_info(video_path)
@@ -1012,21 +1170,3 @@ class ClipService:
                     await result
             except Exception as exc:
                 log.debug(f"Progress notify failed: {exc}")
-
-    async def _render_progress_heartbeat(
-        self,
-        callback: Any,
-        index: int,
-        total_clips: int,
-        aspect_ratio: str,
-        percent: int,
-    ) -> None:
-        started = time.monotonic()
-        while True:
-            await asyncio.sleep(10)
-            elapsed = int(time.monotonic() - started)
-            await self._notify(
-                callback,
-                f"Rendering clip {index + 1}/{total_clips} ({aspect_ratio})... {elapsed}s elapsed",
-                percent,
-            )
