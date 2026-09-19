@@ -41,6 +41,51 @@ DEFAULT_PIPELINE_STEPS = [
     "clip_generation",
 ]
 
+# Steps the orchestrator can actually run. A request naming anything else --
+# the UI has long sent "bounding_box_detection", which has no handler -- would
+# otherwise get a step row that stays "pending" forever, leaving a stuck entry
+# in the UI and holding overall progress below 100% for the whole run.
+RUNNABLE_PIPELINE_STEPS = {
+    PipelineStepType.AUDIO_EXTRACTION,
+    PipelineStepType.AI_NOISE_CANCELLATION,
+    PipelineStepType.TRANSCRIPTION,
+    PipelineStepType.TOPIC_RESEARCH,
+    PipelineStepType.VISUAL_ANALYSIS,
+    PipelineStepType.CONTENT_CLASSIFICATION,
+    PipelineStepType.HIGHLIGHT_DETECTION,
+    PipelineStepType.SCORING,
+    PipelineStepType.METADATA_GENERATION,
+    PipelineStepType.ASPECT_RATIO_RENDER,
+    PipelineStepType.CLIP_GENERATION,
+    PipelineStepType.SUBTITLE_STYLING,
+    PipelineStepType.BURN_IN_EXPORT,
+    PipelineStepType.DEPTH_CAPTIONS,
+}
+
+
+def _resolve_steps(requested: list[str]) -> list[PipelineStepType]:
+    """Map requested step names onto the steps the orchestrator implements."""
+    resolved: list[PipelineStepType] = []
+    for name in requested:
+        try:
+            step = PipelineStepType.resolve(name)
+        except ValueError:
+            log.warning("Ignoring unknown pipeline step requested by client: %s", name)
+            continue
+        if step not in RUNNABLE_PIPELINE_STEPS:
+            log.info("Ignoring pipeline step with no handler: %s", step.value)
+            continue
+        if step not in resolved:
+            resolved.append(step)
+    if not resolved:
+        raise CustomException(
+            message="No runnable pipeline steps were requested.",
+            code="NO_RUNNABLE_STEPS",
+            status_code=400,
+        )
+    return resolved
+
+
 DEFAULT_AUDIO_CONFIG = {
     "ai_denoise": True,
     "noise_suppression_strength": 90,
@@ -152,7 +197,7 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
         body = body or {}
         # Subtitles are burned at export time from the style the user picks, so
         # caption steps are deliberately absent from the default run.
-        selected_steps = [PipelineStepType.resolve(s) for s in body.get("steps", DEFAULT_PIPELINE_STEPS)]
+        selected_steps = _resolve_steps(body.get("steps", DEFAULT_PIPELINE_STEPS))
         output_aspect_ratios = ["9:16"]  # Single aspect ratio for faster processing
         audio_config = body.get("audio_config", DEFAULT_AUDIO_CONFIG)
         watermark_enabled = body.get("watermark_enabled", True)
@@ -251,7 +296,7 @@ async def pipeline_progress(project_id: str, user: CurrentUserDep):
             async with _progress_lock:
                 data = dict(_progress_store.get(project_id, {"status": "idle", "percent": 0, "message": ""}))
             yield f"data: {json.dumps(data)}\n\n"
-            if data.get("status") in ("completed", "error"):
+            if data.get("status") in ("completed", "error", "cancelled"):
                 break
             await asyncio.sleep(1)
 
@@ -358,7 +403,7 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
             raise CustomException(message="Pipeline not found", code="NOT_FOUND", status_code=404)
 
         body = body or {}
-        selected_steps = [PipelineStepType.resolve(s) for s in body.get("steps", DEFAULT_PIPELINE_STEPS)]
+        selected_steps = _resolve_steps(body.get("steps", DEFAULT_PIPELINE_STEPS))
         output_aspect_ratios = ["9:16"]  # Single aspect ratio for faster processing
         audio_config = body.get("audio_config", DEFAULT_AUDIO_CONFIG)
         watermark_enabled = body.get("watermark_enabled", True)

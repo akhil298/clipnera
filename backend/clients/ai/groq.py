@@ -46,6 +46,17 @@ MODEL_PROFILES: dict[str, ModelProfile] = {
 # empty with finish_reason="length".
 MIN_REASONING_OUTPUT_TOKENS = 2048
 
+# Reasoning effort asked of a reasoning model. At the default ("medium") a model
+# like openai/gpt-oss-20b spends its whole output budget thinking and returns
+# empty content for a long extraction prompt, which silently emptied highlight
+# detection. "low" leaves the budget for the answer and is ample for the
+# structured JSON extraction this codebase asks for.
+DEFAULT_REASONING_EFFORT = "low"
+
+# When a reply comes back empty because reasoning consumed the budget, retry
+# once with this much more room rather than returning "" to the caller.
+EMPTY_REPLY_RETRY_MULTIPLIER = 2
+
 # Headroom for the chat template, role markers and estimation error.
 TOKEN_ESTIMATE_SAFETY_MARGIN = 256
 
@@ -225,6 +236,34 @@ class Groq(BaseAI):
         return system_msgs + kept
 
     async def chat(self, messages: list[dict[str, Any]], **kwargs: Any) -> str:
+        """Send one chat completion and return its text.
+
+        Guarantees a non-empty reply or an exception: a reasoning model that
+        spends its whole output budget thinking is retried with more room
+        instead of handing the caller "" to parse.
+        """
+        json_mode = bool(kwargs.pop("json_mode", False))
+        content = await self._chat_once(messages, json_mode=json_mode, **kwargs)
+        if content.strip():
+            return content
+
+        requested = int(kwargs.get("max_tokens") or 1024)
+        retry_tokens = effective_max_tokens(requested, self.model) * EMPTY_REPLY_RETRY_MULTIPLIER
+        log.warning(
+            "Groq returned empty content; retrying with max_tokens=%d: model=%s",
+            retry_tokens, self.model,
+        )
+        retry_kwargs = dict(kwargs)
+        retry_kwargs["max_tokens"] = retry_tokens
+        content = await self._chat_once(messages, json_mode=json_mode, **retry_kwargs)
+        if not content.strip():
+            raise RuntimeError(
+                f"Groq model {self.model} returned no content even with "
+                f"max_tokens={retry_tokens}. Use a non-reasoning model or lower reasoning_effort."
+            )
+        return content
+
+    async def _chat_once(self, messages: list[dict[str, Any]], json_mode: bool = False, **kwargs: Any) -> str:
         requested = int(kwargs.get("max_tokens") or 1024)
         max_output_tokens = effective_max_tokens(requested, self.model)
         if max_output_tokens != requested:
@@ -234,6 +273,12 @@ class Groq(BaseAI):
                 requested, max_output_tokens, self.model,
             )
         kwargs["max_tokens"] = max_output_tokens
+        # A reasoning model left at its default effort thinks until the budget is
+        # gone and returns nothing. Callers may override per request.
+        if self.profile.reasoning:
+            kwargs.setdefault("reasoning_effort", DEFAULT_REASONING_EFFORT)
+        if json_mode:
+            kwargs.setdefault("response_format", {"type": "json_object"})
         fitted = self._fit_messages(messages, max_output_tokens)
         estimated_input = _messages_tokens(fitted)
 
@@ -294,6 +339,8 @@ class Groq(BaseAI):
     async def stream_chat(self, messages: list[dict[str, Any]], **kwargs: Any) -> AsyncIterator[str]:
         max_output_tokens = effective_max_tokens(int(kwargs.get("max_tokens") or 1024), self.model)
         kwargs["max_tokens"] = max_output_tokens
+        if self.profile.reasoning:
+            kwargs.setdefault("reasoning_effort", DEFAULT_REASONING_EFFORT)
         fitted = self._fit_messages(messages, max_output_tokens)
         await self._limiter_for(self.model).acquire(_messages_tokens(fitted) + max_output_tokens)
 

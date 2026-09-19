@@ -30,6 +30,10 @@ log = get_logger(__name__)
 
 ProgressCallback = Callable[[str, int, Optional[str], Optional[str], Optional[str]], None]
 
+# Minimum gap between step-progress writes to the database. Step transitions
+# always write; the chatty in-step updates are sampled.
+PROGRESS_WRITE_INTERVAL_SECONDS = 2.0
+
 
 def _read_audio_file(path: str) -> bytes:
     with open(path, "rb") as f:
@@ -79,6 +83,11 @@ class PipelineOrchestrator:
         self._cancel = False
         self._local_path: str | None = None
         self._step_statuses: dict[str, str] = {}
+        self._current_step: str | None = None
+        self._last_progress_write: float = 0.0
+        # asyncio keeps only a weak reference to a running task, so a
+        # fire-and-forget progress write can be collected before it commits.
+        self._background_tasks: set[asyncio.Task] = set()
 
     def cancel(self) -> None:
         self._cancel = True
@@ -539,6 +548,7 @@ class PipelineOrchestrator:
             transcript_segments=segments,
             analysis=analysis,
             progress_callback=lambda msg, pct, _: self._notify(msg, pct),
+            clip_settings=self.clip_settings,
         )
         log.info(
             "Highlight detection complete",
@@ -562,7 +572,7 @@ class PipelineOrchestrator:
         from content_intelligence.service import ContentIntelligenceService
         service = ContentIntelligenceService()
 
-        scored = await service.score_highlights(highlights, analysis)
+        scored = await service.score_highlights(highlights, analysis, clip_settings=self.clip_settings)
         log.info(
             "Scoring complete",
             extra={"project_id": self.project_id, "scored_count": len(scored)},
@@ -873,6 +883,7 @@ class PipelineOrchestrator:
             log.debug(f"Failed to save artifact for step {step.value}: {exc}")
 
     async def _mark_step_running(self, step: PipelineStepType) -> None:
+        self._current_step = step.value
         self._notify(f"Starting {step.value}...", 0, step=step.value, step_status="running")
         try:
             from pipeline.repository import PipelineRepository
@@ -956,13 +967,62 @@ class PipelineOrchestrator:
     def _notify(
         self, message: str, percent: int, step: Optional[str] = None, step_status: Optional[str] = None
     ) -> None:
+        target_step = step or self._current_step
         if self.progress_callback:
             try:
-                result = self.progress_callback(message, percent, None, step, step_status)
+                result = self.progress_callback(message, percent, None, target_step, step_status)
                 if asyncio.iscoroutine(result):
-                    asyncio.create_task(result)
+                    self._spawn(result)
             except Exception as e:
                 log.debug(f"Progress notify failed: {e}")
+
+        # The in-memory SSE store above lives in one worker process and is lost
+        # on restart, so clients fall back to polling /status, which reads the
+        # database. Without this the polled view reported 0% and no message for
+        # every step and the UI could only ever show whole-step granularity.
+        if target_step:
+            self._schedule_progress_write(target_step, percent, message, step_status)
+
+    def _schedule_progress_write(
+        self, step: str, percent: int, message: str, step_status: Optional[str]
+    ) -> None:
+        """Persist step progress, rate-limited so a chatty step cannot flood the DB."""
+        now = time.monotonic()
+        is_transition = step_status is not None
+        if not is_transition and now - self._last_progress_write < PROGRESS_WRITE_INTERVAL_SECONDS:
+            return
+        self._last_progress_write = now
+        self._spawn(self._persist_step_progress(step, percent, message))
+
+    def _spawn(self, coro) -> None:
+        """Run a coroutine in the background, holding a reference until it ends."""
+        try:
+            task = asyncio.create_task(coro)
+        except RuntimeError:
+            # No running loop (synchronous caller); nothing to schedule onto.
+            coro.close()
+            log.debug("No event loop available for background pipeline task")
+            return
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+
+    async def _persist_step_progress(self, step: str, percent: int, message: str) -> None:
+        try:
+            step_enum = PipelineStepType.resolve(step)
+        except ValueError:
+            return
+        try:
+            from pipeline.repository import PipelineRepository
+            async with AsyncSessionLocal() as session:
+                repo = PipelineRepository(session)
+                await repo.update_step_progress(
+                    self.project_id,
+                    step_enum,
+                    progress_percent=max(0, min(100, int(percent))),
+                    message=message[:500] if message else None,
+                )
+        except Exception as exc:
+            log.debug(f"Failed to persist progress for step {step}: {exc}")
 
     async def _fetch_processed_bytes(self, url: str) -> bytes:
         log.info("Fetching processed bytes", extra={"project_id": self.project_id, "url": url})

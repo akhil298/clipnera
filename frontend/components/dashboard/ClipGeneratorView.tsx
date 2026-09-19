@@ -28,13 +28,17 @@ import {
   ArrowLeft,
   Headphones,
   AlertCircle,
+  ArrowDownWideNarrow,
   RotateCcw
 } from 'lucide-react';
 import { VideoProject, ViralClip, TabType, PipelineStep } from '@/lib/types';
 import { clipApi } from '@/lib/api';
+import { ClipCard } from './ClipCard';
 import { PipelineStepIndicator } from './PipelineStepIndicator';
 import { AudioBeforeAfter } from './AudioBeforeAfter';
 import confetti from 'canvas-confetti';
+
+type SortMode = 'score' | 'timeline' | 'duration';
 
 interface ClipGeneratorViewProps {
   project: VideoProject;
@@ -69,29 +73,14 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
 }) => {
   const safeProject = project || { clips: [] as ViralClip[], title: '', folderName: '' };
   const [selectedClip, setSelectedClip] = useState<ViralClip | null>(safeProject.clips[0] || null);
-  const [isPlayingClip, setIsPlayingClip] = useState(false);
 
-  useEffect(() => {
-    if (safeProject.clips.length > 0 && !selectedClip) {
-      setSelectedClip(safeProject.clips[0]);
-    } else if (safeProject.clips.length > 0 && selectedClip && !safeProject.clips.find((c) => c.id === selectedClip.id)) {
-      setSelectedClip(safeProject.clips[0]);
-    }
-  }, [safeProject.clips, selectedClip]);
-  const [isPlayingRaw, setIsPlayingRaw] = useState(false);
-  const [copiedHookId, setCopiedHookId] = useState<string | null>(null);
   const [filterScore, setFilterScore] = useState<number>(0);
+  const [sortMode, setSortMode] = useState<SortMode>('score');
   const [quickExportingId, setQuickExportingId] = useState<string | null>(null);
   const [isBatchExporting, setIsBatchExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
   const [newFolderName, setNewFolderName] = useState(safeProject.folderName || safeProject.title || '');
-
-  const handleCopyHook = (clipId: string, hookText: string) => {
-    navigator.clipboard.writeText(hookText);
-    setCopiedHookId(clipId);
-    setTimeout(() => setCopiedHookId(null), 2000);
-  };
 
   const downloadExport = (url: string, filename: string) => {
     const link = document.createElement('a');
@@ -159,21 +148,27 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
     setIsRenaming(false);
   };
 
-  const filteredClips = safeProject.clips.filter((c) => c.viralityScore >= filterScore);
+  // Memoised so the identity is stable: the selection effect below depends on
+  // it, and a fresh array every render would re-run that effect forever.
+  const visibleClips = React.useMemo(() => {
+    const kept = safeProject.clips.filter((c) => c.viralityScore >= filterScore);
+    const bySort: Record<SortMode, (a: ViralClip, b: ViralClip) => number> = {
+      score: (a, b) => b.viralityScore - a.viralityScore,
+      timeline: (a, b) => a.startTime - b.startTime,
+      duration: (a, b) => b.duration - a.duration,
+    };
+    return [...kept].sort(bySort[sortMode]);
+  }, [safeProject.clips, filterScore, sortMode]);
 
   useEffect(() => {
-    if (!safeProject.clips.length) {
+    if (!visibleClips.length) {
       setSelectedClip(null);
       return;
     }
-    if (!filteredClips.length) {
-      setSelectedClip(null);
-      return;
-    }
-    if (!selectedClip || !filteredClips.find((c) => c.id === selectedClip.id)) {
-      setSelectedClip(filteredClips[0]);
-    }
-  }, [safeProject.clips, filteredClips, selectedClip]);
+    setSelectedClip((current) =>
+      current && visibleClips.some((c) => c.id === current.id) ? current : visibleClips[0],
+    );
+  }, [visibleClips]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -421,324 +416,96 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
         </div>
       </div>
 
-      {/* Main Grid: Viral Clips List & Side Preview Card */}
-      <div className="grid lg:grid-cols-12 gap-6">
-        {/* Left Column: Clips Leaderboard */}
-        <div className="lg:col-span-7 xl:col-span-8 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-white">
-                Extracted Viral Clips
-              </h2>
-              <span className="px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300 text-xs font-semibold">
-                {filteredClips.length} clips
-              </span>
+      {/* Clip Grid */}
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-white">Extracted Viral Clips</h2>
+            <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs font-semibold text-neutral-300">
+              {visibleClips.length}
+              {visibleClips.length !== safeProject.clips.length && ` of ${safeProject.clips.length}`}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <ArrowDownWideNarrow className="h-3.5 w-3.5 text-neutral-400" />
+              <select
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as SortMode)}
+                className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-xs text-white focus:border-amber-400 focus:outline-none"
+                aria-label="Sort clips"
+              >
+                <option value="score">Highest score</option>
+                <option value="timeline">Video order</option>
+                <option value="duration">Longest first</option>
+              </select>
             </div>
 
-            {/* Filter Bar */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-neutral-400 flex items-center gap-1">
-                <Filter className="w-3.5 h-3.5 text-neutral-400" />
-                Score &ge;
-              </span>
+            <div className="flex items-center gap-1.5">
+              <Filter className="h-3.5 w-3.5 text-neutral-400" />
               <select
                 value={filterScore}
                 onChange={(e) => setFilterScore(Number(e.target.value))}
-                className="px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-white focus:outline-none focus:border-amber-400"
+                className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-xs text-white focus:border-amber-400 focus:outline-none"
+                aria-label="Filter clips by score"
               >
-                <option value={0}>All (0+)</option>
+                <option value={0}>All scores</option>
                 <option value={70}>Standard (70+)</option>
                 <option value={85}>High (85+)</option>
-                <option value={90}>Ultra Viral (90+)</option>
-                <option value={95}>Superstar (95+)</option>
+                <option value={90}>Ultra viral (90+)</option>
               </select>
             </div>
           </div>
-
-          {/* List of Clips */}
-          <div className="space-y-3.5">
-            {filteredClips.map((clip, index) => {
-              const isSelected = selectedClip?.id === clip.id;
-              const isSuperViral = clip.viralityScore >= 95;
-
-              return (
-                <div
-                  key={clip.id}
-                  onClick={() => setSelectedClip(clip)}
-                  className={`rounded-xl p-4 lg:p-5 border transition-all cursor-pointer ${
-                    isSelected
-                      ? 'bg-neutral-900 border-amber-500/60 ring-1 ring-amber-500/30 shadow-lg'
-                      : 'bg-neutral-900/60 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900/80'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    {/* Left: Score Badge & Index */}
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`flex flex-col items-center justify-center w-13 h-13 rounded-xl border flex-shrink-0 font-mono shadow-sm ${
-                          isSuperViral
-                            ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                            : 'bg-neutral-800 border-neutral-700 text-white'
-                        }`}
-                      >
-                        <span className="text-base font-black leading-none">
-                          {clip.viralityScore}
-                        </span>
-                        <span className="text-[8px] font-bold uppercase tracking-wider text-neutral-400 mt-0.5">
-                          Score
-                        </span>
-                      </div>
-
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[11px] font-semibold text-neutral-400">
-                            Clip #{index + 1}
-                          </span>
-                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 font-mono">
-                            {clip.duration}s
-                          </span>
-                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 font-medium">
-                            {clip.suggestedAspectRatio} Vertical
-                          </span>
-                        </div>
-                        <h3 className="text-sm font-bold text-white mt-1 group-hover:text-amber-300 transition-colors">
-                          {clip.title}
-                        </h3>
-                      </div>
-                    </div>
-
-                    {/* Right: Quick Action Buttons */}
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectClipForEdit(clip);
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-semibold border border-neutral-700 transition-all flex items-center gap-1.5 shadow-sm"
-                      >
-                        <Scissors className="w-3.5 h-3.5 text-neutral-300" />
-                        <span>Edit Studio</span>
-                      </button>
-
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onScheduleClip(clip);
-                        }}
-                        className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-amber-400 border border-neutral-700 transition-colors"
-                        title="Schedule Post"
-                      >
-                        <Calendar className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Hook Box */}
-                  <div className="mt-3.5 p-2.5 rounded-lg bg-neutral-950 border border-neutral-800/80 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-xs">
-                      <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                      <span className="text-neutral-400 font-medium">Hook:</span>
-                      <span className="text-neutral-200 italic font-medium truncate">
-                        "{clip.hook}"
-                      </span>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCopyHook(clip.id, clip.hook);
-                      }}
-                      className="p-1 text-neutral-400 hover:text-white rounded transition-colors flex-shrink-0"
-                      title="Copy Hook Text"
-                    >
-                      {copiedHookId === clip.id ? (
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" />
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Metrics Bar & AI Rationale */}
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs pt-2 border-t border-neutral-800/60">
-                    <p className="text-[11px] text-neutral-400 max-w-xl truncate">
-                      <span className="text-amber-400 font-semibold">AI Rationale: </span>
-                      {clip.rationale}
-                    </p>
-
-                    <div className="flex items-center gap-3 text-[11px] font-mono">
-                      <span className="text-emerald-400">Hook: {clip.hookScore}%</span>
-                      <span className="text-amber-400">Engage: {clip.engagementScore}%</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            {safeProject.clips.length > 0 && filteredClips.length === 0 && (
-              <div className="rounded-xl border border-dashed border-neutral-800 bg-neutral-900/60 p-4 text-center">
-                <p className="text-xs text-neutral-400">No clips match the current filter.</p>
-                <button
-                  onClick={() => setFilterScore(0)}
-                  className="mt-2 text-[11px] font-semibold text-amber-300 hover:text-amber-200"
-                >
-                  Reset filter
-                </button>
-              </div>
-            )}
-            {safeProject.clips.length === 0 && (
-              <div className="rounded-xl border border-dashed border-neutral-800 bg-neutral-900/60 p-4 text-center">
-                <p className="text-xs text-neutral-400">No clips generated yet. Please wait for the pipeline to complete.</p>
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* Right Column: Active Clip Preview & Quick Actions */}
-        <div className="lg:col-span-5 xl:col-span-4">
-          <div className="sticky top-20 rounded-xl bg-neutral-900 border border-neutral-800 p-5 space-y-4 shadow-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Smartphone className="w-4 h-4 text-amber-400" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300">
-                  9:16 Vertical Preview
-                </h3>
-              </div>
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-400/10 text-amber-300">
-                {selectedClip ? `${selectedClip.duration}s • Score ${selectedClip.viralityScore}` : 'Select a clip'}
-              </span>
+        {visibleClips.length > 0 && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {visibleClips.map((clip, index) => (
+              <ClipCard
+                key={clip.id}
+                clip={clip}
+                index={index}
+                isSelected={selectedClip?.id === clip.id}
+                isExporting={quickExportingId === clip.id}
+                onSelect={setSelectedClip}
+                onEdit={onSelectClipForEdit}
+                onSchedule={onScheduleClip}
+                onExport={handleQuickExport}
+              />
+            ))}
+          </div>
+        )}
+
+        {safeProject.clips.length > 0 && visibleClips.length === 0 && (
+          <div className="rounded-xl border border-dashed border-neutral-800 bg-neutral-900/60 p-8 text-center">
+            <p className="text-xs text-neutral-400">No clips match the current filter.</p>
+            <button
+              onClick={() => setFilterScore(0)}
+              className="mt-2 text-[11px] font-semibold text-amber-300 hover:text-amber-200"
+            >
+              Reset filter
+            </button>
+          </div>
+        )}
+
+        {safeProject.clips.length === 0 && (
+          <div className="rounded-xl border border-dashed border-neutral-800 bg-neutral-900/60 p-10 text-center">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-neutral-800/70">
+              <Sparkles className="h-5 w-5 text-neutral-500" />
             </div>
-
-            {/* Vertical Video Phone Frame Mockup */}
-            {selectedClip && (
-              <div className="relative mx-auto w-56 aspect-[9/16] rounded-2xl bg-black border-2 border-neutral-800 shadow-xl overflow-hidden flex flex-col justify-between p-3">
-                {/* Video Preview with Play Overlay */}
-                 <div className="absolute inset-0">
-                   {selectedClip.presignedUrl ? (
-                      <>
-                        <video
-                          src={selectedClip.presignedUrl}
-                          autoPlay={isPlayingClip}
-                          muted
-                          loop
-                          playsInline
-                          poster={selectedClip.posterUrl || ''}
-                          className="w-full h-full object-cover"
-                          onPlay={() => setIsPlayingClip(true)}
-                          onPause={() => setIsPlayingClip(false)}
-                          onError={() => {
-                            console.error('Clip preview failed to load:', selectedClip.presignedUrl);
-                            setIsPlayingClip(false);
-                          }}
-                        />
-                        {!isPlayingClip && selectedClip.posterUrl && (
-                          <img
-                            src={selectedClip.posterUrl}
-                            alt={selectedClip.title}
-                            className="absolute inset-0 w-full h-full object-cover opacity-40"
-                          />
-                        )}
-                       {!isPlayingClip && (
-                         <div className="absolute inset-0 flex items-center justify-center">
-                           <button
-                             onClick={() => setIsPlayingClip(true)}
-                             className="w-14 h-14 rounded-full bg-amber-500/90 hover:bg-amber-400 text-neutral-950 flex items-center justify-center shadow-xl transition-all active:scale-90"
-                           >
-                             <Play className="w-6 h-6 fill-current" />
-                           </button>
-                         </div>
-                       )}
-                     </>
-                   ) : (
-                     <div className="absolute inset-0 flex items-center justify-center">
-                       <div className="text-center space-y-2">
-                         <div className="w-14 h-14 rounded-full bg-neutral-800/60 flex items-center justify-center mx-auto">
-                           <Play className="w-6 h-6 text-neutral-400" />
-                         </div>
-                         <p className="text-[10px] text-neutral-400">Video not available</p>
-                       </div>
-                     </div>
-                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-black/60" />
-                </div>
-
-                {/* Top UI: Virality & Duration */}
-                <div className="relative z-10 flex items-center justify-between text-[10px]">
-                  <span className="px-2 py-0.5 rounded-full bg-black/70 backdrop-blur-md text-amber-300 font-bold border border-white/10">
-                    ⚡ {selectedClip.viralityScore} Virality
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded bg-black/70 text-white font-mono">
-                    00:{selectedClip.duration}
-                  </span>
-                </div>
-
-                {/* Middle: Kinetic Animated Caption Mockup */}
-                <div className="relative z-10 text-center my-auto px-2">
-                  <div className="inline-block p-1.5 rounded-lg bg-black/80 backdrop-blur-sm border border-neutral-700 shadow-lg">
-                    <p
-                      className="font-extrabold text-xs tracking-tight uppercase"
-                      style={{
-                        fontFamily: selectedClip.captionConfig.fontFamily,
-                        color: selectedClip.captionConfig.textColor,
-                      }}
-                    >
-                      {selectedClip.hook || selectedClip.title || 'Your caption'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Bottom UI: Title */}
-                <div className="relative z-10 space-y-1">
-                  <p className="text-[11px] font-bold text-white line-clamp-1">
-                    {selectedClip.title}
-                  </p>
-                  <p className="text-[9px] text-neutral-300 line-clamp-1">
-                    {selectedClip.socialOptimization.hashtags.slice(0, 3).join(' ')}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* Quick Action Trigger to open Studio */}
-            {selectedClip && (
-              <div className="space-y-2 pt-2">
-                <button
-                  id="btn-open-full-editor"
-                  onClick={() => onSelectClipForEdit(selectedClip)}
-                  className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/15 active:scale-95 transition-all flex items-center justify-center gap-2"
-                >
-                  <Scissors className="w-4 h-4 stroke-[2.5]" />
-                  <span>Open in Studio Editor</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => onScheduleClip(selectedClip)}
-                    className="py-2 px-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-neutral-200 border border-neutral-700 transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <Calendar className="w-3.5 h-3.5 text-neutral-400" />
-                    <span>Schedule</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleQuickExport(selectedClip)}
-                    disabled={quickExportingId === selectedClip.id}
-                    className="py-2 px-3 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-neutral-200 border border-neutral-700 transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    {quickExportingId === selectedClip.id ? (
-                      <span className="text-amber-400 animate-pulse">Exporting...</span>
-                    ) : (
-                      <>
-                        <Download className="w-3.5 h-3.5 text-neutral-400" />
-                        <span>Quick Export</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
+            <p className="text-sm font-semibold text-white">
+              {safeProject.processingStatus === 'processing' ? 'Finding your best moments' : 'No clips yet'}
+            </p>
+            <p className="mt-1 text-xs text-neutral-400">
+              {safeProject.processingStatus === 'processing'
+                ? 'Clips appear here as soon as the pipeline finishes rendering them.'
+                : 'Run the pipeline on this project to generate clips.'}
+            </p>
           </div>
-        </div>
+        )}
       </div>
+
     </div>
   );
 };

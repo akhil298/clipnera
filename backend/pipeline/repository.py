@@ -112,13 +112,46 @@ class PipelineRepository:
         )
 
     async def update_pipeline_current_step(self, project_id: str, current_step: PipelineStepType, is_completed: bool = False) -> None:
-        stmt = select(PipelineState).where(PipelineState.project_id == project_id)
-        result = await self._session.execute(stmt)
-        state = result.scalar_one_or_none()
+        """Advance the newest pipeline for a project.
+
+        A restarted project has several pipeline rows, and scalar_one_or_none()
+        raised MultipleResultsFound on those — which meant the run that raised it
+        was never marked completed and the UI showed it as processing forever.
+        """
+        state = await self.get_pipeline(project_id)
         if state:
             state.current_step = current_step.value
             state.is_completed = is_completed
             await self._session.commit()
+
+    async def update_step_progress(
+        self,
+        project_id: str,
+        step: PipelineStepType,
+        progress_percent: int,
+        message: str | None = None,
+    ) -> None:
+        """Record how far through a step the run is, for the polled /status view.
+
+        Kept separate from update_step_status() so a progress tick can never
+        change a step's status, and so it can no-op quietly when the step row is
+        missing rather than failing the run.
+        """
+        state = await self.get_pipeline(project_id)
+        if not state:
+            return
+        stmt = select(PipelineStepLog).where(
+            PipelineStepLog.pipeline_id == state.id,
+            PipelineStepLog.step == step.value,
+        )
+        result = await self._session.execute(stmt)
+        log_entry = result.scalars().first()
+        if not log_entry:
+            return
+        log_entry.progress_percent = progress_percent
+        if message:
+            log_entry.message = message
+        await self._session.commit()
 
     async def save_artifact(self, pipeline_id: str, step: PipelineStepType, artifact_path: str) -> None:
         stmt = select(PipelineStepLog).where(

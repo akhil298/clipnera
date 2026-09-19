@@ -73,7 +73,7 @@ class ContentClassifier:
                     response = await self._text_client.chat([
                         {"role": "system", "content": "You are a content classification assistant. Always return valid JSON."},
                         {"role": "user", "content": prompt},
-                    ], temperature=0.1, max_tokens=300)
+                    ], temperature=0.1, max_tokens=300, json_mode=True)
                     result = self._parse_json(response)
                     category = result.get("category", "unknown")
                     if category not in CONTENT_TAXONOMY:

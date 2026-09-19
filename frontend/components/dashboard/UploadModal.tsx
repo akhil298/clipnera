@@ -216,7 +216,6 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       'visual_analysis',
       'content_classification',
       'highlight_detection',
-      'bounding_box_detection',
       'scoring',
       'metadata_generation',
       'aspect_ratio_render',

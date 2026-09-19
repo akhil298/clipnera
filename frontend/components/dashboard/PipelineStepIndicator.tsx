@@ -30,11 +30,41 @@ const STEP_LABELS: Record<string, string> = {
 export const PipelineStepIndicator: React.FC<PipelineStepIndicatorProps> = ({ steps, onRevert }) => {
   if (!steps || steps.length === 0) return null;
 
+  const finished = steps.filter((s) => s.status === 'completed' || s.status === 'skipped').length;
+  const running = steps.find((s) => s.status === 'running');
+  const hasFailure = steps.some((s) => s.status === 'failed');
+  // Partial credit for the step in flight, so the bar moves during a long step
+  // instead of sitting still between whole-step jumps.
+  const overall = Math.round(
+    ((finished + (running ? Math.min(100, Math.max(0, running.progress_percent ?? 0)) / 100 : 0)) / steps.length) * 100,
+  );
+
   return (
     <div className="rounded-xl bg-neutral-900 border border-neutral-800 p-4 space-y-3">
-      <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
-        Processing Pipeline
-      </h3>
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300">
+          Processing Pipeline
+        </h3>
+        <span className="font-mono text-[11px] font-semibold text-neutral-400">
+          {finished}/{steps.length} steps &middot; {overall}%
+        </span>
+      </div>
+
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${
+            hasFailure ? 'bg-rose-500' : overall >= 100 ? 'bg-emerald-400' : 'bg-amber-400'
+          }`}
+          style={{ width: `${overall}%` }}
+        />
+      </div>
+
+      {running && (
+        <p className="text-[11px] text-neutral-400">
+          <span className="font-semibold text-amber-300">{STEP_LABELS[running.step] || running.step}</span>
+          {running.message ? ` — ${running.message}` : ''}
+        </p>
+      )}
       <div className="space-y-2">
         {steps.map((step) => {
           const isCompleted = step.status === 'completed';
@@ -72,7 +102,7 @@ export const PipelineStepIndicator: React.FC<PipelineStepIndicatorProps> = ({ st
                     {STEP_LABELS[step.step] || step.step}
                   </span>
                   {step.message && (
-                    <span className="text-[10px] text-neutral-400 block truncate max-w-[200px]">
+                    <span className="text-[10px] text-neutral-400 block truncate max-w-[340px]">
                       {step.message}
                     </span>
                   )}
@@ -81,9 +111,17 @@ export const PipelineStepIndicator: React.FC<PipelineStepIndicatorProps> = ({ st
 
               <div className="flex items-center gap-2">
                 {isRunning && (
-                  <span className="text-[10px] font-mono text-amber-400 font-bold">
-                    {step.progress_percent}%
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="h-1 w-16 overflow-hidden rounded-full bg-neutral-800">
+                      <div
+                        className="h-full rounded-full bg-amber-400 transition-all duration-500"
+                        style={{ width: `${Math.min(100, Math.max(0, step.progress_percent ?? 0))}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-mono text-amber-400 font-bold">
+                      {step.progress_percent ?? 0}%
+                    </span>
+                  </div>
                 )}
                 {isReverted && onRevert && (
                   <button

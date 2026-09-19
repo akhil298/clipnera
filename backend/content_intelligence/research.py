@@ -45,7 +45,7 @@ If the video mentions a prime minister or another public official reacting to so
             response = await self._text_client.chat([
                 {"role": "system", "content": "You are a factual video research assistant. Return valid JSON only."},
                 {"role": "user", "content": prompt},
-            ], temperature=0.1, max_tokens=1800)
+            ], temperature=0.1, max_tokens=1800, json_mode=True)
             data = self._parse_json(response)
         except Exception as exc:
             log.warning(f"Groq topic research failed: {exc}")

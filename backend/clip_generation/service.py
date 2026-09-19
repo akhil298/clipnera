@@ -758,7 +758,27 @@ class ClipService:
         ]
         visual_quality = sum(visual_scores) / len(visual_scores) if visual_scores else 0.0
         overall = normalized(clip.get("score", 0.0))
+
+        # The scorer's virality breakdown lives under scoring_factors and was
+        # never surfaced, so every client that asked for hook_score or
+        # engagement_score fell back to the overall score and showed the same
+        # number three times. Each component is scored out of 25, the total out
+        # of 100; they are normalised here like every other score.
+        factors = clip.get("scoring_factors", {}) if isinstance(clip.get("scoring_factors"), dict) else {}
+        virality = factors.get("virality_scores", {}) if isinstance(factors.get("virality_scores"), dict) else {}
+
+        def component(key: str) -> float:
+            try:
+                return round(min(1.0, max(0.0, float(virality.get(key, 0.0)) / 25.0)), 4)
+            except (TypeError, ValueError):
+                return 0.0
+
         return {
+            "hook_score": component("hook_score"),
+            "engagement_score": component("engagement_score"),
+            "value_score": component("value_score"),
+            "shareability_score": component("shareability_score"),
+            "virality_score": normalized(virality.get("virality_score", overall * 100)),
             "relevance": normalized(raw_scores.get("relevance", overall)),
             "importance": normalized(raw_scores.get("importance", overall)),
             "emotional_impact": normalized(raw_scores.get("emotional_impact", overall)),

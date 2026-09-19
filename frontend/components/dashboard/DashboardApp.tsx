@@ -216,8 +216,24 @@ export default function DashboardApp() {
             // Projects without a pipeline are still valid folders.
           }
           const clips = (project.clips || []).map(mapBackendClip);
-          const processing = ['processing', 'pending', 'uploaded'].includes(project.status) ||
-            Boolean(pipelineStatus && !pipelineStatus.is_completed && !pipelineStatus.error && pipelineStatus.steps?.length);
+          // The pipeline's own view wins when there is one. Going by
+          // project.status alone left a project whose run had finished but
+          // whose row still said "uploaded" showing as processing forever.
+          const hasPipeline = Boolean(pipelineStatus?.steps?.length);
+          const failed = Boolean(pipelineStatus?.error) || project.status === 'failed';
+          const processing = failed
+            ? false
+            : hasPipeline
+              ? !pipelineStatus.is_completed
+              : ['processing', 'pending', 'uploaded'].includes(project.status);
+          const completedSteps = (pipelineStatus?.steps || []).filter(
+            (step: PipelineStep) => step.status === 'completed' || step.status === 'skipped',
+          ).length;
+          const progress = pipelineStatus?.is_completed
+            ? 100
+            : hasPipeline
+              ? Math.round((completedSteps / pipelineStatus.steps.length) * 100)
+              : 0;
           const youtubeThumbnail = extractYouTubeThumbnail(project.source_url || '');
           return {
             id: project.id,
@@ -239,8 +255,8 @@ export default function DashboardApp() {
             offlineAvailable: project.status === 'uploaded',
             clips,
             transcript: [],
-            processingProgress: pipelineStatus?.is_completed ? 100 : 0,
-            processingStatus: pipelineStatus?.error || project.status === 'failed'
+            processingProgress: progress,
+            processingStatus: failed
               ? 'failed' as const
               : processing ? 'processing' as const : 'completed' as const,
           } satisfies VideoProject;

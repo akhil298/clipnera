@@ -102,7 +102,7 @@ class MetadataGenerator:
                     response = await self._text_client.chat([
                         {"role": "system", "content": "You are a social media expert specializing in YouTube Shorts metadata. Always return valid JSON only."},
                         {"role": "user", "content": prompt},
-                    ], temperature=0.7, max_tokens=900)
+                    ], temperature=0.7, max_tokens=900, json_mode=True)
         except Exception as exc:
             log.warning(f"Metadata generation failed after retries: {exc}")
             return self._fallback_metadata(clip)
@@ -135,9 +135,25 @@ class MetadataGenerator:
         return clip_copy
 
     def _default_title(self, clip: dict, category: str) -> str:
-        excerpt = clip.get("transcript_excerpt", "")[:40]
+        """Title used when the model could not supply one.
+
+        Cuts on a word boundary and prefers the excerpt's first sentence, so a
+        failed generation reads as a headline rather than a severed fragment.
+        """
+        excerpt = " ".join(str(clip.get("transcript_excerpt", "")).split())
         emoji = EMOJI_MAP.get(category, "\ud83c\udf1f")
-        return f"{emoji} {excerpt}..."
+        if not excerpt:
+            return f"{emoji} Untitled clip"
+
+        for terminator in (". ", "? ", "! "):
+            head, sep, _ = excerpt.partition(terminator)
+            if sep and len(head) <= 60:
+                return f"{emoji} {head.strip()}{sep.strip()}"
+
+        if len(excerpt) <= 60:
+            return f"{emoji} {excerpt}"
+        clipped = excerpt[:60].rsplit(" ", 1)[0].rstrip(",;:- ")
+        return f"{emoji} {clipped}..."
 
     def _default_description(self, clip: dict) -> str:
         return clip.get("transcript_excerpt", "")[:150]

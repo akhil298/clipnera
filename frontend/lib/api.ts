@@ -335,17 +335,23 @@ function buildTranscriptSegments(clip: BackendClip): TranscriptSegment[] {
 
 export function mapBackendClip(clip: BackendClip): ViralClip {
   const viralityScore = Math.round(clip.score ?? 50);
-  const hookScore = typeof clip.scores?.hook_score === 'number'
-    ? Math.round(clip.scores.hook_score * 100)
-    : viralityScore;
-  const engagementScore = typeof clip.scores?.engagement_score === 'number'
-    ? Math.round(clip.scores.engagement_score * 100)
-    : viralityScore;
+  // Scores arrive normalised to 0-1. A component of exactly 0 is a real
+  // reading, not a missing one, so only a non-number falls back to the overall
+  // score -- `|| viralityScore` would have hidden every genuine zero.
+  const asPercent = (value: unknown): number =>
+    typeof value === 'number' && Number.isFinite(value)
+      ? Math.round(Math.min(1, Math.max(0, value)) * 100)
+      : viralityScore;
+  const hookScore = asPercent(clip.scores?.hook_score);
+  const engagementScore = asPercent(clip.scores?.engagement_score);
+  // The clip's own headline is the hook; `reason` is the model's rationale for
+  // picking it and read as a duplicate of the rationale line beneath it.
+  const hook = (clip.description || clip.title || '').trim();
   return {
     id: clip.id,
     projectId: clip.project_id,
     title: clip.title,
-    hook: clip.reason || clip.title,
+    hook,
     posterUrl: clip.poster_url || '',
     presignedUrl: clip.presigned_url || clip.burned_presigned_url || '',
     burnedPresignedUrl: clip.burned_presigned_url || '',

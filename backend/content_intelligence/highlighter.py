@@ -18,13 +18,32 @@ log = get_logger(__name__)
 
 MIN_CLIP_DURATION = 20.0
 MAX_CLIP_DURATION = 60.0
-MAX_CLIPS_PER_HOUR = 12.0
+# Clips kept per hour of source. Short-form tools are expected to surface a
+# shelf of options, not a single pick, so this is a ceiling on density rather
+# than a target; scoring still decides which ones survive.
+MAX_CLIPS_PER_HOUR = 30.0
+# No matter how short the video, offer at least this many candidates, as long
+# as the transcript can supply them.
+MIN_CLIPS = 5
+# Two kept clips should not start within this many seconds of each other, so a
+# model that fixates on one passage cannot fill the whole result set.
+MIN_CLIP_SPACING_SECONDS = 15.0
 
 # Output cap per window. Each moment costs roughly 120 tokens of JSON, so this
 # comfortably covers the handful of moments we ask any single window for.
 WINDOW_MAX_OUTPUT_TOKENS = 1400
 # Tokens reserved for the instruction block wrapped around each window.
 PROMPT_OVERHEAD_TOKENS = 500
+
+
+# Generic hooks that read as interesting in any category. Used to rank
+# transcript windows when the model is unavailable.
+_FALLBACK_ENGAGEMENT_SIGNALS = (
+    "but ", "actually", "secret", "never", "always", "truth", "mistake", "wrong",
+    "crazy", "insane", "shocking", "reason", "because", "problem", "why",
+    "how to", "the thing is", "believe", "realize", "learned", "first time",
+    "biggest", "best", "worst", "money", "free", "wait",
+)
 
 
 class HighlightDetector:
@@ -41,31 +60,36 @@ class HighlightDetector:
         max_clips_per_hour = float(settings.get("max_clips_per_hour") or MAX_CLIPS_PER_HOUR)
         max_clips = self._max_clips(duration, max_clips_per_hour, settings.get("max_clips"))
 
+        source = "llm"
         candidates = await self._detect_with_llm(
             transcript_segments, analysis, duration, category,
             min_clip_duration, max_clip_duration, target_clips=max_clips,
         )
         if not candidates and transcript_segments:
             log.warning("LLM returned no highlights; falling back to transcript-based clip detection")
-            candidates = self._detect_from_transcript(transcript_segments, category, min_clip_duration)
-            candidates = [self._cap_candidate(c, duration, min_clip_duration, max_clip_duration) for c in candidates]
+            source = "transcript_fallback"
+            candidates = self._detect_from_transcript(
+                transcript_segments, category, duration, min_clip_duration, max_clip_duration,
+            )
 
         if not candidates:
             log.warning("LLM and fallback both returned no highlights; returning empty clip list")
             return []
 
-        explicit_min = "min_clip_duration" in settings
-        explicit_max = "max_clip_duration" in settings
-        if explicit_min or explicit_max:
-            effective_min = min_clip_duration if explicit_min else 0.0
-            effective_max = max_clip_duration if explicit_max else 0.0
-            candidates = self._enforce_duration_bounds(candidates, duration, effective_min, effective_max)
-
-        candidates = sorted(candidates, key=lambda item: item.get("score", 0), reverse=True)[:max_clips]
+        # Duration bounds always apply. They used to be enforced only when the
+        # caller passed explicit settings, so a model that proposed four-second
+        # moments had them rendered verbatim; and enforcement dropped anything
+        # too short instead of growing it, which threw away good moments.
+        candidates = self._fit_durations(
+            candidates, transcript_segments, duration, min_clip_duration, max_clip_duration,
+        )
+        candidates = deduplicate_moments(candidates)
+        candidates = self._select_spread(candidates, max_clips, duration)
 
         for i, candidate in enumerate(candidates):
             candidate["id"] = f"highlight_{i}"
             candidate["content_category"] = category
+            candidate["detection_source"] = source
 
         log.info(
             "Highlight detection complete",
@@ -75,7 +99,7 @@ class HighlightDetector:
                 "max_clip_duration": max_clip_duration,
                 "max_clips_per_hour": max_clips_per_hour,
                 "selected_clips": len(candidates),
-                "source": "llm_only",
+                "source": source,
                 "clip_ranges": [
                     {
                         "id": c.get("id", f"highlight_{idx}"),
@@ -164,6 +188,9 @@ class HighlightDetector:
     ) -> list[dict[str, Any]] | None:
         """Return the model's moments for one window, or None if the call failed."""
         research = analysis.get("topic_research", {})
+        # Left to itself the model takes its moments from the opening of the
+        # excerpt and ignores the rest, so it is told where to look.
+        anchors = self._distribution_anchors(window.start, window.end, max_moments)
         prompt = f"""Select the best standalone short-form video clips from this transcript excerpt. Return only valid JSON as an object with a "moments" array.
 
 Video category: {category}
@@ -174,13 +201,20 @@ Topics: {', '.join(research.get('topics', []))}
 Current relevance: {research.get('current_relevance', '')}
 
 REQUIREMENTS:
-- Return at most {max_moments} moments, the strongest ones only.
-- Each clip must be between {min_clip_duration:.0f} and {max_clip_duration:.0f} seconds.
+- Return {max_moments} moments. Fewer only if the excerpt genuinely cannot support that many.
+- LENGTH IS MANDATORY: end_time - start_time must be between {min_clip_duration:.0f} and {max_clip_duration:.0f} seconds.
+  A single transcript line is far too short. Span as many consecutive lines as it takes,
+  typically {min_clip_duration:.0f}-{max_clip_duration:.0f} seconds of dialogue. Check the arithmetic before answering.
 - Timestamps are absolute seconds within the full video, copied exactly from the lines below.
 - Every moment must lie inside {window.start:.3f}s to {window.end:.3f}s.
-- Prefer the strongest hooks, arguments, or emotional moments.
+- Spread the moments across the whole excerpt, not just its opening. Find one near each of
+  these points: {anchors}. Move off a point only if there is nothing worth clipping near it.
+- Moments must not overlap each other.
+- Start each clip on a hook: a question, a claim, a surprise, or the first line of a story.
+- End each clip on a resolution, not mid-sentence.
 - Each clip must make sense on its own, without the surrounding video.
 - Do not invent content outside the transcript.
+- "score" and every value in "scores" is a number from 0 to 1.
 
 Transcript:
 {window.text}
@@ -200,7 +234,7 @@ JSON schema:
                     raw_response = await self._text_client.chat([
                         {"role": "system", "content": "You select high-value, factual, standalone video moments. Return valid JSON only."},
                         {"role": "user", "content": prompt},
-                    ], temperature=0.2, max_tokens=WINDOW_MAX_OUTPUT_TOKENS)
+                    ], temperature=0.2, max_tokens=WINDOW_MAX_OUTPUT_TOKENS, json_mode=True)
                     data = self._parse_json(raw_response)
                     break
         except Exception as exc:
@@ -220,6 +254,14 @@ JSON schema:
             )
             return []
         return moments
+
+    @staticmethod
+    def _distribution_anchors(start: float, end: float, count: int) -> str:
+        """Evenly spaced timestamps naming where to look for each moment."""
+        if count <= 1 or end <= start:
+            return f"{start:.0f}s"
+        step = (end - start) / count
+        return ", ".join(f"{start + step * (index + 0.5):.0f}s" for index in range(count))
 
     def _build_candidate(
         self,
@@ -254,23 +296,159 @@ JSON schema:
         return {
             "start_time": round(start, 3),
             "end_time": round(end, 3),
-            "score": min(1.0, max(0.0, self._score(item.get("score"), default=0.5))),
+            "score": self._normalize_score(item.get("score"), default=0.5),
             "title": str(item.get("title", "")),
             "reason": str(item.get("reason", "")),
             "scores": {
-                "relevance": self._score(scores.get("relevance")),
-                "importance": self._score(scores.get("importance")),
-                "emotional_impact": self._score(scores.get("emotional_impact")),
-                "information_value": self._score(scores.get("information_value")),
-                "standalone_context": self._score(scores.get("standalone_context")),
-                "social_media_value": self._score(scores.get("social_media_value")),
-                "current_relevance": self._score(scores.get("current_relevance")),
+                key: self._normalize_score(scores.get(key), default=0.0)
+                for key in (
+                    "relevance", "importance", "emotional_impact", "information_value",
+                    "standalone_context", "social_media_value", "current_relevance",
+                )
             },
             "transcript_excerpt": excerpt[:1000],
             "speakers": speakers,
             "reasons": ["llm_selected"],
             "source_window": window.index,
         }
+
+    def _fit_durations(
+        self,
+        candidates: list[dict[str, Any]],
+        transcript_segments: list[dict[str, Any]],
+        duration: float,
+        min_clip_duration: float,
+        max_clip_duration: float,
+    ) -> list[dict[str, Any]]:
+        """Bring every candidate inside the allowed length band.
+
+        A moment shorter than the minimum is grown outward rather than dropped:
+        the model is good at spotting where the interesting passage is and bad at
+        saying how long it runs, so its start/end are treated as a seed. Bounds
+        are then snapped onto word timestamps so cuts land in pauses instead of
+        mid-word.
+        """
+        if duration <= 0:
+            return candidates
+
+        # A video shorter than the requested minimum can only ever yield itself.
+        floor = min(min_clip_duration, duration)
+        ceiling = max(floor, min(max_clip_duration, duration))
+
+        fitted: list[dict[str, Any]] = []
+        for candidate in candidates:
+            start = max(0.0, float(candidate.get("start_time", 0.0)))
+            end = min(duration, float(candidate.get("end_time", start)))
+            if end <= start:
+                continue
+
+            if end - start > ceiling:
+                end = start + ceiling
+            if end - start < floor:
+                # Grow forward first, keeping the seed's opening line intact,
+                # then backwards only if the video ends too soon.
+                end = min(duration, start + floor)
+                if end - start < floor:
+                    start = max(0.0, end - floor)
+
+            start, end = self._snap_boundaries(
+                start, end, transcript_segments, duration,
+                min_duration=floor, max_duration=ceiling,
+            )
+            if end - start <= 0:
+                continue
+
+            item = dict(candidate)
+            item["start_time"] = round(start, 3)
+            item["end_time"] = round(end, 3)
+            fitted.append(item)
+
+        dropped = len(candidates) - len(fitted)
+        if dropped:
+            log.info("Duration fitting dropped %d unusable candidate(s)", dropped)
+        return fitted
+
+    @staticmethod
+    def _select_spread(candidates: list[dict[str, Any]], max_clips: int, duration: float = 0.0) -> list[dict[str, Any]]:
+        """Keep the best ``max_clips``, covering the whole video.
+
+        Ranking by score alone clustered the result: candidates that tie (common
+        when the transcript fallback is scoring similar windows) are returned in
+        timeline order, so the top N were simply the first N and everything past
+        the opening minutes went unrepresented. The timeline is instead split
+        into as many buckets as there are slots and the best candidate in each
+        is taken first, so a long video yields clips from end to end.
+        """
+        if not candidates or max_clips <= 0:
+            return []
+
+        ranked = sorted(candidates, key=lambda c: float(c.get("score", 0.0)), reverse=True)
+        if len(ranked) <= max_clips:
+            return sorted(ranked, key=lambda c: float(c.get("start_time", 0.0)))
+
+        span_start = min(float(c.get("start_time", 0.0)) for c in candidates)
+        span_end = max(float(c.get("end_time", 0.0)) for c in candidates)
+        span_end = max(span_end, duration)
+        span = max(1e-6, span_end - span_start)
+        bucket_size = span / max_clips
+
+        kept: list[dict[str, Any]] = []
+        used_buckets: set[int] = set()
+        for candidate in ranked:
+            if len(kept) >= max_clips:
+                break
+            offset = float(candidate.get("start_time", 0.0)) - span_start
+            bucket = min(max_clips - 1, int(offset / bucket_size))
+            if bucket in used_buckets:
+                continue
+            if any(
+                abs(float(candidate.get("start_time", 0.0)) - float(k.get("start_time", 0.0)))
+                < MIN_CLIP_SPACING_SECONDS
+                for k in kept
+            ):
+                continue
+            used_buckets.add(bucket)
+            kept.append(candidate)
+
+        # One clip per bucket is a preference, not a quota: if sparse regions
+        # left slots unfilled, spend them on the best of what is left.
+        if len(kept) < max_clips:
+            kept_ids = {id(c) for c in kept}
+            for candidate in ranked:
+                if len(kept) >= max_clips:
+                    break
+                if id(candidate) in kept_ids:
+                    continue
+                if any(
+                    abs(float(candidate.get("start_time", 0.0)) - float(k.get("start_time", 0.0)))
+                    < MIN_CLIP_SPACING_SECONDS
+                    for k in kept
+                ):
+                    continue
+                kept.append(candidate)
+                kept_ids.add(id(candidate))
+
+        return sorted(kept, key=lambda c: float(c.get("start_time", 0.0)))
+
+    @staticmethod
+    def _normalize_score(value: Any, default: float = 0.5) -> float:
+        """Map a model-supplied score onto 0-1 whatever scale it chose.
+
+        Models answer this prompt on 0-1, 0-10 and 0-100 depending on the run.
+        Clamping instead of rescaling turned every 0-10 answer into 1.0 and
+        flattened the ranking, so the spread selection had nothing to work with.
+        """
+        try:
+            score = float(value)
+        except (TypeError, ValueError):
+            return default
+        if score < 0:
+            return 0.0
+        if score <= 1.0:
+            return score
+        if score <= 10.0:
+            return score / 10.0
+        return min(1.0, score / 100.0)
 
     @staticmethod
     def _max_clips(duration: float, max_clips_per_hour: float, explicit: Any = None) -> int:
@@ -286,54 +464,28 @@ JSON schema:
             except (TypeError, ValueError):
                 log.debug("Ignoring invalid max_clips setting: %r", explicit)
         if duration <= 0:
-            return 3
-        return max(3, math.ceil((duration / 3600.0) * max_clips_per_hour))
+            return MIN_CLIPS
+        return max(MIN_CLIPS, math.ceil((duration / 3600.0) * max_clips_per_hour))
 
     @staticmethod
-    def _enforce_duration_bounds(candidates: list[dict], duration: float, min_clip_duration: float, max_clip_duration: float) -> list[dict]:
-        enforced = []
-        for candidate in candidates:
-            start = float(candidate.get("start_time", 0.0))
-            end = float(candidate.get("end_time", start))
-            if min_clip_duration > 0 and end - start < min_clip_duration:
-                continue
-            if max_clip_duration > 0 and end - start > max_clip_duration:
-                candidate = dict(candidate)
-                candidate["start_time"] = round(start, 3)
-                candidate["end_time"] = round(start + max_clip_duration, 3)
-            enforced.append(candidate)
-        return enforced
-
-    @staticmethod
-    def _score(value: Any, default: float = 0.0) -> float:
-        try:
-            return min(1.0, max(0.0, float(value)))
-        except (TypeError, ValueError):
-            return default
-
-    @staticmethod
-    def _snap_boundaries(start: float, end: float, segments: list[dict], duration: float) -> tuple[float, float]:
+    def _snap_boundaries(
+        start: float,
+        end: float,
+        segments: list[dict],
+        duration: float,
+        min_duration: float | None = None,
+        max_duration: float = MAX_CLIP_DURATION,
+    ) -> tuple[float, float]:
+        """Move cut points onto word boundaries, falling back to the input."""
         try:
             from content_intelligence.word_snapper import snap_clip_to_words
-            return snap_clip_to_words(start, end, segments, duration)
-        except Exception:
+            return snap_clip_to_words(
+                start, end, segments, duration,
+                min_duration=min_duration, max_duration=max_duration,
+            )
+        except Exception as exc:
+            log.debug("Word snapping unavailable, keeping raw bounds: %s", exc)
             return start, end
-
-    @staticmethod
-    def _cap_duration(start: float, end: float, duration: float, min_clip_duration: float = MIN_CLIP_DURATION, max_clip_duration: float = MAX_CLIP_DURATION) -> tuple[float, float]:
-        end = min(end, start + max_clip_duration)
-        end = min(end, duration)
-        start = max(0.0, min(start, end - min_clip_duration))
-        return start, end
-
-    def _cap_candidate(self, candidate: dict, duration: float, min_clip_duration: float = MIN_CLIP_DURATION, max_clip_duration: float = MAX_CLIP_DURATION) -> dict:
-        start = float(candidate.get("start_time", 0.0))
-        end = float(candidate.get("end_time", start))
-        capped_start, capped_end = self._cap_duration(start, end, duration, min_clip_duration, max_clip_duration)
-        candidate = dict(candidate)
-        candidate["start_time"] = round(capped_start, 3)
-        candidate["end_time"] = round(capped_end, 3)
-        return candidate
 
     @staticmethod
     def _parse_json(text: str) -> dict[str, Any]:
@@ -352,106 +504,106 @@ JSON schema:
         except json.JSONDecodeError:
             return {}
 
-    def _detect_from_transcript(self, segments: list[dict], category: str, min_clip_duration: float = MIN_CLIP_DURATION) -> list[dict]:
-        candidates = []
-        speaker_turns: list[dict] = []
-        current_speaker = None
-        current_start = None
-        current_end = None
+    def _detect_from_transcript(
+        self,
+        segments: list[dict],
+        category: str,
+        duration: float,
+        min_clip_duration: float = MIN_CLIP_DURATION,
+        max_clip_duration: float = MAX_CLIP_DURATION,
+    ) -> list[dict]:
+        """Propose clips from the transcript alone, without the model.
 
-        for seg in segments:
-            speaker = seg.get("speaker") or "Unknown"
-            start = seg.get("start", 0)
-            end = seg.get("end", 0)
-            text = seg.get("text", "").strip()
+        This runs whenever LLM detection comes back empty, so it decides what
+        the user sees on a bad day and must never collapse the video into one
+        clip. It used to group consecutive segments by speaker, which meant a
+        video with no diarization — the normal case, since diarization needs an
+        HF token — became a single speaker turn spanning the whole video and
+        therefore exactly one clip. It now slides a fixed-length window across
+        the entire transcript, so coverage is a function of video length rather
+        than of whether diarization happened to run.
+        """
+        usable = [s for s in segments if str(s.get("text", "")).strip()]
+        if not usable:
+            log.warning("Transcript fallback: no segments with text")
+            return []
 
-            if speaker != current_speaker:
-                if current_speaker is not None and (current_end - current_start) >= min_clip_duration:
-                    speaker_turns.append({
-                        "start": current_start,
-                        "end": current_end,
-                        "speaker": current_speaker,
-                        "text": "",
-                    })
-                else:
-                    if current_speaker is not None:
-                        log.debug(
-                            "Skipped short speaker turn",
-                            extra={
-                                "speaker": current_speaker,
-                                "start": round(current_start, 2),
-                                "end": round(current_end, 2),
-                                "duration": round(current_end - current_start, 2),
-                                "reason": "below_min_duration",
-                            },
-                        )
-                current_speaker = speaker
-                current_start = start
-                current_end = end
-            else:
-                current_end = max(current_end, end)
-
-            if current_start is not None:
-                current_end = max(current_end, end)
-
-        if current_speaker is not None and current_end - current_start >= min_clip_duration:
-            speaker_turns.append({
-                "start": current_start,
-                "end": current_end,
-                "speaker": current_speaker,
-                "text": "",
-            })
-        elif current_speaker is not None:
-            log.debug(
-                "Skipped short speaker turn",
-                extra={
-                    "speaker": current_speaker,
-                    "start": round(current_start, 2),
-                    "end": round(current_end, 2),
-                    "duration": round(current_end - current_start, 2),
-                    "reason": "below_min_duration",
-                },
-            )
-
+        target = max(min_clip_duration, min(max_clip_duration, (min_clip_duration + max_clip_duration) / 2.0))
+        step = max(5.0, target / 2.0)
         keywords = self._category_keywords(category)
-        for turn in speaker_turns:
-            turn_text = ""
-            for seg in segments:
-                if turn["start"] <= seg.get("start", 0) < turn["end"]:
-                    turn_text += seg.get("text", "") + " "
-            turn["text"] = turn_text.strip()
-            score = self._transcript_score(turn_text, keywords)
-            if score > 0.1:
+
+        candidates: list[dict] = []
+        cursor = 0
+        next_start = float(usable[0].get("start", 0.0))
+
+        while cursor < len(usable):
+            # Prefer opening on a sentence boundary so the clip does not begin
+            # mid-thought; fall back to the raw window start.
+            begin_index = self._sentence_start_index(usable, cursor)
+            begin = float(usable[begin_index].get("start", 0.0))
+            window_end = begin + target
+
+            text_parts: list[str] = []
+            speakers: list[str] = []
+            last_end = begin
+            index = begin_index
+            while index < len(usable) and float(usable[index].get("start", 0.0)) < window_end:
+                text_parts.append(str(usable[index].get("text", "")).strip())
+                speaker = usable[index].get("speaker")
+                if speaker and speaker not in speakers:
+                    speakers.append(speaker)
+                last_end = max(last_end, float(usable[index].get("end", last_end)))
+                index += 1
+
+            text = " ".join(part for part in text_parts if part).strip()
+            end = min(last_end, begin + max_clip_duration)
+            if duration > 0:
+                end = min(end, duration)
+
+            if text and end - begin >= min(min_clip_duration, target):
                 candidates.append({
-                    "start_time": round(turn["start"], 3),
-                    "end_time": round(turn["end"], 3),
-                    "score": score,
-                    "transcript_excerpt": turn_text[:300],
-                    "speakers": [turn["speaker"]],
-                    "reasons": ["speaker_turn", "keyword_match"],
+                    "start_time": round(begin, 3),
+                    "end_time": round(end, 3),
+                    "score": self._transcript_score(text, keywords),
+                    "title": "",
+                    "reason": "",
+                    "scores": {},
+                    "transcript_excerpt": text[:1000],
+                    "speakers": speakers,
+                    "reasons": ["transcript_window"],
                 })
-            else:
-                log.debug(
-                    "Skipped speaker turn",
-                    extra={
-                        "speaker": turn.get("speaker"),
-                        "start": round(turn.get("start", 0), 2),
-                        "end": round(turn.get("end", 0), 2),
-                        "score": round(score, 2),
-                        "reason": "low_keyword_score",
-                    },
-                )
 
-        log.debug(
-            "Transcript highlight detection complete",
-            extra={
-                "speaker_turns_found": len(speaker_turns),
-                "candidates_kept": len(candidates),
-                "candidates_skipped": len(speaker_turns) - len(candidates),
-            },
+            next_start = begin + step
+            cursor = self._index_at_or_after(usable, next_start, minimum=begin_index + 1)
+
+        log.info(
+            "Transcript fallback produced %d candidate(s) across %.1fs (target=%.0fs, step=%.0fs)",
+            len(candidates), duration, target, step,
         )
-
         return candidates
+
+    @staticmethod
+    def _sentence_start_index(segments: list[dict], cursor: int) -> int:
+        """First segment at or after ``cursor`` that follows a sentence end."""
+        for index in range(cursor, min(cursor + 4, len(segments))):
+            if index == 0:
+                return index
+            previous = str(segments[index - 1].get("text", "")).rstrip()
+            if previous.endswith((".", "?", "!")):
+                return index
+        return cursor
+
+    @staticmethod
+    def _index_at_or_after(segments: list[dict], timestamp: float, minimum: int = 0) -> int:
+        """Index of the first segment starting at or after ``timestamp``.
+
+        ``minimum`` guarantees forward progress, so the window loop always
+        terminates even when many segments share a start time.
+        """
+        for index in range(minimum, len(segments)):
+            if float(segments[index].get("start", 0.0)) >= timestamp:
+                return index
+        return len(segments)
 
     def _detect_from_scenes(self, frame_analysis: dict, duration: float, category: str, min_clip_duration: float = MIN_CLIP_DURATION) -> list[dict]:
         candidates = []
@@ -563,13 +715,29 @@ JSON schema:
         return merged
 
     def _transcript_score(self, text: str, keywords: list[str]) -> float:
+        """Rank one fallback window, on 0-1.
+
+        Category keywords alone returned a flat 0.2 for every window of an
+        unknown-category video, which left the selection step with nothing to
+        rank by. Generic engagement signals and speech density are always
+        available, so they carry the score when keywords are not.
+        """
         if not text:
             return 0.0
-        text_lower = text.lower()
-        matched = sum(1 for kw in keywords if kw.lower() in text_lower)
-        if not keywords:
-            return 0.2
-        return min(1.0, matched / len(keywords))
+        lowered = text.lower()
+
+        keyword_hits = sum(1 for kw in keywords if kw.lower() in lowered)
+        keyword_score = min(1.0, keyword_hits / len(keywords)) if keywords else 0.0
+
+        signal_hits = sum(1 for signal in _FALLBACK_ENGAGEMENT_SIGNALS if signal in lowered)
+        signal_score = min(1.0, signal_hits / 6.0)
+
+        question_score = 0.15 if "?" in text else 0.0
+        # A window that is mostly silence carries less than one that is dense
+        # with speech; 600 characters is roughly a talkative 30 seconds.
+        density_score = min(1.0, len(text) / 600.0) * 0.25
+
+        return round(min(1.0, 0.1 + keyword_score * 0.35 + signal_score * 0.3 + question_score + density_score), 4)
 
     def _category_keywords(self, category: str) -> list[str]:
         mapping = {
