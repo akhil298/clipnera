@@ -1,5 +1,6 @@
 ﻿"use client";
 import React, { useState, useEffect, useRef } from 'react';
+import { CaptionStylePreview } from './CaptionStylePreview';
 import {
   Play,
   Pause,
@@ -562,7 +563,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
       {/* Main Studio Grid: Video Player (Left/Center) + Customizer Panels (Right) */}
       <div className="grid lg:grid-cols-12 gap-6 items-start">
         {/* LEFT/CENTER: 9:16 Canvas & Player Controls (7 cols) */}
-        <div className="lg:col-span-7 flex flex-col items-center space-y-4">
+        <div className="lg:col-span-7 flex flex-col items-center space-y-4 lg:sticky lg:top-20 lg:self-start">
           {/* Vertical Video Stage */}
           <div
             ref={stageRef}
@@ -959,9 +960,12 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                 <label className="text-xs font-bold text-neutral-300 uppercase tracking-wider block mb-2">
                   Preset Templates:
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                {/* Own scroll container: the list is twenty templates long and
+                    previously grew the page until the video scrolled off screen. */}
+                <div className="caption-preset-scroll max-h-[22rem] space-y-2 overflow-y-auto pr-1.5">
                   {getAllCaptionStyles().map((style) => {
                     const config = style.config;
+                    const isActive = captionConfig.preset === style.id;
                     return (
                       <button
                         key={style.id}
@@ -969,24 +973,28 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                           setCaptionConfig({ ...config });
                           syncChangesToParent();
                         }}
-                        className={`p-2.5 rounded-xl border text-left transition-all ${
-                          captionConfig.preset === style.id
+                        aria-pressed={isActive}
+                        className={`flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-all ${
+                          isActive
                             ? 'bg-neutral-800 border-amber-400 ring-1 ring-amber-400/30'
                             : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700'
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-white">{style.brandName}</span>
-                          <span className="text-[9px] px-1 py-0.2 rounded bg-amber-400/10 text-amber-300">
-                            {style.badge}
-                          </span>
+                        <CaptionStylePreview config={config} className="h-14 w-28 shrink-0" />
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-xs font-bold text-white">{style.brandName}</span>
+                            <span className="shrink-0 rounded bg-amber-400/10 px-1 py-0.5 text-[9px] text-amber-300">
+                              {style.badge}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 line-clamp-2 text-[10px] text-neutral-400">
+                            {style.description}
+                          </p>
                         </div>
-                        <p className="text-[10px] text-neutral-500 mt-1 line-clamp-1">
-                          {style.name}
-                        </p>
-                        <p className="text-[10px] text-neutral-400 mt-0.5 line-clamp-1">
-                          {style.description}
-                        </p>
+
+                        {isActive && <Check className="h-4 w-4 shrink-0 text-amber-400" />}
                       </button>
                     );
                   })}

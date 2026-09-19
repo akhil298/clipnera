@@ -33,6 +33,12 @@ export const PipelineStepIndicator: React.FC<PipelineStepIndicatorProps> = ({ st
   const finished = steps.filter((s) => s.status === 'completed' || s.status === 'skipped').length;
   const running = steps.find((s) => s.status === 'running');
   const hasFailure = steps.some((s) => s.status === 'failed');
+  const needsAttention = hasFailure || steps.some((s) => s.status === 'reverted');
+
+  // Once every step has landed cleanly the tracker has nothing left to say, and
+  // it pushes the clips it was reporting on below the fold. A run that failed or
+  // has a reverted step stays visible, since those still need the user.
+  if (finished === steps.length && !needsAttention) return null;
   // Partial credit for the step in flight, so the bar moves during a long step
   // instead of sitting still between whole-step jumps.
   const overall = Math.round(

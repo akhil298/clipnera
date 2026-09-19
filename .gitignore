@@ -21,6 +21,7 @@ backend/.env.*
 # Node
 node_modules/
 .next/
+.next-*/
 out/
 dist/
 build/

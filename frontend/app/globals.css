@@ -80,3 +80,71 @@
   animation: skeleton-shimmer 1.8s ease-in-out infinite;
   border-radius: 0.5rem;
 }
+
+/* Caption style previews.
+   Each preview shows a fixed four words; the active word cycles through them so
+   the list reads as motion graphics rather than a wall of descriptions. The
+   highlight travels purely in CSS with a staggered animation-delay, so twenty
+   simultaneous previews cost no JS timers. Per-style values arrive as custom
+   properties, which keeps one keyframe set serving every template. */
+@keyframes caption-word-cycle {
+  0%,
+  21% {
+    color: var(--cap-hl);
+    background-color: var(--cap-hl-bg);
+    transform: translateY(var(--cap-lift)) scale(var(--cap-pop));
+    opacity: 1;
+  }
+  27%,
+  100% {
+    color: var(--cap-text);
+    background-color: transparent;
+    transform: translateY(0) scale(1);
+    opacity: var(--cap-idle-opacity);
+  }
+}
+
+.caption-preview-word {
+  --cap-pop: 1;
+  --cap-lift: 0px;
+  --cap-idle-opacity: 1;
+  --cap-hl-bg: transparent;
+  display: inline-block;
+  border-radius: 0.3em;
+  padding: 0.05em 0.25em;
+  animation: caption-word-cycle 2.8s steps(1, end) infinite;
+  will-change: transform, color;
+}
+
+/* Respect a reader's motion preference: the styles still read, they just hold
+   on the highlighted word instead of cycling. */
+@media (prefers-reduced-motion: reduce) {
+  .caption-preview-word {
+    animation: none;
+  }
+}
+
+/* The preset list scrolls inside its own box. A visible thin scrollbar is the
+   affordance that tells the user so, instead of the list looking truncated. */
+.caption-preset-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(64 64 64) transparent;
+  overscroll-behavior: contain;
+}
+
+.caption-preset-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.caption-preset-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.caption-preset-scroll::-webkit-scrollbar-thumb {
+  background-color: rgb(64 64 64);
+  border-radius: 9999px;
+}
+
+.caption-preset-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(115 115 115);
+}

@@ -20,18 +20,25 @@ MIN_CLIP_DURATION = 20.0
 MAX_CLIP_DURATION = 60.0
 # Clips kept per hour of source. Short-form tools are expected to surface a
 # shelf of options, not a single pick, so this is a ceiling on density rather
-# than a target; scoring still decides which ones survive.
-MAX_CLIPS_PER_HOUR = 30.0
+# than a target; scoring still decides which ones survive. Roughly one clip per
+# minute, which is the density a competitive short-form tool returns.
+MAX_CLIPS_PER_HOUR = 60.0
 # No matter how short the video, offer at least this many candidates, as long
 # as the transcript can supply them.
-MIN_CLIPS = 5
+MIN_CLIPS = 8
 # Two kept clips should not start within this many seconds of each other, so a
 # model that fixates on one passage cannot fill the whole result set.
 MIN_CLIP_SPACING_SECONDS = 15.0
 
-# Output cap per window. Each moment costs roughly 120 tokens of JSON, so this
-# comfortably covers the handful of moments we ask any single window for.
-WINDOW_MAX_OUTPUT_TOKENS = 1400
+# Output cap per window. A moment costs roughly 120 tokens of JSON, so this
+# covers a full window's worth with room for a reasoning model's preamble.
+# Too low and the reply is truncated mid-JSON, which parses to nothing and
+# silently empties the window.
+WINDOW_MAX_OUTPUT_TOKENS = 2600
+# Most moments to request from any single window. Asking one window for a long
+# list produces padding and risks truncating the reply; a higher target is met
+# by having more windows, not longer answers.
+MAX_MOMENTS_PER_WINDOW = 10
 # Tokens reserved for the instruction block wrapped around each window.
 PROMPT_OVERHEAD_TOKENS = 500
 
@@ -139,7 +146,7 @@ class HighlightDetector:
             log.warning("No usable transcript segments for highlight detection")
             return []
 
-        per_window = allocate_per_window(target_clips, len(windows))
+        per_window = min(MAX_MOMENTS_PER_WINDOW, allocate_per_window(target_clips, len(windows)))
         log.info(
             "LLM highlight detection over %d window(s): budget=%d tokens, requesting %d moment(s) per window",
             len(windows), budget, per_window,
