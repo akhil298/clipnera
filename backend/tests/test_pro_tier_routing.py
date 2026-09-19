@@ -113,7 +113,11 @@ class TestProviderForTier:
 class TestTierReachesTheClient:
     @pytest.mark.parametrize("is_pro,expected", [(True, Anthropic), (False, Groq)])
     def test_content_service_uses_the_tier_provider(self, is_pro, expected):
-        assert isinstance(ContentIntelligenceService(is_pro=is_pro)._text_client, expected)
+        # There is no single service-wide client any more: STEP_POLICY gives
+        # each step its own. Highlight detection is the step that follows the
+        # tier and carries the product, so it stands for "the tier provider".
+        service = ContentIntelligenceService(is_pro=is_pro)
+        assert isinstance(service._highlighter._text_client, expected)
 
     @pytest.mark.parametrize("is_pro", [True, False])
     def test_orchestrator_carries_the_flag(self, is_pro):
@@ -130,6 +134,6 @@ class TestTierReachesTheClient:
         assert orchestrator.is_pro is False
 
     def test_pro_window_is_far_larger(self):
-        pro = ContentIntelligenceService(is_pro=True)._text_client
-        free = ContentIntelligenceService(is_pro=False)._text_client
+        pro = ContentIntelligenceService(is_pro=True)._highlighter._text_client
+        free = ContentIntelligenceService(is_pro=False)._highlighter._text_client
         assert pro.input_token_budget(2600) > free.input_token_budget(2600) * 10

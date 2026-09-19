@@ -17,6 +17,7 @@ import { SettingsView } from './SettingsView';
 import { NotificationsDrawer } from './NotificationsDrawer';
 import { AuthModal } from './AuthModal';
 import { PlanSelectionModal } from './PlanSelectionModal';
+import { EntitlementsProvider } from './EntitlementsProvider';
 import { PaymentModal } from './PaymentModal';
 import { VideoProject, ViralClip, TabType, UserProfile, Workspace, AppNotification, PipelineStep, PipelineStatus } from '@/lib/types';
 import { DashboardSkeleton } from '@/components/skeletons';
@@ -152,6 +153,15 @@ export default function DashboardApp() {
 
   // Plan & Payment modals state
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
+  // Bumped whenever the plan may have changed, so entitlements refetch.
+  const [entitlementsRefreshKey, setEntitlementsRefreshKey] = useState(0);
+  const [upgradeReason, setUpgradeReason] = useState<string | undefined>(undefined);
+
+  // Opens the plan modal from anywhere a locked control is clicked.
+  const promptUpgrade = useCallback((reason?: string) => {
+    setUpgradeReason(reason);
+    setIsPlanModalOpen(true);
+  }, []);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<{ id: string; name: string; slug: string; credit_minutes: number; price_monthly: number; currency: string } | null>(null);
 
@@ -594,6 +604,9 @@ export default function DashboardApp() {
     setIsPaymentModalOpen(false);
     setIsPlanModalOpen(false);
     setSelectedPlan(null);
+    setUpgradeReason(undefined);
+    // The plan just changed, so the cached capability set is stale.
+    setEntitlementsRefreshKey((k) => k + 1);
     let cancelled = false;
     try {
       const profile = await userApi.getMe();
@@ -644,6 +657,11 @@ export default function DashboardApp() {
   }
 
   return (
+    <EntitlementsProvider
+      isAuthed={Boolean(isAuthed)}
+      onPromptUpgrade={promptUpgrade}
+      refreshKey={entitlementsRefreshKey}
+    >
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex font-['Plus_Jakarta_Sans',sans-serif]">
       {/* Left Navigation Sidebar */}
       <Sidebar
@@ -877,5 +895,6 @@ export default function DashboardApp() {
         onPaymentComplete={handlePaymentComplete}
       />
     </div>
+    </EntitlementsProvider>
   );
 }

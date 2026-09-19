@@ -832,8 +832,36 @@ export interface CreditLedgerResponse {
   created_at: string;
 }
 
+export interface EntitlementsResponse {
+  plan: string;
+  aspect_ratios: string[];
+  /** null means every caption style is available. */
+  caption_styles: string[] | null;
+  max_clips_per_video: number;
+  watermark_forced: boolean;
+  pro_ai_provider: boolean;
+  priority_rendering: boolean;
+  max_upload_duration_seconds: number;
+}
+
+export interface PlanCatalogEntry {
+  id: string;
+  name: string;
+  slug: string;
+  credit_minutes: number;
+  price_monthly: number;
+  currency: string;
+  features: string[];
+  entitlements: EntitlementsResponse;
+  is_current: boolean;
+}
+
 export const subscriptionApi = {
   listPlans: () => authedRequest<PlanResponse[]>('/subscription/plans'),
+  /** Capabilities of the caller's current plan. The UI gates on this rather
+   * than reimplementing the tier rules. */
+  getEntitlements: () => authedRequest<EntitlementsResponse>('/subscription/entitlements'),
+  getPlanCatalog: () => authedRequest<PlanCatalogEntry[]>('/subscription/catalog'),
   getMySubscription: () => authedRequest<{ plan: string; credit_minutes_total: number; credit_minutes_remaining: number; subscription_status: string; current_period_end: string | null }>('/subscription/me'),
   activateFreePlan: () => authedRequest<{ plan: string; credit_minutes_total: number; credit_minutes_remaining: number; subscription_status: string; current_period_end: string | null }>('/subscription/activate-free', { method: 'POST' }),
   topupCredits: (amount: number, notes?: string) =>
