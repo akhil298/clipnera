@@ -831,10 +831,12 @@ export default function DashboardApp() {
 
       {/* Plan Selection Modal */}
       <PlanSelectionModal
+        upgradeReason={upgradeReason}
         isOpen={isPlanModalOpen}
         onClose={() => {
           setIsPlanModalOpen(false);
           setSelectedPlan(null);
+          setUpgradeReason(undefined);
         }}
         onPlanSelected={handlePlanSelected}
         onActivateFree={handleActivateFree}

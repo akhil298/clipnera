@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Check, CreditCard, Zap, Crown, Sparkles, Shield } from 'lucide-react';
-import { subscriptionApi, PlanResponse } from '@/lib/api';
+import { subscriptionApi, PlanResponse, type PlanCatalogEntry } from '@/lib/api';
 import { ModalSkeleton } from '@/components/skeletons';
 
 interface PlanSelectionModalProps {
@@ -10,10 +10,12 @@ interface PlanSelectionModalProps {
   onClose: () => void;
   onPlanSelected: (plan: PlanResponse) => void;
   onActivateFree: () => void;
+  /** What the user tried to do that needed a paid plan, e.g. "The 16:9 format". */
+  upgradeReason?: string;
 }
 
-export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, onActivateFree }: PlanSelectionModalProps) {
-  const [plans, setPlans] = useState<PlanResponse[]>([]);
+export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, onActivateFree, upgradeReason }: PlanSelectionModalProps) {
+  const [plans, setPlans] = useState<PlanCatalogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,7 +24,9 @@ export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, onActivate
     let cancelled = false;
     async function loadPlans() {
       try {
-        const data = await subscriptionApi.listPlans();
+        // The catalog carries each plan's capabilities and flags the current
+        // one, so the modal can show what an upgrade actually unlocks.
+        const data = await subscriptionApi.getPlanCatalog();
         if (!cancelled) {
           setPlans(data);
         }
@@ -36,8 +40,8 @@ export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, onActivate
     return () => { cancelled = true; };
   }, [isOpen]);
 
-  const handleSelectPlan = (plan: PlanResponse) => {
-    onPlanSelected(plan);
+  const handleSelectPlan = (plan: PlanCatalogEntry) => {
+    onPlanSelected(plan as unknown as PlanResponse);
   };
 
   if (!isOpen) return null;
@@ -50,6 +54,12 @@ export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, onActivate
             <div>
               <h2 className="text-2xl font-bold text-white font-['Syne',sans-serif]">Choose Your Plan</h2>
               <p className="text-sm text-neutral-400 mt-1">Select a plan that fits your content creation needs</p>
+              {upgradeReason && (
+                <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-400/10 px-2.5 py-1 text-xs font-semibold text-amber-300 ring-1 ring-amber-400/25">
+                  <Crown className="h-3.5 w-3.5" />
+                  {upgradeReason} requires a paid plan
+                </p>
+              )}
             </div>
             <button
               onClick={onClose}
@@ -103,9 +113,9 @@ export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, onActivate
                         <Shield className="w-4 h-4 text-emerald-400" />
                         <span>{plan.credit_minutes} AI Processing Minutes / mo</span>
                       </div>
-                      {plan.features && (
+                      {plan.features.length > 0 && (
                         <ul className="space-y-2 text-xs text-neutral-300">
-                          {plan.features.split(', ').map((feature) => (
+                          {plan.features.map((feature) => (
                             <li key={feature} className="flex items-center gap-2">
                               <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                               <span>{feature}</span>
@@ -115,22 +125,30 @@ export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, onActivate
                       )}
                     </div>
                     <button
+                      disabled={plan.is_current}
                       onClick={() => {
+                        if (plan.is_current) return;
                         if (plan.slug === 'free') {
                           onActivateFree();
                         } else {
                           handleSelectPlan(plan);
                         }
                       }}
-                      className={`w-full mt-6 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 ${
-                        isPro
-                          ? 'bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-md shadow-amber-500/15'
+                      className={`w-full mt-6 py-3 rounded-xl text-sm font-bold transition-all ${
+                        plan.is_current
+                          ? 'cursor-default bg-neutral-800/60 text-neutral-400 ring-1 ring-neutral-700'
+                          : isPro
+                          ? 'active:scale-95 bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-md shadow-amber-500/15'
                           : isProPlus
-                          ? 'bg-purple-500 hover:bg-purple-400 text-white shadow-md shadow-purple-500/15'
-                          : 'bg-neutral-800 hover:bg-neutral-700 text-white'
+                          ? 'active:scale-95 bg-purple-500 hover:bg-purple-400 text-white shadow-md shadow-purple-500/15'
+                          : 'active:scale-95 bg-neutral-800 hover:bg-neutral-700 text-white'
                       }`}
                     >
-                      {plan.price_monthly === 0 ? 'Get Started Free' : `Choose ${plan.name}`}
+                      {plan.is_current
+                        ? 'Current Plan'
+                        : plan.price_monthly === 0
+                        ? 'Switch to Free'
+                        : `Choose ${plan.name}`}
                     </button>
                   </div>
                 );
