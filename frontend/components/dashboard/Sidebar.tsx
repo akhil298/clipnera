@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
 import { Skeleton } from '@/components/skeletons';
+import { useEntitlements, planLabel, isPaidPlan } from '@/hooks/useEntitlements';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -57,6 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
 }) => {
   const [foldersExpanded, setFoldersExpanded] = useState(true);
+  const { entitlements } = useEntitlements();
   const activeWorkspace = workspaces.find((w) => w.id === user.activeWorkspaceId) || workspaces[0];
 
   const primaryNavItems = [
@@ -189,8 +191,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="font-semibold text-white truncate text-xs">
                   {activeWorkspace?.name || 'My Workspace'}
                 </div>
-                <div className="text-[10px] text-neutral-400 capitalize">
-                  {user.plan} Plan • {workspaces.length} Spaces
+                <div className="text-[10px] text-neutral-400">
+                  {planLabel(entitlements.plan)} Plan • {workspaces.length} Spaces
                 </div>
               </div>
             </div>

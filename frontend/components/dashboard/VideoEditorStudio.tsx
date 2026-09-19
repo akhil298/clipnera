@@ -47,6 +47,8 @@ import {
   AudioEnhancementConfig,
 } from '@/lib/types';
 import { getCaptionConfig, getAllCaptionStyles } from '@/lib/utils/captionStyles';
+import { useEntitlements, canUseAspectRatio, canUseCaptionStyle } from '@/hooks/useEntitlements';
+import { ProLockBadge, UpgradeHint } from './ProLockBadge';
 import { EMOJI_COLLECTIONS, getEmojiCollection } from '@/lib/data/emojiCollections';
 import { sfxEngine } from '@/lib/utils/audioSynth';
 import confetti from 'canvas-confetti';
@@ -114,6 +116,8 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
   // Active studio tabs
   const [activeStudioTab, setActiveStudioTab] = useState<'captions' | 'broll' | 'sfx' | 'audio' | 'reframe' | 'transcript'>('captions');
   const [socialOverlay, setSocialOverlay] = useState<'none' | 'tiktok' | 'reels' | 'shorts'>('none');
+
+  const { entitlements, promptUpgrade } = useEntitlements();
 
   // Export modal state
   const [isExporting, setIsExporting] = useState(false);
@@ -968,18 +972,26 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                   {getAllCaptionStyles().map((style) => {
                     const config = style.config;
                     const isActive = captionConfig.preset === style.id;
+                    const unlocked = canUseCaptionStyle(entitlements, style.id);
                     return (
                       <button
                         key={style.id}
                         onClick={() => {
+                          if (!unlocked) {
+                            promptUpgrade(`The ${style.brandName} caption style`);
+                            return;
+                          }
                           setCaptionConfig({ ...config });
                           syncChangesToParent();
                         }}
                         aria-pressed={isActive}
+                        aria-disabled={!unlocked}
                         className={`flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-all ${
-                          isActive
+                          isActive && unlocked
                             ? 'bg-neutral-800 border-amber-400 ring-1 ring-amber-400/30'
-                            : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700'
+                            : unlocked
+                            ? 'bg-neutral-950 border-neutral-800 hover:border-neutral-700'
+                            : 'bg-neutral-950/60 border-neutral-800/60 opacity-70 hover:border-amber-400/40 hover:opacity-100'
                         }`}
                       >
                         <CaptionStylePreview config={config} className="h-14 w-28 shrink-0" />
@@ -987,9 +999,13 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
                             <span className="truncate text-xs font-bold text-white">{style.brandName}</span>
-                            <span className="shrink-0 rounded bg-amber-400/10 px-1 py-0.5 text-[9px] text-amber-300">
-                              {style.badge}
-                            </span>
+                            {unlocked ? (
+                              <span className="shrink-0 rounded bg-amber-400/10 px-1 py-0.5 text-[9px] text-amber-300">
+                                {style.badge}
+                              </span>
+                            ) : (
+                              <ProLockBadge feature={`The ${style.brandName} style`} />
+                            )}
                           </div>
                           <p className="mt-0.5 line-clamp-2 text-[10px] text-neutral-400">
                             {style.description}
@@ -1517,20 +1533,40 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                   Output Format:
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {(['9:16', '1:1', '4:5', '16:9'] as AspectRatio[]).map((ratio) => (
-                    <button
-                      key={ratio}
-                      onClick={() => setAspectRatio(ratio)}
-                      className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
-                        aspectRatio === ratio
-                          ? 'bg-neutral-800 border-violet-400 text-violet-300 ring-1 ring-violet-400/30'
-                          : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-300'
-                      }`}
-                    >
-                      {ratio} {ratio === '9:16' ? 'Vertical' : ratio === '1:1' ? 'Square' : ratio === '4:5' ? 'Portrait' : 'Wide'}
-                    </button>
-                  ))}
+                  {(['9:16', '1:1', '4:5', '16:9'] as AspectRatio[]).map((ratio) => {
+                    const unlocked = canUseAspectRatio(entitlements, ratio);
+                    return (
+                      <button
+                        key={ratio}
+                        onClick={() =>
+                          unlocked
+                            ? setAspectRatio(ratio)
+                            : promptUpgrade(`The ${ratio} output format`)
+                        }
+                        aria-disabled={!unlocked}
+                        className={`relative py-2 px-3 rounded-xl border text-xs font-bold transition-all ${
+                          aspectRatio === ratio && unlocked
+                            ? 'bg-neutral-800 border-violet-400 text-violet-300 ring-1 ring-violet-400/30'
+                            : unlocked
+                            ? 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-300'
+                            : 'bg-neutral-950/60 border-neutral-800/60 text-neutral-600 hover:border-amber-400/40'
+                        }`}
+                      >
+                        <span className="flex items-center justify-center gap-1.5">
+                          {ratio} {ratio === '9:16' ? 'Vertical' : ratio === '1:1' ? 'Square' : ratio === '4:5' ? 'Portrait' : 'Wide'}
+                          {!unlocked && <ProLockBadge feature={`The ${ratio} format`} />}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
+                {entitlements.aspect_ratios.length < 4 && (
+                  <UpgradeHint
+                    className="mt-2"
+                    message="Unlock 1:1, 4:5 and 16:9 exports with a paid plan."
+                    onUpgrade={() => promptUpgrade('Additional output formats')}
+                  />
+                )}
               </div>
 
               {/* Auto Zoom Controls */}

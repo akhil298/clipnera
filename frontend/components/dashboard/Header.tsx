@@ -18,6 +18,7 @@ import {
   Folder,
   Crown
 } from 'lucide-react';
+import { useEntitlements, planLabel, isPaidPlan } from '@/hooks/useEntitlements';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
 import { Avatar } from './Avatar';
 
@@ -61,6 +62,7 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigateTab,
   onUpgradePlan,
 }) => {
+  const { entitlements } = useEntitlements();
   const activeWorkspace = workspaces.find((w) => w.id === user.activeWorkspaceId) || workspaces[0];
   const CurrentIcon = TAB_TITLES[activeTab]?.icon || LayoutDashboard;
 
@@ -136,18 +138,38 @@ export const Header: React.FC<HeaderProps> = ({
           <span className="max-w-[120px] truncate font-medium">{activeWorkspace?.name || 'Workspace'}</span>
         </button>
 
+        {/* Current plan badge */}
+        <button
+          onClick={() => onNavigateTab('settings')}
+          className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+            isPaidPlan(entitlements)
+              ? 'bg-violet-500/10 border-violet-400/30 text-violet-300 hover:border-violet-400/60'
+              : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+          }`}
+          title={`You are on the ${planLabel(entitlements.plan)} plan`}
+        >
+          {isPaidPlan(entitlements) && <Crown className="w-3.5 h-3.5" />}
+          <span>{planLabel(entitlements.plan)}</span>
+        </button>
+
         {/* AI Credits remaining badge */}
         <button
           onClick={() => onNavigateTab('settings')}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs text-neutral-300 font-mono hover:border-amber-500/40 hover:text-white transition-all"
-          title="AI Rendering Quota Remaining"
+          title={`${user.aiCreditsMinutesRemaining} of ${user.aiCreditsTotal} AI minutes remaining`}
         >
           <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-          <span className="font-semibold">{user.aiCreditsMinutesRemaining}m</span>
+          <span className="font-semibold">
+            {user.aiCreditsMinutesRemaining}
+            {user.aiCreditsTotal > 0 && (
+              <span className="text-neutral-500">/{user.aiCreditsTotal}</span>
+            )}
+            m
+          </span>
         </button>
 
         {/* Upgrade Plan Button for Free Users */}
-        {user.plan === 'free' && (
+        {!isPaidPlan(entitlements) && (
           <button
             onClick={onUpgradePlan || (() => onNavigateTab('settings'))}
             className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/15 active:scale-95 transition-all"
