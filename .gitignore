@@ -8,6 +8,7 @@ __pycache__/
 # Virtual environments
 venv/
 .venv/
+backend/venv
 env/
 backend/venv/
 
@@ -15,6 +16,7 @@ backend/venv/
 .env
 .env.*
 !.env.example
+**/youtube_cookies.txt
 backend/.env
 backend/.env.*
 !backend/.env.example

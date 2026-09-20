@@ -8,7 +8,7 @@ echo "=========================================="
 BACKEND_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${BACKEND_DIR}/.." && pwd)"
 PYTHON_VERSION="${PYTHON_VERSION:-3.13.15}"
-VENV_DIR="${BACKEND_DIR}/.venv"
+VENV_DIR="${BACKEND_DIR}/venv"
 
 cd "${BACKEND_DIR}"
 
