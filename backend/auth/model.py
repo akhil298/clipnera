@@ -43,7 +43,10 @@ class UserAccount(Base):
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    provider: Mapped[AuthProvider] = mapped_column(Enum(AuthProvider, values_callable=lambda obj: [e.value for e in obj]), nullable=False)
+    provider: Mapped[AuthProvider] = mapped_column(
+        Enum(AuthProvider, name="auth_provider", values_callable=lambda obj: [e.value for e in obj]),
+        nullable=False,
+    )
     provider_user_id: Mapped[str] = mapped_column(String(255), nullable=False)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
