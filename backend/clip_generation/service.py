@@ -27,7 +27,7 @@ log = get_logger(__name__)
 # How many clips may be cut at once. Each cut runs its own FFmpeg encode, which
 # is already multi-threaded, so a small number keeps the cores busy without the
 # encodes starving each other.
-MAX_CONCURRENT_CUTS = 3
+MAX_CONCURRENT_CUTS = 7
 
 
 class _CutProgress:
