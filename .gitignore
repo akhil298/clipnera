@@ -36,6 +36,8 @@ build/
 
 # Generated/downloaded files
 download_videos/*
+backend/generated_clips/
+backend/transcription_outputs/
 *.mp4
 *.webm
 *.mkv
@@ -49,3 +51,7 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+.vscode/
+
+# Kilo config
+.kilo/kilo.jsonc
