@@ -17,6 +17,17 @@ backend/venv/
 !.env.example
 backend/.env
 backend/.env.*
+!backend/.env.example
+
+# Environment files without leading dot
+env
+env.*
+backend/env
+backend/env.*
+frontend/env
+frontend/env.*
+backend/.env.example
+frontend/.env.example
 
 # Node
 node_modules/
@@ -55,3 +66,6 @@ Thumbs.db
 
 # Kilo config
 .kilo/kilo.jsonc
+backend/env.developmenet
+backend/env.production
+backend/env
