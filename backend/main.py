@@ -8,6 +8,7 @@ from audio.enhancement.route import audio as audio_router
 from audio.extraction.route import extraction as extraction_router
 from transcription.route import transcription as transcription_router
 from pipeline.route import pipeline as pipeline_router
+from pipeline.service import fail_interrupted_pipelines
 from brand_kit.route import brand_kit as brand_kit_router
 from clip_generation.route import clip_generation as clip_generation_router
 from subtitle_styling.route import subtitle_styling as subtitle_styling_router
@@ -32,6 +33,10 @@ log = get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    try:
+        await fail_interrupted_pipelines()
+    except Exception as exc:
+        log.error(f"Could not recover interrupted pipelines: {exc}", exc_info=True)
     yield
     log.info("Shutting down")
 

@@ -136,8 +136,15 @@ class ClipCutter:
         source_width, source_height = await self._source_dimensions(request.source_path)
 
         frames = await self._sample_frames(request)
-        faces_per_frame = await asyncio.to_thread(self._detect_faces, frames)
+        faces_per_frame = await asyncio.to_thread(self._detect_faces, request.clip_id, frames)
         tracks = build_tracks(frames, faces_per_frame)
+        for track in tracks:
+            log.info(
+                "[TRACK] clip=%s id=%d samples=%d seen=%.2fs-%.2fs mean_area=%.4f mean_motion=%.2f",
+                request.clip_id, track.track_id, len(track.samples), track.first_seen,
+                track.last_seen, track.mean_area,
+                sum(s.mouth_motion for s in track.samples) / len(track.samples),
+            )
         intervals = speech_intervals(request.transcript_segments)
         layout = self._classify_layout(tracks, request.content_category)
 
@@ -271,10 +278,32 @@ class ClipCutter:
             if frame is None or frame.size == 0:
                 continue
             frames.append((request.start + index * step, frame))
+
+        log.info(
+            "[FRAMES] clip=%s sampled=%d decoded=%d fps=%.2f width=%d",
+            request.clip_id, len(images), len(frames), fps, DETECT_WIDTH,
+        )
+        if not frames:
+            log.warning("[FRAMES] clip=%s produced no decodable frames; face detection skipped", request.clip_id)
         return frames
 
-    def _detect_faces(self, frames: list[tuple[float, np.ndarray]]) -> list[list[Face]]:
-        return [self._faces.detect(frame) for _, frame in frames]
+    def _detect_faces(self, clip_id: str, frames: list[tuple[float, np.ndarray]]) -> list[list[Face]]:
+        started = time.monotonic()
+        faces_per_frame = [self._faces.detect(frame) for _, frame in frames]
+
+        all_faces = [face for faces in faces_per_frame for face in faces]
+        frames_with_faces = sum(1 for faces in faces_per_frame if faces)
+        log.info(
+            "[FACES] clip=%s backend=%s frames=%d with_faces=%d total_faces=%d max_per_frame=%d "
+            "avg_confidence=%.2f elapsed=%.2fs",
+            clip_id, self._faces.backend, len(frames), frames_with_faces, len(all_faces),
+            max((len(faces) for faces in faces_per_frame), default=0),
+            sum(f.confidence for f in all_faces) / len(all_faces) if all_faces else 0.0,
+            time.monotonic() - started,
+        )
+        if frames and not all_faces:
+            log.warning("[FACES] clip=%s no faces detected in any sampled frame; crop will centre", clip_id)
+        return faces_per_frame
 
     # ---- layout ------------------------------------------------------------
 
@@ -348,12 +377,18 @@ class ClipCutter:
         step = request.duration / max(1, count - 1)
 
         timestamps = [request.start + index * step for index in range(count)]
-        raw = [
+        targets = [
             self._target_center(
                 ts, tracks, intervals, strategy, source_width, source_height, aspect_ratio
             )
             for ts in timestamps
         ]
+        centred = sum(1 for target in targets if target is None)
+        raw = [target or (0.5, 0.5) for target in targets]
+        log.info(
+            "[CROP] clip=%s ratio=%s strategy=%s crop=%dx%d points=%d subject_framed=%d centred=%d",
+            request.clip_id, aspect_ratio, strategy, crop_w, crop_h, count, count - centred, centred,
+        )
 
         xs = _smooth_series([point[0] for point in raw], step)
         ys = _smooth_series([point[1] for point in raw], step)
@@ -376,21 +411,22 @@ class ClipCutter:
         source_width: int,
         source_height: int,
         aspect_ratio: str,
-    ) -> tuple[float, float]:
+    ) -> tuple[float, float] | None:
+        """Where to centre the crop, or ``None`` when no subject is available."""
         if strategy == "center" or not tracks:
-            return 0.5, 0.5
+            return None
 
         if strategy == "cover_subjects":
             boxes = [b for b in (t.box_at(timestamp) for t in tracks) if b is not None]
             if not boxes:
-                return 0.5, 0.5
+                return None
             covering = crop_covering(boxes, source_width, source_height, aspect_ratio)
             return covering.center
 
         speaker = active_speaker_at(timestamp, tracks, intervals)
         box = speaker.box_at(timestamp) if speaker else None
         if box is None:
-            return 0.5, 0.5
+            return None
         center_x, center_y = box.center
         # Lift the frame slightly so the subject is not dead centre, and so the
         # lower third stays clear for captions added at export.

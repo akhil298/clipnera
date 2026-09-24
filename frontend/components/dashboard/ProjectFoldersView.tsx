@@ -23,6 +23,7 @@ import {
   Plus,
   Scissors,
   Share2,
+  Square,
   Zap
 } from 'lucide-react';
 import { VideoProject, ViralClip } from '@/lib/types';
@@ -33,6 +34,7 @@ import confetti from 'canvas-confetti';
 
 interface ProjectFoldersViewProps {
   projects: VideoProject[];
+  isLoading?: boolean;
   activeProject?: VideoProject;
   onSelectProject: (project: VideoProject) => void;
   onOpenFolder: (project: VideoProject) => void;
@@ -46,6 +48,7 @@ interface ProjectFoldersViewProps {
 
 export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
   projects,
+  isLoading = false,
   activeProject,
   onSelectProject,
   onOpenFolder,
@@ -106,7 +109,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
 
     setIsIngesting(true);
     const meta = ytMeta
-      ? analyzeVideoSource(quickYtUrl, { title: ytMeta.title, channelTitle: ytMeta.channel_title })
+      ? analyzeVideoSource(quickYtUrl, { title: ytMeta.title, channelTitle: ytMeta.channel_title, thumbnailUrl: ytMeta.thumbnail_url })
       : analyzeVideoSource(quickYtUrl);
 
     let newProjectId = `proj-${Date.now()}`;
@@ -419,7 +422,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
       </div>
 
       {/* 2. STATS ROW */}
-      {projects.length === 0 ? (
+      {isLoading ? (
         <StatsSkeleton />
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
@@ -614,6 +617,29 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                           <Sparkles className="w-3 h-3 text-amber-400" />
                           <span>Processing {localProcessingProgress[project.id] ?? project.processingProgress ?? 0}%</span>
                         </span>
+                      )}
+                      {/* Reachable without scrolling to the footer while a run is live */}
+                      {project.processingStatus === 'processing' && (
+                        <div className="relative z-10 flex items-center gap-1">
+                          {onCancelPipeline && (
+                            <button
+                              onClick={() => onCancelPipeline(project.id)}
+                              className="p-1.5 rounded-lg bg-black/60 border border-neutral-700 text-neutral-300 hover:text-amber-300 hover:border-amber-500/40 transition-colors"
+                              title="Stop processing"
+                              aria-label="Stop processing"
+                            >
+                              <Square className="w-3 h-3 fill-current" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => onDeleteFolder(project.id)}
+                            className="p-1.5 rounded-lg bg-black/60 border border-neutral-700 text-neutral-300 hover:text-rose-400 hover:border-rose-500/40 transition-colors"
+                            title="Stop and delete project"
+                            aria-label="Stop and delete project"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
                       )}
                       {project.processingStatus === 'failed' && (
                         <span className="px-2 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/20 text-[10px] font-semibold text-rose-300 flex items-center gap-1">

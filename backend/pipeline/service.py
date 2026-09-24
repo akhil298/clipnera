@@ -34,6 +34,23 @@ ProgressCallback = Callable[[str, int, Optional[str], Optional[str], Optional[st
 # Minimum gap between step-progress writes to the database. Step transitions
 # always write; the chatty in-step updates are sampled.
 PROGRESS_WRITE_INTERVAL_SECONDS = 2.0
+INTERRUPTED_ERROR = "Processing was interrupted by a server restart. Resume to continue."
+
+
+async def fail_interrupted_pipelines() -> None:
+    """Fail runs left open by a previous process, so they do not show as processing forever.
+
+    Runs execute as in-process tasks, so this assumes a single backend process.
+    """
+    from pipeline.repository import PipelineRepository
+
+    async with AsyncSessionLocal() as session:
+        project_ids = await PipelineRepository(session).fail_unfinished_pipelines(INTERRUPTED_ERROR)
+        clip_repo = ClipRepository(session)
+        for project_id in project_ids:
+            await clip_repo.update_project_status(project_id, ProjectStatus.FAILED)
+    if project_ids:
+        log.warning("Marked %d interrupted pipeline(s) failed: %s", len(project_ids), project_ids)
 
 
 def _read_audio_file(path: str) -> bytes:
@@ -231,10 +248,9 @@ class PipelineOrchestrator:
             await self._mark_pipeline_failed(str(exc))
             raise
         finally:
-            # Local renders are a scratch area only. Later steps (subtitle
-            # burn-in, social export) read the cut files off disk, so cleanup
-            # cannot happen at upload time; it happens here, once the run is
-            # over, on success, failure and cancellation alike.
+            # Cut clips are deleted as soon as they reach S3, and later renders
+            # fetch them back from there. This sweeps whatever is left (cuts
+            # that failed to upload, aborted renders) on every outcome.
             await self._cleanup_local_clips()
         return results
 
@@ -746,83 +762,56 @@ class PipelineOrchestrator:
 
     async def _step_burn_in_export(self, context: dict) -> dict:
         self._notify("Burning titles into clips...", 50)
-        log.info("Starting burn-in export", extra={"project_id": self.project_id})
-
         transcript_segments = self._transcript_segments(context)
 
         async with AsyncSessionLocal() as session:
             repo = ClipRepository(session)
-            clips = await repo.list_clips(self.project_id, self.user_id)
-            log.info(
-                "Clips loaded for burn-in",
-                extra={"project_id": self.project_id, "clip_count": len(clips)},
-            )
-
-            from subtitle_styling.service import SubtitleStylingService
-            styling = SubtitleStylingService()
-
-            burned = []
+            clips = [clip for clip in await repo.list_clips(self.project_id, self.user_id) if clip.s3_key]
+            styles: dict[str, str] = {}
             for clip in clips:
-                if not clip.local_path or not Path(clip.local_path).exists():
-                    log.warning(
-                        "Clip skipped for burn-in: missing local file",
-                        extra={"project_id": self.project_id, "clip_id": clip.id, "local_path": clip.local_path},
-                    )
-                    continue
-                try:
-                    clip_transcript = json.loads(clip.transcript or "[]") if clip.transcript else None
-                    transcript_to_use = transcript_segments
-
-                    effective_style = "default"
-                    if getattr(clip, "subtitle_style_id", None):
-                        stored_style = await repo.get_subtitle_style(clip.subtitle_style_id, self.user_id)
-                        if stored_style:
-                            effective_style = stored_style.style_type
-
-                    log.info(
-                        "Burning subtitles for clip",
-                        extra={
-                            "project_id": self.project_id,
-                            "clip_id": clip.id,
-                            "title": clip.title,
-                            "style_type": effective_style,
-                            "subtitle_style_id": getattr(clip, "subtitle_style_id", None),
-                            "transcript_source": "full_pipeline" if transcript_to_use is transcript_segments else "clip_local",
-                        },
-                    )
-                    burned_path = await styling.burn_subtitles(
-                        video_path=clip.local_path,
-                        clip_start=clip.start_time,
-                        clip_end=clip.end_time,
-                        style_type=effective_style,
-                        title_text=clip.title,
-                        enable_watermark=self.watermark_enabled,
-                        transcript_segments=transcript_to_use,
-                    )
-                    burned.append({
-                        "clip_id": clip.id,
-                        "title": clip.title,
-                        "burned_path": burned_path,
-                    })
-                    log.info(
-                        "Burn-in success",
-                        extra={"project_id": self.project_id, "clip_id": clip.id, "burned_path": burned_path},
-                    )
-                except Exception as exc:
-                    log.warning(
-                        "Burn-in failed for clip",
-                        extra={
-                            "project_id": self.project_id,
-                            "clip_id": clip.id,
-                            "error": str(exc),
-                            "error_type": type(exc).__name__,
-                        },
-                    )
+                stored_style = (
+                    await repo.get_subtitle_style(clip.subtitle_style_id, self.user_id)
+                    if clip.subtitle_style_id else None
+                )
+                styles[clip.id] = stored_style.style_type if stored_style else "default"
 
         log.info(
-            "Burn-in export complete",
-            extra={"project_id": self.project_id, "burned_count": len(burned), "total_clips": len(clips)},
+            "BURN-IN START | project=%s | %d clip(s) fetched from S3",
+            self.project_id, len(clips),
         )
+        burned = []
+        for index, clip in enumerate(clips, start=1):
+            tag = f"[BURN {index}/{len(clips)}]"
+            started = time.monotonic()
+            try:
+                # Fetches the cut from S3, burns it, stores the result in S3.
+                result = await self._clip_service.process_clip_subtitles(
+                    clip.id,
+                    self.user_id,
+                    {"style_type": styles[clip.id], "enable_watermark": self.watermark_enabled},
+                    transcript_segments=transcript_segments,
+                )
+            except Exception as exc:
+                log.error(
+                    "%s FAILED  %s after %.1fs | %s: %s",
+                    tag, clip.id, time.monotonic() - started, type(exc).__name__, exc,
+                    extra={"project_id": self.project_id, "clip_id": clip.id},
+                )
+                continue
+            log.info(
+                "%s DONE    %s in %.1fs | style=%s",
+                tag, clip.id, time.monotonic() - started, styles[clip.id],
+                extra={"project_id": self.project_id, "clip_id": clip.id},
+            )
+            burned.append({"clip_id": clip.id, "title": clip.title, "s3_key": result["s3_key"]})
+            self._notify(f"Burned {len(burned)}/{len(clips)} clips", 50 + int(index * 50 / len(clips)))
+
+        log.info(
+            "BURN-IN DONE  | project=%s | %d/%d clip(s) burned",
+            self.project_id, len(burned), len(clips),
+        )
+        if clips and not burned:
+            raise RuntimeError(f"Burn-in failed for all {len(clips)} clips")
         self._notify(f"Burned {len(burned)}/{len(clips)} clips", 100)
         return {"status": "completed", "burned_clips": burned, "message": "Titles burned at export time"}
 
@@ -986,6 +975,7 @@ class PipelineOrchestrator:
                 if state:
                     state.error = error
                     state.is_completed = False
+                    await repo.fail_running_steps([state.id], error)
                     await session.commit()
                 else:
                     log.error(f"No pipeline state to mark failed: project={self.project_id}")

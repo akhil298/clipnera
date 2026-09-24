@@ -120,6 +120,15 @@ class S3:
                 code="AWS_S3_ERROR",
             ) from e
 
+    def download_file(self, bucket: str, key: str, file_path: str) -> None:
+        try:
+            self._client.download_file(bucket, key, file_path, Config=self.FAST_UPLOAD_CONFIG)
+        except ClientError as e:
+            raise CustomException(
+                message=e.response["Error"]["Message"],
+                code="AWS_S3_ERROR",
+            ) from e
+
     def upload_file(self, bucket: str, key: str, file_path: str, content_type: str | None = None, callback=None) -> dict:
         try:
             extra_args = {}

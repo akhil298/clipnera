@@ -31,6 +31,7 @@ interface SidebarProps {
   user: UserProfile;
   workspaces: Workspace[];
   projects?: VideoProject[];
+  projectsLoading?: boolean;
   activeProject?: VideoProject;
   onSelectProject?: (project: VideoProject) => void;
   selectedClip?: ViralClip;
@@ -48,6 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   user,
   workspaces,
   projects = [],
+  projectsLoading = false,
   activeProject,
   onSelectProject,
   selectedClip,
@@ -273,7 +275,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Project Folders Quick Switcher (when not collapsed) */}
-        {!isCollapsed && (projects.length === 0 ? (
+        {!isCollapsed && (projectsLoading ? (
           <div className="space-y-1.5 pt-1">
             <div className="px-3 flex items-center justify-between text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
               <span>Your Project Folders</span>
@@ -326,7 +328,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <FolderOpen className={`w-3.5 h-3.5 shrink-0 ${isCurrent ? 'text-amber-400' : isProcessing ? 'text-neutral-600' : 'text-neutral-500'}`} />
                       <span className="truncate text-[11px]">{displayName}</span>
                       {isProcessing && (
-                        <span className="text-[9px] text-amber-400 animate-pulse">Processing...</span>
+                        <span
+                          className="text-[9px] text-amber-400 animate-pulse font-mono shrink-0"
+                          title={`Processing ${Math.round(p.processingProgress || 0)}%`}
+                        >
+                          {Math.round(p.processingProgress || 0)}%
+                        </span>
                       )}
                     </div>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-400 font-mono shrink-0 ml-1">
@@ -413,7 +420,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Bottom Section: AI Credits Meter & User Profile */}
-      <div className="p-3 border-t border-neutral-900 space-y-3 bg-neutral-950">
+      <div className="p-3 pb-6 border-t border-neutral-900 space-y-3 bg-neutral-950">
         {/* Credits usage widget */}
         {!isCollapsed ? (
           <div className="p-3 rounded-xl bg-neutral-900/70 border border-neutral-800 space-y-2">

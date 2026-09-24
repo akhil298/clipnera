@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pipeline.service import PipelineOrchestrator
@@ -138,6 +138,43 @@ class PipelineRepository:
         await self._session.commit()
         await self._session.refresh(log_entry)
         return log_entry
+
+    async def fail_running_steps(self, pipeline_ids: list[str], message: str) -> None:
+        """Close out steps a dead run left RUNNING, so none spins forever in the UI."""
+        if not pipeline_ids:
+            return
+        await self._session.execute(
+            update(PipelineStepLog)
+            .where(
+                PipelineStepLog.pipeline_id.in_(pipeline_ids),
+                PipelineStepLog.status == StepStatus.RUNNING.value,
+            )
+            .values(status=StepStatus.FAILED.value, message=message, finished_at=datetime.utcnow())
+        )
+
+    async def fail_unfinished_pipelines(self, error: str) -> list[str]:
+        """Mark every run with no outcome as failed; return the affected project ids.
+
+        Only for startup: runs live in this process's memory, so any run still
+        open when the process starts belonged to a process that is gone.
+        """
+        result = await self._session.execute(
+            select(PipelineState).where(
+                PipelineState.is_completed.is_(False),
+                PipelineState.error.is_(None),
+            )
+        )
+        states = result.scalars().all()
+        for state in states:
+            state.error = error
+        await self.fail_running_steps([s.id for s in states], error)
+        await self._session.commit()
+
+        # A project can have older, superseded runs; only fail the project when
+        # its newest run is one of the interrupted ones.
+        interrupted = {s.id for s in states}
+        latest = await self.get_latest_pipelines(list({s.project_id for s in states}))
+        return [pid for pid, state in latest.items() if state.id in interrupted]
 
     async def mark_step_reverted(self, pipeline_id: str, step: PipelineStepType, artifact_path: str | None = None) -> None:
         await self.update_step_status(

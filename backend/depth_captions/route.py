@@ -16,6 +16,7 @@ from depth_captions.schema import (
 )
 from depth_captions.pipeline import create_depth_captions_job
 from clip_generation.repository import ClipRepository
+from clip_generation.service import clip_source
 from core.database import AsyncSessionLocal
 from clip_generation.model import GeneratedClip
 
@@ -64,7 +65,7 @@ async def start_depth_captions_render(
         if clip.project_id != request.project_id:
             raise HTTPException(status_code=403, detail="Clip does not belong to project")
         
-        if not clip.local_path:
+        if not clip.s3_key and not clip.local_path:
             raise HTTPException(status_code=400, detail="Clip video file not available")
         
         # Parse transcript
@@ -125,12 +126,13 @@ async def start_depth_captions_render(
                     stage=stage or "processing",
                 )
             
-            result = await create_depth_captions_job(
-                dc_request,
-                segments,
-                clip.local_path,
-                progress_callback=progress_cb,
-            )
+            async with clip_source(clip) as clip_path:
+                result = await create_depth_captions_job(
+                    dc_request,
+                    segments,
+                    clip_path,
+                    progress_callback=progress_cb,
+                )
             _job_store[job_id] = result
             
         except Exception as e:

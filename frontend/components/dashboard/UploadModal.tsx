@@ -140,7 +140,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       projectId = downloadResult?.id || null;
 
       if (projectId) {
-        const meta = analyzeVideoSource(urlInput, { title: ytMeta?.title, channelTitle: ytMeta?.channel_title });
+        const meta = analyzeVideoSource(urlInput, { title: ytMeta?.title, channelTitle: ytMeta?.channel_title, thumbnailUrl: ytMeta?.thumbnail_url });
         onProjectCreated({
           id: projectId,
           title: customTitle || meta.cleanTitle,
@@ -287,7 +287,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
     await new Promise((r) => setTimeout(r, 500));
 
-    const meta = analyzeVideoSource(urlInput, { title: ytMeta?.title, channelTitle: ytMeta?.channel_title });
+    const meta = analyzeVideoSource(urlInput, { title: ytMeta?.title, channelTitle: ytMeta?.channel_title, thumbnailUrl: ytMeta?.thumbnail_url });
 
     const newProject: VideoProject = {
       id: projectId || `proj-${Date.now()}`,

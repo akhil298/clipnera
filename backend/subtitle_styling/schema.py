@@ -27,7 +27,7 @@ class SubtitleBurnRequest(BaseModel):
 class SubtitleBurnResponse(BaseModel):
     clip_id: str
     burned_presigned_url: str
-    local_path: str
+    s3_key: str
 
 
 class SubtitleStylePresetsResponse(BaseModel):

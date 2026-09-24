@@ -176,7 +176,7 @@ class StyleBurnRequest(BaseModel):
 class StyleBurnResponse(BaseModel):
     clip_id: str
     burned_presigned_url: str
-    local_path: str
+    s3_key: str
 
 
 class SubtitleStyleResponse(BaseModel):

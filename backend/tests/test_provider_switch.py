@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from clients.ai import TEXT_PROVIDERS, get_text_client
-from clients.ai.anthropic import Anthropic
+from clients.ai.anthropic import THINKING_TOKEN_ALLOWANCE, Anthropic
 from clients.ai.groq import DEFAULT_MODEL as GROQ_DEFAULT_MODEL
 from clients.ai.groq import MODEL_PROFILES, Groq
 from content_intelligence.classifier import CLASSIFICATION_JSON_SCHEMA, CONTENT_TAXONOMY
@@ -19,8 +19,8 @@ RETIRED_GROQ_MODELS = ("llama-3.1-8b-instant", "llama-3.3-70b-versatile")
 class _FakeMessage:
     """Minimal stand-in for an SDK message, for shaping assertions."""
 
-    def __init__(self, text: str) -> None:
-        self.stop_reason = "end_turn"
+    def __init__(self, text: str, stop_reason: str = "end_turn") -> None:
+        self.stop_reason = stop_reason
         self.usage = type("Usage", (), {
             "input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0,
         })()
@@ -28,8 +28,9 @@ class _FakeMessage:
 
 
 class _FakeStream:
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, stop_reason: str = "end_turn") -> None:
         self._text = text
+        self._stop_reason = stop_reason
 
     async def __aenter__(self):
         return self
@@ -38,17 +39,19 @@ class _FakeStream:
         return False
 
     async def get_final_message(self):
-        return _FakeMessage(self._text)
+        return _FakeMessage(self._text, self._stop_reason)
 
 
-def _capturing_anthropic(reply: str = '{"ok": true}') -> tuple[Anthropic, dict]:
+def _capturing_anthropic(
+    reply: str = '{"ok": true}', stop_reason: str = "end_turn",
+) -> tuple[Anthropic, dict]:
     """An Anthropic client whose outgoing request is captured, not sent."""
     client = Anthropic()
     captured: dict = {}
 
     def fake_stream(**kwargs):
         captured.update(kwargs)
-        return _FakeStream(reply)
+        return _FakeStream(reply, stop_reason)
 
     client._client.messages.stream = fake_stream
     return client, captured
@@ -120,7 +123,15 @@ class TestAnthropicRequestShape:
         )
         assert "temperature" not in captured
         assert "top_p" not in captured
-        assert captured["max_tokens"] == 500
+
+    @pytest.mark.asyncio
+    async def test_output_cap_leaves_room_for_thinking(self):
+        # Claude's thinking is billed against max_tokens. Sending the caller's
+        # Groq-sized cap as-is let a 2600-token highlight call spend all of it
+        # thinking and return no text, dropping the run to the heuristic.
+        client, captured = _capturing_anthropic()
+        await client.chat([{"role": "user", "content": "hi"}], max_tokens=500)
+        assert captured["max_tokens"] == 500 + THINKING_TOKEN_ALLOWANCE
 
     @pytest.mark.asyncio
     async def test_json_schema_becomes_an_enforced_output_format(self):
@@ -183,6 +194,12 @@ class TestAnthropicRequestShape:
     async def test_empty_reply_raises_instead_of_returning_blank(self):
         client, _ = _capturing_anthropic("   ")
         with pytest.raises(RuntimeError, match="no text content"):
+            await client.chat([{"role": "user", "content": "hi"}], max_tokens=500)
+
+    @pytest.mark.asyncio
+    async def test_empty_reply_at_the_cap_names_thinking_as_the_cause(self):
+        client, _ = _capturing_anthropic("", stop_reason="max_tokens")
+        with pytest.raises(RuntimeError, match="spent on thinking"):
             await client.chat([{"role": "user", "content": "hi"}], max_tokens=500)
 
 

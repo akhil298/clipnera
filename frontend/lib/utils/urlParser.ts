@@ -11,11 +11,39 @@
   posterUrl: string;
 }
 
+interface SourceOverrides {
+  title?: string;
+  channelTitle?: string;
+  thumbnailUrl?: string;
+}
+
+/** Thumbnail for a YouTube URL (or bare video id), or '' when it is not one. */
+export function youtubeThumbnailUrl(url: string): string {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
+    /^([a-zA-Z0-9_-]{11})$/,
+  ];
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) {
+      return `https://img.youtube.com/vi/${match[1]}/maxresdefault.jpg`;
+    }
+  }
+  return '';
+}
+
 /**
  * Intelligent analyzer that inspects a YouTube / media URL or title
  * and returns clean, professional folder naming and metadata.
  */
-export function analyzeVideoSource(inputUrlOrTitle: string, overrides?: { title?: string; channelTitle?: string }): ParsedUrlMeta {
+export function analyzeVideoSource(inputUrlOrTitle: string, overrides?: SourceOverrides): ParsedUrlMeta {
+  const meta = inferSourceMeta(inputUrlOrTitle, overrides);
+  // The video's real thumbnail beats the stock placeholder picked by genre.
+  const posterUrl = overrides?.thumbnailUrl || youtubeThumbnailUrl(inputUrlOrTitle.trim()) || meta.posterUrl;
+  return { ...meta, posterUrl };
+}
+
+function inferSourceMeta(inputUrlOrTitle: string, overrides?: SourceOverrides): ParsedUrlMeta {
   const trimmed = inputUrlOrTitle.trim();
   const lower = trimmed.toLowerCase();
 

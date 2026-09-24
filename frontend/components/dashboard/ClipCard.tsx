@@ -54,6 +54,9 @@ function scoreTone(score: number): { ring: string; text: string; chip: string } 
   };
 }
 
+// Only one card plays with sound at a time; starting another pauses this one.
+let audibleVideo: HTMLVideoElement | null = null;
+
 const RADIUS = 15;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
@@ -69,6 +72,7 @@ export const ClipCard: React.FC<ClipCardProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [withSound, setWithSound] = useState(false);
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -80,13 +84,18 @@ export const ClipCard: React.FC<ClipCardProps> = ({
       event.stopPropagation();
       const video = videoRef.current;
       if (!video) return;
-      if (video.paused) {
+      // A muted hover preview counts as "not playing" here: the click is a
+      // request to actually watch, with sound.
+      if (video.paused || video.muted) {
+        if (audibleVideo && audibleVideo !== video) audibleVideo.pause();
+        audibleVideo = video;
+        video.muted = false;
+        setWithSound(true);
         // A play() rejection (autoplay policy, expired URL) must not leave the
         // button stuck showing "pause".
         video.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
       } else {
         video.pause();
-        setIsPlaying(false);
       }
     },
     [],
@@ -102,7 +111,8 @@ export const ClipCard: React.FC<ClipCardProps> = ({
 
   const handleMouseLeave = useCallback(() => {
     const video = videoRef.current;
-    if (!video) return;
+    // A clip the user chose to watch keeps playing; only the preview stops.
+    if (!video || !video.muted) return;
     video.pause();
     video.currentTime = 0;
     setIsPlaying(false);
@@ -142,7 +152,13 @@ export const ClipCard: React.FC<ClipCardProps> = ({
             preload="metadata"
             className="h-full w-full object-cover"
             onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
+            onPause={(event) => {
+              // Back to silent preview mode, so the next hover stays muted.
+              event.currentTarget.muted = true;
+              if (audibleVideo === event.currentTarget) audibleVideo = null;
+              setWithSound(false);
+              setIsPlaying(false);
+            }}
             onError={() => {
               setFailed(true);
               setIsPlaying(false);
@@ -196,11 +212,11 @@ export const ClipCard: React.FC<ClipCardProps> = ({
         {hasVideo && (
           <button
             onClick={togglePlay}
-            aria-label={isPlaying ? 'Pause preview' : 'Play preview'}
+            aria-label={isPlaying && withSound ? 'Pause clip' : 'Play clip with sound'}
             className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100 focus:outline-none"
           >
             <span className="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-transform active:scale-90">
-              {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 fill-current" />}
+              {isPlaying && withSound ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 fill-current" />}
             </span>
           </button>
         )}

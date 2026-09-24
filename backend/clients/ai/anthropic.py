@@ -57,6 +57,18 @@ TOKEN_ESTIMATE_SAFETY_MARGIN = 4_000
 # spread across an hour of speech when picking a single moment.
 MAX_PROMPT_TOKENS = 120_000
 
+# Callers size ``max_tokens`` for the visible reply, as Groq counts it. Claude
+# thinks by default and its thinking is billed against the same cap, so a
+# 2600-token cap at high effort can be spent entirely on thinking and return no
+# text at all. The allowance is added on top of what the caller asked for; only
+# tokens actually generated are billed, so the headroom costs nothing unused.
+THINKING_TOKEN_ALLOWANCE = 16_000
+
+
+def output_token_cap(requested: int) -> int:
+    """``max_tokens`` to send: the caller's reply budget plus thinking room."""
+    return requested + THINKING_TOKEN_ALLOWANCE
+
 
 def estimate_tokens(text: str) -> int:
     """Rough token estimate: ~4 chars per token for English."""
@@ -162,7 +174,7 @@ class Anthropic(BaseAI):
 
         request: dict[str, Any] = {
             "model": self.model,
-            "max_tokens": requested_max_tokens,
+            "max_tokens": output_token_cap(requested_max_tokens),
             "messages": conversation,
         }
         if system:
@@ -183,7 +195,7 @@ class Anthropic(BaseAI):
 
         log.info(
             "Anthropic API call started: model=%s, messages=%d, max_output_tokens=%d, schema=%s",
-            self.model, len(conversation), requested_max_tokens, bool(json_schema),
+            self.model, len(conversation), request["max_tokens"], bool(json_schema),
         )
 
         try:
@@ -235,16 +247,18 @@ class Anthropic(BaseAI):
             getattr(usage, "cache_read_input_tokens", None),
         )
 
-        if response.stop_reason == "max_tokens" and not json_schema:
-            # Without a schema the reply is whatever fit, so a truncated JSON
-            # body would parse to nothing further downstream. Say so here.
-            log.warning(
-                "Anthropic reply hit the output cap at max_tokens=%d; it may be truncated",
-                requested_max_tokens,
-            )
-
+        truncated = response.stop_reason == "max_tokens"
         if not text.strip():
-            raise RuntimeError(f"Anthropic model {self.model} returned no text content")
+            cause = " (output cap spent on thinking)" if truncated else ""
+            raise RuntimeError(f"Anthropic model {self.model} returned no text content{cause}")
+
+        if truncated:
+            # A schema constrains the shape, not the length: a reply cut off at
+            # the cap is still incomplete JSON and parses to nothing downstream.
+            log.warning(
+                "Anthropic reply hit the output cap at max_tokens=%d; it is truncated",
+                request["max_tokens"],
+            )
 
         # A schema-enforced reply is valid JSON by construction, but a caller in
         # json_mode without a schema relies on the prompt; fail loudly here
@@ -266,7 +280,7 @@ class Anthropic(BaseAI):
         system, conversation = self._split_system(messages)
         request: dict[str, Any] = {
             "model": self.model,
-            "max_tokens": requested_max_tokens,
+            "max_tokens": output_token_cap(requested_max_tokens),
             "messages": conversation,
             "output_config": {"effort": self.effort},
         }

@@ -23,6 +23,7 @@ import { VideoProject, ViralClip, TabType, UserProfile, Workspace, AppNotificati
 import { DashboardSkeleton } from '@/components/skeletons';
 import { userApi, workspaceApi, authApi, pipelineApi, subscriptionApi, clipApi, mapBackendClip } from '@/lib/api';
 import { isAuthenticated, clearAuth } from '@/lib/auth';
+import { youtubeThumbnailUrl } from '@/lib/utils/urlParser';
 
 const getTabFromPathname = (pathname: string): TabType => {
   const segments = pathname.split('/').filter(Boolean);
@@ -39,24 +40,6 @@ const getTabFromPathname = (pathname: string): TabType => {
   if (segments[1] === 'settings') return 'settings';
 
   return 'dashboard';
-};
-
-const extractYouTubeThumbnail = (url: string): string => {
-  try {
-    const patterns = [
-      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-      /^([a-zA-Z0-9_-]{11})$/,
-    ];
-    for (const pattern of patterns) {
-      const match = url.match(pattern);
-      if (match) {
-        return `https://img.youtube.com/vi/${match[1]}/maxresdefault.jpg`;
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return '';
 };
 
 const getDashboardPath = (
@@ -113,6 +96,8 @@ export default function DashboardApp() {
 
   // Projects State
   const [projects, setProjects] = useState<VideoProject[]>([]);
+  // Distinguishes "still fetching" from "user has no projects" for skeletons.
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [activeProject, setActiveProject] = useState<VideoProject | undefined>(undefined);
   const [selectedClip, setSelectedClip] = useState<ViralClip | undefined>(undefined);
   const [pipelineSteps, setPipelineSteps] = useState<PipelineStep[]>([]);
@@ -243,7 +228,7 @@ export default function DashboardApp() {
             : hasPipeline
               ? Math.round((completedSteps / pipelineStatus!.steps.length) * 100)
               : 0;
-          const youtubeThumbnail = extractYouTubeThumbnail(project.source_url || '');
+          const youtubeThumbnail = youtubeThumbnailUrl(project.source_url || '');
           return {
             id: project.id,
             title: project.title,
@@ -276,6 +261,7 @@ export default function DashboardApp() {
         // dashboard stayed blank until the slowest of N requests came back.
         const baseProjects = projectResponse.projects.map((project) => buildProject(project, null));
         setProjects(baseProjects);
+        setProjectsLoaded(true);
         const initialProject = routeProjectId
           ? baseProjects.find((project) => project.id === routeProjectId)
           : baseProjects[0];
@@ -304,6 +290,8 @@ export default function DashboardApp() {
           clearAuth();
           router.replace('/');
         }
+      } finally {
+        if (!cancelled) setProjectsLoaded(true);
       }
     }
 
@@ -341,7 +329,11 @@ export default function DashboardApp() {
     // every 3s for the life of the page, holding a DB connection each time and
     // slowing down every other request behind it.
     if (activeProject.processingStatus === 'completed') {
-      if (activeProject.clips.length === 0) void loadClipsOnce();
+      // The project list carries clip summaries without video URLs, so a
+      // non-empty list is not enough: fetch until every clip can play.
+      if (activeProject.clips.length === 0 || activeProject.clips.some((clip) => !clip.presignedUrl)) {
+        void loadClipsOnce();
+      }
       return;
     }
 
@@ -414,14 +406,19 @@ export default function DashboardApp() {
   const handleCancelPipeline = async (projectId: string) => {
     try {
       await pipelineApi.cancel(projectId);
-      handleUpdateProject(projectId, {
-        processingStatus: 'failed',
-        description: 'Processing was cancelled.',
-      });
-      if (activeProject?.id === projectId) setPipelineSteps([]);
     } catch (err) {
-      console.error('Failed to cancel pipeline:', err);
+      // The server has no live run for it (e.g. after a restart), so there is
+      // nothing left to stop; anything else is a real failure to cancel.
+      if (!(err instanceof Error && err.message.includes('No active pipeline'))) {
+        console.error('Failed to cancel pipeline:', err);
+        return;
+      }
     }
+    handleUpdateProject(projectId, {
+      processingStatus: 'failed',
+      description: 'Processing was cancelled.',
+    });
+    if (activeProject?.id === projectId) setPipelineSteps([]);
   };
 
   // Handle project creation from UploadModal or ProjectFoldersView
@@ -671,6 +668,7 @@ export default function DashboardApp() {
         user={currentUser}
         workspaces={workspaces}
         projects={projects}
+        projectsLoading={!projectsLoaded}
         activeProject={activeProject}
         onSelectProject={handleOpenFolder}
         selectedClip={selectedClip}
@@ -721,6 +719,7 @@ export default function DashboardApp() {
           {activeTab === 'folders' && (
             <ProjectFoldersView
               projects={projects}
+              isLoading={!projectsLoaded}
               activeProject={activeProject}
               onOpenFolder={handleOpenFolder}
               onSelectProject={handleOpenFolder}

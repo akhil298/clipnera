@@ -157,7 +157,12 @@ class FaceDetector:
             faces = self._detect_haar(frame)
         else:
             return []
-        return self._postprocess(faces)
+        kept = self._postprocess(faces)
+        log.debug(
+            "Face detect (%s): raw=%d kept=%d confidences=%s",
+            self._backend, len(faces), len(kept), [round(f.confidence, 2) for f in kept],
+        )
+        return kept
 
     def _detect_yunet(self, frame: np.ndarray) -> list[Face]:
         height, width = frame.shape[:2]
@@ -167,7 +172,7 @@ class FaceDetector:
         try:
             _, detections = self._yunet.detect(frame)
         except cv2.error as exc:
-            log.debug("YuNet detection failed: %s", exc)
+            log.warning("YuNet detection failed on %dx%d frame: %s", width, height, exc)
             return []
         if detections is None:
             return []

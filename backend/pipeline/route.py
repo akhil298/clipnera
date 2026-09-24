@@ -11,7 +11,7 @@ from auth.dependencies import CurrentUserDep
 from clip_generation.schema import SocialExportRequest, SocialExportResponse
 from clip_generation.service import ClipService
 from pipeline.model import PipelineStepType, StepStatus
-from pipeline.service import PipelineOrchestrator
+from pipeline.service import INTERRUPTED_ERROR, PipelineOrchestrator
 from pipeline.repository import PipelineRepository
 from clip.repository import ClipRepository
 from clip.model import ProjectStatus
@@ -192,6 +192,9 @@ DEFAULT_AUDIO_CONFIG = {
 
 _progress_store: dict[str, dict[str, Any]] = {}
 _active_orchestrators: dict[str, PipelineOrchestrator] = {}
+# The event loop only weakly references tasks; an unreferenced run can be
+# garbage-collected mid-flight and vanish without ever recording an outcome.
+_background_tasks: set[asyncio.Task] = set()
 _progress_lock = asyncio.Lock()
 _semaphore = asyncio.Semaphore(10)
 
@@ -241,6 +244,14 @@ async def _run_pipeline(orchestrator: PipelineOrchestrator, project_id: str, use
                 success=True,
                 clip_count=clip_count,
             )
+    except asyncio.CancelledError:
+        # Raised when the server shuts down mid-run. It is not an Exception, so
+        # the handler below never saw it and the run stayed "running" forever.
+        log.warning(f"Pipeline interrupted: project={project_id}")
+        await orchestrator._mark_pipeline_failed(INTERRUPTED_ERROR)
+        if credit_refund_callback:
+            await credit_refund_callback()
+        raise
     except Exception as exc:
         log.error(f"Pipeline failed: project={project_id} error={exc}")
         async with _progress_lock:
@@ -271,6 +282,15 @@ async def _run_pipeline(orchestrator: PipelineOrchestrator, project_id: str, use
             )
     finally:
         _active_orchestrators.pop(project_id, None)
+
+
+def _launch_pipeline(orchestrator: PipelineOrchestrator, project_id: str, user: dict, credit_refund_callback) -> None:
+    _active_orchestrators[project_id] = orchestrator
+    task = asyncio.create_task(
+        _run_pipeline(orchestrator, project_id, user=user, credit_refund_callback=credit_refund_callback)
+    )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 @pipeline.post("/start/{project_id}")
@@ -331,8 +351,6 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
                 status_code=403,
             )
 
-        await pipeline_repo.create_pipeline(project_id, selected_steps)
-
         credit_cost = subscription_service.calculate_video_credit_cost(duration_seconds)
         try:
             await subscription_service.deduct_credits(
@@ -363,6 +381,13 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
                 except Exception as refund_exc:
                     log.error(f"Credit refund failed: project={project_id} error={refund_exc}")
 
+        # After the charge, so a refused charge leaves no run that looks in progress.
+        try:
+            await pipeline_repo.create_pipeline(project_id, selected_steps)
+        except Exception:
+            await refund_credits()
+            raise
+
         orchestrator = PipelineOrchestrator(
             project_id=project_id,
             user_id=user["user_id"],
@@ -376,9 +401,7 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
             is_pro=is_pro,
         )
 
-        _active_orchestrators[project_id] = orchestrator
-
-        asyncio.create_task(_run_pipeline(orchestrator, project_id, user=user, credit_refund_callback=refund_credits))
+        _launch_pipeline(orchestrator, project_id, user, refund_credits)
 
         return {
             "project_id": project_id,
@@ -655,6 +678,12 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
                 except Exception as refund_exc:
                     log.error(f"Credit refund failed: project={project_id} error={refund_exc}")
 
+        # Clients read either field as "failed", so a resumed run that kept them
+        # showed as failed throughout, and even after it succeeded.
+        state.error = None
+        await session.commit()
+        await clip_repo.update_project_status(project_id, ProjectStatus.PROCESSING)
+
         orchestrator = PipelineOrchestrator(
             project_id=project_id,
             user_id=user["user_id"],
@@ -669,7 +698,7 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
             resume=True,
         )
 
-        asyncio.create_task(_run_pipeline(orchestrator, project_id, user=user, credit_refund_callback=refund_credits))
+        _launch_pipeline(orchestrator, project_id, user, refund_credits)
 
         return {
             "project_id": project_id,

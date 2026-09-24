@@ -3,9 +3,12 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import shutil
+import tempfile
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, AsyncIterator, Callable
 
 from clients.services.s3 import S3
 from clip_generation.model import ContentCategory, GeneratedClip, SocialPlatform, SOCIAL_PLATFORM_DEFAULTS
@@ -28,6 +31,9 @@ log = get_logger(__name__)
 # is already multi-threaded, so a small number keeps the cores busy without the
 # encodes starving each other.
 MAX_CONCURRENT_CUTS = 7
+# URLs are re-signed on every read, so this only needs to outlive one page view.
+PRESIGN_EXPIRES_SECONDS = 6 * 3600
+LOG_RULE = "=" * 78
 
 
 class _CutProgress:
@@ -101,6 +107,40 @@ class _CutProgress:
         await self._notify(line, 95)
 
 
+def _mb(path: str | Path) -> float:
+    return Path(path).stat().st_size / (1024 * 1024)
+
+
+@asynccontextmanager
+async def clip_source(clip: GeneratedClip) -> AsyncIterator[str]:
+    """Yield a local copy of a cut clip, fetched from S3, for one render.
+
+    S3 is where cut clips live; the local copy is scratch, deleted on exit.
+    """
+    if not clip.s3_key:
+        # Clips cut before storage moved to S3 may still have a local file.
+        if clip.local_path and Path(clip.local_path).exists():
+            yield clip.local_path
+            return
+        raise CustomException(message="Clip video is not stored in S3", code="VIDEO_MISSING", status_code=404)
+
+    scratch = Path(tempfile.mkdtemp(prefix="clipnera-render-"))
+    # Named after the clip: the burner names its output after its input, so a
+    # shared name would let two concurrent renders overwrite each other.
+    path = scratch / f"{clip.id}.mp4"
+    bucket = clip.s3_bucket or settings.S3_BUCKET_NAME
+    started = time.monotonic()
+    try:
+        await asyncio.to_thread(S3().download_file, bucket, clip.s3_key, str(path))
+        log.info(
+            "[S3] FETCHED  clip=%s  %.1fMB in %.1fs  <- s3://%s/%s",
+            clip.id, _mb(path), time.monotonic() - started, bucket, clip.s3_key,
+        )
+        yield str(path)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
 def _sanitize_str(s: str | None) -> str | None:
     if s is None:
         return None
@@ -145,50 +185,46 @@ class ClipService:
             clip = await repo.get_clip(clip_id, user_id)
             return self._serialize_clip(clip) if clip else None
 
-    async def process_clip_subtitles(self, clip_id: str, user_id: str, burn_request: dict) -> dict:
+    async def process_clip_subtitles(
+        self,
+        clip_id: str,
+        user_id: str,
+        burn_request: dict,
+        transcript_segments: list[dict[str, Any]] | None = None,
+    ) -> dict:
         clip = await self._get_clip(clip_id, user_id)
         if not clip:
             raise CustomException(message="Clip not found", code="NOT_FOUND", status_code=404)
 
-        video_path = clip.local_path
-        if not video_path or not Path(video_path).exists():
-            raise CustomException(message="Clip video file missing", code="VIDEO_MISSING", status_code=404)
-
         from subtitle_styling.service import SubtitleStylingService
         styling = SubtitleStylingService()
 
-        transcript_segments = json.loads(clip.transcript or "[]") if clip.transcript else None
+        if transcript_segments is None and clip.transcript:
+            transcript_segments = json.loads(clip.transcript)
 
-        burned_path = await styling.burn_subtitles(
-            video_path=clip.local_path,
-            clip_start=clip.start_time,
-            clip_end=clip.end_time,
-            style_type=burn_request.get("style_type", "bold_captions"),
-            custom_config=burn_request.get("custom_config"),
-            subtitles=burn_request.get("subtitles"),
-            title_text=clip.title,
-            enable_watermark=burn_request.get("enable_watermark", True),
-            transcript_segments=transcript_segments,
-        )
+        async with clip_source(clip) as video_path:
+            burned_path = await styling.burn_subtitles(
+                video_path=video_path,
+                clip_start=clip.start_time,
+                clip_end=clip.end_time,
+                style_type=burn_request.get("style_type", "bold_captions"),
+                custom_config=burn_request.get("custom_config"),
+                subtitles=burn_request.get("subtitles"),
+                title_text=clip.title,
+                enable_watermark=burn_request.get("enable_watermark", True),
+                transcript_segments=transcript_segments,
+            )
 
         s3_key = f"clips/{user_id}/{clip.project_id}/{clip_id}_burned.mp4"
-        s3_bucket = self._bucket
-        try:
-            self._s3.create_bucket(s3_bucket)
-        except Exception:
-            pass
-
-        with open(burned_path, "rb") as f:
-            file_bytes = f.read()
-        self._s3.put_object(s3_bucket, s3_key, file_bytes)
-        presigned_url = self._s3.generate_presigned_url(s3_bucket, s3_key, expires_in=3600)
+        presigned_url = await self._store_render(burned_path, s3_key, label=f"burned clip={clip_id}")
 
         async with AsyncSessionLocal() as session:
             repo = ClipRepository(session)
             await repo.update_clip(
                 clip_id=clip_id,
                 user_id=user_id,
-                burned_subtitle_path=burned_path,
+                # The S3 key, re-signed on every read; the render itself is gone locally.
+                burned_subtitle_path=s3_key,
                 burned_presigned_url=presigned_url,
                 status="burned",
             )
@@ -196,8 +232,31 @@ class ClipService:
         return {
             "clip_id": clip_id,
             "burned_presigned_url": presigned_url,
-            "local_path": burned_path,
+            "s3_key": s3_key,
         }
+
+    async def _store_render(self, path: str, s3_key: str, label: str) -> str | None:
+        """Upload a finished render to S3, delete the local file, return a fresh URL."""
+        started = time.monotonic()
+        try:
+            size = _mb(path)
+            await asyncio.to_thread(self._s3.upload_file, self._bucket, s3_key, path, "video/mp4")
+        finally:
+            Path(path).unlink(missing_ok=True)
+        log.info(
+            "[S3] STORED   %s  %.1fMB in %.1fs  -> s3://%s/%s",
+            label, size, time.monotonic() - started, self._bucket, s3_key,
+        )
+        return self._presign(self._bucket, s3_key)
+
+    def _presign(self, bucket: str | None, key: str | None) -> str | None:
+        if not key:
+            return None
+        try:
+            return self._s3.generate_presigned_url(bucket or self._bucket, key, expires_in=PRESIGN_EXPIRES_SECONDS)
+        except Exception as exc:
+            log.warning("Presign failed: key=%s error=%s", key, exc)
+            return None
 
     async def export_clips_for_social(
         self,
@@ -279,7 +338,7 @@ class ClipService:
                 for rendered in rendered_clips:
                     output_files = rendered.get("output_files", {})
                     platform_path = output_files.get(aspect_ratio, "")
-                    burned_path = platform_path
+                    s3_key = f"social/{user_id}/{project_id}/{clip.id}_{platform.value}.mp4"
                     presigned_url = None
 
                     if burn_subtitles and platform_path and Path(platform_path).exists():
@@ -292,7 +351,7 @@ class ClipService:
                         merged_config["animation_speed"] = animation_speed
                         
                         burned_path = await styling.burn_subtitles(
-                            video_path=clip.local_path or platform_path,
+                            video_path=platform_path,
                             clip_start=s,
                             clip_end=e,
                             style_type=effective_style,
@@ -303,34 +362,32 @@ class ClipService:
                             ai_cues=ai_cues if enable_emoji else None,
                         )
 
-                        s3_key = f"social/{user_id}/{project_id}/{clip.id}_{platform.value}.mp4"
-                        s3_bucket = self._bucket
-                        try:
-                            self._s3.create_bucket(s3_bucket)
-                        except Exception:
-                            pass
-
-                        with open(burned_path, "rb") as f:
-                            file_bytes = f.read()
-                        self._s3.put_object(s3_bucket, s3_key, file_bytes)
-                        presigned_url = self._s3.generate_presigned_url(s3_bucket, s3_key, expires_in=3600)
-
-                    async with AsyncSessionLocal() as session:
-                        repo = ClipRepository(session)
-                        await repo.update_clip(
-                            clip_id=clip.id,
-                            user_id=user_id,
-                            burned_subtitle_path=burned_path if burned_path != platform_path else None,
-                            burned_presigned_url=presigned_url,
+                        presigned_url = await self._store_render(
+                            burned_path, s3_key, label=f"export clip={clip.id} platform={platform.value}"
                         )
+
+                    # The fresh platform cut is scratch either way; S3 holds the result.
+                    for path in output_files.values():
+                        if path:
+                            Path(path).unlink(missing_ok=True)
+
+                    if presigned_url:
+                        async with AsyncSessionLocal() as session:
+                            repo = ClipRepository(session)
+                            await repo.update_clip(
+                                clip_id=clip.id,
+                                user_id=user_id,
+                                burned_subtitle_path=s3_key,
+                                burned_presigned_url=presigned_url,
+                            )
 
                     exported_clips.append({
                         "clip_id": clip.id,
                         "platform": platform.value,
                         "aspect_ratio": aspect_ratio,
                         "burned_presigned_url": presigned_url,
-                        "local_path": burned_path,
-                        "s3_key": f"social/{user_id}/{project_id}/{clip.id}_{platform.value}.mp4",
+                        "local_path": None,
+                        "s3_key": s3_key if presigned_url else None,
                     })
 
                 completed += 1
@@ -469,10 +526,10 @@ class ClipService:
                 status_code=422,
             )
 
-        rendered_count = sum(1 for clip in saved_clips if clip.local_path)
-        if rendered_count == 0:
+        stored_count = sum(1 for clip in saved_clips if clip.s3_key)
+        if stored_count == 0:
             raise CustomException(
-                message="Clip files could not be rendered. Check the FFmpeg video encoder configuration.",
+                message="No clip could be rendered and stored in S3. Check the FFmpeg encoder and S3 access.",
                 code="CLIP_RENDER_FAILED",
                 status_code=500,
             )
@@ -534,10 +591,14 @@ class ClipService:
 
         render_errors: list[str] = []
 
+        total = len(clips)
+        cutting_started = time.monotonic()
+        log.info(LOG_RULE)
         log.info(
-            "Rendering %d clip(s) for project %s into %s (max %d at a time)",
-            len(clips), project_id, ", ".join(ratios), MAX_CONCURRENT_CUTS,
+            "CLIP CUTTING START | project=%s | %d clip(s) | ratios=%s | %d at a time",
+            project_id, total, ", ".join(ratios), MAX_CONCURRENT_CUTS,
         )
+        log.info(LOG_RULE)
 
         async def notify_status(message: str, percent: int) -> None:
             if progress_callback:
@@ -566,23 +627,45 @@ class ClipService:
                 transcript_segments=transcript_segments,
             )
 
+            tag = f"[CUT {index + 1}/{total}]"
             async with semaphore:
                 await tracker.mark_running(clip_id)
+                log.info(
+                    "%s START   %s  %.1fs -> %.1fs (%.1fs)",
+                    tag, clip_id, start, end, max(0.0, end - start),
+                )
+                cut_started = time.monotonic()
                 try:
                     # A cutter per clip, not one shared: ClipCutter's
                     # FaceDetector reconfigures the underlying cv2 model per
                     # frame size, and detection runs in a worker thread, so two
                     # concurrent clips sharing one would race on that model.
                     result = await ClipCutter().cut(request)
-                except BaseException:
+                except BaseException as exc:
+                    log.error(
+                        "%s FAILED  %s  after %.1fs | %s: %s",
+                        tag, clip_id, time.monotonic() - cut_started, type(exc).__name__, exc,
+                    )
                     await tracker.mark_failed(clip_id)
                     raise
 
+            elapsed = time.monotonic() - cut_started
             # A clip that rendered no file at all is a failure to the user even
             # though cut() returned normally, so count it as one.
             if result.rendered:
+                files = ", ".join(
+                    f"{ratio}={_mb(path):.1f}MB" for ratio, path in result.output_files.items() if path
+                )
+                log.info(
+                    "%s DONE    %s  in %.1fs | layout=%s strategy=%s speakers=%d | %s",
+                    tag, clip_id, elapsed, result.layout, result.strategy, result.speaker_count, files,
+                )
                 await tracker.mark_done(clip_id)
             else:
+                log.error(
+                    "%s FAILED  %s  after %.1fs | no file rendered | %s",
+                    tag, clip_id, elapsed, "; ".join(result.errors) or "unknown error",
+                )
                 await tracker.mark_failed(clip_id)
 
             render_errors.extend(f"clip={clip_id} {err}" for err in result.errors)
@@ -620,12 +703,19 @@ class ClipService:
             if isinstance(outcome, BaseException):
                 clip_id = str(clips[index].get("clip_id") or clips[index].get("id") or f"clip_{index + 1:03d}")
                 # One clip blowing up must not lose the clips that did render.
-                log.error("Clip cut failed: clip=%s error=%s", clip_id, outcome)
                 render_errors.append(f"clip={clip_id} {outcome}")
                 continue
             rendered.append(outcome)
 
         await tracker.notify_summary()
+
+        rendered_ok = sum(1 for c in rendered if any(c.get("output_files", {}).values()))
+        log.info(LOG_RULE)
+        log.info(
+            "CLIP CUTTING DONE  | project=%s | %d/%d rendered | %d failed | %.1fs total",
+            project_id, rendered_ok, total, total - rendered_ok, time.monotonic() - cutting_started,
+        )
+        log.info(LOG_RULE)
 
         if rendered and not any(c.get("output_files", {}).values() for c in rendered):
             raise CustomException(
@@ -644,10 +734,17 @@ class ClipService:
         analysis: dict[str, Any],
         video_metadata: dict[str, Any],
     ) -> list[GeneratedClip]:
+        upload_started = time.monotonic()
+        log.info(LOG_RULE)
+        log.info(
+            "CLIP S3 UPLOAD START | project=%s | %d clip(s) -> s3://%s/clips/%s/%s/",
+            project_id, len(clips), self._bucket, user_id, project_id,
+        )
+        log.info(LOG_RULE)
         async with AsyncSessionLocal() as session:
             repo = ClipRepository(session)
             saved = []
-            for clip in clips:
+            for index, clip in enumerate(clips):
                 clip_id = str(clip.get("clip_id", ""))
                 start = float(clip.get("start_time", clip.get("start", 0.0)))
                 end = float(clip.get("end_time", clip.get("end", start)))
@@ -668,7 +765,8 @@ class ClipService:
                 s3_keys: dict[str, str] = {}
                 if local_path and Path(local_path).exists():
                     presigned_url, s3_key, poster_url, s3_keys = await self._upload_clip_and_thumbnail(
-                        local_path, clip_id, user_id, project_id, output_files
+                        local_path, clip_id, user_id, project_id, output_files,
+                        tag=f"[S3 {index + 1}/{len(clips)}]",
                     )
                 saved_clip = await repo.create_clip(
                     project_id=project_id,
@@ -681,10 +779,11 @@ class ClipService:
                     score=float(clip.get("score", 0.0)),
                     scores=_json_dumps(clip.get("scores", {})),
                     content_category=clip.get("content_category", ContentCategory.UNKNOWN.value),
-                    status="completed" if local_path else "pending",
-                    local_path=local_path,
+                    # Only a clip that reached S3 counts: renders read from there.
+                    status="completed" if s3_key else "failed",
+                    local_path=None,
                     s3_key=s3_key,
-                    s3_bucket=self._bucket if presigned_url else None,
+                    s3_bucket=self._bucket if s3_key else None,
                     presigned_url=presigned_url,
                     poster_url=poster_url,
                     transcript=_json_dumps(transcript),
@@ -696,7 +795,15 @@ class ClipService:
                     analysis_json=_json_dumps({**clip_analysis, "s3_keys": s3_keys}),
                 )
                 saved.append(saved_clip)
-            return saved
+
+        stored = sum(1 for clip in saved if clip.s3_key)
+        log.info(LOG_RULE)
+        log.info(
+            "CLIP S3 UPLOAD DONE  | project=%s | %d/%d clip(s) stored | %d failed | %.1fs total",
+            project_id, stored, len(saved), len(saved) - stored, time.monotonic() - upload_started,
+        )
+        log.info(LOG_RULE)
+        return saved
 
     def _clip_s3_prefix(self, user_id: str, project_id: str, clip_id: str) -> str:
         """Every artefact for one clip lives under one prefix, its own folder."""
@@ -709,6 +816,7 @@ class ClipService:
         user_id: str,
         project_id: str,
         output_files: dict[str, str] | None = None,
+        tag: str = "[S3]",
     ) -> tuple[str | None, str | None, str | None, dict[str, str]]:
         """Upload every rendered aspect ratio plus a poster frame to S3.
 
@@ -740,26 +848,25 @@ class ClipService:
             if not path or not Path(path).exists():
                 continue
             key = f"{prefix}/{ratio.replace(':', 'x')}.mp4"
+            started = time.monotonic()
             try:
                 await asyncio.to_thread(
                     self._s3.upload_file, s3_bucket, key, path, "video/mp4"
                 )
             except Exception as exc:
-                log.warning(
-                    "S3 upload failed: clip=%s ratio=%s error=%s", clip_id, ratio, exc
+                log.error(
+                    "%s FAILED  %s %s | %s: %s", tag, clip_id, ratio, type(exc).__name__, exc
                 )
                 continue
+            log.info(
+                "%s STORED  %s %s  %.1fMB in %.1fs  -> s3://%s/%s",
+                tag, clip_id, ratio, _mb(path), time.monotonic() - started, s3_bucket, key,
+            )
             s3_keys[ratio] = key
             if path == local_path:
                 primary_key = key
 
-        if primary_key:
-            try:
-                presigned_url = self._s3.generate_presigned_url(
-                    s3_bucket, primary_key, expires_in=3600
-                )
-            except Exception as exc:
-                log.warning("Presign failed: clip=%s error=%s", clip_id, exc)
+        presigned_url = self._presign(s3_bucket, primary_key)
 
         poster_url = None
         if primary_key and local_path:
@@ -771,13 +878,16 @@ class ClipService:
                     self._s3.upload_file, s3_bucket, thumb_key, thumbnail_path, "image/jpeg"
                 )
                 s3_keys["thumbnail"] = thumb_key
-                poster_url = self._s3.generate_presigned_url(
-                    s3_bucket, thumb_key, expires_in=3600
-                )
+                poster_url = self._presign(s3_bucket, thumb_key)
             except Exception as exc:
                 log.warning(f"Thumbnail extraction failed: clip={clip_id} error={exc}")
             finally:
                 Path(thumbnail_path).unlink(missing_ok=True)
+
+        # Everything uploaded now lives in S3; renders fetch it from there.
+        for ratio, path in uploads.items():
+            if ratio in s3_keys and path:
+                Path(path).unlink(missing_ok=True)
 
         return presigned_url, primary_key, poster_url, s3_keys
 
@@ -1142,13 +1252,15 @@ class ClipService:
             "score": clip.score,
             "scores": self._loads(clip.scores, {}),
             "content_category": clip.content_category,
-            "presigned_url": clip.presigned_url,
-            "poster_url": clip.poster_url,
+            # Signed per read: stored URLs expire, the S3 keys do not.
+            "presigned_url": self._presign(clip.s3_bucket, clip.s3_key) or clip.presigned_url,
+            "poster_url": self._presign(clip.s3_bucket, (analysis.get("s3_keys") or {}).get("thumbnail"))
+            or clip.poster_url,
             "local_path": clip.local_path,
             "status": clip.status,
             "subtitle_style_id": clip.subtitle_style_id,
             "burned_subtitle_path": clip.burned_subtitle_path,
-            "burned_presigned_url": clip.burned_presigned_url,
+            "burned_presigned_url": self._burned_url(clip),
             "transcript": transcript,
             # Absolute-time transcript above, clip-relative words below: the
             # player needs the latter, the burner needs the former.
@@ -1161,6 +1273,14 @@ class ClipService:
             "analysis_json": analysis,
             "created_at": clip.created_at.isoformat() if clip.created_at else None,
         }
+
+    def _burned_url(self, clip: GeneratedClip) -> str | None:
+        # burned_subtitle_path holds the S3 key since renders moved to S3; older
+        # rows hold a local path, for which only the stored URL is left.
+        key = clip.burned_subtitle_path
+        if clip.burned_presigned_url and key and not Path(key).is_absolute():
+            return self._presign(clip.s3_bucket, key) or clip.burned_presigned_url
+        return clip.burned_presigned_url
 
     @staticmethod
     def _loads(value: str | None, fallback: Any) -> Any:
