@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import cv2
 import numpy as np
 import pytest
 
@@ -7,11 +8,14 @@ from video_processor.clip_cutter import ClipCutter
 from video_processor.face_detection import Face
 from video_processor.geometry import Box
 from video_processor.speaker_tracking import (
+    SILENT_MOTION_THRESHOLD,
     FaceSample,
     SpeakerTrack,
     active_speaker_at,
     build_tracks,
     is_speaking_at,
+    match_labels_to_tracks,
+    speaker_timeline,
     speech_intervals,
 )
 
@@ -26,11 +30,16 @@ def cutter() -> ClipCutter:
     return ClipCutter()
 
 
-def track_with(track_id: int, box: Box, motions: list[float], start: float = 0.0) -> SpeakerTrack:
+def track_with(
+    track_id: int, box: Box, motions: list[float], start: float = 0.0, step: float = 1.0
+) -> SpeakerTrack:
     face = Face(box=box, confidence=0.9, mouth=box)
     return SpeakerTrack(
         track_id=track_id,
-        samples=[FaceSample(timestamp=start + i, face=face, mouth_motion=m) for i, m in enumerate(motions)],
+        samples=[
+            FaceSample(timestamp=start + i * step, face=face, mouth_motion=m)
+            for i, m in enumerate(motions)
+        ],
     )
 
 
@@ -192,3 +201,128 @@ class TestFragmentationRecovery:
         n = 20
         tracks = build_tracks(self.frames(n), [[] for _ in range(n)])
         assert tracks == []
+
+
+def textured_frame(seed: int) -> np.ndarray:
+    return np.random.default_rng(seed).integers(0, 255, (100, 100, 3), dtype=np.uint8)
+
+
+class TestLipMotion:
+    FACE = face_at(0.2, 0.2, 0.6)
+
+    def test_mouth_change_scores_motion(self) -> None:
+        still = textured_frame(1)
+        talking = still.copy()
+        # Only the mouth band changes.
+        talking[60:80, 40:65] = textured_frame(2)[60:80, 40:65]
+        frames = [(0.0, still), (0.17, talking)]
+        tracks = build_tracks(frames, [[self.FACE], [self.FACE]])
+        assert tracks[0].samples[1].mouth_motion > 5.0
+
+    def test_whole_face_change_is_not_lip_motion(self) -> None:
+        """A head nod or camera move shifts eyes and mouth alike."""
+        face = cv2.GaussianBlur(textured_frame(1), (9, 9), 3)
+        frames = [(0.0, face), (0.17, np.roll(face, 3, axis=0))]
+        tracks = build_tracks(frames, [[self.FACE], [self.FACE]])
+        assert tracks[0].samples[1].mouth_motion < SILENT_MOTION_THRESHOLD
+
+    def test_no_comparison_across_long_gaps(self) -> None:
+        still = textured_frame(1)
+        changed = still.copy()
+        changed[60:80, 40:65] = 0
+        frames = [(0.0, still), (3.0, changed)]
+        tracks = build_tracks(frames, [[self.FACE], [self.FACE]])
+        assert tracks[0].samples[1].mouth_motion == 0.0
+
+
+class TestSpeakerTimeline:
+    LEFT = Box(0.1, 0.4, 0.2, 0.2)
+    RIGHT = Box(0.7, 0.4, 0.2, 0.2)
+    STEP = 1.0 / 6.0
+
+    def timestamps(self, seconds: float) -> list[float]:
+        return [i * 0.25 for i in range(int(seconds / 0.25) + 1)]
+
+    def test_follows_the_talker_and_switches(self) -> None:
+        n = 60  # 10s at 6fps: left talks for 5s, then right.
+        left = track_with(0, self.LEFT, [8.0] * 30 + [0.2] * 30, step=self.STEP)
+        right = track_with(1, self.RIGHT, [0.2] * 30 + [8.0] * 30, step=self.STEP)
+        segments = [{"start": 0.0, "end": 10.0, "text": "talk"}]
+        ts = self.timestamps(n * self.STEP - self.STEP)
+        timeline = speaker_timeline(ts, [left, right], segments)
+        assert timeline[4] is left
+        assert timeline[-1] is right
+        switches = sum(1 for a, b in zip(timeline, timeline[1:]) if a is not b)
+        assert switches == 1
+
+    def test_ignores_a_brief_burst_from_the_listener(self) -> None:
+        left = track_with(0, self.LEFT, [8.0] * 60, step=self.STEP)
+        motions = [0.2] * 60
+        motions[30:32] = [30.0, 30.0]  # a one-third-second laugh
+        right = track_with(1, self.RIGHT, motions, step=self.STEP)
+        timeline = speaker_timeline(self.timestamps(9.8), [left, right], [{"start": 0.0, "end": 10.0, "text": "x"}])
+        assert all(t is left for t in timeline)
+
+    def test_holds_speaker_through_pauses(self) -> None:
+        """Pauses used to jump to the largest face; now the framing holds."""
+        small_talker = track_with(0, Box(0.1, 0.4, 0.15, 0.15), [8.0] * 60, step=self.STEP)
+        big_listener = track_with(1, Box(0.6, 0.3, 0.35, 0.35), [0.2] * 60, step=self.STEP)
+        segments = [{"start": 0.0, "end": 4.0, "text": "a"}, {"start": 5.0, "end": 9.8, "text": "b"}]
+        timeline = speaker_timeline(self.timestamps(9.8), [small_talker, big_listener], segments)
+        assert all(t is small_talker for t in timeline[2:])
+
+    def test_does_not_frame_someone_who_left(self) -> None:
+        left = track_with(0, self.LEFT, [8.0] * 12, step=self.STEP)  # gone after 2s
+        late = track_with(1, self.RIGHT, [0.2] * 12, start=8.0, step=self.STEP)
+        ts = self.timestamps(9.8)
+        timeline = speaker_timeline(ts, [left, late], [{"start": 0.0, "end": 10.0, "text": "x"}])
+        assert timeline[ts.index(9.0)] is late
+
+    def test_diarization_label_decides_speaker(self) -> None:
+        # Lip motion is weak and ambiguous, but each label lines up with one track.
+        left = track_with(0, self.LEFT, [3.0] * 30 + [1.6] * 30, step=self.STEP)
+        right = track_with(1, self.RIGHT, [1.6] * 30 + [2.0] * 30, step=self.STEP)
+        segments = [
+            {"start": 0.0, "end": 5.0, "text": "a", "speaker": "SPEAKER_00"},
+            {"start": 5.0, "end": 10.0, "text": "b", "speaker": "SPEAKER_01"},
+        ]
+        timeline = speaker_timeline(self.timestamps(9.8), [left, right], segments)
+        assert timeline[2] is left
+        assert timeline[-1] is right
+
+    def test_ambiguous_label_is_not_mapped(self) -> None:
+        a = track_with(0, self.LEFT, [2.0] * 10)
+        b = track_with(1, self.RIGHT, [2.0] * 10)
+        assert match_labels_to_tracks([(0.0, 9.0, "SPEAKER_00")], [a, b]) == {}
+
+    def test_empty_inputs(self) -> None:
+        assert speaker_timeline([0.0, 1.0], [], []) == [None, None]
+
+
+class TestCoverSubjects:
+    """Regression: a panel spread across a wide stage was 'covered' by centring
+    on the group's middle, which framed empty stage for the whole clip."""
+
+    SRC_W, SRC_H = 1920, 1080
+
+    def target(self, cutter: ClipCutter, tracks: list[SpeakerTrack], speaker: SpeakerTrack):
+        return cutter._target_center(
+            1.0, tracks, speaker, "cover_subjects", self.SRC_W, self.SRC_H, "9:16",
+        )
+
+    def test_group_that_fits_is_framed_together(self, cutter: ClipCutter) -> None:
+        tracks = [
+            track_with(0, Box(0.40, 0.3, 0.06, 0.1), [1.0, 1.0, 1.0]),
+            track_with(1, Box(0.52, 0.3, 0.06, 0.1), [1.0, 1.0, 1.0]),
+        ]
+        x, _ = self.target(cutter, tracks, tracks[0])
+        assert x == pytest.approx(0.49, abs=0.01)
+
+    def test_wide_panel_follows_the_speaker(self, cutter: ClipCutter) -> None:
+        tracks = [
+            track_with(0, Box(0.05, 0.3, 0.08, 0.12), [1.0, 1.0, 1.0]),
+            track_with(1, Box(0.45, 0.3, 0.08, 0.12), [1.0, 1.0, 1.0]),
+            track_with(2, Box(0.85, 0.3, 0.08, 0.12), [1.0, 1.0, 1.0]),
+        ]
+        x, _ = self.target(cutter, tracks, tracks[2])
+        assert x == pytest.approx(0.89, abs=0.01)

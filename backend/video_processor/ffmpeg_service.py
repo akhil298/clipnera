@@ -293,8 +293,11 @@ class FFmpegService:
                 "".join(f"{t:.3f} crop x {x}, crop y {y};\n" for t, x, y in path),
                 encoding="utf-8",
             )
+            # FFmpeg runs from workdir, so local paths must be absolute; URLs
+            # (a presigned S3 source) are passed through untouched.
+            source = input_path if "://" in input_path else str(Path(input_path).resolve())
             returncode, stderr = await self._run_ffmpeg(
-                str(Path(input_path).resolve()), str(output_file.resolve()),
+                source, str(output_file.resolve()),
                 start_time, duration, video_filter, encoder_args, cwd=workdir,
             )
 

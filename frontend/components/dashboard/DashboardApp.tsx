@@ -277,10 +277,20 @@ export default function DashboardApp() {
             const refined = projectResponse.projects.map((project) =>
               buildProject(project, statuses[project.id] ?? null),
             );
-            setProjects(refined);
-            setActiveProject((prev) =>
-              prev ? refined.find((p) => p.id === prev.id) ?? prev : prev,
+            // The list rows carry clip summaries without video URLs. If the
+            // full clips already loaded, overwriting them here would leave the
+            // cards on "Render still processing" with nothing left to refetch.
+            const keepLoadedClips = (next: VideoProject, prev?: VideoProject): VideoProject =>
+              prev?.clips.some((clip) => clip.presignedUrl) ? { ...next, clips: prev.clips } : next;
+            setProjects((prevProjects) =>
+              refined.map((project) =>
+                keepLoadedClips(project, prevProjects.find((p) => p.id === project.id)),
+              ),
             );
+            setActiveProject((prev) => {
+              const next = prev && refined.find((p) => p.id === prev.id);
+              return next ? keepLoadedClips(next, prev) : prev;
+            });
           } catch {
             // The list is already usable without pipeline detail.
           }
@@ -308,10 +318,9 @@ export default function DashboardApp() {
     let cancelled = false;
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let clipsFetchRequested = false;
+    const MAX_CLIP_FETCH_RETRIES = 3;
 
-    const loadClipsOnce = async () => {
-      if (clipsFetchRequested) return;
-      clipsFetchRequested = true;
+    const fetchClips = async (attempt: number) => {
       try {
         const clipResponse = await clipApi.listClips(projectId);
         if (cancelled) return;
@@ -322,7 +331,18 @@ export default function DashboardApp() {
         }
       } catch (clipErr) {
         console.error('Failed to fetch clips:', clipErr);
+        // One failed request used to leave every card on "Render still
+        // processing" until a full page reload.
+        if (!cancelled && attempt < MAX_CLIP_FETCH_RETRIES) {
+          timeoutId = setTimeout(() => void fetchClips(attempt + 1), 2000 * (attempt + 1));
+        }
       }
+    };
+
+    const loadClipsOnce = () => {
+      if (clipsFetchRequested) return;
+      clipsFetchRequested = true;
+      void fetchClips(0);
     };
 
     // A finished project has nothing left to watch. This used to keep polling

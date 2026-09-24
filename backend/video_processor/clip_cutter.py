@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -38,20 +39,22 @@ from video_processor.geometry import (
     normalize_box,
     output_dimensions,
     target_crop_size,
+    union_box,
 )
 from video_processor.speaker_tracking import (
     SpeakerTrack,
-    active_speaker_at,
     build_tracks,
-    speech_intervals,
+    speaker_timeline,
+    visible_tracks,
 )
 
 log = get_logger(__name__)
 
 # Seconds between frames sent to face detection, for the whole clip whatever
-# its length. A cap on frame count used to stretch this on longer clips, so a
-# speaker could move for a second or more before the crop saw it.
-SAMPLE_INTERVAL_SECONDS = 0.5
+# its length. Lip motion is measured between consecutive samples, and lips move
+# several times a second: at 0.5s the difference mostly measured head movement
+# and lighting, so the wrong person was picked as the speaker.
+SAMPLE_INTERVAL_SECONDS = 1.0 / 6.0
 # Face detection runs on a downscaled copy; boxes are normalised so they map
 # back to full resolution exactly.
 DETECT_WIDTH = 640
@@ -137,7 +140,7 @@ class ClipCutter:
 
         frames = await self._sample_frames(request)
         faces_per_frame = await asyncio.to_thread(self._detect_faces, request.clip_id, frames)
-        tracks = build_tracks(frames, faces_per_frame)
+        tracks = build_tracks(_decode_frames(frames), faces_per_frame)
         for track in tracks:
             log.info(
                 "[TRACK] clip=%s id=%d samples=%d seen=%.2fs-%.2fs mean_area=%.4f mean_motion=%.2f",
@@ -145,8 +148,16 @@ class ClipCutter:
                 track.last_seen, track.mean_area,
                 sum(s.mouth_motion for s in track.samples) / len(track.samples),
             )
-        intervals = speech_intervals(request.transcript_segments)
         layout = self._classify_layout(tracks, request.content_category)
+        timestamps = _tracking_timestamps(request)
+        # cover_subjects needs the speaker too: it falls back to them whenever
+        # the group is too wide for the crop.
+        speakers = (
+            speaker_timeline(timestamps, tracks, request.transcript_segments)
+            if self._strategy_for(layout) != "center"
+            else [None] * len(timestamps)
+        )
+        _log_speaker_switches(request.clip_id, timestamps, speakers)
 
         result = CutResult(
             clip_id=request.clip_id,
@@ -169,7 +180,8 @@ class ClipCutter:
             tracking = self._build_tracking(
                 request=request,
                 tracks=tracks,
-                intervals=intervals,
+                timestamps=timestamps,
+                speakers=speakers,
                 layout=layout,
                 aspect_ratio=aspect_ratio,
                 source_width=source_width,
@@ -243,11 +255,13 @@ class ClipCutter:
 
     # ---- frame sampling ----------------------------------------------------
 
-    async def _sample_frames(self, request: CutRequest) -> list[tuple[float, np.ndarray]]:
-        """Decode evenly spaced frames from the clip range in one FFmpeg pass.
+    async def _sample_frames(self, request: CutRequest) -> list[tuple[float, bytes]]:
+        """Evenly spaced JPEG frames from the clip range, from one FFmpeg pass.
 
-        One process per clip rather than one per frame; at 8 frames a clip the
-        old per-frame approach spawned 80 processes for a 10-clip project.
+        One process per clip rather than one per frame. Frames stay compressed
+        (tens of KB each) and are decoded one at a time where used, so a long
+        clip at the lip-motion sample rate does not hold hundreds of raw
+        frames in memory.
         """
         fps = 1.0 / SAMPLE_INTERVAL_SECONDS
         cmd = [
@@ -270,26 +284,23 @@ class ClipCutter:
             )
             return []
 
-        images = _split_mjpeg(stdout)
         step = 1.0 / fps if fps > 0 else request.duration
-        frames: list[tuple[float, np.ndarray]] = []
-        for index, payload in enumerate(images):
-            frame = cv2.imdecode(np.frombuffer(payload, dtype=np.uint8), cv2.IMREAD_COLOR)
-            if frame is None or frame.size == 0:
-                continue
-            frames.append((request.start + index * step, frame))
+        frames = [
+            (request.start + index * step, payload)
+            for index, payload in enumerate(_split_mjpeg(stdout))
+        ]
 
         log.info(
-            "[FRAMES] clip=%s sampled=%d decoded=%d fps=%.2f width=%d",
-            request.clip_id, len(images), len(frames), fps, DETECT_WIDTH,
+            "[FRAMES] clip=%s sampled=%d fps=%.2f width=%d",
+            request.clip_id, len(frames), fps, DETECT_WIDTH,
         )
         if not frames:
             log.warning("[FRAMES] clip=%s produced no decodable frames; face detection skipped", request.clip_id)
         return frames
 
-    def _detect_faces(self, clip_id: str, frames: list[tuple[float, np.ndarray]]) -> list[list[Face]]:
+    def _detect_faces(self, clip_id: str, frames: list[tuple[float, bytes]]) -> list[list[Face]]:
         started = time.monotonic()
-        faces_per_frame = [self._faces.detect(frame) for _, frame in frames]
+        faces_per_frame = [self._faces.detect(frame) for _, frame in _decode_frames(frames)]
 
         all_faces = [face for faces in faces_per_frame for face in faces]
         frames_with_faces = sum(1 for faces in faces_per_frame if faces)
@@ -356,7 +367,8 @@ class ClipCutter:
         self,
         request: CutRequest,
         tracks: list[SpeakerTrack],
-        intervals: list[tuple[float, float]],
+        timestamps: list[float],
+        speakers: list[SpeakerTrack | None],
         layout: str,
         aspect_ratio: str,
         source_width: int,
@@ -373,15 +385,13 @@ class ClipCutter:
             }]
 
         strategy = self._strategy_for(layout)
-        count = max(2, int(request.duration * TRACKING_FPS))
+        count = len(timestamps)
         step = request.duration / max(1, count - 1)
-
-        timestamps = [request.start + index * step for index in range(count)]
         targets = [
             self._target_center(
-                ts, tracks, intervals, strategy, source_width, source_height, aspect_ratio
+                ts, tracks, speaker, strategy, source_width, source_height, aspect_ratio
             )
-            for ts in timestamps
+            for ts, speaker in zip(timestamps, speakers)
         ]
         centred = sum(1 for target in targets if target is None)
         raw = [target or (0.5, 0.5) for target in targets]
@@ -406,7 +416,7 @@ class ClipCutter:
         self,
         timestamp: float,
         tracks: list[SpeakerTrack],
-        intervals: list[tuple[float, float]],
+        speaker: SpeakerTrack | None,
         strategy: str,
         source_width: int,
         source_height: int,
@@ -417,13 +427,15 @@ class ClipCutter:
             return None
 
         if strategy == "cover_subjects":
-            boxes = [b for b in (t.box_at(timestamp) for t in tracks) if b is not None]
-            if not boxes:
-                return None
-            covering = crop_covering(boxes, source_width, source_height, aspect_ratio)
-            return covering.center
+            boxes = [b for b in (t.box_at(timestamp) for t in visible_tracks(timestamp, tracks)) if b is not None]
+            group = union_box(boxes)
+            crop_w, crop_h = target_crop_size(source_width, source_height, aspect_ratio)
+            # Only frame the group when it fits. A panel spread across a wide
+            # stage does not, and centring on its middle framed empty stage
+            # for the whole clip; follow whoever is talking instead.
+            if group is not None and group.width <= crop_w / source_width and group.height <= crop_h / source_height:
+                return crop_covering(boxes, source_width, source_height, aspect_ratio).center
 
-        speaker = active_speaker_at(timestamp, tracks, intervals)
         box = speaker.box_at(timestamp) if speaker else None
         if box is None:
             return None
@@ -468,6 +480,35 @@ class ClipCutter:
                 code="CLIP_RENDER_EMPTY",
                 status_code=500,
             )
+
+
+def _tracking_timestamps(request: CutRequest) -> list[float]:
+    """Source-video times at which a crop window is computed."""
+    count = max(2, int(request.duration * TRACKING_FPS))
+    step = request.duration / max(1, count - 1)
+    return [request.start + index * step for index in range(count)]
+
+
+def _decode_frames(frames: list[tuple[float, bytes]]) -> Iterator[tuple[float, np.ndarray]]:
+    """Decode JPEG frames one at a time, substituting a blank for a corrupt one
+    so timestamps stay aligned with the detections made from the same list."""
+    for timestamp, payload in frames:
+        frame = cv2.imdecode(np.frombuffer(payload, dtype=np.uint8), cv2.IMREAD_COLOR)
+        yield timestamp, frame if frame is not None else np.zeros((1, 1, 3), dtype=np.uint8)
+
+
+def _log_speaker_switches(
+    clip_id: str, timestamps: list[float], speakers: list[SpeakerTrack | None]
+) -> None:
+    """One line per change of framed speaker, to debug tracking from logs."""
+    previous: SpeakerTrack | None = None
+    switches = []
+    for timestamp, speaker in zip(timestamps, speakers):
+        if speaker is not previous and speaker is not None:
+            switches.append(f"{timestamp:.1f}s->#{speaker.track_id}")
+        previous = speaker
+    if switches:
+        log.info("[SPEAKER] clip=%s %s", clip_id, " ".join(switches))
 
 
 def _split_mjpeg(payload: bytes) -> list[bytes]:

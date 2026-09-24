@@ -1,9 +1,12 @@
 """Face detection for reframing, CPU-only and dependency-light.
 
-Two backends, chosen at runtime:
+Three backends, the first available one wins:
 
-* **YuNet** (``cv2.FaceDetectorYN``) when an ONNX model is available. More
-  accurate, handles profile and angled faces, ~340KB, still fast on CPU.
+* **RetinaFace-ResNet50** (ONNX, run by onnxruntime) when its model is present.
+  The most accurate by a wide margin on small, angled and partly hidden faces;
+  ~109MB and several times slower than YuNet, still CPU-only.
+* **YuNet** (``cv2.FaceDetectorYN``) when its ONNX model is available. Handles
+  profile and angled faces, ~340KB, fast on CPU.
 * **Haar cascades** otherwise. These ship inside the ``opencv-contrib-python``
   wheel, so this backend needs no downloads and works on a bare EC2 instance.
 
@@ -13,6 +16,7 @@ pipeline working when an instance has no outbound internet access.
 
 from __future__ import annotations
 
+import math
 import os
 from dataclasses import dataclass
 from functools import lru_cache
@@ -21,6 +25,7 @@ from typing import Any
 
 import cv2
 import numpy as np
+import onnxruntime as ort
 
 from core.logging_config import get_logger
 from video_processor.geometry import Box, normalize_box
@@ -34,6 +39,22 @@ YUNET_SEARCH_PATHS = (
     Path(__file__).resolve().parent.parent / "models" / YUNET_FILENAME,
     Path("/opt/clipnera/models") / YUNET_FILENAME,
 )
+
+# RetinaFace-ResNet50 from biubug6/Pytorch_Retinaface (MIT), exported to ONNX.
+# Too large for git; setup_ec2.sh downloads it into backend/models/.
+RETINAFACE_FILENAME = "retinaface_r50.onnx"
+RETINAFACE_SEARCH_PATHS = (
+    Path(__file__).resolve().parent.parent / "models" / RETINAFACE_FILENAME,
+    Path("/opt/clipnera/models") / RETINAFACE_FILENAME,
+)
+# Anchor layout and box encoding the network was trained with.
+RETINAFACE_STEPS = (8, 16, 32)
+RETINAFACE_MIN_SIZES = ((16, 32), (64, 128), (256, 512))
+RETINAFACE_VARIANCE = (0.1, 0.2)
+RETINAFACE_MEAN_BGR = np.array([104.0, 117.0, 123.0], dtype=np.float32)
+# Candidate boxes overlapping more than this are one face; applied before the
+# shared post-processing, since every face fires dozens of anchors.
+RETINAFACE_NMS_IOU = 0.4
 
 MIN_FACE_CONFIDENCE = 0.6
 # Faces smaller than this fraction of frame width are usually background
@@ -81,7 +102,7 @@ def _mouth_from_box(face: Box) -> Box:
 
 
 def _mouth_from_landmarks(face: Box, left: tuple[float, float], right: tuple[float, float]) -> Box:
-    """Mouth region spanning YuNet's two mouth-corner landmarks."""
+    """Mouth region spanning the detector's two mouth-corner landmarks."""
     x0, x1 = sorted((left[0], right[0]))
     y0, y1 = sorted((left[1], right[1]))
     pad_x = max(0.01, (x1 - x0) * 0.35)
@@ -95,15 +116,56 @@ def _mouth_from_landmarks(face: Box, left: tuple[float, float], right: tuple[flo
     return Box(x=x, y=y, width=width, height=height)
 
 
-@lru_cache(maxsize=1)
-def _yunet_model_path() -> str | None:
-    override = os.getenv("YUNET_MODEL_PATH", "").strip()
+def _find_model(env_var: str, search_paths: tuple[Path, ...]) -> str | None:
+    override = os.getenv(env_var, "").strip()
     candidates = [Path(override)] if override else []
-    candidates.extend(YUNET_SEARCH_PATHS)
+    candidates.extend(search_paths)
     for candidate in candidates:
         if candidate.is_file():
             return str(candidate)
     return None
+
+
+@lru_cache(maxsize=1)
+def _yunet_model_path() -> str | None:
+    return _find_model("YUNET_MODEL_PATH", YUNET_SEARCH_PATHS)
+
+
+@lru_cache(maxsize=1)
+def _retinaface_session() -> ort.InferenceSession | None:
+    """One shared session per process.
+
+    ClipCutter builds a detector per clip; loading 109MB of weights each time
+    would cost seconds and double memory with two clips cutting at once.
+    InferenceSession.run is thread-safe, so sharing it is fine.
+    """
+    model_path = _find_model("RETINAFACE_MODEL_PATH", RETINAFACE_SEARCH_PATHS)
+    if not model_path:
+        return None
+    try:
+        session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+    except Exception as exc:
+        log.warning("RetinaFace model at %s failed to load: %s", model_path, exc)
+        return None
+    log.info("Face detection backend: RetinaFace-ResNet50 (%s)", model_path)
+    return session
+
+
+@lru_cache(maxsize=8)
+def _retinaface_priors(height: int, width: int) -> np.ndarray:
+    """Anchor centres and sizes, normalised, in the order the network emits them."""
+    priors: list[tuple[float, float, float, float]] = []
+    for step, min_sizes in zip(RETINAFACE_STEPS, RETINAFACE_MIN_SIZES):
+        for row in range(math.ceil(height / step)):
+            for col in range(math.ceil(width / step)):
+                for size in min_sizes:
+                    priors.append((
+                        (col + 0.5) * step / width,
+                        (row + 0.5) * step / height,
+                        size / width,
+                        size / height,
+                    ))
+    return np.asarray(priors, dtype=np.float32)
 
 
 class FaceDetector:
@@ -111,6 +173,7 @@ class FaceDetector:
 
     def __init__(self, min_confidence: float = MIN_FACE_CONFIDENCE) -> None:
         self._min_confidence = min_confidence
+        self._retinaface: ort.InferenceSession | None = None
         self._yunet: Any | None = None
         self._yunet_size: tuple[int, int] | None = None
         self._frontal: Any | None = None
@@ -122,6 +185,10 @@ class FaceDetector:
         return self._backend
 
     def _select_backend(self) -> str:
+        self._retinaface = _retinaface_session()
+        if self._retinaface is not None:
+            return "retinaface"
+
         model_path = _yunet_model_path()
         if model_path and hasattr(cv2, "FaceDetectorYN"):
             try:
@@ -151,7 +218,9 @@ class FaceDetector:
     def detect(self, frame: np.ndarray) -> list[Face]:
         if frame is None or getattr(frame, "size", 0) == 0:
             return []
-        if self._backend == "yunet":
+        if self._backend == "retinaface":
+            faces = self._detect_retinaface(frame)
+        elif self._backend == "yunet":
             faces = self._detect_yunet(frame)
         elif self._backend == "haar":
             faces = self._detect_haar(frame)
@@ -163,6 +232,49 @@ class FaceDetector:
             self._backend, len(faces), len(kept), [round(f.confidence, 2) for f in kept],
         )
         return kept
+
+    def _detect_retinaface(self, frame: np.ndarray) -> list[Face]:
+        height, width = frame.shape[:2]
+        blob = (frame.astype(np.float32) - RETINAFACE_MEAN_BGR).transpose(2, 0, 1)[np.newaxis]
+        try:
+            loc, conf, landms = self._retinaface.run(None, {"input": blob})
+        except Exception as exc:
+            log.warning("RetinaFace detection failed on %dx%d frame: %s", width, height, exc)
+            return []
+
+        scores = conf[0][:, 1]
+        keep = scores >= self._min_confidence
+        if not keep.any():
+            return []
+        priors = _retinaface_priors(height, width)[keep]
+        loc, landms, scores = loc[0][keep], landms[0][keep], scores[keep]
+
+        centre_var, size_var = RETINAFACE_VARIANCE
+        centres = priors[:, :2] + loc[:, :2] * centre_var * priors[:, 2:]
+        sizes = priors[:, 2:] * np.exp(loc[:, 2:] * size_var)
+        corners = centres - sizes / 2
+        # Landmarks: eyes, nose, then the two mouth corners (indices 3 and 4).
+        points = priors[:, np.newaxis, :2] + landms.reshape(-1, 5, 2) * centre_var * priors[:, np.newaxis, 2:]
+
+        pixel_boxes = [
+            [float(x * width), float(y * height), float(w * width), float(h * height)]
+            for (x, y), (w, h) in zip(corners, sizes)
+        ]
+        indices = cv2.dnn.NMSBoxes(pixel_boxes, scores.tolist(), self._min_confidence, RETINAFACE_NMS_IOU)
+
+        faces: list[Face] = []
+        for index in np.asarray(indices).reshape(-1):
+            (x, y), (w, h) = corners[index], sizes[index]
+            box = normalize_box({"x": float(x), "y": float(y), "width": float(w), "height": float(h)})
+            if box is None:
+                continue
+            mouth_left, mouth_right = (tuple(map(float, points[index][i])) for i in (3, 4))
+            faces.append(Face(
+                box=box,
+                confidence=float(scores[index]),
+                mouth=_mouth_from_landmarks(box, mouth_left, mouth_right),
+            ))
+        return faces
 
     def _detect_yunet(self, frame: np.ndarray) -> list[Face]:
         height, width = frame.shape[:2]

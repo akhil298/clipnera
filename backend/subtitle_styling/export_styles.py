@@ -23,7 +23,7 @@ OUTPUT_PATH = (
 
 # CaptionConfig.animation in the frontend accepts a wider set than the templates
 # use; anything unmapped falls back to the karaoke reveal.
-ANIMATIONS = {"karaoke", "pop", "fade", "bounce", "none"}
+ANIMATIONS = {"karaoke", "pop", "fade", "none"}
 
 
 def _badge(template: dict) -> str:

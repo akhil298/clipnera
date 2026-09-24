@@ -76,7 +76,7 @@ export interface CaptionConfig {
   hasBgBox: boolean;
   bgBoxColor: string;
   uppercase: boolean;
-  animation: 'bounce' | 'pop' | 'wave' | 'karaoke' | 'glow' | 'fade' | 'none';
+  animation: 'pop' | 'wave' | 'karaoke' | 'glow' | 'fade' | 'none';
   animationSpeed: number;
   positionY: number;
   emojisEnabled: boolean;

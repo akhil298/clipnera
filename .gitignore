@@ -71,3 +71,6 @@ Thumbs.db
 backend/env.developmenet
 backend/env.production
 backend/env
+
+# Large model weights (downloaded by setup_ec2.sh)
+backend/models/retinaface_r50.onnx

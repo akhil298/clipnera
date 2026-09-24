@@ -13,7 +13,6 @@ const SAMPLE_WORDS = ['THIS', 'CHANGES', 'EVERY', 'THING'];
 
 /** Per-animation motion, expressed as the custom properties the keyframes read. */
 const MOTION: Record<CaptionConfig['animation'], { pop: string; lift: string; idleOpacity: string }> = {
-  bounce: { pop: '1.18', lift: '-0.12em', idleOpacity: '1' },
   pop: { pop: '1.22', lift: '0px', idleOpacity: '1' },
   wave: { pop: '1.06', lift: '-0.16em', idleOpacity: '1' },
   karaoke: { pop: '1', lift: '0px', idleOpacity: '1' },

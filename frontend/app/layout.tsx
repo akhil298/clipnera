@@ -17,6 +17,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Syne:wght@700;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
           rel="stylesheet"
         />
+        {/* Caption faces, mirroring the files bundled in backend/static/fonts for burn-in. */}
+        <link
+          href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=Bangers&family=Bebas+Neue&family=DM+Serif+Display&family=Luckiest+Guy&family=Permanent+Marker&display=swap"
+          rel="stylesheet"
+        />
         <Script
           id="hydration-fix"
           strategy="beforeInteractive"

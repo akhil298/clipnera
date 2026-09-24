@@ -4,10 +4,12 @@ This is the single source of truth for subtitle styling. The frontend mirrors
 these ids in ``lib/utils/captionStyles.ts`` for live preview; any id here must
 exist there and vice versa, which is asserted by ``tests/test_caption_templates``.
 
-Font note for Linux/EC2: libass resolves fonts through fontconfig. "DejaVu Sans"
-and "DejaVu Serif" ship with virtually every distribution. Styles asking for
-Impact, Arial or Georgia fall back to a default face unless the msttcorefonts
-package is installed, which changes how they look but never fails the render.
+Font note for Linux/EC2: libass is pointed at ``static/fonts`` (see
+``ass_generator.ass_filter``), so the display faces bundled there render the
+same on every host; the frontend loads the same families from Google Fonts.
+Other names resolve through fontconfig: "DejaVu Sans" and "DejaVu Serif" ship
+with virtually every distribution, while Impact, Arial or Georgia fall back to
+a default face unless msttcorefonts is installed.
 """
 
 from __future__ import annotations
@@ -19,7 +21,6 @@ AnimationType = (
     "karaoke",
     "pop",
     "fade",
-    "bounce",
 )
 
 # Applied under every template, so a template only states what makes it distinct.
@@ -106,13 +107,13 @@ CAPTION_TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "comic": {
         "name": "Comic Pop",
-        "description": "Playful bouncing words with a bright outline",
+        "description": "Playful punchy words with a bright outline",
         "font_size": 36,
         "highlight_color": "#FF7A00",
         "emphasis_color": "#00C2FF",
         "stroke_color": "#2B0A3D",
         "stroke_width": 4,
-        "animation": "bounce",
+        "animation": "pop",
         "uppercase": True,
         "max_words_per_line": 3,
         "position_y": 0.76,
@@ -313,6 +314,100 @@ CAPTION_TEMPLATES: dict[str, dict[str, Any]] = {
         "shadow": False,
         "max_words_per_line": 9,
         "position_y": 0.88,
+    },
+
+    # --- Font-driven (faces bundled in static/fonts) -------------------------
+    "bold_pop": {
+        "name": "Bold Pop",
+        "description": "Condensed Anton caps with a red box snapping to each word",
+        "font_family": "Anton",
+        "font_size": 40,
+        "highlight_color": "#FFFFFF",
+        "emphasis_color": "#FFE000",
+        "stroke_width": 4,
+        "word_box": True,
+        "word_box_color": "#E52222",
+        "uppercase": True,
+        "animation": "pop",
+        "max_words_per_line": 3,
+        "position_y": 0.72,
+    },
+    "headline": {
+        "name": "Headline",
+        "description": "Tall Bebas Neue lettering with a cyan karaoke sweep",
+        "font_family": "Bebas Neue",
+        "font_size": 46,
+        "highlight_color": "#00E5FF",
+        "emphasis_color": "#FFE000",
+        "stroke_width": 4,
+        "uppercase": True,
+        "max_words_per_line": 3,
+        "position_y": 0.74,
+    },
+    "comic_book": {
+        "name": "Comic Book",
+        "description": "Bangers comic lettering in yellow with red pops",
+        "font_family": "Bangers",
+        "font_size": 42,
+        "font_color": "#FFE600",
+        "highlight_color": "#FF3B30",
+        "emphasis_color": "#FFFFFF",
+        "stroke_width": 5,
+        "uppercase": True,
+        "animation": "pop",
+        "max_words_per_line": 3,
+        "position_y": 0.74,
+    },
+    "marker": {
+        "name": "Marker",
+        "description": "Hand-drawn Permanent Marker for casual, vlog-style clips",
+        "font_family": "Permanent Marker",
+        "font_size": 34,
+        "highlight_color": "#FF4FA3",
+        "emphasis_color": "#FFE000",
+        "stroke_width": 3,
+        "max_words_per_line": 4,
+        "position_y": 0.78,
+    },
+    "bubble": {
+        "name": "Bubble",
+        "description": "Chunky rounded Luckiest Guy letters with a purple outline",
+        "font_family": "Luckiest Guy",
+        "font_size": 38,
+        "highlight_color": "#7CFC00",
+        "emphasis_color": "#FFD60A",
+        "stroke_color": "#3A0CA3",
+        "stroke_width": 5,
+        "uppercase": True,
+        "animation": "pop",
+        "max_words_per_line": 3,
+        "position_y": 0.74,
+    },
+    "clean_creator": {
+        "name": "Clean Creator",
+        "description": "Heavy Archivo Black in sentence case with a green highlight",
+        "font_family": "Archivo Black",
+        "font_size": 30,
+        "highlight_color": "#4ADE80",
+        "emphasis_color": "#4ADE80",
+        "stroke_width": 2,
+        "emoji": False,
+        "max_words_per_line": 4,
+        "position_y": 0.78,
+    },
+    "elegant": {
+        "name": "Elegant",
+        "description": "High-contrast DM Serif Display with a soft gold fade",
+        "font_family": "DM Serif Display",
+        "font_size": 36,
+        "highlight_color": "#F5C542",
+        "emphasis_color": "#F5C542",
+        "stroke_width": 1,
+        "animation": "fade",
+        "word_pop": False,
+        "emoji": False,
+        "max_words_per_line": 5,
+        "position_y": 0.80,
     },
 }
 

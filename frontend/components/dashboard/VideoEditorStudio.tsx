@@ -704,11 +704,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                     className={`font-black tracking-tight leading-tight transition-all duration-100 ${
                       captionConfig.uppercase ? 'uppercase' : ''
                     } ${
-                      captionConfig.animation === 'bounce'
-                        ? 'animate-bounce'
-                        : captionConfig.animation === 'pop'
-                        ? 'scale-105'
-                        : ''
+                      captionConfig.animation === 'pop' ? 'scale-105' : ''
                     }`}
                     style={{
                       fontFamily: captionConfig.fontFamily,
@@ -1231,7 +1227,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                     Kinetic Animation Style:
                   </label>
                   <div className="grid grid-cols-3 gap-2">
-                    {(['bounce', 'pop', 'karaoke', 'wave', 'glow'] as const).map(
+                    {(['pop', 'karaoke', 'wave', 'glow'] as const).map(
                       (anim) => (
                         <button
                           key={anim}

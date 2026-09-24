@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import os
 import tempfile
+from pathlib import Path
 from typing import Any
 
 from core.logging_config import get_logger
@@ -13,6 +14,41 @@ log = get_logger(__name__)
 
 CAPTION_SAFE_WIDTH = 0.90
 DEFAULT_WIN_SPAN_RATIO = 1.75
+# Bundled caption faces (SIL OFL / Apache 2.0), so styles render identically on
+# any host instead of depending on what fontconfig happens to have installed.
+FONTS_DIR = Path(__file__).resolve().parent.parent / "static" / "fonts"
+WATERMARK_PATH = Path(__file__).resolve().parent.parent / "static" / "watermark.png"
+
+
+def _escape_filter_value(value: str) -> str:
+    return value.replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
+
+
+def ass_filter(ass_path: str) -> str:
+    """FFmpeg ``ass`` filter for a file in the working directory, with the
+    bundled fonts available to libass."""
+    return f"ass={_escape_filter_value(Path(ass_path).name)}:fontsdir={_escape_filter_value(str(FONTS_DIR))}"
+
+
+def burn_filter_args(video_filters: list[str], enable_watermark: bool) -> list[str]:
+    """FFmpeg args applying ``video_filters`` to input 0, plus the watermark.
+
+    Place them after the source video's ``-i``. The graph is labelled
+    explicitly: chaining ``...,[1:v]overlay`` bound the watermark as the base
+    layer, so the burned clip came out at the watermark's 300x60 size.
+    """
+    chain = ",".join(video_filters)
+    if not enable_watermark:
+        return ["-vf", chain]
+    if not WATERMARK_PATH.exists():
+        log.warning("Watermark requested but file not found: %s", WATERMARK_PATH)
+        return ["-vf", chain]
+    graph = f"[0:v]{chain}[base];[base][1:v]overlay=x=W-w-10:y=10[v]"
+    return [
+        "-i", str(WATERMARK_PATH),
+        "-filter_complex", graph,
+        "-map", "[v]", "-map", "0:a?",
+    ]
 
 
 def ass_time(sec: float) -> str:
@@ -370,8 +406,6 @@ class _FFmpegHelper:
     """Wraps FFmpeg ASS-based burn-in with the standard encoding params used
     elsewhere in the codebase."""
 
-    WATERMARK_FILENAME = "watermark.png"
-
     def burn_ass(
         self,
         video_path: str,
@@ -410,44 +444,12 @@ class _FFmpegHelper:
         duration: float | None,
         enable_watermark: bool,
     ) -> list[str]:
-        from pathlib import Path
-
-        static_dir = Path(__file__).resolve().parent.parent / "static"
-        watermark_path = static_dir / self.WATERMARK_FILENAME
-        has_watermark = enable_watermark and watermark_path.exists()
-
-        inputs: list[str] = ["-ss", str(clip_start), "-i", video_path]
-        if has_watermark:
-            inputs.extend(["-i", str(watermark_path)])
-
-        time_args: list[str] = []
-        if duration:
-            time_args = ["-t", str(duration)]
-
-        ass_file = Path(ass_path).name
-        ass_escaped = ass_file.replace(":", "\\:")
-
-        vf_parts: list[str] = [f"ass={ass_escaped}"]
-        if has_watermark:
-            vf_parts.append("[1:v]overlay=x=W-w-10:y=10")
-
-        vf = ",".join(vf_parts)
-
-        if has_watermark:
-            return [
-                "ffmpeg", "-y",
-                *inputs, *time_args,
-                "-filter_complex", vf,
-                "-map", "0:a?",
-                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-                "-c:a", "aac", "-b:a", "128k",
-                "-movflags", "+faststart",
-                output_path,
-            ]
+        time_args: list[str] = ["-t", str(duration)] if duration else []
         return [
             "ffmpeg", "-y",
-            *inputs, *time_args,
-            "-vf", vf,
+            "-ss", str(clip_start), "-i", video_path,
+            *burn_filter_args([ass_filter(ass_path)], enable_watermark),
+            *time_args,
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",

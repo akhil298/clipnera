@@ -89,8 +89,10 @@ async def get_download_progress(project_id: str, user: CurrentUserDep):
 async def list_projects(user: CurrentUserDep):
     from clip.repository import ClipRepository
     from clip_generation.repository import ClipRepository as ClipGenRepository
+    from clip_generation.service import ClipService as ClipGenService
     from core.database import AsyncSessionLocal
 
+    clip_gen_service = ClipGenService()
     async with AsyncSessionLocal() as session:
         clip_repo = ClipRepository(session)
         clip_gen_repo = ClipGenRepository(session)
@@ -120,6 +122,7 @@ async def list_projects(user: CurrentUserDep):
                         "end_time": c.end_time,
                         "content_category": c.content_category,
                         "status": c.status,
+                        "poster_url": clip_gen_service.poster_url(c),
                         "created_at": c.created_at.isoformat() if c.created_at else None,
                     }
                     for c in clips

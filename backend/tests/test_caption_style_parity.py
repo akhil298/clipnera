@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from subtitle_styling.ass_generator import FONTS_DIR, ass_filter
 from subtitle_styling.export_styles import OUTPUT_PATH, render
 from subtitle_styling.model import LEGACY_STYLE_ALIASES, SubtitleStyleType
 from subtitle_styling.templates import (
@@ -18,7 +19,7 @@ from subtitle_styling.templates import (
 
 class TestTemplates:
     def test_expected_style_count(self) -> None:
-        assert len(CAPTION_TEMPLATES) == 20
+        assert len(CAPTION_TEMPLATES) == 27
 
     def test_every_template_is_fully_populated(self) -> None:
         for name in get_template_names():
@@ -80,3 +81,24 @@ class TestFrontendParity:
         content = OUTPUT_PATH.read_text(encoding="utf-8")
         for name in get_template_names():
             assert f'"{name}"' in content, f"{name} missing from frontend mirror"
+
+
+class TestBundledFonts:
+    def test_burn_filter_loads_bundled_fonts(self) -> None:
+        assert ass_filter("/tmp/work/captions.ass") == f"ass=captions.ass:fontsdir={FONTS_DIR}"
+
+    def test_bundled_faces_have_font_files(self) -> None:
+        """A face missing from static/fonts silently burns in the fallback font."""
+        bundled = {
+            "Anton": "Anton-Regular.ttf",
+            "Archivo Black": "ArchivoBlack-Regular.ttf",
+            "Bangers": "Bangers-Regular.ttf",
+            "Bebas Neue": "BebasNeue-Regular.ttf",
+            "DM Serif Display": "DMSerifDisplay-Regular.ttf",
+            "Luckiest Guy": "LuckiestGuy-Regular.ttf",
+            "Permanent Marker": "PermanentMarker-Regular.ttf",
+        }
+        for name in get_template_names():
+            family = get_template(name)["font_family"]
+            if family in bundled:
+                assert (FONTS_DIR / bundled[family]).is_file(), f"{name}: {family}"

@@ -258,6 +258,13 @@ class ClipService:
             log.warning("Presign failed: key=%s error=%s", key, exc)
             return None
 
+    def poster_url(self, clip: GeneratedClip, analysis: dict | None = None) -> str | None:
+        """Signed per read: the stored poster URL expires, the S3 key does not."""
+        if analysis is None:
+            analysis = self._loads(clip.analysis_json, {})
+        thumb_key = (analysis.get("s3_keys") or {}).get("thumbnail") if isinstance(analysis, dict) else None
+        return self._presign(clip.s3_bucket, thumb_key) or clip.poster_url
+
     async def export_clips_for_social(
         self,
         project_id: str,
@@ -1254,8 +1261,7 @@ class ClipService:
             "content_category": clip.content_category,
             # Signed per read: stored URLs expire, the S3 keys do not.
             "presigned_url": self._presign(clip.s3_bucket, clip.s3_key) or clip.presigned_url,
-            "poster_url": self._presign(clip.s3_bucket, (analysis.get("s3_keys") or {}).get("thumbnail"))
-            or clip.poster_url,
+            "poster_url": self.poster_url(clip, analysis),
             "local_path": clip.local_path,
             "status": clip.status,
             "subtitle_style_id": clip.subtitle_style_id,

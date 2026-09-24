@@ -237,7 +237,7 @@ const DEFAULT_CAPTION_CONFIG: CaptionConfig = {
   hasBgBox: true,
   bgBoxColor: '#000000',
   uppercase: true,
-  animation: 'bounce',
+  animation: 'pop',
   animationSpeed: 1.0,
   positionY: 78,
    emojisEnabled: true,

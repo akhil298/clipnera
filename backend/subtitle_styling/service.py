@@ -11,7 +11,7 @@ from typing import Any, Callable, Optional
 from core.logging_config import get_logger
 from core.exceptions import CustomException
 from video_processor.ffmpeg_service import FFmpegService
-from subtitle_styling.ass_generator import AssGenerator, build_ass_file
+from subtitle_styling.ass_generator import AssGenerator, ass_filter, build_ass_file, burn_filter_args
 from subtitle_styling.templates import get_template, get_template_info, get_template_names
 from subtitle_styling.phrase_segmenter import segment_phrases, segment_for_captions
 
@@ -199,38 +199,12 @@ class SubtitleStylingService:
         enable_watermark: bool,
         work_dir: str,
     ) -> list[str]:
-        static_dir = Path(__file__).resolve().parent.parent / "static"
-        watermark_path = static_dir / "watermark.png"
-        has_watermark = enable_watermark and watermark_path.exists()
-
         # No -ss: the input is already the trimmed clip.
-        inputs = ["-i", video_path]
-        if has_watermark:
-            inputs.extend(["-i", str(watermark_path)])
-
-        ass_file = Path(ass_path).name
-        ass_escaped = ass_file.replace(":", "\\:")
-
-        vf_parts = [f"ass={ass_escaped}"]
-        if has_watermark:
-            vf_parts.append("[1:v]overlay=x=W-w-10:y=10")
-        vf = ",".join(vf_parts)
-
-        if has_watermark:
-            return [
-                "ffmpeg", "-y",
-                *inputs, "-t", str(duration),
-                "-filter_complex", vf,
-                "-map", "0:a?",
-                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-                "-c:a", "aac", "-b:a", "128k",
-                "-movflags", "+faststart",
-                output_path,
-            ]
         return [
             "ffmpeg", "-y",
-            *inputs, "-t", str(duration),
-            "-vf", vf,
+            "-i", video_path,
+            *burn_filter_args([ass_filter(ass_path)], enable_watermark),
+            "-t", str(duration),
             "-c:v", "libx264", "-preset", "fast", "-crf", "23",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
@@ -268,11 +242,6 @@ class SubtitleStylingService:
             srt_path = self._generate_srt(subtitles or [], clip_start, output_dir=tmpdir)
             escaped_srt = os.path.basename(srt_path).replace(":", r"\:").replace("'", r"\'")
 
-            watermark_path = Path(__file__).resolve().parent.parent / "static" / "watermark.png"
-            has_watermark = enable_watermark and watermark_path.exists()
-            if enable_watermark and not has_watermark:
-                log.warning("Watermark requested but file not found: %s", watermark_path)
-
             filters = [f"subtitles={escaped_srt}:force_style='{filter_str}'"]
             if title_text:
                 safe_title = title_text.replace("'", r"\'").replace(":", r"\:")
@@ -282,19 +251,11 @@ class SubtitleStylingService:
                 )
 
             # No -ss: the input is already the trimmed clip.
-            inputs = ["-i", video_path]
-            if has_watermark:
-                inputs.extend(["-i", str(watermark_path)])
-                filters.insert(0, "[0:v]")
-                filters.append("[1:v]overlay=x=W-w-10:y=10")
-
-            filter_arg = "-filter_complex" if has_watermark else "-vf"
             cmd = [
                 "ffmpeg", "-y",
-                *inputs,
+                "-i", video_path,
+                *burn_filter_args(filters, enable_watermark),
                 "-t", str(duration),
-                filter_arg, ",".join(filters),
-                *(["-map", "0:a?"] if has_watermark else []),
                 "-c:v", "libx264", "-preset", "fast", "-crf", "23",
                 "-c:a", "aac", "-b:a", "128k",
                 "-movflags", "+faststart",
