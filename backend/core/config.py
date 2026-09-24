@@ -88,6 +88,12 @@ class BaseConfig(BaseSettings):
     WATERMARK_ENABLED: bool = True
     WATERMARK_PATH: str = "./backend/static/watermark.png"
 
+    # yt-dlp cookies. A browser name ("chrome", "firefox") reads them live from
+    # that browser and wins over the file; for servers, update_ec2.sh exports
+    # them locally and copies them to YOUTUBE_COOKIES_PATH.
+    YOUTUBE_COOKIES_BROWSER: str = ""
+    YOUTUBE_COOKIES_PATH: str = "~/.clipnera/youtube_cookies.txt"
+
 
 class DevelopmentConfig(BaseConfig):
     model_config = SettingsConfigDict(

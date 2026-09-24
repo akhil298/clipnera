@@ -96,11 +96,12 @@ class YouTubeService:
 
         Includes a browser-like User-Agent to reduce bot-detection and
         cookie support via two methods:
-        1. YOUTUBE_COOKIES_BROWSER: yt-dlp reads cookies directly from browser (recommended).
+        1. YOUTUBE_COOKIES_BROWSER: yt-dlp reads cookies directly from browser.
            Set to browser name, e.g. "chrome", "firefox", "edge".
-        2. YOUTUBE_COOKIES_PATH: path to a manually exported cookies.txt file.
+        2. YOUTUBE_COOKIES_PATH: path to an exported cookies.txt file
+           (default ~/.clipnera/youtube_cookies.txt, where update_ec2.sh puts it).
 
-        If neither is set, the project falls back to its bundled backend/youtube_cookies.txt file.
+        If neither resolves, a local backend/youtube_cookies.txt is used when present.
         """
         options: dict = {
             "quiet": True,
@@ -120,45 +121,35 @@ class YouTubeService:
             options["remote_components"] = ["ejs:github"]
             log.info(f"yt-dlp JavaScript runtime enabled: {deno_path}")
 
-        cookie_browser = os.environ.get("YOUTUBE_COOKIES_BROWSER")
-        if cookie_browser:
-            options["cookiesfrombrowser"] = (cookie_browser,)
-            log.info(f"YouTube cookies will be read from browser: {cookie_browser}")
+        if settings.YOUTUBE_COOKIES_BROWSER:
+            options["cookiesfrombrowser"] = (settings.YOUTUBE_COOKIES_BROWSER,)
+            log.info(f"YouTube cookies will be read from browser: {settings.YOUTUBE_COOKIES_BROWSER}")
             return options
 
-        cookie_path = os.environ.get("YOUTUBE_COOKIES_PATH")
-        backend_dir = Path(__file__).resolve().parent.parent
-        if cookie_path and Path(cookie_path).name.startswith(".env"):
-            log.warning("Ignoring invalid YOUTUBE_COOKIES_PATH pointing to an environment file")
-            cookie_path = None
-
-        if cookie_path:
-            configured_path = Path(cookie_path).expanduser()
-            if not configured_path.is_absolute():
-                backend_relative_path = backend_dir / configured_path
-                if backend_relative_path.exists():
-                    cookie_path = str(backend_relative_path)
-
-        if not cookie_path:
-            candidate_paths = [
-                backend_dir / "youtube_cookies.txt",
-                Path.cwd() / "youtube_cookies.txt",
-                backend_dir / ".." / "youtube_cookies.txt",
-            ]
-            for candidate in candidate_paths:
-                if candidate.exists():
-                    cookie_path = str(candidate.resolve())
-                    break
-
-        if cookie_path:
-            cookie_file = Path(cookie_path).expanduser()
-            if cookie_file.exists():
-                options["cookiefile"] = str(cookie_file.resolve())
-                log.info(f"YouTube cookies file loaded from {cookie_file.resolve()}")
-            else:
-                log.warning(f"YOUTUBE_COOKIES_PATH points to a missing file: {cookie_path}")
+        cookie_file = self._resolve_cookie_file()
+        if cookie_file:
+            options["cookiefile"] = str(cookie_file)
+            log.info(f"YouTube cookies file loaded from {cookie_file}")
+        else:
+            log.warning("No YouTube cookies file found; downloads may be blocked as a bot")
 
         return options
+
+    @staticmethod
+    def _resolve_cookie_file() -> Path | None:
+        """Configured YOUTUBE_COOKIES_PATH first, then the local-dev backend/youtube_cookies.txt."""
+        backend_dir = Path(__file__).resolve().parent.parent
+        candidates = [backend_dir / "youtube_cookies.txt"]
+
+        configured = Path(settings.YOUTUBE_COOKIES_PATH).expanduser()
+        if configured.name.startswith(".env"):
+            log.warning("Ignoring invalid YOUTUBE_COOKIES_PATH pointing to an environment file")
+        else:
+            if not configured.is_absolute():
+                configured = backend_dir / configured
+            candidates.insert(0, configured)
+
+        return next((path.resolve() for path in candidates if path.is_file()), None)
 
     def _content_type_from_path(self, path: str) -> str:
         """Determine content type from file extension."""
