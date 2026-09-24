@@ -191,6 +191,10 @@ class GeneratedClip(Base):
     start_time: Mapped[float] = mapped_column(Float, nullable=False)
     end_time: Mapped[float] = mapped_column(Float, nullable=False)
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    # Source-video span of the teaser played before the clip; null when the
+    # clip has none. duration_seconds includes it.
+    hook_start: Mapped[float | None] = mapped_column(Float, nullable=True)
+    hook_end: Mapped[float | None] = mapped_column(Float, nullable=True)
     score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     scores: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_category: Mapped[str | None] = mapped_column(String(100), nullable=True)

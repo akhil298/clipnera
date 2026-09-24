@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Callable
 
 from clients.services.s3 import S3
+from clip_generation.hook import Hook, locate_hook, on_output_timeline
 from clip_generation.model import ContentCategory, GeneratedClip, SocialPlatform, SOCIAL_PLATFORM_DEFAULTS
 from clip_generation.repository import ClipRepository
 from subtitle_styling.model import SubtitleStyle
@@ -213,6 +214,7 @@ class ClipService:
                 title_text=clip.title,
                 enable_watermark=burn_request.get("enable_watermark", True),
                 transcript_segments=transcript_segments,
+                hook=Hook.from_values(clip.hook_start, clip.hook_end),
             )
 
         s3_key = f"clips/{user_id}/{clip.project_id}/{clip_id}_burned.mp4"
@@ -336,6 +338,8 @@ class ClipService:
                         "title": clip.title,
                         "start_time": clip.start_time,
                         "end_time": clip.end_time,
+                        "hook_start": clip.hook_start,
+                        "hook_end": clip.hook_end,
                         "duration": max(0.0, min(clip.duration_seconds, float(platform_max_duration))),
                     }],
                     transcript_segments=clip_transcript,
@@ -367,6 +371,7 @@ class ClipService:
                             enable_watermark=watermark_enabled,
                             transcript_segments=clip_transcript,
                             ai_cues=ai_cues if enable_emoji else None,
+                            hook=Hook.from_values(rendered.get("hook_start"), rendered.get("hook_end")),
                         )
 
                         presigned_url = await self._store_render(
@@ -622,6 +627,11 @@ class ClipService:
             clip_copy["clip_id"] = clip_id
             start = float(clip_copy.get("start_time", clip_copy.get("start", 0.0)))
             end = float(clip_copy.get("end_time", clip_copy.get("end", start)))
+            # A re-cut keeps the hook the clip was saved with; a first cut finds
+            # the line the model quoted.
+            hook = Hook.from_values(clip_copy.get("hook_start"), clip_copy.get("hook_end")) or locate_hook(
+                str(clip_copy.get("hook_quote") or ""), transcript_segments, start, end,
+            )
 
             request = CutRequest(
                 source_path=video_path,
@@ -632,14 +642,16 @@ class ClipService:
                 aspect_ratios=ratios,
                 content_category=str(clip_copy.get("content_category", "unknown")),
                 transcript_segments=transcript_segments,
+                hook=hook,
             )
 
             tag = f"[CUT {index + 1}/{total}]"
             async with semaphore:
                 await tracker.mark_running(clip_id)
                 log.info(
-                    "%s START   %s  %.1fs -> %.1fs (%.1fs)",
+                    "%s START   %s  %.1fs -> %.1fs (%.1fs) | hook=%s",
                     tag, clip_id, start, end, max(0.0, end - start),
+                    f"{hook.start:.1f}s-{hook.end:.1f}s" if hook else "none",
                 )
                 cut_started = time.monotonic()
                 try:
@@ -693,7 +705,10 @@ class ClipService:
                 }
                 for ratio in ratios
             }
-            clip_copy["duration"] = result.duration
+            clip_copy["hook_start"] = hook.start if hook else None
+            clip_copy["hook_end"] = hook.end if hook else None
+            # The rendered file's length, teaser included.
+            clip_copy["duration"] = result.duration + (hook.duration if hook else 0.0)
             clip_copy["layout"] = result.layout
             clip_copy["reason"] = str(clip_copy.get("reason") or clip_copy.get("description") or "")
             return clip_copy
@@ -783,6 +798,8 @@ class ClipService:
                     start_time=start,
                     end_time=end,
                     duration_seconds=float(clip.get("duration", end - start)),
+                    hook_start=clip.get("hook_start"),
+                    hook_end=clip.get("hook_end"),
                     score=float(clip.get("score", 0.0)),
                     scores=_json_dumps(clip.get("scores", {})),
                     content_category=clip.get("content_category", ContentCategory.UNKNOWN.value),
@@ -982,17 +999,18 @@ class ClipService:
         start: float,
         end: float,
         ai_cues: list[dict[str, Any]] | None = None,
+        hook: Hook | None = None,
     ) -> list[dict[str, Any]]:
         """Word-level captions on the *clip's own* timeline, for the editor.
 
         The rendered mp4 starts at zero while `transcript` carries absolute
         source timestamps, so a player comparing its currentTime against the
         stored transcript never matches a single word. Rebasing belongs here,
-        once, next to the burner's own rebasing - not in each client.
+        once, next to the burner's own rebasing - not in each client. The
+        teaser's words come first, as they do in the file.
         """
         from subtitle_styling.emoji_annotator import annotate_caption_words
 
-        duration = max(0.0, end - start)
         words: list[dict[str, Any]] = []
         for segment in transcript:
             raw_words = segment.get("words") or [
@@ -1010,11 +1028,16 @@ class ClipService:
                     continue
                 words.append({
                     "text": text,
-                    "start": round(min(max(0.0, w_start - start), duration), 3),
-                    "end": round(min(max(0.0, w_end - start), duration), 3),
+                    "start": w_start,
+                    "end": w_end,
                     "speaker": segment.get("speaker") or "Speaker",
                 })
 
+        origin, words = on_output_timeline(words, start, end, hook)
+        duration = max(0.0, end - origin)
+        for word in words:
+            word["start"] = round(min(max(0.0, word["start"] - origin), duration), 3)
+            word["end"] = round(min(max(0.0, word["end"] - origin), duration), 3)
         words.sort(key=lambda w: w["start"])
         emoji_by_index, emphasis_indices = annotate_caption_words(words, ai_cues)
         for index, word in enumerate(words):
@@ -1250,6 +1273,8 @@ class ClipService:
             "start_time": clip.start_time,
             "end_time": clip.end_time,
             "duration_seconds": clip.duration_seconds,
+            "hook_start": clip.hook_start,
+            "hook_end": clip.hook_end,
             "timestamps": {
                 "start": clip.start_time,
                 "end": clip.end_time,
@@ -1270,7 +1295,10 @@ class ClipService:
             "transcript": transcript,
             # Absolute-time transcript above, clip-relative words below: the
             # player needs the latter, the burner needs the former.
-            "captions": self._clip_captions(transcript, clip.start_time, clip.end_time, ai_cues),
+            "captions": self._clip_captions(
+                transcript, clip.start_time, clip.end_time, ai_cues,
+                hook=Hook.from_values(clip.hook_start, clip.hook_end),
+            ),
             "visual_analysis": self._loads(clip.visual_analysis, []),
             "bounding_boxes": self._loads(clip.bounding_boxes, []),
             "crop_tracking": self._loads(clip.crop_tracking, {}),

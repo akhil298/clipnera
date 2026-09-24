@@ -133,6 +133,8 @@ class GeneratedClipResponse(BaseModel):
     start_time: float
     end_time: float
     duration_seconds: float
+    hook_start: Optional[float] = None
+    hook_end: Optional[float] = None
     timestamps: dict[str, float]
     reason: str = ""
     score: float

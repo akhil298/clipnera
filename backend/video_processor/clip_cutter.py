@@ -30,6 +30,7 @@ import cv2
 import numpy as np
 
 from core.exceptions import CustomException
+from clip_generation.hook import Hook
 from core.logging_config import get_logger
 from video_processor.face_detection import Face, FaceDetector
 from video_processor.geometry import (
@@ -94,6 +95,8 @@ class CutRequest:
     aspect_ratios: list[str]
     content_category: str = "unknown"
     transcript_segments: list[dict[str, Any]] = field(default_factory=list)
+    # Teaser played before the clip, inside [start, end) in source seconds.
+    hook: Hook | None = None
 
     @property
     def duration(self) -> float:
@@ -462,18 +465,38 @@ class ClipCutter:
     ) -> None:
         from video_processor.ffmpeg_service import FFmpegService
 
+        ffmpeg = FFmpegService()
         target_width, target_height = output_dimensions(aspect_ratio)
-        await FFmpegService().crop_with_tracking(
-            input_path=request.source_path,
-            output_path=str(output_path),
-            start_time=request.start,
-            duration=request.duration,
-            crop_tracking=tracking,
-            target_width=target_width,
-            target_height=target_height,
-            source_width=source_width,
-            source_height=source_height,
-        )
+
+        async def render_span(start: float, end: float, path: Path) -> None:
+            await ffmpeg.crop_with_tracking(
+                input_path=request.source_path,
+                output_path=str(path),
+                start_time=start,
+                duration=end - start,
+                crop_tracking=_tracking_from(tracking, start),
+                target_width=target_width,
+                target_height=target_height,
+                source_width=source_width,
+                source_height=source_height,
+            )
+
+        hook = request.hook
+        if hook is None:
+            await render_span(request.start, request.end, output_path)
+        else:
+            # Both parts go through the same encoder settings, so they join by
+            # stream copy and the clip is never encoded a second time.
+            teaser_path = output_path.with_suffix(".hook.mp4")
+            body_path = output_path.with_suffix(".body.mp4")
+            try:
+                await render_span(hook.start, hook.end, teaser_path)
+                await render_span(request.start, request.end, body_path)
+                await ffmpeg.concat_segments([str(teaser_path), str(body_path)], str(output_path))
+            finally:
+                teaser_path.unlink(missing_ok=True)
+                body_path.unlink(missing_ok=True)
+
         if not output_path.exists() or output_path.stat().st_size == 0:
             raise CustomException(
                 message=f"Render produced an empty file for {aspect_ratio}",
@@ -487,6 +510,16 @@ def _tracking_timestamps(request: CutRequest) -> list[float]:
     count = max(2, int(request.duration * TRACKING_FPS))
     step = request.duration / max(1, count - 1)
     return [request.start + index * step for index in range(count)]
+
+
+def _tracking_from(tracking: list[dict[str, Any]], start: float) -> list[dict[str, Any]]:
+    """Tracking for a render starting at ``start``, keeping the point in effect then.
+
+    The renderer clamps earlier points to its first frame, so passing them all
+    would pin the opening crop to wherever the clip itself began.
+    """
+    earlier = [point for point in tracking if point["timestamp"] <= start]
+    return earlier[-1:] + [point for point in tracking if point["timestamp"] > start]
 
 
 def _decode_frames(frames: list[tuple[float, bytes]]) -> Iterator[tuple[float, np.ndarray]]:

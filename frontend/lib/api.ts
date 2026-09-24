@@ -164,6 +164,9 @@ export interface BackendClip {
   start_time: number;
   end_time: number;
   duration_seconds: number;
+  /** Source-video span of the teaser played before the clip; null when none. */
+  hook_start: number | null;
+  hook_end: number | null;
   timestamps: { start: number; end: number; duration: number };
   reason: string;
   score: number;
@@ -258,7 +261,9 @@ const DEFAULT_CAPTION_CONFIG: CaptionConfig = {
  * is never inside a word window measured in source-video seconds.
  */
 function buildTranscriptSegments(clip: BackendClip): TranscriptSegment[] {
-  const clipStart = clip.start_time || 0;
+  // A teaser ahead of the clip pushes the clip's own words later in the file.
+  const hookDuration = clip.hook_start != null && clip.hook_end != null ? clip.hook_end - clip.hook_start : 0;
+  const clipStart = (clip.start_time || 0) - hookDuration;
   const SPEAKER_COLOR = '#38bdf8';
 
   if (clip.captions && clip.captions.length > 0) {

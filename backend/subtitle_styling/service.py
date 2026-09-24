@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from clip_generation.hook import Hook, on_output_timeline
 from core.logging_config import get_logger
 from core.exceptions import CustomException
 from video_processor.ffmpeg_service import FFmpegService
@@ -59,7 +60,12 @@ class SubtitleStylingService:
         enable_watermark: bool = True,
         transcript_segments: Optional[list[dict]] = None,
         ai_cues: Optional[list[dict[str, Any]]] = None,
+        hook: Optional[Hook] = None,
     ) -> str:
+        # FFmpeg runs with cwd set to a scratch dir (for the bare caption
+        # filename), so a relative clip path like generated_clips/... would not
+        # resolve there.
+        video_path = str(Path(video_path).resolve())
         # Extract animation_speed and emoji_collection from custom_config if provided
         animation_speed = 1.0
         emoji_collection = None
@@ -75,11 +81,11 @@ class SubtitleStylingService:
             return await self._burn_with_ass(
                 video_path, clip_start, clip_end, style_type, title_text,
                 enable_watermark, transcript_segments, ai_cues,
-                animation_speed, emoji_collection, _style_overrides(custom_config),
+                animation_speed, emoji_collection, _style_overrides(custom_config), hook,
             )
         return await self._burn_with_srt(
             video_path, clip_start, clip_end, style_type, custom_config,
-            subtitles, title_text, enable_watermark,
+            subtitles, title_text, enable_watermark, hook,
         )
 
     @staticmethod
@@ -100,6 +106,7 @@ class SubtitleStylingService:
         animation_speed: float = 1.0,
         emoji_collection: Optional[str] = None,
         style_overrides: Optional[dict[str, Any]] = None,
+        hook: Optional[Hook] = None,
     ) -> str:
         template_name = style_type
         if not get_template_names().__contains__(style_type):
@@ -119,6 +126,11 @@ class SubtitleStylingService:
         # while clip_start/clip_end are absolute positions in the source video.
         # The offset belongs in the ASS timings only; applying it to FFmpeg as
         # well seeks past the end of the clip and loses subtitle sync entirely.
+        # A teaser ahead of the clip moves where the file starts in source time;
+        # rebasing against that origin keeps every word in sync.
+        clip_start, words = on_output_timeline(
+            self._extract_words_for_ass(transcript_segments), clip_start, clip_end, hook,
+        )
         duration = max(0.0, clip_end - clip_start)
         if duration <= 0:
             raise CustomException(
@@ -132,7 +144,7 @@ class SubtitleStylingService:
             # set here, to dodge Windows drive-letter escaping in the filter
             # string, so the .ass file has to be written into this directory.
             ass_path = build_ass_file(
-                transcript_words=self._extract_words_for_ass(transcript_segments),
+                transcript_words=words,
                 clip_start=clip_start,
                 clip_end=clip_end,
                 style_id=template_name,
@@ -221,6 +233,7 @@ class SubtitleStylingService:
         subtitles: Optional[list[dict]],
         title_text: Optional[str],
         enable_watermark: bool,
+        hook: Optional[Hook] = None,
     ) -> str:
         """Burn SRT subtitles using a force_style preset.
 
@@ -232,6 +245,7 @@ class SubtitleStylingService:
         if custom_config:
             config.update(custom_config)
 
+        clip_start, subtitles = on_output_timeline(subtitles or [], clip_start, clip_end, hook)
         duration = clip_end - clip_start
         if duration <= 0:
             raise ValueError("Invalid clip duration")
@@ -239,7 +253,7 @@ class SubtitleStylingService:
         with tempfile.TemporaryDirectory() as tmpdir:
             output_path = os.path.join(tmpdir, f"burned_{Path(video_path).stem}.mp4")
             filter_str = self._build_ass_filter(config)
-            srt_path = self._generate_srt(subtitles or [], clip_start, output_dir=tmpdir)
+            srt_path = self._generate_srt(subtitles, clip_start, output_dir=tmpdir)
             escaped_srt = os.path.basename(srt_path).replace(":", r"\:").replace("'", r"\'")
 
             filters = [f"subtitles={escaped_srt}:force_style='{filter_str}'"]

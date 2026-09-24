@@ -33,11 +33,11 @@ MIN_CLIP_SPACING_SECONDS = 15.0
 # Moments separated by less than this are one continuous passage.
 CONTIGUOUS_GAP_SECONDS = 1.0
 
-# Output cap per window. A moment costs roughly 120 tokens of JSON, so this
+# Output cap per window. A moment costs roughly 150 tokens of JSON, so this
 # covers a full window's worth with room for a reasoning model's preamble.
 # Too low and the reply is truncated mid-JSON, which parses to nothing and
 # silently empties the window.
-WINDOW_MAX_OUTPUT_TOKENS = 2600
+WINDOW_MAX_OUTPUT_TOKENS = 3000
 # Most moments to request from any single window. Asking one window for a long
 # list produces padding and risks truncating the reply; a higher target is met
 # by having more windows, not longer answers.
@@ -59,6 +59,7 @@ MOMENTS_JSON_SCHEMA: dict[str, Any] = {
                     "end_time": {"type": "number", "minimum": 0},
                     "title": {"type": "string"},
                     "reason": {"type": "string"},
+                    "hook_quote": {"type": "string"},
                     "score": _SCORE,
                     "scores": {
                         "type": "object",
@@ -79,7 +80,7 @@ MOMENTS_JSON_SCHEMA: dict[str, Any] = {
                     },
                     "speakers": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["start_time", "end_time", "title", "reason", "score", "scores", "speakers"],
+                "required": ["start_time", "end_time", "title", "reason", "hook_quote", "score", "scores", "speakers"],
                 "additionalProperties": False,
             },
         },
@@ -293,6 +294,11 @@ REQUIREMENTS:
 - End each clip after the thought's payoff: the answer, conclusion, or punchline. Never end on
   a setup line that promises what comes next ("Let's begin.", "Here's how.", "The first step is easy.").
 - Each clip must make sense on its own, without the surrounding video.
+- "hook_quote" is the single most gripping line inside the moment, copied word for word from the
+  transcript: a surprising claim, a punchline, a bold number, or an emotional peak that makes a
+  viewer need to see the rest. It is played as a teaser before the clip starts, so it must be
+  5-15 words (about 2-5 seconds spoken), must come from the middle or end of the moment, never
+  its opening line, and must make sense heard on its own. Use "" if no line qualifies.
 - Do not invent content outside the transcript.
 - "score" and every value in "scores" is a number from 0 to 1.
 
@@ -300,7 +306,7 @@ Transcript:
 {window.text}
 
 JSON schema:
-{{"moments":[{{"start_time":0.0,"end_time":0.0,"title":"...","reason":"...","score":0.0,"scores":{{"relevance":0.0,"importance":0.0,"emotional_impact":0.0,"information_value":0.0,"standalone_context":0.0,"social_media_value":0.0,"current_relevance":0.0}},"speakers":["Speaker 1"]}}]}}
+{{"moments":[{{"start_time":0.0,"end_time":0.0,"title":"...","reason":"...","hook_quote":"...","score":0.0,"scores":{{"relevance":0.0,"importance":0.0,"emotional_impact":0.0,"information_value":0.0,"standalone_context":0.0,"social_media_value":0.0,"current_relevance":0.0}},"speakers":["Speaker 1"]}}]}}
 """
         raw_response = None
         try:
@@ -380,6 +386,7 @@ JSON schema:
             "score": self._normalize_score(item.get("score"), default=0.5),
             "title": str(item.get("title", "")),
             "reason": str(item.get("reason", "")),
+            "hook_quote": str(item.get("hook_quote", "")).strip(),
             "scores": {
                 key: self._normalize_score(scores.get(key), default=0.0)
                 for key in (

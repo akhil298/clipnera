@@ -394,22 +394,29 @@ class FFmpegService:
         return proc.returncode, stderr.decode("utf-8", errors="ignore")
 
     async def concat_segments(self, segment_paths: list[str], output_path: str) -> None:
+        """Join segments end to end by stream copy.
+
+        The segments must share codecs and encoding parameters, as renders from
+        the same source and settings do; nothing is re-encoded.
+        """
         list_file = output_path + ".concat.txt"
         with open(list_file, "w", encoding="utf-8") as f:
             for path in segment_paths:
                 safe_path = path.replace("'", "'\\''")
                 f.write(f"file '{safe_path}'\n")
 
-        encoder_args = await self._get_encoder_args()
         cmd = [
-            "ffmpeg", "-y", "-f", "concat", "-safe", "0",
+            "ffmpeg", "-y", "-nostdin", "-f", "concat", "-safe", "0",
             "-i", list_file,
-            *encoder_args,
-            "-c:a", "aac", "-b:a", "128k",
+            "-c", "copy",
+            "-movflags", "+faststart",
             output_path,
         ]
-        proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        _, stderr = await proc.communicate()
+        try:
+            proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            _, stderr = await proc.communicate()
+        finally:
+            Path(list_file).unlink(missing_ok=True)
         if proc.returncode != 0:
             err = stderr.decode("utf-8", errors="ignore")[-200:]
             raise CustomException(message=f"Concat failed: {err}", code="CONCAT_FAILED", status_code=500)
