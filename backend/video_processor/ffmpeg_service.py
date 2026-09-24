@@ -402,7 +402,9 @@ class FFmpegService:
         list_file = output_path + ".concat.txt"
         with open(list_file, "w", encoding="utf-8") as f:
             for path in segment_paths:
-                safe_path = path.replace("'", "'\\''")
+                # The concat demuxer resolves relative entries against the list
+                # file's own directory, not the cwd, so write absolute paths.
+                safe_path = str(Path(path).resolve()).replace("'", "'\\''")
                 f.write(f"file '{safe_path}'\n")
 
         cmd = [
