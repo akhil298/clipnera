@@ -250,6 +250,12 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
     return matchesSearch && matchesCategory;
   });
 
+  // Processing cards are 16:9 while completed ones are tall, so each gets its own grid
+  const projectSections = [
+    { key: 'processing', label: 'Processing', items: filteredProjects.filter((p) => p.processingStatus === 'processing') },
+    { key: 'completed', label: 'Completed', items: filteredProjects.filter((p) => p.processingStatus !== 'processing') },
+  ].filter((section) => section.items.length > 0);
+
   // Calculate folder stats
   const totalClips = projects.reduce((acc, p) => acc + (p.clips?.length || 0), 0);
   const avgVirality = Math.round(
@@ -525,12 +531,18 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
           </button>
         </div>
       ) : (
+        projectSections.map((section) => (
+        <section key={section.key} className="space-y-3">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400">
+            {section.label} <span className="font-mono text-neutral-500">({section.items.length})</span>
+          </h2>
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredProjects.map((project) => {
+          {section.items.map((project) => {
             const isSelected = project.id === activeProject?.id;
             const displayName = project.folderName || project.title;
             const isEditing = renamingProjectId === project.id;
             const colorClass = getFolderColorClass(project.folderColor);
+            const progress = localProcessingProgress[project.id] ?? project.processingProgress ?? 0;
 
             return (
           <div
@@ -541,7 +553,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                 : project.processingStatus === 'processing'
                   ? 'bg-neutral-900 border-neutral-800 hover:border-neutral-700'
                   : 'bg-neutral-900/80 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-900'
-            } ${(project.processingStatus === 'processing') ? 'ring-1 ring-amber-500/40' : ''}`}
+            } ${(project.processingStatus === 'processing') ? 'ring-1 ring-amber-500/40 aspect-video self-start' : ''}`}
           >
             {/* Thumbnail background during processing */}
             {project.processingStatus === 'processing' && project.posterUrl && (
@@ -551,21 +563,21 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
               />
             )}
 
-            {/* Permanent dark overlay so UI stays readable over thumbnail */}
-            {project.processingStatus === 'processing' && (
-              <div className="absolute inset-0 bg-black/80 pointer-events-none" />
-            )}
-
-            {/* Loading overlay: dark gradient sweep from left to right */}
+            {/* Loading overlay: the loaded part (left) lightens toward the
+                progress edge, the part still to load (right) stays dark */}
             {project.processingStatus === 'processing' && (
               <>
                 <div
-                  className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/80 to-black/60 pointer-events-none transition-all duration-500 ease-out"
-                  style={{ width: `${localProcessingProgress[project.id] ?? project.processingProgress ?? 0}%`, left: 0 }}
+                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-black/60 to-black/20 pointer-events-none transition-all duration-500 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+                <div
+                  className="absolute inset-y-0 right-0 bg-black/80 pointer-events-none transition-all duration-500 ease-out"
+                  style={{ left: `${progress}%` }}
                 />
                 <div
                   className="absolute top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-amber-400 shadow-lg animate-pulse z-10"
-                  style={{ left: `calc(${localProcessingProgress[project.id] ?? project.processingProgress ?? 0}% - 8px)` }}
+                  style={{ left: `calc(${progress}% - 8px)` }}
                 />
               </>
             )}
@@ -585,7 +597,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
             <div className="w-full h-1 bg-neutral-800">
               <div
                 className="h-full bg-amber-500 transition-all duration-300 ease-out"
-                style={{ width: `${localProcessingProgress[project.id] ?? project.processingProgress ?? 0}%` }}
+                style={{ width: `${progress}%` }}
               />
             </div>
           )}
@@ -615,7 +627,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                       {project.processingStatus === 'processing' && (
                         <span className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-[10px] font-semibold text-amber-300 flex items-center gap-1 animate-pulse">
                           <Sparkles className="w-3 h-3 text-amber-400" />
-                          <span>Processing {localProcessingProgress[project.id] ?? project.processingProgress ?? 0}%</span>
+                          <span>Processing {progress}%</span>
                         </span>
                       )}
                       {/* Reachable without scrolling to the footer while a run is live */}
@@ -796,7 +808,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                   <div className="flex items-center gap-2">
                     <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">
                       {project.processingStatus === 'processing'
-                        ? `Processing ${localProcessingProgress[project.id] ?? project.processingProgress ?? 0}%`
+                        ? `Processing ${progress}%`
                         : `Avg ${Math.round(project.clips.reduce((acc, c) => acc + c.viralityScore, 0) / (project.clips.length || 1))}/100`}
                     </span>
                     {project.processingStatus === 'processing' && onCancelPipeline && (
@@ -867,6 +879,8 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
             );
           })}
         </div>
+        </section>
+        ))
       )}
 
       {/* 5. NEW FOLDER MODAL */}

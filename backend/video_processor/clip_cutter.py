@@ -48,16 +48,16 @@ from video_processor.speaker_tracking import (
 
 log = get_logger(__name__)
 
-# Frames sampled per second of clip. Two is enough to follow a speaker turn
-# while keeping one 60s clip to ~120 detections.
-SAMPLE_FPS = 2.0
-MAX_SAMPLED_FRAMES = 120
+# Seconds between frames sent to face detection, for the whole clip whatever
+# its length. A cap on frame count used to stretch this on longer clips, so a
+# speaker could move for a second or more before the crop saw it.
+SAMPLE_INTERVAL_SECONDS = 0.5
 # Face detection runs on a downscaled copy; boxes are normalised so they map
 # back to full resolution exactly.
 DETECT_WIDTH = 640
-# Crop points emitted per second of output.
+# Crop targets computed per second of output, twice the sampling rate so the
+# smoothed path has a point between every pair of detections.
 TRACKING_FPS = 4.0
-MAX_TRACKING_POINTS = 240
 # Exponential smoothing factor, applied forward then backward for zero phase
 # lag. Lower is calmer.
 SMOOTHING_ALPHA = 0.22
@@ -249,7 +249,7 @@ class ClipCutter:
         One process per clip rather than one per frame; at 8 frames a clip the
         old per-frame approach spawned 80 processes for a 10-clip project.
         """
-        fps = min(SAMPLE_FPS, MAX_SAMPLED_FRAMES / max(1e-6, request.duration))
+        fps = 1.0 / SAMPLE_INTERVAL_SECONDS
         cmd = [
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
             "-ss", f"{request.start:.3f}",
@@ -373,7 +373,7 @@ class ClipCutter:
             }]
 
         strategy = self._strategy_for(layout)
-        count = max(2, min(MAX_TRACKING_POINTS, int(request.duration * TRACKING_FPS)))
+        count = max(2, int(request.duration * TRACKING_FPS))
         step = request.duration / max(1, count - 1)
 
         timestamps = [request.start + index * step for index in range(count)]

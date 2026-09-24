@@ -13,6 +13,7 @@ is the convention FFmpeg's ``crop`` filter expects.
 from __future__ import annotations
 
 import math
+from bisect import bisect_right
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -209,53 +210,34 @@ def union_box(boxes: list[Box]) -> Box | None:
     return Box(x=left, y=top, width=max(1e-6, right - left), height=max(1e-6, bottom - top))
 
 
-# FFmpeg's expression evaluator rejects graphs beyond a few thousand characters
-# ("Failed to configure input pad on Parsed_crop_0"), which silently demoted long
-# clips to a centred crop. Measured failure begins between 2.4k and 3.7k chars, so
-# the path is subsampled to stay well inside that.
-MAX_CROP_EXPRESSION_CHARS = 2000
+# Crop positions written per second of output: at or above common frame rates,
+# so the crop moves on every frame and a pan glides instead of stepping.
+CROP_PATH_RATE = 30.0
 
 
-def _subsample_points(points: list[tuple[float, "Box"]], limit: int) -> list[tuple[float, "Box"]]:
-    """Evenly thin a tracking path, always keeping the first and last point."""
-    if len(points) <= limit or limit < 2:
-        return points
-    step = (len(points) - 1) / (limit - 1)
-    thinned = [points[min(len(points) - 1, round(i * step))] for i in range(limit)]
-    thinned[-1] = points[-1]
-    deduped: list[tuple[float, "Box"]] = []
-    for point in thinned:
-        if not deduped or point[0] > deduped[-1][0]:
-            deduped.append(point)
-    return deduped
-
-
-def crop_tracking_expressions(
+def crop_tracking_path(
     crop_tracking: list[dict[str, Any]],
     source_width: int,
     source_height: int,
     crop_width: int,
     crop_height: int,
-) -> tuple[str, str]:
-    """Build FFmpeg ``crop`` x/y expressions that pan between tracking points.
+    duration: float,
+    rate: float = CROP_PATH_RATE,
+) -> list[tuple[float, int, int]]:
+    """Top-left crop origin ``(t, x, y)`` in pixels across the whole clip.
 
     Timestamps must already be relative to the start of the output clip.
+    Tracking points are interpolated linearly, held flat before the first and
+    after the last, and clamped so the crop never leaves the frame. Only
+    changes are kept, so a still subject yields a single entry.
 
-    The path is expressed as a flat sum of clamped linear ramps rather than
-    nested ``if()`` calls:
-
-        x(t) = x0 + sum_i slope_i * clip(t - t_i, 0, dt_i)
-
-    Each term contributes its segment's change once ``t`` passes it and nothing
-    before, which reproduces piecewise-linear interpolation with no nesting. The
-    nested form grew one level per point and FFmpeg failed to parse it beyond
-    roughly a minute of tracking, falling back to a centred crop.
+    The path used to be encoded as one FFmpeg crop expression, whose parser
+    fails past a few thousand characters; that forced long clips down to ~64
+    points. Emitting positions for FFmpeg's ``sendcmd`` has no such ceiling,
+    so every tracking point survives into the render.
     """
     max_x = max(0, source_width - crop_width)
     max_y = max(0, source_height - crop_height)
-    static = (str(max_x // 2), str(max_y // 2))
-    if not crop_tracking:
-        return static
 
     points: list[tuple[float, Box]] = []
     for item in crop_tracking:
@@ -263,39 +245,30 @@ def crop_tracking_expressions(
         if box is not None:
             points.append((float(item.get("timestamp", 0.0)), box))
     if not points:
-        return static
+        return [(0.0, max_x // 2, max_y // 2)]
     points.sort(key=lambda item: item[0])
 
-    # Roughly 31 characters per segment term; keep both axes inside the budget.
-    max_points = max(2, MAX_CROP_EXPRESSION_CHARS // 31)
-    if len(points) > max_points:
-        original = len(points)
-        points = _subsample_points(points, max_points)
-        log.info(
-            "Subsampled crop tracking from %d to %d point(s) to stay within FFmpeg's expression limit",
-            original, len(points),
-        )
+    times = [t for t, _ in points]
+    xs = [box.x * source_width for _, box in points]
+    ys = [box.y * source_height for _, box in points]
 
-    def axis_expression(axis: str) -> str:
-        scale = source_width if axis == "x" else source_height
-        limit = max_x if axis == "x" else max_y
+    def value_at(t: float, values: list[float], limit: int) -> int:
+        if t <= times[0]:
+            value = values[0]
+        elif t >= times[-1]:
+            value = values[-1]
+        else:
+            index = bisect_right(times, t)
+            t0, t1 = times[index - 1], times[index]
+            ratio = (t - t0) / max(t1 - t0, 1e-6)
+            value = values[index - 1] + (values[index] - values[index - 1]) * ratio
+        return int(round(min(limit, max(0.0, value))))
 
-        def value_at(box: Box) -> float:
-            return (box.x if axis == "x" else box.y) * scale
-
-        base = value_at(points[0][1])
-        if len(points) == 1 or limit <= 0:
-            return f"clip({base:.3f},0,{limit})"
-
-        terms: list[str] = [f"{base:.3f}"]
-        for (start_time, start_box), (end_time, end_box) in zip(points, points[1:]):
-            span = max(end_time - start_time, 1e-3)
-            delta = value_at(end_box) - value_at(start_box)
-            if abs(delta) < 1e-6:
-                continue
-            slope = delta / span
-            terms.append(f"{slope:+.5f}*clip(t-{start_time:.3f},0,{span:.3f})")
-
-        return f"clip({''.join(terms)},0,{limit})"
-
-    return axis_expression("x"), axis_expression("y")
+    path: list[tuple[float, int, int]] = []
+    frames = max(1, math.ceil(max(0.0, duration) * rate))
+    for index in range(frames + 1):
+        t = index / rate
+        x, y = value_at(t, xs, max_x), value_at(t, ys, max_y)
+        if not path or (x, y) != path[-1][1:]:
+            path.append((round(t, 3), x, y))
+    return path

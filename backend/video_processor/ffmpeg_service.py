@@ -3,16 +3,19 @@ from __future__ import annotations
 import asyncio
 import os
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Optional
 
-from video_processor.geometry import crop_tracking_expressions, target_crop_size
+from video_processor.geometry import crop_tracking_path, target_crop_size
 
 from core.logging_config import get_logger
 from core.exceptions import CustomException
 
 log = get_logger(__name__)
+
+CROP_COMMANDS_FILE = "crop.cmd"
 
 
 class FFmpegService:
@@ -232,12 +235,17 @@ class FFmpegService:
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
-        x_expression, y_expression = crop_tracking_expressions(
-            relative_tracking, source_width, source_height, crop_width, crop_height,
+        path = crop_tracking_path(
+            relative_tracking, source_width, source_height, crop_width, crop_height, duration,
         )
+        _, start_x, start_y = path[0]
+        # The crop starts at the path's first position and sendcmd moves it
+        # every frame after. The command file is referenced by bare name with
+        # cwd set to its directory, which avoids escaping drive letters and
+        # colons inside the filter string.
         video_filter = (
-            f"crop={crop_width}:{crop_height}:"
-            f"{x_expression.replace(',', chr(92) + ',')}:{y_expression.replace(',', chr(92) + ',')},"
+            f"sendcmd=f={CROP_COMMANDS_FILE},"
+            f"crop={crop_width}:{crop_height}:{start_x}:{start_y},"
             f"scale={target_width}:{target_height}:flags=lanczos"
         )
         log.debug("Crop filter graph", extra={"video_filter": video_filter})
@@ -280,9 +288,15 @@ class FFmpegService:
             output_file.unlink(missing_ok=True)
 
         encoder_args = await self._get_encoder_args()
-        returncode, stderr = await self._run_ffmpeg(
-            input_path, output_path, start_time, duration, video_filter, encoder_args
-        )
+        with tempfile.TemporaryDirectory() as workdir:
+            Path(workdir, CROP_COMMANDS_FILE).write_text(
+                "".join(f"{t:.3f} crop x {x}, crop y {y};\n" for t, x, y in path),
+                encoding="utf-8",
+            )
+            returncode, stderr = await self._run_ffmpeg(
+                str(Path(input_path).resolve()), str(output_file.resolve()),
+                start_time, duration, video_filter, encoder_args, cwd=workdir,
+            )
 
         if returncode != 0:
             log.warning(
@@ -315,6 +329,7 @@ class FFmpegService:
                 "end_time": round(start_time + duration, 3),
                 "crop": f"{crop_width}x{crop_height}",
                 "tracking_points": len(crop_tracking),
+                "crop_positions": len(path),
             },
         )
 
@@ -356,6 +371,7 @@ class FFmpegService:
         duration: float,
         video_filter: str,
         encoder_args: list[str],
+        cwd: str | None = None,
     ) -> tuple[int, str]:
         cmd = [
             "ffmpeg", "-y",
@@ -369,7 +385,7 @@ class FFmpegService:
         ]
         log.debug("Running FFmpeg", extra={"cmd": " ".join(cmd)})
         proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd
         )
         _, stderr = await proc.communicate()
         return proc.returncode, stderr.decode("utf-8", errors="ignore")

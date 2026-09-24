@@ -6,7 +6,7 @@ from video_processor.geometry import (
     Box,
     crop_around,
     crop_covering,
-    crop_tracking_expressions,
+    crop_tracking_path,
     normalize_box,
     target_crop_size,
 )
@@ -75,23 +75,19 @@ class TestNormalizeBox:
         assert normalize_box(None) is None
 
 
-class TestCropTrackingExpressions:
+class TestCropTrackingPath:
     def test_static_when_no_tracking(self) -> None:
-        x, y = crop_tracking_expressions([], 1920, 1080, 608, 1080)
-        assert x == str((1920 - 608) // 2) and y == "0"
+        assert crop_tracking_path([], 1920, 1080, 608, 1080, 5.0) == [(0.0, (1920 - 608) // 2, 0)]
 
     def test_interpolates_between_points(self) -> None:
         tracking = [
             {"timestamp": 0.0, "bbox": Box(0.0, 0.0, 0.3, 1.0).as_dict()},
             {"timestamp": 2.0, "bbox": Box(0.5, 0.0, 0.3, 1.0).as_dict()},
         ]
-        x, _ = crop_tracking_expressions(tracking, 1920, 1080, 608, 1080)
-        # Flat sum of clamped ramps; the old nested if() form exceeded FFmpeg's
-        # expression limit. Interpolation accuracy is covered in
-        # tests/test_crop_expressions.py.
-        assert "clip(" in x and "if(" not in x
+        path = crop_tracking_path(tracking, 1920, 1080, 608, 1080, 2.0)
+        # Accuracy is covered in tests/test_crop_path.py.
+        assert path[0][1] == 0 and path[-1][1] == 960
 
     def test_clamps_within_frame(self) -> None:
         tracking = [{"timestamp": 0.0, "bbox": Box(0.99, 0.0, 0.3, 1.0).as_dict()}]
-        x, _ = crop_tracking_expressions(tracking, 1920, 1080, 608, 1080)
-        assert f",0,{1920 - 608})" in x
+        assert crop_tracking_path(tracking, 1920, 1080, 608, 1080, 1.0) == [(0.0, 1920 - 608, 0)]
