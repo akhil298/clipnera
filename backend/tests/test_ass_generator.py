@@ -82,6 +82,31 @@ class TestAssGenerator:
         assert "Amazing Clip!" in result
         assert "Title" in result
 
+    @staticmethod
+    def _style(ass: str, name: str) -> list[str]:
+        line = next(l for l in ass.splitlines() if l.startswith(f"Style: {name},"))
+        return line.split(",")
+
+    def test_title_style_overrides_size_and_position(self, words):
+        default = self._style(AssGenerator().build_ass(words, 0.0, 5.0, title="T"), "Title")
+        moved = self._style(
+            AssGenerator().build_ass(
+                words, 0.0, 5.0, title="T",
+                style_overrides={"title_font_size": 40, "title_position_y": 0.2},
+            ),
+            "Title",
+        )
+        assert int(moved[2]) < int(default[2])
+        assert int(moved[-2]) == round(0.2 * 1920)
+
+    def test_caption_style_overrides_size(self, words):
+        default = self._style(AssGenerator().build_ass(words, 0.0, 5.0, style_id="mrbeast"), "Caption")
+        smaller = self._style(
+            AssGenerator().build_ass(words, 0.0, 5.0, style_id="mrbeast", style_overrides={"font_size": 30}),
+            "Caption",
+        )
+        assert int(smaller[2]) < int(default[2])
+
     def test_build_ass_filters_words_outside_clip(self, words):
         gen = AssGenerator()
         result = gen.build_ass(words, 2.0, 4.0, style_id="default")

@@ -127,8 +127,9 @@ class AssGenerator:
         ai_cues: list[dict[str, Any]] | None = None,
         animation_speed: float = 1.0,
         emoji_collection: str | None = None,
+        style_overrides: dict[str, Any] | None = None,
     ) -> str:
-        template = get_template(style_id)
+        template = {**get_template(style_id), **(style_overrides or {})}
 
         # Templates are authored against a 1080-wide vertical frame. Scaling by
         # height made the same template 1.78x larger on 9:16 (h=1920) than on
@@ -194,8 +195,10 @@ class AssGenerator:
                 f"&H00000000,0,0,0,0,100,100,0,0,1,{glow_outline},0,5,{margin_h},{margin_h},0,1"
             )
 
-        hook_font_size = ass_font_size(height * 0.044)
-        title_margin_v = round(height * 0.07)
+        # Same width-based scale as the captions, so the editor preview can
+        # size both from one rule.
+        hook_font_size = ass_font_size(template["title_font_size"] * width / 1080.0)
+        title_margin_v = round(template["title_position_y"] * height)
         title_margin_h = round(width * 0.1)
         title_box_pad = max(6, round(height * 0.009))
         title_shadow = max(2, round(height * 0.0032))
@@ -464,6 +467,7 @@ def build_ass_file(
     output_path: str | None = None,
     animation_speed: float = 1.0,
     emoji_collection: str | None = None,
+    style_overrides: dict[str, Any] | None = None,
 ) -> str:
     """Generate an ASS subtitle file and return its path."""
     generator = AssGenerator()
@@ -478,6 +482,7 @@ def build_ass_file(
         ai_cues=ai_cues,
         animation_speed=animation_speed,
         emoji_collection=emoji_collection,
+        style_overrides=style_overrides,
     )
 
     if output_path:

@@ -10,6 +10,7 @@ from content_intelligence.transcript_windows import (
     build_transcript_windows,
     deduplicate_moments,
 )
+from content_intelligence.word_snapper import snap_clip_to_sentences
 from core.logging_config import get_logger
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
@@ -29,6 +30,8 @@ MIN_CLIPS = 5
 # Two kept clips should not start within this many seconds of each other, so a
 # model that fixates on one passage cannot fill the whole result set.
 MIN_CLIP_SPACING_SECONDS = 15.0
+# Moments separated by less than this are one continuous passage.
+CONTIGUOUS_GAP_SECONDS = 1.0
 
 # Output cap per window. A moment costs roughly 120 tokens of JSON, so this
 # covers a full window's worth with room for a reasoning model's preamble.
@@ -149,6 +152,10 @@ class HighlightDetector:
         candidates = self._fit_durations(
             candidates, transcript_segments, duration, min_clip_duration, max_clip_duration,
         )
+        if source == "llm":
+            # Back-to-back moments are one passage the model chopped up to hit
+            # its count; rejoined, the clip carries the whole thought.
+            candidates = self._merge_overlapping(candidates, min_clip_duration, max_clip_duration)
         candidates = deduplicate_moments(candidates)
         candidates = self._select_spread(candidates, max_clips, duration)
 
@@ -270,17 +277,21 @@ Topics: {', '.join(research.get('topics', []))}
 Current relevance: {research.get('current_relevance', '')}
 
 REQUIREMENTS:
-- Return {max_moments} moments. Fewer only if the excerpt genuinely cannot support that many.
+- Return up to {max_moments} moments. A complete moment beats a quota: return fewer rather
+  than padding the list with fragments.
 - LENGTH IS MANDATORY: end_time - start_time must be between {min_clip_duration:.0f} and {max_clip_duration:.0f} seconds.
   A single transcript line is far too short. Span as many consecutive lines as it takes,
   typically {min_clip_duration:.0f}-{max_clip_duration:.0f} seconds of dialogue. Check the arithmetic before answering.
 - Timestamps are absolute seconds within the full video, copied exactly from the lines below.
 - Every moment must lie inside {window.start:.3f}s to {window.end:.3f}s.
-- Spread the moments across the whole excerpt, not just its opening. Find one near each of
-  these points: {anchors}. Move off a point only if there is nothing worth clipping near it.
-- Moments must not overlap each other.
-- Start each clip on a hook: a question, a claim, a surprise, or the first line of a story.
-- End each clip on a resolution, not mid-sentence.
+- Spread the moments across the whole excerpt, not just its opening. Look near each of
+  these points: {anchors}. Skip a point if no complete moment lives there.
+- Moments must not overlap each other, and must never be consecutive slices of one
+  explanation or story: if a thought runs past one clip's end, extend that clip instead.
+- Start each clip where a thought starts: a question, a claim, a surprise, or the first line
+  of a story. Never open on a line that continues the previous one ("Not...", "And...", "So...").
+- End each clip after the thought's payoff: the answer, conclusion, or punchline. Never end on
+  a setup line that promises what comes next ("Let's begin.", "Here's how.", "The first step is easy.").
 - Each clip must make sense on its own, without the surrounding video.
 - Do not invent content outside the transcript.
 - "score" and every value in "scores" is a number from 0 to 1.
@@ -421,6 +432,10 @@ JSON schema:
                 if end - start < floor:
                     start = max(0.0, end - floor)
 
+            start, end = snap_clip_to_sentences(
+                start, end, transcript_segments,
+                min_duration=floor, max_duration=ceiling,
+            )
             start, end = self._snap_boundaries(
                 start, end, transcript_segments, duration,
                 min_duration=floor, max_duration=ceiling,
@@ -731,7 +746,7 @@ JSON schema:
             next_start = next_c.get("start_time", 0)
             merged_end = max(curr_end, next_c.get("end_time", 0))
             merged_duration = merged_end - current.get("start_time", 0)
-            if next_start <= curr_end and merged_duration <= max_clip_duration:
+            if next_start <= curr_end + CONTIGUOUS_GAP_SECONDS and merged_duration <= max_clip_duration:
                 log.debug(
                     "Merged overlapping clips",
                     extra={

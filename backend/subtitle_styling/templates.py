@@ -43,6 +43,10 @@ TEMPLATE_DEFAULTS: dict[str, Any] = {
     "glow": False,
     "max_words_per_line": 4,
     "position_y": 0.80,
+    # The static headline pinned above the captions: size on the same
+    # 1080-wide scale as font_size, top margin as a fraction of frame height.
+    "title_font_size": 56,
+    "title_position_y": 0.07,
 }
 
 CAPTION_TEMPLATES: dict[str, dict[str, Any]] = {

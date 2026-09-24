@@ -100,6 +100,8 @@ def render() -> str:
             f"      emojisEnabled: {_ts(bool(template['emoji']))},",
             f"      maxWordsPerLine: {_ts(template['max_words_per_line'])},",
             f"      shadowIntensity: {_ts(0.8 if template['shadow'] else 0.0)},",
+            f"      titleFontSize: {_ts(template['title_font_size'])},",
+            f"      titlePositionY: {_ts(round(template['title_position_y'] * 100))},",
             "    },",
             "  },",
         ]

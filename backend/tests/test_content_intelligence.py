@@ -215,3 +215,15 @@ class TestClipCount:
 
     def test_explicit_setting_wins(self):
         assert HighlightDetector._max_clips(3600.0, 30.0, explicit=3) == 3
+
+
+@pytest.mark.asyncio
+async def test_highlighter_merges_back_to_back_moments():
+    detector = HighlightDetector()
+    candidates = [
+        {"start_time": 0.0, "end_time": 23.84, "score": 0.4, "reasons": ["a"]},
+        {"start_time": 24.04, "end_time": 45.46, "score": 0.5, "reasons": ["b"]},
+        {"start_time": 45.6, "end_time": 67.02, "score": 0.4, "reasons": ["c"]},
+    ]
+    merged = detector._merge_overlapping(candidates, 20.0, 60.0)
+    assert [(c["start_time"], c["end_time"]) for c in merged] == [(0.0, 45.46), (45.6, 67.02)]

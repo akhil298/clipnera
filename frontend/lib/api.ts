@@ -244,6 +244,8 @@ const DEFAULT_CAPTION_CONFIG: CaptionConfig = {
   emojiCollection: 'skull_fire',
   maxWordsPerLine: 6,
   shadowIntensity: 0.8,
+  titleFontSize: 56,
+  titlePositionY: 7,
 };
 
 /**
@@ -498,6 +500,8 @@ export const clipApi = {
          emoji_collection: captionConfig.emojiCollection,
          max_words_per_line: captionConfig.maxWordsPerLine,
         shadow_intensity: captionConfig.shadowIntensity,
+        title_font_size: captionConfig.titleFontSize,
+        title_position_y: captionConfig.titlePositionY,
       } : undefined,
     }),
   }),

@@ -83,6 +83,10 @@ export interface CaptionConfig {
   emojiCollection?: string;
   maxWordsPerLine: number;
   shadowIntensity: number;
+  // Static clip headline: size on the same 1080-wide scale as fontSize, top
+  // offset as a percentage of frame height.
+  titleFontSize: number;
+  titlePositionY: number;
 }
 
 export interface AutoZoomConfig {

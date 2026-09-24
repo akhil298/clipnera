@@ -17,6 +17,31 @@ from subtitle_styling.phrase_segmenter import segment_phrases, segment_for_capti
 
 log = get_logger(__name__)
 
+# Editor custom_config key -> (template key, min, max, scale). Ranges mirror the
+# editor's sliders; positions arrive as a percentage of frame height.
+_STYLE_OVERRIDE_FIELDS: dict[str, tuple[str, float, float, float]] = {
+    "font_size": ("font_size", 8, 72, 1.0),
+    "position_y": ("position_y", 20, 90, 0.01),
+    "title_font_size": ("title_font_size", 24, 96, 1.0),
+    "title_position_y": ("title_position_y", 2, 40, 0.01),
+}
+
+
+def _style_overrides(custom_config: Optional[dict]) -> dict[str, float]:
+    """Template overrides for the size/position values the editor lets users set.
+
+    Without these the burner used the template's own values whatever the
+    sliders said, so the export never matched the preview.
+    """
+    overrides: dict[str, float] = {}
+    for key, (template_key, low, high, scale) in _STYLE_OVERRIDE_FIELDS.items():
+        try:
+            value = float((custom_config or {})[key])
+        except (KeyError, TypeError, ValueError):
+            continue
+        overrides[template_key] = min(high, max(low, value)) * scale
+    return overrides
+
 class SubtitleStylingService:
     def __init__(self) -> None:
         self._ffmpeg = FFmpegService()
@@ -45,12 +70,12 @@ class SubtitleStylingService:
                 except (ValueError, TypeError):
                     animation_speed = 1.0
             emoji_collection = custom_config.get("emoji_collection")
-        
+
         if self._is_template_style(style_type) and transcript_segments is not None:
             return await self._burn_with_ass(
                 video_path, clip_start, clip_end, style_type, title_text,
                 enable_watermark, transcript_segments, ai_cues,
-                animation_speed, emoji_collection,
+                animation_speed, emoji_collection, _style_overrides(custom_config),
             )
         return await self._burn_with_srt(
             video_path, clip_start, clip_end, style_type, custom_config,
@@ -74,6 +99,7 @@ class SubtitleStylingService:
         ai_cues: Optional[list[dict[str, Any]]] = None,
         animation_speed: float = 1.0,
         emoji_collection: Optional[str] = None,
+        style_overrides: Optional[dict[str, Any]] = None,
     ) -> str:
         template_name = style_type
         if not get_template_names().__contains__(style_type):
@@ -116,6 +142,7 @@ class SubtitleStylingService:
                 ai_cues=ai_cues,
                 animation_speed=animation_speed,
                 emoji_collection=emoji_collection,
+                style_overrides=style_overrides,
                 output_path=os.path.join(tmpdir, "captions.ass"),
             )
 

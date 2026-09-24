@@ -58,6 +58,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: true,
       maxWordsPerLine: 4,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   hormozi: {
@@ -82,6 +84,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: true,
       maxWordsPerLine: 3,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   mrbeast: {
@@ -106,6 +110,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: true,
       maxWordsPerLine: 3,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   tiktok: {
@@ -130,6 +136,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: true,
       maxWordsPerLine: 4,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   impact: {
@@ -154,6 +162,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: true,
       maxWordsPerLine: 2,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   comic: {
@@ -178,6 +188,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: true,
       maxWordsPerLine: 3,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   neon: {
@@ -202,6 +214,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: false,
       maxWordsPerLine: 4,
       shadowIntensity: 0.0,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   cyberpunk: {
@@ -226,6 +240,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: false,
       maxWordsPerLine: 3,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   sunset: {
@@ -250,6 +266,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: true,
       maxWordsPerLine: 4,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   pastel: {
@@ -274,6 +292,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: true,
       maxWordsPerLine: 5,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   luxury: {
@@ -298,6 +318,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: false,
       maxWordsPerLine: 5,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   minimal: {
@@ -322,6 +344,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: false,
       maxWordsPerLine: 6,
       shadowIntensity: 0.0,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   podcast: {
@@ -346,6 +370,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: false,
       maxWordsPerLine: 5,
       shadowIntensity: 0.0,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   news: {
@@ -370,6 +396,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: false,
       maxWordsPerLine: 7,
       shadowIntensity: 0.0,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   documentary: {
@@ -394,6 +422,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: false,
       maxWordsPerLine: 7,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   bold_captions: {
@@ -418,6 +448,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: false,
       maxWordsPerLine: 4,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   karaoke_yellow: {
@@ -442,6 +474,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: false,
       maxWordsPerLine: 5,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   typewriter: {
@@ -466,6 +500,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: false,
       maxWordsPerLine: 6,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   tiny: {
@@ -490,6 +526,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: false,
       maxWordsPerLine: 7,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
   micro: {
@@ -514,6 +552,8 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: false,
       maxWordsPerLine: 9,
       shadowIntensity: 0.0,
+      titleFontSize: 56,
+      titlePositionY: 7,
     },
   },
 };

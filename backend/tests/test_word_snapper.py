@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from content_intelligence.word_snapper import snap_clip_to_words, snap_clip_to_segments
+from content_intelligence.word_snapper import snap_clip_to_sentences, snap_clip_to_segments, snap_clip_to_words
 
 
 class TestSnapClipToWords:
@@ -85,3 +85,41 @@ class TestSnapClipToSegments:
     def test_short_result_fallback(self, segments):
         result = snap_clip_to_segments(0.0, 1.0, segments, 25.0, min_duration=10.0)
         assert result == (0.0, 1.0)
+
+
+class TestSnapClipToSentences:
+    # The transcript behind a clip that opened on "Not for one hour" and
+    # stopped on the setup line before its payoff.
+    @pytest.fixture
+    def segments(self):
+        return [
+            {"start": 19.64, "end": 23.64, "text": "Imagine speaking English before anything else."},
+            {"start": 24.04, "end": 27.68, "text": "Not for one hour, just five minutes."},
+            {"start": 27.68, "end": 32.08, "text": "It sounds too simple,"},
+            {"start": 32.52, "end": 35.60, "text": "but that is why most people never try it."},
+            {"start": 35.60, "end": 38.04, "text": "Minute one, talk about what you see"},
+            {"start": 38.64, "end": 41.00, "text": "around your room."},
+        ]
+
+    def test_start_mid_sentence_moves_to_sentence_start(self, segments):
+        start, _ = snap_clip_to_sentences(33.0, 41.0, segments)
+        assert start == 27.68
+
+    def test_continuation_opener_takes_previous_sentence(self, segments):
+        start, _ = snap_clip_to_sentences(24.04, 32.08, segments)
+        assert start == 19.64
+
+    def test_end_mid_sentence_extends_to_sentence_end(self, segments):
+        _, end = snap_clip_to_sentences(27.68, 36.0, segments)
+        assert end == 41.0
+
+    def test_overrun_pulls_end_back_to_last_fitting_sentence(self, segments):
+        start, end = snap_clip_to_sentences(27.68, 36.0, segments, max_duration=10.0)
+        assert (start, end) == (27.68, 35.6)
+
+    def test_unpunctuated_transcript_is_left_alone(self):
+        segments = [
+            {"start": 0.0, "end": 4.0, "text": "no punctuation here"},
+            {"start": 4.0, "end": 8.0, "text": "or here either"},
+        ]
+        assert snap_clip_to_sentences(2.0, 6.0, segments) == (2.0, 6.0)

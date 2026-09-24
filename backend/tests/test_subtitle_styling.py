@@ -43,3 +43,16 @@ async def test_color_to_ass():
     service = SubtitleStylingService()
     assert service._color_to_ass("#FFFFFF") == "FFFFFFFF"
     assert service._color_to_ass("#00FFCC") == "FFCCFF00"
+
+
+def test_style_overrides_map_editor_config_onto_template_keys():
+    from subtitle_styling.service import _style_overrides
+
+    overrides = _style_overrides({
+        "font_size": 30, "position_y": 75, "title_font_size": 500, "title_position_y": "12",
+        "font_color": "#fff",
+    })
+    assert overrides == {
+        "font_size": 30.0, "position_y": 0.75, "title_font_size": 96.0, "title_position_y": 0.12,
+    }
+    assert _style_overrides(None) == {}

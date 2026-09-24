@@ -75,7 +75,13 @@ export const VideoEditorStudio: React.FC<VideoEditorStudioProps> = (props) => {
     );
   }
 
-  return <VideoEditorStudioContent {...props} clip={props.clip} />;
+  // The content seeds its editable state (transcript, captions, overlays) from
+  // the clip once, on mount. Keying by clip remounts it when a different clip
+  // is opened, and again when a summary clip from the project list (no
+  // transcript or video URL) is replaced by the full record; otherwise the
+  // editor kept the empty summary and showed "No transcript yet".
+  const detailKey = props.clip.presignedUrl ? 'full' : 'summary';
+  return <VideoEditorStudioContent key={`${props.clip.id}:${detailKey}`} {...props} clip={props.clip} />;
 };
 
 const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
@@ -164,28 +170,26 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
 
-  // Caption sizes in CaptionConfig are authored against a 1080px-tall frame
-  // (that is how the backend templates define them). The preview stage is a few
-  // hundred pixels tall, so text has to be scaled down by the same ratio or the
-  // preview shows captions roughly twice the size the export will burn in.
-  const CAPTION_REFERENCE_HEIGHT = 1080;
-  const [stageHeight, setStageHeight] = useState(0);
+  // Caption and title sizes in CaptionConfig are authored against a 1080px-wide
+  // frame, and the burner scales them by frame width. Scaling the preview by
+  // height instead showed 9:16 text ~1.8x larger than the export burns in.
+  const CAPTION_REFERENCE_WIDTH = 1080;
+  const [stageWidth, setStageWidth] = useState(0);
 
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage || typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(([entry]) => {
-      setStageHeight(entry.contentRect.height);
+      setStageWidth(entry.contentRect.width);
     });
     observer.observe(stage);
-    setStageHeight(stage.getBoundingClientRect().height);
+    setStageWidth(stage.getBoundingClientRect().width);
     return () => observer.disconnect();
   }, []);
 
-  const previewScale = stageHeight > 0 ? stageHeight / CAPTION_REFERENCE_HEIGHT : 0.3;
+  const previewScale = stageWidth > 0 ? stageWidth / CAPTION_REFERENCE_WIDTH : 0.3;
   const captionFontPx = Math.max(9, captionConfig.fontSize * previewScale);
-  // Matches the ASS Title style, which is sized at 4.4% of frame height.
-  const titleFontPx = Math.max(9, stageHeight * 0.044) || 14;
+  const titleFontPx = Math.max(9, captionConfig.titleFontSize * previewScale);
 
   useEffect(() => {
     lastTimeRef.current = performance.now();
@@ -653,10 +657,13 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
               </div>
             )}
 
-            {/* Static Title Layer — one sentence, pinned to the top for the
+            {/* Static Title Layer — one sentence, pinned near the top for the
                 whole clip. Mirrors the ASS "Title" style in the burned export. */}
             {safeClip.title?.trim() && (
-              <div className="absolute inset-x-4 top-[7%] z-30 pointer-events-none flex justify-center text-center">
+              <div
+                className="absolute inset-x-4 z-30 pointer-events-none flex justify-center text-center"
+                style={{ top: `${captionConfig.titlePositionY}%` }}
+              >
                 <p
                   className="px-2.5 py-1.5 rounded-lg bg-black/45 backdrop-blur-[2px] font-extrabold leading-snug text-white"
                   style={{
@@ -997,7 +1004,13 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                             promptUpgrade(`The ${style.brandName} caption style`);
                             return;
                           }
-                          setCaptionConfig({ ...config });
+                          // The title is not part of a caption look, so a
+                          // style switch keeps the user's title placement.
+                          setCaptionConfig({
+                            ...config,
+                            titleFontSize: captionConfig.titleFontSize,
+                            titlePositionY: captionConfig.titlePositionY,
+                          });
                           syncChangesToParent();
                         }}
                         aria-pressed={isActive}
@@ -1116,6 +1129,48 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                         setCaptionConfig({
                           ...captionConfig,
                           shadowIntensity: Number(e.target.value),
+                        })
+                      }
+                      className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Title Size & Title Position */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-neutral-400 mb-1">
+                      <span>Title Size</span>
+                      <span className="font-mono">{captionConfig.titleFontSize}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={24}
+                      max={96}
+                      value={captionConfig.titleFontSize}
+                      onChange={(e) =>
+                        setCaptionConfig({
+                          ...captionConfig,
+                          titleFontSize: Number(e.target.value),
+                        })
+                      }
+                      className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between text-xs text-neutral-400 mb-1">
+                      <span>Title Pos (Y)</span>
+                      <span className="font-mono">{captionConfig.titlePositionY}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={2}
+                      max={40}
+                      value={captionConfig.titlePositionY}
+                      onChange={(e) =>
+                        setCaptionConfig({
+                          ...captionConfig,
+                          titlePositionY: Number(e.target.value),
                         })
                       }
                       className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
