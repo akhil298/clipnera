@@ -12,8 +12,10 @@ from typing import Any, AsyncIterator, Callable
 
 from clients.services.s3 import S3
 from clip_generation.hook import Hook, locate_hook, on_output_timeline
+from hook_transitions.resolver import ClipContext, TransitionSpec, hook_text_from, resolve_transition
 from clip_generation.model import ContentCategory, GeneratedClip, SocialPlatform, SOCIAL_PLATFORM_DEFAULTS
 from clip_generation.repository import ClipRepository
+from hook_transitions.schema import HookTransitionConfig
 from subtitle_styling.model import SubtitleStyle
 from content_intelligence.service import ContentIntelligenceService
 from core.config import get_settings
@@ -113,6 +115,27 @@ def _mb(path: str | Path) -> float:
 
 
 @asynccontextmanager
+async def s3_scratch_copy(bucket: str, key: str, filename: str) -> AsyncIterator[str]:
+    """Yield a local copy of one S3 object for a single render, deleted on exit.
+
+    ``filename`` must be unique per render: the burner names its output after
+    its input, so a shared name would let two concurrent renders collide.
+    """
+    scratch = Path(tempfile.mkdtemp(prefix="clipnera-render-"))
+    path = scratch / filename
+    started = time.monotonic()
+    try:
+        await asyncio.to_thread(S3().download_file, bucket, key, str(path))
+        log.info(
+            "[S3] FETCHED  %s  %.1fMB in %.1fs  <- s3://%s/%s",
+            filename, _mb(path), time.monotonic() - started, bucket, key,
+        )
+        yield str(path)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+@asynccontextmanager
 async def clip_source(clip: GeneratedClip) -> AsyncIterator[str]:
     """Yield a local copy of a cut clip, fetched from S3, for one render.
 
@@ -125,21 +148,40 @@ async def clip_source(clip: GeneratedClip) -> AsyncIterator[str]:
             return
         raise CustomException(message="Clip video is not stored in S3", code="VIDEO_MISSING", status_code=404)
 
-    scratch = Path(tempfile.mkdtemp(prefix="clipnera-render-"))
-    # Named after the clip: the burner names its output after its input, so a
-    # shared name would let two concurrent renders overwrite each other.
-    path = scratch / f"{clip.id}.mp4"
-    bucket = clip.s3_bucket or settings.S3_BUCKET_NAME
-    started = time.monotonic()
-    try:
-        await asyncio.to_thread(S3().download_file, bucket, clip.s3_key, str(path))
-        log.info(
-            "[S3] FETCHED  clip=%s  %.1fMB in %.1fs  <- s3://%s/%s",
-            clip.id, _mb(path), time.monotonic() - started, bucket, clip.s3_key,
+    async with s3_scratch_copy(clip.s3_bucket or settings.S3_BUCKET_NAME, clip.s3_key, f"{clip.id}.mp4") as path:
+        yield path
+
+
+@asynccontextmanager
+async def project_source(project: Any) -> AsyncIterator[str]:
+    """Yield the project's source video: the local download, else a copy from S3.
+
+    The local file does not survive a redeploy or a move to another host, while
+    the upload to S3 does.
+    """
+    if project.local_path and Path(project.local_path).exists():
+        yield project.local_path
+        return
+    if not project.s3_key:
+        raise CustomException(
+            message="Source video is no longer available. Re-upload the video to export this size.",
+            code="VIDEO_MISSING",
+            status_code=404,
         )
-        yield str(path)
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
+    async with s3_scratch_copy(
+        project.s3_bucket or settings.S3_BUCKET_NAME, project.s3_key, f"source_{project.id}{Path(project.s3_key).suffix}",
+    ) as path:
+        yield path
+
+
+def stored_cut_key(clip: GeneratedClip, ratio: str) -> str | None:
+    """S3 key of the clip's cut at ``ratio``, if the pipeline rendered that size."""
+    try:
+        analysis = json.loads(clip.analysis_json or "{}")
+    except (TypeError, ValueError):
+        return None
+    keys = analysis.get("s3_keys") if isinstance(analysis, dict) else None
+    return keys.get(ratio) if isinstance(keys, dict) else None
 
 
 def _sanitize_str(s: str | None) -> str | None:
@@ -215,6 +257,7 @@ class ClipService:
                 enable_watermark=burn_request.get("enable_watermark", True),
                 transcript_segments=transcript_segments,
                 hook=Hook.from_values(clip.hook_start, clip.hook_end),
+                transition=self.hook_transition_for(clip, burn_request.get("hook_transition")),
             )
 
         s3_key = f"clips/{user_id}/{clip.project_id}/{clip_id}_burned.mp4"
@@ -272,6 +315,8 @@ class ClipService:
         project_id: str,
         user_id: str,
         platforms: list[str],
+        clip_ids: list[str] | None = None,
+        aspect_ratio: str | None = None,
         style_type: str | None = None,
         custom_config: dict | None = None,
         max_clips: int | None = None,
@@ -280,139 +325,253 @@ class ClipService:
         watermark_enabled: bool = True,
         burn_subtitles: bool = True,
         progress_callback: Callable[[str, int, str | None], None] | None = None,
-        animation_speed: float = 1.0,
+        animation_speed: float | None = None,
+        hook_transition: HookTransitionConfig | None = None,
     ) -> dict:
+        """Render the chosen clips at the chosen size, captioned and watermarked as asked.
+
+        Each render starts from the cut the pipeline already stored in S3 for
+        that aspect ratio; only a size the pipeline never rendered is re-cut
+        from the source video.
+        """
         project = await self._get_project(project_id, user_id)
-        video_path = project.local_path
-        if not video_path or not Path(video_path).exists():
-            raise CustomException(message="Video file not found on disk", code="VIDEO_MISSING", status_code=404)
+        clips = await self._export_selection(project_id, user_id, clip_ids, max_clips)
+        targets = [
+            (platform, aspect_ratio or SOCIAL_PLATFORM_DEFAULTS[platform.value]["aspect_ratio"])
+            for platform in (self._validate_platform(name) for name in platforms)
+        ]
 
-        async with AsyncSessionLocal() as session:
-            repo = ClipRepository(session)
-            clips = await repo.list_clips(project_id, user_id)
+        # The editor sends its own speed inside custom_config, which must win
+        # over the request-level default.
+        caption_config = {
+            **({"animation_speed": animation_speed} if animation_speed else {}),
+            **(custom_config or {}),
+        }
+        if not enable_emoji:
+            caption_config["emojis_enabled"] = False
 
-        if not clips:
-            raise CustomException(message="No clips found for project", code="NO_CLIPS", status_code=404)
+        fallback_transcript: list[dict[str, Any]] = []
+        if burn_subtitles and not any(clip.transcript for clip in clips):
+            async with project_source(project) as source:
+                fallback_transcript = await self._transcribe_if_missing(project_id, source, progress_callback)
 
-        sorted_clips = sorted(clips, key=lambda c: c.score, reverse=True)
-        if max_clips:
-            sorted_clips = sorted_clips[:max_clips]
-
-        transcript_segments = []
-        for clip in sorted_clips:
-            if clip.transcript:
-                transcript_segments = json.loads(clip.transcript) if clip.transcript else []
-                break
-        if not transcript_segments:
-            transcript_segments = await self._transcribe_if_missing(project_id, video_path, progress_callback)
-
-        from subtitle_styling.service import SubtitleStylingService
-        styling = SubtitleStylingService()
-
+        recuts = await self._recut_missing_ratios(project, clips, {ratio for _, ratio in targets}, progress_callback)
         exported_clips: list[dict] = []
-        total_exports = len(sorted_clips) * len(platforms)
-        completed = 0
-
-        for clip in sorted_clips:
-            clip_transcript = json.loads(clip.transcript) if clip.transcript else transcript_segments
-
-            for platform_name in platforms:
-                platform = self._validate_platform(platform_name)
-                platform_defaults = SOCIAL_PLATFORM_DEFAULTS[platform.value]
-                aspect_ratio = platform_defaults["aspect_ratio"]
-                effective_style = style_type or platform_defaults["subtitle_style"]
-                platform_max_duration = max_duration_override or platform_defaults.get("max_duration", 60)
-
-                if progress_callback:
+        total_exports = len(clips) * len(targets)
+        try:
+            for clip in clips:
+                for platform, ratio in targets:
                     await self._notify(
                         progress_callback,
-                        f"Exporting {platform.value} for clip {clip.title[:40]}...",
-                        int(completed / max(1, total_exports) * 100),
+                        f"Exporting {platform.value} {ratio} for clip {clip.title[:40]}...",
+                        int(len(exported_clips) / max(1, total_exports) * 100),
+                    )
+                    s3_key = f"social/{user_id}/{project_id}/{clip.id}_{platform.value}_{ratio.replace(':', 'x')}.mp4"
+                    transition = self.hook_transition_for(clip, hook_transition)
+                    async with self._export_cut(clip, ratio, recuts) as cut_path:
+                        rendered_path = await self._render_export(
+                            clip, cut_path,
+                            style_type=style_type or SOCIAL_PLATFORM_DEFAULTS[platform.value]["subtitle_style"],
+                            caption_config=caption_config,
+                            burn_subtitles=burn_subtitles,
+                            watermark_enabled=watermark_enabled,
+                            enable_emoji=enable_emoji,
+                            transcript=self._loads(clip.transcript, []) or fallback_transcript,
+                            max_duration=max_duration_override,
+                            transition=transition,
+                        )
+                    presigned_url = await self._store_render(
+                        rendered_path, s3_key, label=f"export clip={clip.id} platform={platform.value} ratio={ratio}"
                     )
 
-                rendered_clips = await self.prepare_clip_outputs(
-                    project_id=project_id,
-                    video_path=video_path,
-                    clips=[{
-                        "clip_id": clip.id,
-                        "title": clip.title,
-                        "start_time": clip.start_time,
-                        "end_time": clip.end_time,
-                        "hook_start": clip.hook_start,
-                        "hook_end": clip.hook_end,
-                        "duration": max(0.0, min(clip.duration_seconds, float(platform_max_duration))),
-                    }],
-                    transcript_segments=clip_transcript,
-                    output_aspect_ratios=[aspect_ratio],
-                )
-
-                for rendered in rendered_clips:
-                    output_files = rendered.get("output_files", {})
-                    platform_path = output_files.get(aspect_ratio, "")
-                    s3_key = f"social/{user_id}/{project_id}/{clip.id}_{platform.value}.mp4"
-                    presigned_url = None
-
-                    if burn_subtitles and platform_path and Path(platform_path).exists():
-                        s = float(rendered.get("start_time", clip.start_time))
-                        e = float(rendered.get("end_time", clip.end_time))
-                        ai_cues = json.loads(clip.analysis_json or "{}").get("clip", {}).get("ai_emoji_cues", []) if clip.analysis_json else []
-                        
-                        # Merge custom_config with animation_speed
-                        merged_config = dict(custom_config or {})
-                        merged_config["animation_speed"] = animation_speed
-                        
-                        burned_path = await styling.burn_subtitles(
-                            video_path=platform_path,
-                            clip_start=s,
-                            clip_end=e,
-                            style_type=effective_style,
-                            custom_config=merged_config,
-                            title_text=clip.title,
-                            enable_watermark=watermark_enabled,
-                            transcript_segments=clip_transcript,
-                            ai_cues=ai_cues if enable_emoji else None,
-                            hook=Hook.from_values(rendered.get("hook_start"), rendered.get("hook_end")),
+                    async with AsyncSessionLocal() as session:
+                        await ClipRepository(session).update_clip(
+                            clip_id=clip.id,
+                            user_id=user_id,
+                            burned_subtitle_path=s3_key,
+                            burned_presigned_url=presigned_url,
                         )
-
-                        presigned_url = await self._store_render(
-                            burned_path, s3_key, label=f"export clip={clip.id} platform={platform.value}"
-                        )
-
-                    # The fresh platform cut is scratch either way; S3 holds the result.
-                    for path in output_files.values():
-                        if path:
-                            Path(path).unlink(missing_ok=True)
-
-                    if presigned_url:
-                        async with AsyncSessionLocal() as session:
-                            repo = ClipRepository(session)
-                            await repo.update_clip(
-                                clip_id=clip.id,
-                                user_id=user_id,
-                                burned_subtitle_path=s3_key,
-                                burned_presigned_url=presigned_url,
-                            )
 
                     exported_clips.append({
                         "clip_id": clip.id,
                         "platform": platform.value,
-                        "aspect_ratio": aspect_ratio,
+                        "aspect_ratio": ratio,
                         "burned_presigned_url": presigned_url,
                         "local_path": None,
-                        "s3_key": s3_key if presigned_url else None,
+                        "s3_key": s3_key,
+                        "hook_transition": transition.to_dict() if transition else None,
                     })
+        finally:
+            # Re-cuts are scratch; the exported renders are in S3.
+            for path in recuts.values():
+                Path(path).unlink(missing_ok=True)
 
-                completed += 1
-
-        if progress_callback:
-            await self._notify(progress_callback, "Social export completed", 100)
+        await self._notify(progress_callback, "Social export completed", 100)
 
         return {
             "project_id": project_id,
             "exported_clips": exported_clips,
-            "platforms": [p for p in platforms],
+            "platforms": [platform.value for platform, _ in targets],
             "total_exported": len(exported_clips),
+            "watermark_enabled": watermark_enabled,
         }
+
+    async def _export_selection(
+        self, project_id: str, user_id: str, clip_ids: list[str] | None, max_clips: int | None,
+    ) -> list[GeneratedClip]:
+        """The clips to export: exactly ``clip_ids`` if given, else the top-scored ones."""
+        async with AsyncSessionLocal() as session:
+            clips = await ClipRepository(session).list_clips(project_id, user_id)
+
+        if clip_ids:
+            by_id = {clip.id: clip for clip in clips}
+            selected = [by_id[clip_id] for clip_id in dict.fromkeys(clip_ids) if clip_id in by_id]
+        else:
+            selected = sorted(clips, key=lambda c: c.score, reverse=True)[: max_clips or None]
+        if not selected:
+            raise CustomException(message="No clips found to export", code="NO_CLIPS", status_code=404)
+        return selected
+
+    async def _recut_missing_ratios(
+        self,
+        project: Any,
+        clips: list[GeneratedClip],
+        ratios: set[str],
+        progress_callback: Callable[[str, int, str | None], None] | None = None,
+    ) -> dict[tuple[str, str], str]:
+        """Cut each clip at every requested size the pipeline did not store.
+
+        Returns local paths keyed by ``(clip id, ratio)``; the caller deletes them.
+        """
+        missing = {
+            ratio: [clip for clip in clips if not stored_cut_key(clip, ratio)]
+            for ratio in sorted(ratios)
+        }
+        missing = {ratio: pending for ratio, pending in missing.items() if pending}
+        if not missing:
+            return {}
+
+        recuts: dict[tuple[str, str], str] = {}
+        async with project_source(project) as source:
+            for ratio, pending in missing.items():
+                await self._notify(progress_callback, f"Reframing {len(pending)} clip(s) to {ratio}...", 0)
+                transcript = sorted(
+                    (seg for clip in pending for seg in self._loads(clip.transcript, [])),
+                    key=lambda seg: float(seg.get("start", 0.0)),
+                )
+                rendered = await self.prepare_clip_outputs(
+                    project_id=project.id,
+                    video_path=source,
+                    clips=[
+                        {
+                            "clip_id": clip.id,
+                            "title": clip.title,
+                            "start_time": clip.start_time,
+                            "end_time": clip.end_time,
+                            "hook_start": clip.hook_start,
+                            "hook_end": clip.hook_end,
+                            "content_category": clip.content_category,
+                        }
+                        for clip in pending
+                    ],
+                    transcript_segments=transcript,
+                    output_aspect_ratios=[ratio],
+                )
+                for item in rendered:
+                    path = (item.get("output_files") or {}).get(ratio)
+                    if path and Path(path).exists():
+                        recuts[(str(item["clip_id"]), ratio)] = path
+        return recuts
+
+    @asynccontextmanager
+    async def _export_cut(
+        self, clip: GeneratedClip, ratio: str, recuts: dict[tuple[str, str], str],
+    ) -> AsyncIterator[str]:
+        """Local path of the clip's cut at ``ratio``: a fresh re-cut, else the stored one."""
+        recut = recuts.get((clip.id, ratio))
+        if recut:
+            yield recut
+            return
+        key = stored_cut_key(clip, ratio)
+        if not key:
+            raise CustomException(
+                message=f"Clip '{clip.title}' could not be rendered at {ratio}.",
+                code="CLIP_RENDER_FAILED",
+                status_code=500,
+            )
+        filename = f"{clip.id}_{ratio.replace(':', 'x')}.mp4"
+        async with s3_scratch_copy(clip.s3_bucket or self._bucket, key, filename) as path:
+            yield path
+
+    async def _render_export(
+        self,
+        clip: GeneratedClip,
+        cut_path: str,
+        *,
+        style_type: str,
+        caption_config: dict[str, Any],
+        burn_subtitles: bool,
+        watermark_enabled: bool,
+        enable_emoji: bool,
+        transcript: list[dict[str, Any]],
+        max_duration: int | None,
+        transition: TransitionSpec | None,
+    ) -> str:
+        """Render one exported file from a cut; returns a new local path the caller owns."""
+        from subtitle_styling.service import SubtitleStylingService
+
+        styling = SubtitleStylingService()
+        hook = Hook.from_values(clip.hook_start, clip.hook_end)
+        clip_end = clip.end_time
+        if max_duration:
+            clip_end = min(clip_end, clip.start_time + max_duration)
+
+        if not burn_subtitles:
+            return await styling.render_uncaptioned(
+                cut_path, clip.start_time, clip_end, watermark_enabled, hook=hook, transition=transition,
+            )
+
+        analysis = self._loads(clip.analysis_json, {})
+        ai_cues = (analysis.get("clip") or {}).get("ai_emoji_cues", []) if isinstance(analysis, dict) else []
+        return await styling.burn_subtitles(
+            video_path=cut_path,
+            clip_start=clip.start_time,
+            clip_end=clip_end,
+            style_type=style_type,
+            custom_config=caption_config,
+            title_text=clip.title,
+            enable_watermark=watermark_enabled,
+            transcript_segments=transcript,
+            ai_cues=ai_cues if enable_emoji else None,
+            hook=hook,
+            transition=transition,
+        )
+
+    def hook_transition_for(
+        self, clip: GeneratedClip, config: HookTransitionConfig | dict[str, Any] | None,
+    ) -> TransitionSpec | None:
+        """The bridge to render after this clip's hook; None without a hook or when off.
+
+        ``None`` config means Auto, so every clip with a hook gets a bridge that
+        suits its content unless the user chose otherwise.
+        """
+        hook = Hook.from_values(clip.hook_start, clip.hook_end)
+        if hook is None:
+            return None
+        context = ClipContext(
+            clip_id=clip.id,
+            category=str(getattr(clip.content_category, "value", clip.content_category) or "unknown"),
+            hook_text=hook_text_from(self._loads(clip.transcript, []), hook.start, hook.end),
+        )
+        return resolve_transition(config, context)
+
+    async def resolve_hook_transition(
+        self, clip_id: str, user_id: str, config: HookTransitionConfig | None,
+    ) -> TransitionSpec | None:
+        clip = await self._get_clip(clip_id, user_id)
+        if not clip:
+            raise CustomException(message="Clip not found", code="NOT_FOUND", status_code=404)
+        return self.hook_transition_for(clip, config)
 
     @staticmethod
     def _validate_platform(platform_name: str) -> SocialPlatform:

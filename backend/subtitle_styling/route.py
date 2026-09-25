@@ -55,6 +55,9 @@ async def burn_subtitles(clip_id: str, data: SubtitleBurnRequest, user: CurrentU
     )
 
     payload = data.model_dump()
+    # The model itself, not its dump: a dump marks every unset field as sent,
+    # which would override the preset's parts with blanks.
+    payload["hook_transition"] = data.hook_transition
 
     # A paid caption style has to be checked here too: the editor hides the
     # locked ones, but this endpoint is reachable directly.

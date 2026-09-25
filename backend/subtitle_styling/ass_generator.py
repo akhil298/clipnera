@@ -30,24 +30,39 @@ def ass_filter(ass_path: str) -> str:
     return f"ass={_escape_filter_value(Path(ass_path).name)}:fontsdir={_escape_filter_value(str(FONTS_DIR))}"
 
 
-def burn_filter_args(video_filters: list[str], enable_watermark: bool) -> list[str]:
+def burn_filter_args(
+    video_filters: list[str],
+    enable_watermark: bool,
+    timeline: tuple[list[str], str, str] | None = None,
+) -> list[str]:
     """FFmpeg args applying ``video_filters`` to input 0, plus the watermark.
 
-    Place them after the source video's ``-i``. The graph is labelled
-    explicitly: chaining ``...,[1:v]overlay`` bound the watermark as the base
-    layer, so the burned clip came out at the watermark's 300x60 size.
+    Place them after the source video's ``-i``. ``timeline`` is
+    ``(chains, video_label, audio_label)`` from
+    ``hook_transitions.graph.timeline_graph``: when given, the filters and
+    watermark apply to its re-laid output instead of the raw input. The graph
+    is labelled explicitly: chaining ``...,[1:v]overlay`` bound the watermark
+    as the base layer, so the burned clip came out at the watermark's 300x60 size.
     """
     chain = ",".join(video_filters)
-    if not enable_watermark:
-        return ["-vf", chain]
-    if not WATERMARK_PATH.exists():
+    if enable_watermark and not WATERMARK_PATH.exists():
         log.warning("Watermark requested but file not found: %s", WATERMARK_PATH)
+        enable_watermark = False
+    if timeline is None and not enable_watermark:
         return ["-vf", chain]
-    graph = f"[0:v]{chain}[base];[base][1:v]overlay=x=W-w-10:y=10[v]"
+
+    chains, video_in, audio_out = timeline if timeline else ([], "0:v", None)
+    graph = [*chains, f"[{video_in}]{chain}[base]"]
+    inputs: list[str] = []
+    if enable_watermark:
+        inputs = ["-i", str(WATERMARK_PATH)]
+        graph.append("[base][1:v]overlay=x=W-w-10:y=10[v]")
+    else:
+        graph.append("[base]null[v]")
     return [
-        "-i", str(WATERMARK_PATH),
-        "-filter_complex", graph,
-        "-map", "[v]", "-map", "0:a?",
+        *inputs,
+        "-filter_complex", ";".join(graph),
+        "-map", "[v]", "-map", f"[{audio_out}]" if audio_out else "0:a?",
     ]
 
 

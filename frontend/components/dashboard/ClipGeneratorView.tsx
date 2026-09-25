@@ -118,9 +118,15 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
     setExportError(null);
     setIsBatchExporting(true);
     try {
-      // Use the first clip's caption config for batch export, or default
-      const firstClipCaptionConfig = safeProject.clips[0]?.captionConfig;
-      const result = await clipApi.exportProject(safeProject.id, safeProject.clips.length, firstClipCaptionConfig);
+      // Batch export uses the first clip's caption style, size and hook
+      // transition for every clip (Auto still picks per clip).
+      const firstClip = safeProject.clips[0];
+      const result = await clipApi.exportProject(safeProject.id, {
+        clipIds: safeProject.clips.map((clip) => clip.id),
+        aspectRatio: firstClip?.aspectRatio,
+        captionConfig: firstClip?.captionConfig,
+        hookTransition: firstClip?.hookTransition,
+      });
       const downloadableClips = result.exported_clips.filter((clip) => clip.burned_presigned_url);
 
       downloadableClips.forEach((clip, index) => {

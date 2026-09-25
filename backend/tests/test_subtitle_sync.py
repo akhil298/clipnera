@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from subtitle_styling import ass_generator
-from subtitle_styling.ass_generator import AssGenerator, ass_time, burn_filter_args
+from subtitle_styling.ass_generator import ass_filter, AssGenerator, ass_time, burn_filter_args
 from subtitle_styling.service import SubtitleStylingService
 
 
@@ -85,33 +85,26 @@ class TestAssTimebase:
 
 
 class TestBurnCommand:
-    def test_command_does_not_seek_the_cut_clip(self, tmp_path) -> None:
-        """Regression: -ss on an already-cut clip seeks past its end."""
-        ass = tmp_path / "captions.ass"
-        ass.write_text("[Events]\n", encoding="utf-8")
-        cmd = SubtitleStylingService()._build_ass_cmd(
+    @staticmethod
+    def _cmd(tmp_path, duration: float = 5.0, enable_watermark: bool = False, timeline=None) -> list[str]:
+        return SubtitleStylingService._encode_cmd(
             video_path="clip.mp4",
             output_path=str(tmp_path / "out.mp4"),
-            ass_path=str(ass),
-            duration=10.0,
-            enable_watermark=False,
-            work_dir=str(tmp_path),
+            video_filters=[ass_filter(str(tmp_path / "captions.ass"))],
+            duration=duration,
+            enable_watermark=enable_watermark,
+            timeline=timeline,
         )
+
+    def test_command_does_not_seek_the_cut_clip(self, tmp_path) -> None:
+        """Regression: -ss on an already-cut clip seeks past its end."""
+        cmd = self._cmd(tmp_path, duration=10.0)
         assert "-ss" not in cmd
         assert cmd[cmd.index("-t") + 1] == "10.0"
 
     def test_ass_referenced_by_bare_filename(self, tmp_path) -> None:
         """libass resolves the path against cwd, which is the work dir."""
-        ass = tmp_path / "captions.ass"
-        ass.write_text("[Events]\n", encoding="utf-8")
-        cmd = SubtitleStylingService()._build_ass_cmd(
-            video_path="clip.mp4",
-            output_path=str(tmp_path / "out.mp4"),
-            ass_path=str(ass),
-            duration=5.0,
-            enable_watermark=False,
-            work_dir=str(tmp_path),
-        )
+        cmd = self._cmd(tmp_path)
         graph = cmd[cmd.index("-vf") + 1]
         assert "ass=captions.ass" in graph
         assert str(tmp_path) not in graph
@@ -119,20 +112,22 @@ class TestBurnCommand:
     def test_watermark_overlays_onto_the_video(self, tmp_path) -> None:
         """Regression: ``ass=...,[1:v]overlay`` made the watermark the base
         layer, so the burned clip came out at the watermark's 300x60 size."""
-        cmd = SubtitleStylingService()._build_ass_cmd(
-            video_path="clip.mp4",
-            output_path=str(tmp_path / "out.mp4"),
-            ass_path=str(tmp_path / "captions.ass"),
-            duration=5.0,
-            enable_watermark=True,
-            work_dir=str(tmp_path),
-        )
+        cmd = self._cmd(tmp_path, enable_watermark=True)
         assert cmd[cmd.index("-i") + 1] == "clip.mp4"
         graph = cmd[cmd.index("-filter_complex") + 1]
         assert graph.startswith("[0:v]ass=captions.ass")
         assert "[base][1:v]overlay=" in graph
         assert cmd[cmd.index("-map") + 1] == "[v]"
         assert "0:a?" in cmd
+
+    def test_captions_and_watermark_ride_on_the_bridge_timeline(self, tmp_path) -> None:
+        """With a hook transition the captions apply to the re-laid clip and
+        its rebuilt audio is mapped, not the input's."""
+        timeline = (["[0:v]null[vcat]", "[0:a]anull[acat]"], "vcat", "acat")
+        cmd = self._cmd(tmp_path, enable_watermark=True, timeline=timeline)
+        graph = cmd[cmd.index("-filter_complex") + 1]
+        assert graph.startswith("[0:v]null[vcat];[0:a]anull[acat];[vcat]ass=captions.ass")
+        assert "[acat]" in cmd and "0:a?" not in cmd
 
     def test_missing_watermark_falls_back_to_plain_burn(self, tmp_path, monkeypatch) -> None:
         monkeypatch.setattr(ass_generator, "WATERMARK_PATH", tmp_path / "missing.png")

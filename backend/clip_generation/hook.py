@@ -1,9 +1,11 @@
 """The teaser played before a clip: its most gripping line, shown first.
 
-The rendered file is ``[hook.start, hook.end)`` followed by
-``[clip_start, clip_end)``, both in source-video seconds. Everything that times
-captions against that file goes through :func:`on_output_timeline`, so the
-burner and the editor agree on where each word lands.
+The cut file is ``[hook.start, hook.end)`` followed by
+``[clip_start, clip_end)``, both in source-video seconds; a finished render may
+also hold a bridge of ``gap`` seconds between them (see ``hook_transitions``).
+Everything that times captions against a file goes through
+:func:`on_output_timeline`, so the burner and the editor agree on where each
+word lands.
 """
 
 from __future__ import annotations
@@ -76,6 +78,7 @@ def on_output_timeline(
     clip_start: float,
     clip_end: float,
     hook: Hook | None,
+    gap: float = 0.0,
 ) -> tuple[float, list[dict[str, Any]]]:
     """Lay absolute-time items (words, subtitle lines) out on the rendered file.
 
@@ -83,12 +86,13 @@ def on_output_timeline(
     item's position in the output. Callers keep rebasing against a single
     origin exactly as they did before hooks existed: the teaser's items are
     shifted to sit in the first ``hook.duration`` seconds, and the clip's own
-    items are left in place with the origin moved back by that much.
+    items are left in place with the origin moved back by that much plus the
+    ``gap`` of any bridge rendered between the two.
     """
     if hook is None:
         return clip_start, items
 
-    origin = clip_start - hook.duration
+    origin = clip_start - hook.duration - gap
     teaser = _within(items, hook.start, hook.end, shift=origin - hook.start)
     body = _within(items, clip_start, clip_end, shift=0.0)
     return origin, teaser + body

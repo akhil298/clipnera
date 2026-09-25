@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from pydantic import BaseModel, Field
+from hook_transitions.schema import HookTransitionApplied, HookTransitionConfig
 
 
 class BoundingBox(BaseModel):
@@ -215,12 +216,30 @@ class SocialExportRequest(BaseModel):
         description="Override subtitle style (falls back to platform default)",
     )
     custom_config: Optional[dict] = Field(default=None, description="Custom style overrides")
+    clip_ids: Optional[list[str]] = Field(
+        default=None,
+        description="Export exactly these clips; when omitted the top-scored max_clips are exported",
+    )
+    aspect_ratio: Optional[str] = Field(
+        default=None,
+        description="Output size (9:16, 1:1, 4:5, 16:9); overrides each platform's default ratio",
+    )
     max_clips: Optional[int] = Field(default=10, description="Maximum number of clips to export")
-    max_duration: Optional[int] = Field(default=None, description="Override max clip duration per platform")
+    max_duration: Optional[int] = Field(default=None, description="Trim exported clips to at most this many seconds")
     enable_emoji: Optional[bool] = Field(default=True, description="Auto-insert emojis based on transcript keywords")
-    watermark_enabled: bool = True
+    watermark_enabled: bool = Field(
+        default=True,
+        description="Overlay the Clipnera watermark; only paid plans may turn it off",
+    )
     burn_subtitles: bool = True
-    animation_speed: Optional[float] = Field(default=1.0, description="Animation speed multiplier for caption effects")
+    animation_speed: Optional[float] = Field(
+        default=None,
+        description="Caption animation speed; custom_config.animation_speed wins when both are set",
+    )
+    hook_transition: Optional[HookTransitionConfig] = Field(
+        default=None,
+        description="Bridge between each clip's hook and the clip; omitted means Auto",
+    )
 
 
 class SocialExportClipResponse(BaseModel):
@@ -230,6 +249,7 @@ class SocialExportClipResponse(BaseModel):
     burned_presigned_url: Optional[str] = None
     local_path: Optional[str] = None
     s3_key: Optional[str] = None
+    hook_transition: Optional[HookTransitionApplied] = None
 
 
 class SocialExportResponse(BaseModel):
@@ -237,3 +257,5 @@ class SocialExportResponse(BaseModel):
     exported_clips: list[SocialExportClipResponse]
     platforms: list[str]
     total_exported: int
+    # The watermark actually applied: a free plan gets it whatever was requested.
+    watermark_enabled: bool

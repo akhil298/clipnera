@@ -54,5 +54,6 @@ def test_style_overrides_map_editor_config_onto_template_keys():
     })
     assert overrides == {
         "font_size": 30.0, "position_y": 0.75, "title_font_size": 96.0, "title_position_y": 0.12,
+        "font_color": "#FFFFFF",
     }
     assert _style_overrides(None) == {}

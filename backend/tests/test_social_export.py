@@ -109,7 +109,47 @@ class TestSocialExportResponse:
             ],
             platforms=["tiktok"],
             total_exported=1,
+            watermark_enabled=True,
         )
         assert resp.project_id == "proj-1"
         assert resp.total_exported == 1
         assert len(resp.exported_clips) == 1
+
+
+class TestExportSelectionFields:
+    def test_clip_ids_and_aspect_ratio_default_to_none(self):
+        req = SocialExportRequest()
+        assert req.clip_ids is None
+        assert req.aspect_ratio is None
+        assert req.animation_speed is None
+
+    def test_watermark_can_be_turned_off_in_request(self):
+        assert SocialExportRequest(watermark_enabled=False).watermark_enabled is False
+
+
+class TestExportEntitlements:
+    @staticmethod
+    def _check(plan: str, **fields):
+        from pipeline.route import _check_export_entitlements
+        from subscription.entitlements import entitlements_for
+
+        _check_export_entitlements(entitlements_for(plan), SocialExportRequest(platforms=["tiktok"], **fields))
+
+    def test_free_plan_may_export_vertical(self):
+        self._check("free", aspect_ratio="9:16")
+
+    def test_free_plan_refused_other_sizes(self):
+        from core.exceptions import CustomException
+
+        with pytest.raises(CustomException):
+            self._check("free", aspect_ratio="16:9")
+
+    def test_pro_plan_may_export_any_size(self):
+        for ratio in ("9:16", "1:1", "4:5", "16:9"):
+            self._check("pro", aspect_ratio=ratio)
+
+    def test_unsupported_ratio_rejected(self):
+        from core.exceptions import CustomException
+
+        with pytest.raises(CustomException):
+            self._check("pro", aspect_ratio="3:2")

@@ -25,6 +25,7 @@ from depth_captions.schema import DepthCaptionRequest, StylePreset, DepthMode, T
 from core.database import AsyncSessionLocal
 
 from pipeline.model import PipelineStepType, StepStatus
+from hook_transitions.schema import HookTransitionConfig
 
 log = get_logger(__name__)
 
@@ -97,6 +98,7 @@ class PipelineOrchestrator:
         # service resolves it at render time.
         self.output_aspect_ratios = list(output_aspect_ratios or [])
         self.clip_settings = clip_settings or {}
+        self.hook_transition = self._hook_transition(self.clip_settings)
         # Decides which AI provider every text step runs on. Resolved once at
         # the route from the user's active subscription, so a plan change
         # mid-run cannot switch providers half way through.
@@ -253,6 +255,22 @@ class PipelineOrchestrator:
             # that failed to upload, aborted renders) on every outcome.
             await self._cleanup_local_clips()
         return results
+
+    @staticmethod
+    def _hook_transition(clip_settings: dict) -> HookTransitionConfig | None:
+        """The run's hook-transition choice; an invalid one falls back to Auto.
+
+        Validated here, before any work, so a bad value is logged once rather
+        than failing every clip's burn at the end of the run.
+        """
+        raw = clip_settings.get("hook_transition")
+        if not raw:
+            return None
+        try:
+            return HookTransitionConfig.model_validate(raw)
+        except ValueError as exc:
+            log.warning("Ignoring invalid hook_transition setting, using Auto: %s", exc)
+            return None
 
     async def _cleanup_local_clips(self) -> None:
         """Delete this project's local render directory after the run.
@@ -788,7 +806,12 @@ class PipelineOrchestrator:
                 result = await self._clip_service.process_clip_subtitles(
                     clip.id,
                     self.user_id,
-                    {"style_type": styles[clip.id], "enable_watermark": self.watermark_enabled},
+                    {
+                        "style_type": styles[clip.id],
+                        "enable_watermark": self.watermark_enabled,
+                        # Absent means Auto: every clip with a hook gets a bridge.
+                        "hook_transition": self.hook_transition,
+                    },
                     transcript_segments=transcript_segments,
                 )
             except Exception as exc:

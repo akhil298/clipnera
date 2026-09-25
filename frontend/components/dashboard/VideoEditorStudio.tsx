@@ -45,6 +45,7 @@ import {
   SoundEffect,
   WordTimestamp,
   AudioEnhancementConfig,
+  HookTransitionConfig,
 } from '@/lib/types';
 import { getCaptionConfig, getAllCaptionStyles } from '@/lib/utils/captionStyles';
 import { useEntitlements, canUseAspectRatio, canUseCaptionStyle } from '@/hooks/useEntitlements';
@@ -53,6 +54,7 @@ import { EMOJI_COLLECTIONS, getEmojiCollection } from '@/lib/data/emojiCollectio
 import { sfxEngine } from '@/lib/utils/audioSynth';
 import confetti from 'canvas-confetti';
 import { AudioEnhancerPanel } from './AudioEnhancerPanel';
+import { HookTransitionPanel } from './HookTransitionPanel';
 import { clipApi } from '@/lib/api';
 
 interface VideoEditorStudioProps {
@@ -120,7 +122,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
   const [volume, setVolume] = useState(0.8);
 
   // Active studio tabs
-  const [activeStudioTab, setActiveStudioTab] = useState<'captions' | 'broll' | 'sfx' | 'audio' | 'reframe' | 'transcript'>('captions');
+  const [activeStudioTab, setActiveStudioTab] = useState<'captions' | 'hook' | 'broll' | 'sfx' | 'audio' | 'reframe' | 'transcript'>('captions');
   const [socialOverlay, setSocialOverlay] = useState<'none' | 'tiktok' | 'reels' | 'shorts'>('none');
 
   const { entitlements, promptUpgrade } = useEntitlements();
@@ -136,6 +138,12 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
   const [autoZoomConfig, setAutoZoomConfig] = useState(safeClip.autoZoom);
   const [autoReframeConfig, setAutoReframeConfig] = useState(safeClip.autoReframe);
   const [bRollOverlays, setBRollOverlays] = useState<BRollOverlay[]>(safeClip.bRollOverlays || []);
+  // Auto by default: the server picks a bridge that suits the clip's hook.
+  const [hookTransition, setHookTransition] = useState<HookTransitionConfig>(
+    safeClip.hookTransition ?? { mode: 'auto' },
+  );
+  // Only paid plans may drop the watermark; the server forces it otherwise.
+  const [watermarkEnabled, setWatermarkEnabled] = useState(true);
 
   // A plan change (or a clip saved on a higher tier) can leave a selection the
   // current plan cannot use. Fall back instead of letting the export fail at
@@ -237,7 +245,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
   );
 
   // Update parent when safeClip settings change
-  const syncChangesToParent = () => {
+  const syncChangesToParent = (overrides: Partial<ViralClip> = {}) => {
     onUpdateClip({
       ...safeClip,
       aspectRatio,
@@ -249,7 +257,22 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
       transcriptSegments,
       duration,
       audioEnhancement: audioEnhanceConfig,
+      hookTransition,
+      ...overrides,
     });
+  };
+
+  const handleHookTransitionChange = (next: HookTransitionConfig) => {
+    setHookTransition(next);
+    syncChangesToParent({ hookTransition: next });
+  };
+
+  const handleWatermarkToggle = () => {
+    if (entitlements.watermark_forced) {
+      promptUpgrade('Removing the watermark');
+      return;
+    }
+    setWatermarkEnabled((on) => !on);
   };
 
   // Playhead loop.
@@ -443,12 +466,23 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
         throw new Error('No project ID found for export');
       }
 
-      const result = await clipApi.exportProject(projectId, 1, captionConfig);
+      // Export this clip at the size picked in the editor, not the project's
+      // top-scored clip at the default 9:16.
+      const result = await clipApi.exportProject(projectId, {
+        clipIds: [safeClip.id],
+        aspectRatio,
+        captionConfig,
+        hookTransition,
+        watermarkEnabled,
+      });
 
       if (result?.exported_clips && result.exported_clips.length > 0) {
         const exported = result.exported_clips[0];
         if (exported.burned_presigned_url) {
-          onUpdateClip({ ...safeClip, burnedPresignedUrl: exported.burned_presigned_url, presignedUrl: exported.burned_presigned_url });
+          // The editor keeps previewing the raw cut: the export has captions and
+          // the hook bridge baked in, so playing it under the live caption
+          // overlay would show captions twice and out of step after the hook.
+          syncChangesToParent({ burnedPresignedUrl: exported.burned_presigned_url });
         }
       }
 
@@ -572,6 +606,32 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
             className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-sky-400 text-xs font-semibold border border-neutral-700 transition-colors flex items-center gap-1.5"
           >
             <span>Schedule</span>
+          </button>
+
+          <button
+            onClick={handleWatermarkToggle}
+            role="switch"
+            aria-checked={watermarkEnabled || entitlements.watermark_forced}
+            title={
+              entitlements.watermark_forced
+                ? 'Removing the watermark requires a paid plan'
+                : 'Add the Clipnera watermark to the export'
+            }
+            className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold border border-neutral-700 transition-colors flex items-center gap-2 text-neutral-300"
+          >
+            <span>Watermark</span>
+            <span
+              className={`relative w-7 h-4 rounded-full transition-colors ${
+                watermarkEnabled || entitlements.watermark_forced ? 'bg-emerald-500' : 'bg-neutral-600'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${
+                  watermarkEnabled || entitlements.watermark_forced ? 'left-3.5' : 'left-0.5'
+                }`}
+              />
+            </span>
+            {entitlements.watermark_forced && <ProLockBadge feature="Removing the watermark" />}
           </button>
 
           <button
@@ -912,6 +972,18 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
             >
               <Type className="w-3.5 h-3.5" />
               <span>Captions</span>
+            </button>
+
+            <button
+              onClick={() => setActiveStudioTab('hook')}
+              className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
+                activeStudioTab === 'hook'
+                  ? 'bg-neutral-800 text-fuchsia-400 shadow'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>Hook</span>
             </button>
 
             <button
@@ -1328,6 +1400,17 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                   </div>
                 )}
                </div>
+            </div>
+          )}
+
+          {/* PANEL: HOOK TRANSITION */}
+          {activeStudioTab === 'hook' && (
+            <div className="p-5 rounded-2xl bg-neutral-900/90 border border-neutral-800">
+              <HookTransitionPanel
+                clipId={safeClip.id}
+                config={hookTransition}
+                onChange={handleHookTransitionChange}
+              />
             </div>
           )}
 

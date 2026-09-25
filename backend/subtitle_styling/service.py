@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from clip_generation.hook import Hook, on_output_timeline
+from hook_transitions.graph import BridgePlan, MediaInfo, timeline_graph
+from hook_transitions.resolver import TransitionSpec
+from hook_transitions.text import write_bridge_ass
 from core.logging_config import get_logger
 from core.exceptions import CustomException
 from video_processor.ffmpeg_service import FFmpegService
@@ -28,19 +31,85 @@ _STYLE_OVERRIDE_FIELDS: dict[str, tuple[str, float, float, float]] = {
 }
 
 
-def _style_overrides(custom_config: Optional[dict]) -> dict[str, float]:
-    """Template overrides for the size/position values the editor lets users set.
+# Editor custom_config key -> template key. The inverse of the mapping in
+# export_styles.py, so an unedited preset burns exactly as its template.
+_STYLE_COLOR_FIELDS: dict[str, str] = {
+    "font_color": "font_color",
+    "highlight_color": "highlight_color",
+    "secondary_highlight_color": "emphasis_color",
+    "bg_box_color": "background_color",
+}
+_STYLE_FLAG_FIELDS: dict[str, str] = {
+    "has_bg_box": "background",
+    "uppercase": "uppercase",
+    "emojis_enabled": "emoji",
+}
+_GENERIC_FONT_FAMILIES = {"serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui"}
+
+
+def _css_color_to_hex(value: Any) -> Optional[str]:
+    """'#RGB', '#RRGGBB[AA]' or 'rgb[a](r,g,b[,a])' -> '#RRGGBB'; None if unparseable.
+
+    The ASS colour helpers slice hex digits blindly, so the editor's default
+    ``rgba(0,0,0,0.85)`` box colour would otherwise burn as garbage.
+    """
+    text = str(value or "").strip().lower()
+    if text.startswith("#"):
+        digits = text[1:]
+        if len(digits) in (3, 4):
+            digits = "".join(c * 2 for c in digits[:3])
+        digits = digits[:6]
+        if len(digits) == 6 and all(c in "0123456789abcdef" for c in digits):
+            return f"#{digits.upper()}"
+        return None
+    if text.startswith("rgb") and "(" in text and text.endswith(")"):
+        try:
+            channels = [int(float(p)) for p in text[text.index("(") + 1:-1].split(",")[:3]]
+        except ValueError:
+            return None
+        if len(channels) == 3:
+            return "#" + "".join(f"{min(255, max(0, c)):02X}" for c in channels)
+    return None
+
+
+def _style_overrides(custom_config: Optional[dict]) -> dict[str, Any]:
+    """Template overrides for everything the editor lets users set.
 
     Without these the burner used the template's own values whatever the
-    sliders said, so the export never matched the preview.
+    editor said, so the export never matched the preview.
     """
-    overrides: dict[str, float] = {}
+    config = custom_config or {}
+    overrides: dict[str, Any] = {}
     for key, (template_key, low, high, scale) in _STYLE_OVERRIDE_FIELDS.items():
         try:
-            value = float((custom_config or {})[key])
+            value = float(config[key])
         except (KeyError, TypeError, ValueError):
             continue
         overrides[template_key] = min(high, max(low, value)) * scale
+
+    for key, template_key in _STYLE_COLOR_FIELDS.items():
+        color = _css_color_to_hex(config.get(key))
+        if color:
+            overrides[template_key] = color
+
+    for key, template_key in _STYLE_FLAG_FIELDS.items():
+        if isinstance(config.get(key), bool):
+            overrides[template_key] = config[key]
+
+    try:
+        overrides["max_words_per_line"] = min(8, max(1, int(config["max_words_per_line"])))
+    except (KeyError, TypeError, ValueError):
+        pass
+
+    try:
+        overrides["shadow"] = float(config["shadow_intensity"]) > 0
+    except (KeyError, TypeError, ValueError):
+        pass
+
+    # The editor holds a CSS font stack; libass wants one family name.
+    family = str(config.get("font_family") or "").split(",")[0].strip().strip("'\"")
+    if family and family.lower() not in _GENERIC_FONT_FAMILIES:
+        overrides["font_family"] = family
     return overrides
 
 class SubtitleStylingService:
@@ -61,7 +130,13 @@ class SubtitleStylingService:
         transcript_segments: Optional[list[dict]] = None,
         ai_cues: Optional[list[dict[str, Any]]] = None,
         hook: Optional[Hook] = None,
+        transition: Optional[TransitionSpec] = None,
     ) -> str:
+        """Burn captions (and the watermark) into a cut clip.
+
+        ``transition`` re-lays the clip as ``[hook][bridge][clip]`` in the same
+        pass; it only applies when the clip has a ``hook`` to bridge from.
+        """
         # FFmpeg runs with cwd set to a scratch dir (for the bare caption
         # filename), so a relative clip path like generated_clips/... would not
         # resolve there.
@@ -81,12 +156,102 @@ class SubtitleStylingService:
             return await self._burn_with_ass(
                 video_path, clip_start, clip_end, style_type, title_text,
                 enable_watermark, transcript_segments, ai_cues,
-                animation_speed, emoji_collection, _style_overrides(custom_config), hook,
+                animation_speed, emoji_collection, _style_overrides(custom_config), hook, transition,
             )
         return await self._burn_with_srt(
             video_path, clip_start, clip_end, style_type, custom_config,
-            subtitles, title_text, enable_watermark, hook,
+            subtitles, title_text, enable_watermark, hook, transition,
         )
+
+    async def render_uncaptioned(
+        self,
+        video_path: str,
+        clip_start: float,
+        clip_end: float,
+        enable_watermark: bool,
+        hook: Optional[Hook] = None,
+        transition: Optional[TransitionSpec] = None,
+    ) -> str:
+        """Re-encode a cut clip without captions: watermark and transition only.
+
+        Returns a new file the caller owns; ``video_path`` is left untouched.
+        """
+        video_path = str(Path(video_path).resolve())
+        with tempfile.TemporaryDirectory() as tmpdir:
+            media = await self._media(video_path)
+            timeline, gap = self._bridge(media, hook, transition, tmpdir)
+            origin, _ = on_output_timeline([], clip_start, clip_end, hook, gap)
+            return await self._encode(
+                video_path, ["null"], enable_watermark, clip_end - origin, tmpdir, timeline,
+                label="plain", error_code="EXPORT_FAILED",
+            )
+
+    async def _media(self, video_path: str) -> MediaInfo:
+        return MediaInfo.from_probe(await self._ffmpeg.get_video_info(video_path))
+
+    @staticmethod
+    def _bridge(
+        media: MediaInfo,
+        hook: Optional[Hook],
+        transition: Optional[TransitionSpec],
+        work_dir: str,
+    ) -> tuple[Optional[tuple[list[str], str, str]], float]:
+        """The hook transition's filter timeline and its length; (None, 0) if none applies."""
+        plan = BridgePlan.make(transition, hook.duration if hook else None, media)
+        if plan is None:
+            return None, 0.0
+        text_filter = None
+        if plan.spec.text:
+            name = write_bridge_ass(plan.spec.text, plan.spec.text_style, media.width, media.height, plan.gap, work_dir)
+            text_filter = ass_filter(name)
+        return timeline_graph(plan, text_filter), plan.gap
+
+    async def _encode(
+        self,
+        video_path: str,
+        video_filters: list[str],
+        enable_watermark: bool,
+        duration: float,
+        work_dir: str,
+        timeline: Optional[tuple[list[str], str, str]],
+        label: str,
+        error_code: str = "BURN_IN_FAILED",
+    ) -> str:
+        """Run one render in ``work_dir`` and return a copy the caller owns."""
+        output_path = os.path.join(work_dir, f"{label}_{Path(video_path).stem}.mp4")
+        cmd = self._encode_cmd(video_path, output_path, video_filters, duration, enable_watermark, timeline)
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=work_dir
+        )
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0 or not os.path.exists(output_path):
+            err = stderr.decode("utf-8", errors="ignore")[-500:]
+            raise CustomException(message=f"FFmpeg {label} render failed: {err}", code=error_code, status_code=500)
+
+        final_path = os.path.join(tempfile.gettempdir(), f"{label}_{Path(video_path).name}")
+        shutil.copy2(output_path, final_path)
+        return final_path
+
+    @staticmethod
+    def _encode_cmd(
+        video_path: str,
+        output_path: str,
+        video_filters: list[str],
+        duration: float,
+        enable_watermark: bool,
+        timeline: Optional[tuple[list[str], str, str]] = None,
+    ) -> list[str]:
+        # No -ss: the input is already the trimmed clip.
+        return [
+            "ffmpeg", "-y",
+            "-i", video_path,
+            *burn_filter_args(video_filters, enable_watermark, timeline),
+            "-t", str(duration),
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-c:a", "aac", "-b:a", "128k",
+            "-movflags", "+faststart",
+            output_path,
+        ]
 
     @staticmethod
     def _is_template_style(style_type: str) -> bool:
@@ -107,49 +272,44 @@ class SubtitleStylingService:
         emoji_collection: Optional[str] = None,
         style_overrides: Optional[dict[str, Any]] = None,
         hook: Optional[Hook] = None,
+        transition: Optional[TransitionSpec] = None,
     ) -> str:
         template_name = style_type
         if not get_template_names().__contains__(style_type):
             from subtitle_styling.model import SubtitleStyleType
             template_name = SubtitleStyleType.to_template(style_type)
 
-        video_info = await self._ffmpeg.get_video_info(video_path)
-        streams = video_info.get("streams") or []
-        stream = next(
-            (s for s in streams if s.get("codec_type") == "video"),
-            streams[0] if streams else {},
-        )
-        width = int(stream.get("width", 1080))
-        height = int(stream.get("height", 1920))
-
-        # video_path is the already-cut clip, whose timeline starts at zero,
-        # while clip_start/clip_end are absolute positions in the source video.
-        # The offset belongs in the ASS timings only; applying it to FFmpeg as
-        # well seeks past the end of the clip and loses subtitle sync entirely.
-        # A teaser ahead of the clip moves where the file starts in source time;
-        # rebasing against that origin keeps every word in sync.
-        clip_start, words = on_output_timeline(
-            self._extract_words_for_ass(transcript_segments), clip_start, clip_end, hook,
-        )
-        duration = max(0.0, clip_end - clip_start)
-        if duration <= 0:
-            raise CustomException(
-                message="Cannot burn subtitles into a zero-length clip",
-                code="INVALID_CLIP_RANGE", status_code=400,
-            )
+        media = await self._media(video_path)
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, f"burned_{Path(video_path).stem}.mp4")
-            # The subtitles filter receives the bare filename and runs with cwd
-            # set here, to dodge Windows drive-letter escaping in the filter
-            # string, so the .ass file has to be written into this directory.
+            timeline, gap = self._bridge(media, hook, transition, tmpdir)
+            # video_path is the already-cut clip, whose timeline starts at zero,
+            # while clip_start/clip_end are absolute positions in the source video.
+            # The offset belongs in the ASS timings only; applying it to FFmpeg as
+            # well seeks past the end of the clip and loses subtitle sync entirely.
+            # A teaser (and any bridge) ahead of the clip moves where the output
+            # starts in source time; rebasing against that origin keeps every
+            # word in sync.
+            clip_start, words = on_output_timeline(
+                self._extract_words_for_ass(transcript_segments), clip_start, clip_end, hook, gap,
+            )
+            duration = max(0.0, clip_end - clip_start)
+            if duration <= 0:
+                raise CustomException(
+                    message="Cannot burn subtitles into a zero-length clip",
+                    code="INVALID_CLIP_RANGE", status_code=400,
+                )
+
+            # The ass filter receives the bare filename and runs with cwd set
+            # here, to dodge Windows drive-letter escaping in the filter string,
+            # so the .ass file has to be written into this directory.
             ass_path = build_ass_file(
                 transcript_words=words,
                 clip_start=clip_start,
                 clip_end=clip_end,
                 style_id=template_name,
-                width=width,
-                height=height,
+                width=media.width,
+                height=media.height,
                 title=title_text,
                 ai_cues=ai_cues,
                 animation_speed=animation_speed,
@@ -157,30 +317,9 @@ class SubtitleStylingService:
                 style_overrides=style_overrides,
                 output_path=os.path.join(tmpdir, "captions.ass"),
             )
-
-            async def _burn() -> None:
-                cmd = self._build_ass_cmd(
-                    video_path, output_path, ass_path, duration, enable_watermark, tmpdir,
-                )
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=tmpdir
-                )
-                _, stderr = await proc.communicate()
-                if proc.returncode != 0:
-                    err = stderr.decode("utf-8", errors="ignore")[-500:]
-                    raise CustomException(
-                        message=f"FFmpeg ASS burn-in failed: {err}",
-                        code="BURN_IN_FAILED", status_code=500,
-                    )
-
-            await _burn()
-
-            if not os.path.exists(output_path):
-                raise CustomException(message="Burned video not created", code="BURN_IN_FAILED", status_code=500)
-
-            final_path = os.path.join(tempfile.gettempdir(), f"burned_{Path(video_path).name}")
-            shutil.copy2(output_path, final_path)
-            return final_path
+            return await self._encode(
+                video_path, [ass_filter(ass_path)], enable_watermark, duration, tmpdir, timeline, label="burned",
+            )
 
     @staticmethod
     def _extract_words_for_ass(segments: list[dict]) -> list[dict[str, Any]]:
@@ -202,27 +341,6 @@ class SubtitleStylingService:
         words.sort(key=lambda w: w["start"])
         return words
 
-    def _build_ass_cmd(
-        self,
-        video_path: str,
-        output_path: str,
-        ass_path: str,
-        duration: float,
-        enable_watermark: bool,
-        work_dir: str,
-    ) -> list[str]:
-        # No -ss: the input is already the trimmed clip.
-        return [
-            "ffmpeg", "-y",
-            "-i", video_path,
-            *burn_filter_args([ass_filter(ass_path)], enable_watermark),
-            "-t", str(duration),
-            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-            "-c:a", "aac", "-b:a", "128k",
-            "-movflags", "+faststart",
-            output_path,
-        ]
-
     async def _burn_with_srt(
         self,
         video_path: str,
@@ -234,6 +352,7 @@ class SubtitleStylingService:
         title_text: Optional[str],
         enable_watermark: bool,
         hook: Optional[Hook] = None,
+        transition: Optional[TransitionSpec] = None,
     ) -> str:
         """Burn SRT subtitles using a force_style preset.
 
@@ -245,13 +364,14 @@ class SubtitleStylingService:
         if custom_config:
             config.update(custom_config)
 
-        clip_start, subtitles = on_output_timeline(subtitles or [], clip_start, clip_end, hook)
-        duration = clip_end - clip_start
-        if duration <= 0:
-            raise ValueError("Invalid clip duration")
-
+        media = await self._media(video_path)
         with tempfile.TemporaryDirectory() as tmpdir:
-            output_path = os.path.join(tmpdir, f"burned_{Path(video_path).stem}.mp4")
+            timeline, gap = self._bridge(media, hook, transition, tmpdir)
+            clip_start, subtitles = on_output_timeline(subtitles or [], clip_start, clip_end, hook, gap)
+            duration = clip_end - clip_start
+            if duration <= 0:
+                raise ValueError("Invalid clip duration")
+
             filter_str = self._build_ass_filter(config)
             srt_path = self._generate_srt(subtitles, clip_start, output_dir=tmpdir)
             escaped_srt = os.path.basename(srt_path).replace(":", r"\:").replace("'", r"\'")
@@ -263,33 +383,9 @@ class SubtitleStylingService:
                     f"drawtext=text='{safe_title}':fontcolor=white:fontsize=36:"
                     "box=1:boxcolor=black@0.5:boxborderw=8:x=(w-text_w)/2:y=20"
                 )
-
-            # No -ss: the input is already the trimmed clip.
-            cmd = [
-                "ffmpeg", "-y",
-                "-i", video_path,
-                *burn_filter_args(filters, enable_watermark),
-                "-t", str(duration),
-                "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-                "-c:a", "aac", "-b:a", "128k",
-                "-movflags", "+faststart",
-                output_path,
-            ]
-
-            proc = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=tmpdir
+            return await self._encode(
+                video_path, filters, enable_watermark, duration, tmpdir, timeline, label="burned_srt",
             )
-            _, stderr = await proc.communicate()
-            if proc.returncode != 0:
-                err = stderr.decode("utf-8", errors="ignore")[-500:]
-                raise CustomException(message=f"FFmpeg burn-in failed: {err}", code="BURN_IN_FAILED", status_code=500)
-
-            if not os.path.exists(output_path):
-                raise CustomException(message="Burned video not created", code="BURN_IN_FAILED", status_code=500)
-
-            final_path = os.path.join(tempfile.gettempdir(), f"burned_srt_{Path(video_path).name}")
-            shutil.copy2(output_path, final_path)
-            return final_path
 
     def _generate_srt(self, subtitles: list[dict], clip_start: float, output_dir: str | None = None) -> str:
         import tempfile

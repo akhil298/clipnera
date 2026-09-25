@@ -151,6 +151,96 @@ export interface ViralClip {
   socialOptimization: SocialOptimization;
   thumbnailTime?: number;
   audioEnhancement?: AudioEnhancementConfig;
+  /** Bridge between the hook and the clip; absent means Auto. */
+  hookTransition?: HookTransitionConfig;
+}
+
+// --- Hook transitions: mirror backend/hook_transitions/schema.py ------------
+
+export type HookTransitionMode = 'auto' | 'preset' | 'custom' | 'off';
+
+/** Mirrors backend HookTransitionConfig. Unset parts fall back to the preset's. */
+export interface HookTransitionConfig {
+  mode: HookTransitionMode;
+  preset_id?: string | null;
+  source?: string | null;
+  effects?: string[] | null;
+  sound?: string | null;
+  impact?: string | null;
+  /** "none" for no impact sound; omit to keep the preset's. */
+  impact_sound?: string | null;
+  /** A phrase id, "auto" to match the hook, or "none". */
+  text_id?: string | null;
+  custom_text?: string | null;
+  text_style?: string | null;
+  duration?: number | null;
+}
+
+/** Mirrors backend HookTransitionApplied: the concrete transition a render used. */
+export interface HookTransitionApplied {
+  preset_id: string;
+  source: string;
+  effects: string[];
+  sound: string;
+  impact: string;
+  impact_sound: string | null;
+  text: string | null;
+  text_style: string;
+  duration: number;
+}
+
+export interface HookTransitionPart {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface HookTransitionPhrase {
+  id: string;
+  text: string;
+  intents: string[];
+}
+
+export interface HookTransitionPreset {
+  id: string;
+  name: string;
+  group: string;
+  source: string;
+  effects: string[];
+  sound: string;
+  impact: string;
+  impact_sound: string | null;
+  text: string | null;
+  text_style: string;
+  duration: number;
+  fits: string[];
+  moods: string[];
+}
+
+/** Mirrors backend HookTransitionCatalogResponse. */
+export interface HookTransitionCatalog {
+  sources: HookTransitionPart[];
+  effects: HookTransitionPart[];
+  sounds: HookTransitionPart[];
+  impact_sounds: HookTransitionPart[];
+  impacts: HookTransitionPart[];
+  text_styles: HookTransitionPart[];
+  phrases: HookTransitionPhrase[];
+  groups: string[];
+  presets: HookTransitionPreset[];
+  limits: {
+    min_duration: number;
+    max_duration: number;
+    max_effects: number;
+    framing_effects: string[];
+  };
+  default_preset: string;
+}
+
+/** Mirrors backend HookTransitionResolveResponse. */
+export interface HookTransitionResolveResponse {
+  clip_id: string;
+  transition: HookTransitionApplied | null;
 }
 
 export interface VideoProject {

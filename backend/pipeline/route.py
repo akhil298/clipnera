@@ -729,26 +729,83 @@ async def list_social_platforms():
     return {"platforms": platforms}
 
 
-@pipeline.post("/export/{project_id}")
+def _check_export_entitlements(entitlements, request: SocialExportRequest) -> None:
+    """Refuse an export the plan does not cover.
+
+    Checked here as well as in the editor, which only hides locked options; the
+    endpoint is reachable directly.
+    """
+    from clip_generation.model import SOCIAL_PLATFORM_DEFAULTS
+    from video_processor.geometry import SUPPORTED_ASPECT_RATIOS
+
+    if request.aspect_ratio and request.aspect_ratio not in SUPPORTED_ASPECT_RATIOS:
+        raise CustomException(
+            message=f"Unsupported aspect ratio: {request.aspect_ratio}",
+            code="INVALID_ASPECT_RATIO",
+            status_code=400,
+        )
+    ratios = (
+        {request.aspect_ratio}
+        if request.aspect_ratio
+        else {
+            SOCIAL_PLATFORM_DEFAULTS[p.lower()]["aspect_ratio"]
+            for p in request.platforms
+            if p.lower() in SOCIAL_PLATFORM_DEFAULTS
+        }
+    )
+    if any(not entitlements.allows_aspect_ratio(r) for r in ratios):
+        raise CustomException(
+            message=(
+                f"Your {entitlements.plan} plan supports "
+                f"{', '.join(entitlements.aspect_ratios)}. Upgrade to export other formats."
+            ),
+            code="ASPECT_RATIO_NOT_ENTITLED",
+            status_code=403,
+        )
+    if request.style_type and not entitlements.allows_caption_style(request.style_type):
+        raise CustomException(
+            message=(
+                f"The '{request.style_type}' caption style requires a paid plan. "
+                "Upgrade to unlock the full caption library."
+            ),
+            code="CAPTION_STYLE_NOT_ENTITLED",
+            status_code=403,
+        )
+
+
+@pipeline.post("/export/{project_id}", response_model=SocialExportResponse)
 async def export_clips_for_social(project_id: str, request: SocialExportRequest, user: CurrentUserDep):
     async with AsyncSessionLocal() as session:
         clip_repo = ClipRepository(session)
         project = await clip_repo.get_project(project_id, user["user_id"])
         if not project:
             raise CustomException(message="Project not found", code="NOT_FOUND", status_code=404)
+        entitlements = await SubscriptionService(
+            PlanRepository(session),
+            UserSubscriptionRepository(session),
+            PaymentTransactionRepository(session),
+            CreditLedgerRepository(session),
+        ).get_entitlements(user["user_id"])
+
+    _check_export_entitlements(entitlements, request)
+    # A forced watermark cannot be switched off by the client.
+    watermark_enabled = request.watermark_enabled or entitlements.watermark_forced
 
     service = ClipService()
     result = await service.export_clips_for_social(
         project_id=project_id,
         user_id=user["user_id"],
         platforms=request.platforms,
+        clip_ids=request.clip_ids,
+        aspect_ratio=request.aspect_ratio,
         style_type=request.style_type,
         custom_config=request.custom_config,
         max_clips=request.max_clips,
         max_duration_override=request.max_duration,
         enable_emoji=request.enable_emoji,
-        watermark_enabled=request.watermark_enabled,
+        watermark_enabled=watermark_enabled,
         burn_subtitles=request.burn_subtitles,
         animation_speed=request.animation_speed,
+        hook_transition=request.hook_transition,
     )
     return result

@@ -1,4 +1,16 @@
-import { BrandKit, PipelineProgressEvent, PipelineStatus, ViralClip, CaptionConfig, TranscriptSegment, WordTimestamp } from '@/lib/types';
+import {
+  BrandKit,
+  PipelineProgressEvent,
+  PipelineStatus,
+  ViralClip,
+  CaptionConfig,
+  TranscriptSegment,
+  WordTimestamp,
+  HookTransitionApplied,
+  HookTransitionCatalog,
+  HookTransitionConfig,
+  HookTransitionResolveResponse,
+} from '@/lib/types';
 import { getToken, clearAuth, setAuth } from '@/lib/auth';
 import { emojiForKeyword } from '@/lib/data/emojiCatalog.generated';
 
@@ -225,9 +237,26 @@ export interface SocialExportResponse {
     burned_presigned_url?: string | null;
     local_path?: string | null;
     s3_key?: string | null;
+    hook_transition?: HookTransitionApplied | null;
   }>;
   platforms: string[];
   total_exported: number;
+  /** The watermark actually applied: always true on plans that force it. */
+  watermark_enabled: boolean;
+}
+
+/** Mirrors backend SocialExportRequest. */
+export interface ExportProjectOptions {
+  /** Export exactly these clips; omitted exports the top-scored `maxClips`. */
+  clipIds?: string[];
+  maxClips?: number;
+  /** Output size; overrides the platform default (TikTok is 9:16). */
+  aspectRatio?: string;
+  captionConfig?: CaptionConfig;
+  /** Only paid plans can turn the watermark off; the server forces it otherwise. */
+  watermarkEnabled?: boolean;
+  /** Omitted means Auto. */
+  hookTransition?: HookTransitionConfig;
 }
 
 const DEFAULT_CAPTION_CONFIG: CaptionConfig = {
@@ -480,14 +509,20 @@ export const clipApi = {
     method: 'POST',
     body: JSON.stringify({ url, format_id: formatId }),
   }),
-  exportProject: (projectId: string, maxClips?: number, captionConfig?: CaptionConfig) => authedRequest<SocialExportResponse>(`/pipeline/export/${projectId}`, {
+  exportProject: (
+    projectId: string,
+    { clipIds, maxClips, aspectRatio, captionConfig, watermarkEnabled = true, hookTransition }: ExportProjectOptions = {},
+  ) => authedRequest<SocialExportResponse>(`/pipeline/export/${projectId}`, {
     method: 'POST',
     body: JSON.stringify({
       platforms: ['tiktok'],
+      ...(clipIds?.length ? { clip_ids: clipIds } : {}),
+      ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
       max_clips: maxClips,
       burn_subtitles: true,
       enable_emoji: true,
-      watermark_enabled: true,
+      watermark_enabled: watermarkEnabled,
+      ...(hookTransition ? { hook_transition: hookTransition } : {}),
       style_type: captionConfig?.preset || 'bold_captions',
       custom_config: captionConfig ? {
         font_size: captionConfig.fontSize,
@@ -800,6 +835,16 @@ export interface CreateBrandKitPayload {
   auto_emojis: boolean;
   outro_cta_text: string;
 }
+
+export const hookTransitionApi = {
+  getCatalog: () => authedRequest<HookTransitionCatalog>('/hook-transitions/catalog'),
+  /** What a config renders as for one clip, e.g. what Auto picks for it. */
+  resolveForClip: (clipId: string, config: HookTransitionConfig) =>
+    authedRequest<HookTransitionResolveResponse>(`/hook-transitions/clips/${clipId}/resolve`, {
+      method: 'POST',
+      body: JSON.stringify(config),
+    }),
+};
 
 export const brandKitApi = {
   getMe: () => authedRequest<BrandKit>('/brand-kits/me'),
