@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timedelta
-from uuid import uuid4
 
-from subscription.model import Plan, UserSubscription, PaymentTransaction, CreditLedger, PlanSlug, SubscriptionStatus, PaymentStatus
+from subscription.model import Plan, UserSubscription, PaymentTransaction, CreditLedger, PlanSlug, SubscriptionStatus
 from subscription.entitlements import Entitlements, entitlements_for
 from subscription.repository import (
     PlanRepository,
@@ -122,89 +121,52 @@ class SubscriptionService:
     async def get_user_transactions(self, user_id: str) -> list[PaymentTransaction]:
         return await self._tx_repo.get_by_user(user_id)
 
-    async def initiate_payment(self, user_id: str, plan_slug: str, payment_method: str | None = None, notes: str | None = None) -> PaymentTransaction:
-        plan = await self._plan_repo.get_by_slug(plan_slug)
-        if not plan:
-            raise ValueError(f"Plan not found: {plan_slug}")
-
-        payment_uuid = str(uuid4())
-        tx = await self._tx_repo.create(
-            user_id=user_id,
-            plan_id=plan.id,
-            amount=float(plan.price_monthly),
-            currency=plan.currency,
-            payment_uuid=payment_uuid,
-            payment_method=payment_method,
-            notes=notes,
-        )
-        log.info(f"Payment initiated: user={user_id} plan={plan_slug} uuid={payment_uuid}")
-        return tx
-
     async def activate_free_plan(self, user_id: str) -> UserSubscription:
         plan = await self._plan_repo.get_by_slug(PlanSlug.FREE)
         if not plan:
             raise ValueError("Free plan not found")
+        return await self.start_subscription(
+            user_id,
+            plan,
+            reason=f"Free plan activated: {plan.name}",
+            reference_type="subscription",
+        )
 
+    async def start_subscription(
+        self,
+        user_id: str,
+        plan: Plan,
+        reason: str,
+        reference_type: str,
+        reference_id: str | None = None,
+        commit: bool = True,
+    ) -> UserSubscription:
+        """Replace the user's active subscription with a fresh 30-day ``plan``
+        and credit its minutes.
+
+        With ``commit=False`` everything is only flushed, so the caller can make
+        it part of a larger transaction (e.g. approving a payment).
+        """
         now = datetime.utcnow()
-        period_end = now + timedelta(days=30)
-
         existing = await self._sub_repo.get_active_by_user(user_id)
         if existing:
             existing.status = SubscriptionStatus.EXPIRED
             existing.current_period_end = now
 
-        sub = await self._sub_repo.create(user_id, plan.id, now, period_end)
+        sub = await self._sub_repo.create(user_id, plan.id, now, now + timedelta(days=30), commit=commit)
 
         current_balance = await self._ledger_repo.get_latest_balance(user_id)
         await self._ledger_repo.add_entry(
             user_id=user_id,
             amount=plan.credit_minutes,
             balance_after=current_balance + plan.credit_minutes,
-            reason=f"Free plan activated: {plan.name}",
-            reference_id=sub.id,
-            reference_type="subscription",
+            reason=reason,
+            reference_id=reference_id or sub.id,
+            reference_type=reference_type,
+            commit=commit,
         )
-        log.info(f"Free plan activated: user={user_id} credits={plan.credit_minutes}")
+        log.info(f"Subscription started: user={user_id} plan={plan.name} credits={plan.credit_minutes}")
         return sub
-
-    async def verify_payment(self, payment_uuid: str, status: str, notes: str | None = None) -> PaymentTransaction | None:
-        if status not in ("success", "failed"):
-            raise ValueError("Status must be 'success' or 'failed'")
-
-        payment_status = PaymentStatus.SUCCESS if status == "success" else PaymentStatus.FAILED
-        tx = await self._tx_repo.update_status(payment_uuid, payment_status, notes)
-
-        if not tx:
-            return None
-
-        if payment_status == PaymentStatus.SUCCESS:
-            plan = await self._plan_repo.get_by_id(tx.plan_id)
-            if not plan:
-                log.error(f"Plan not found for verified payment: {tx.plan_id}")
-                return tx
-
-            now = datetime.utcnow()
-            period_end = now + timedelta(days=30)
-
-            existing = await self._sub_repo.get_active_by_user(tx.user_id)
-            if existing:
-                existing.status = SubscriptionStatus.EXPIRED
-                existing.current_period_end = now
-
-            await self._sub_repo.create(tx.user_id, plan.id, now, period_end)
-
-            current_balance = await self._ledger_repo.get_latest_balance(tx.user_id)
-            await self._ledger_repo.add_entry(
-                user_id=tx.user_id,
-                amount=plan.credit_minutes,
-                balance_after=current_balance + plan.credit_minutes,
-                reason=f"Subscription payment verified: {plan.name}",
-                reference_id=tx.id,
-                reference_type="payment_transaction",
-            )
-            log.info(f"Payment verified and subscription activated: user={tx.user_id} plan={plan.name} credits={plan.credit_minutes}")
-
-        return tx
 
     async def deduct_credits(self, user_id: str, amount: int, reason: str, reference_id: str | None = None, reference_type: str | None = None) -> CreditLedger:
         if amount <= 0:

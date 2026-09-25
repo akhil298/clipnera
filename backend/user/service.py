@@ -39,6 +39,7 @@ class UserService:
             avatar_initials=UserService._get_initials(display_name, user.email),
             active_workspace_id=None,
             providers=[a.provider.value for a in user.accounts],
+            role=user.role.value,
         )
 
     async def to_full_response(self, user: User) -> "UserProfileResponse":
@@ -72,4 +73,5 @@ class UserService:
             ai_credits_total=ai_credits_total,
             active_workspace_id=None,
             providers=[a.provider.value for a in user.accounts],
+            role=user.role.value,
         )

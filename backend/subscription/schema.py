@@ -12,6 +12,7 @@ class PlanResponse(BaseModel):
     credit_minutes: int
     price_monthly: float
     currency: str
+    price_inr: Optional[float] = None
     is_active: bool
     features: Optional[str] = None
     created_at: datetime
@@ -45,18 +46,6 @@ class PaymentTransactionResponse(BaseModel):
     verified_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
-
-
-class PaymentInitiateRequest(BaseModel):
-    plan_slug: str
-    payment_method: Optional[str] = None
-    notes: Optional[str] = None
-
-
-class PaymentVerifyRequest(BaseModel):
-    payment_uuid: str
-    status: str
-    notes: Optional[str] = None
 
 
 class CreditTopupRequest(BaseModel):

@@ -16,6 +16,11 @@ class AuthProvider(str, enum.Enum):
     MICROSOFT = "microsoft"
 
 
+class UserRole(str, enum.Enum):
+    USER = "user"
+    ADMIN = "admin"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -26,6 +31,12 @@ class User(Base):
     avatar_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, name="user_role", values_callable=lambda obj: [e.value for e in obj]),
+        default=UserRole.USER,
+        server_default=UserRole.USER.value,
+        nullable=False,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False

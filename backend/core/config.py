@@ -78,6 +78,11 @@ class BaseConfig(BaseSettings):
     MICROSOFT_CLIENT_SECRET: str = ""
     MICROSOFT_TENANT_ID: str = "common"
 
+    # Manual UPI payments: users pay this VPA, upload proof, and an admin verifies.
+    UPI_ID: str = ""
+    UPI_PAYEE_NAME: str = "Clipnera"
+    PAYMENT_SUBMISSIONS_PER_HOUR: int = 5
+
     EMAIL_SENDER: str = "no-reply@clipnera.com"
     TWILIO_ACCOUNT_SID: str = ""
     TWILIO_AUTH_TOKEN: str = ""

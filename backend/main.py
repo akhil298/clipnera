@@ -13,6 +13,7 @@ from brand_kit.route import brand_kit as brand_kit_router
 from clip_generation.route import clip_generation as clip_generation_router
 from subtitle_styling.route import subtitle_styling as subtitle_styling_router
 from subscription.route import router as subscription_router
+from payment.route import payments as payments_router, admin_payments as admin_payments_router
 from depth_captions.route import depth_captions as depth_captions_router
 from hook_transitions.route import hook_transitions as hook_transitions_router
 from contextlib import asynccontextmanager
@@ -68,6 +69,8 @@ app.include_router(transcription_router, prefix="/api/v1")
 app.include_router(pipeline_router, prefix="/api/v1")
 app.include_router(brand_kit_router, prefix="/api/v1")
 app.include_router(subscription_router, prefix="/api/v1")
+app.include_router(payments_router, prefix="/api/v1")
+app.include_router(admin_payments_router, prefix="/api/v1")
 app.include_router(depth_captions_router, prefix="/api/v1")
 app.include_router(hook_transitions_router, prefix="/api/v1")
 

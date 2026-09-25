@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from auth.dependencies import CurrentUserDep
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,13 +12,11 @@ from subscription.repository import (
     PaymentTransactionRepository,
     CreditLedgerRepository,
 )
-from subscription.service import SubscriptionService, InsufficientCreditsError
+from subscription.service import SubscriptionService
 from subscription.schema import (
     PlanResponse,
     UserSubscriptionResponse,
     PaymentTransactionResponse,
-    PaymentInitiateRequest,
-    PaymentVerifyRequest,
     CreditLedgerResponse,
     UserCreditsResponse,
     CreditTopupRequest,
@@ -171,34 +169,3 @@ async def get_my_transactions(current_user: CurrentUserDep, service: Subscriptio
 async def get_credit_ledger(current_user: CurrentUserDep, service: SubscriptionServiceDep, limit: int = 50):
     entries = await service.get_user_credit_history(current_user["user_id"], limit)
     return [CreditLedgerResponse.model_validate(e) for e in entries]
-
-
-@router.post("/payment/initiate", response_model=PaymentTransactionResponse)
-async def initiate_payment(current_user: CurrentUserDep, service: SubscriptionServiceDep, body: PaymentInitiateRequest):
-    try:
-        tx = await service.initiate_payment(
-            user_id=current_user["user_id"],
-            plan_slug=body.plan_slug,
-            payment_method=body.payment_method,
-            notes=body.notes,
-        )
-        return PaymentTransactionResponse.model_validate(tx)
-    except ValueError as exc:
-        raise CustomException(message=str(exc), code="INVALID_PLAN", status_code=400)
-
-
-@router.post("/payment/verify", response_model=PaymentTransactionResponse)
-async def verify_payment(current_user: CurrentUserDep, service: SubscriptionServiceDep, body: PaymentVerifyRequest):
-    try:
-        tx = await service.verify_payment(
-            payment_uuid=body.payment_uuid,
-            status=body.status,
-            notes=body.notes,
-        )
-        if not tx:
-            raise CustomException(message="Transaction not found", code="NOT_FOUND", status_code=404)
-        return PaymentTransactionResponse.model_validate(tx)
-    except ValueError as exc:
-        raise CustomException(message=str(exc), code="INVALID_STATUS", status_code=400)
-    except InsufficientCreditsError as exc:
-        raise CustomException(message=str(exc), code="INSUFFICIENT_CREDITS", status_code=402)

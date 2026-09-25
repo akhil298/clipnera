@@ -1,8 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
-import { CreditCard, CheckCircle2, XCircle, Copy, ExternalLink } from 'lucide-react';
-import { subscriptionApi, PaymentTransactionResponse } from '@/lib/api';
+import React, { useEffect, useState } from 'react';
+import { CreditCard, CheckCircle2, Copy, Check, ImageUp, Smartphone } from 'lucide-react';
+import { paymentsApi, UpiCheckoutResponse } from '@/lib/api';
+import {
+  formatAmount,
+  normalizeUtr,
+  MAX_SCREENSHOT_BYTES,
+  SCREENSHOT_TYPES,
+  UTR_PATTERN,
+} from '@/lib/utils/payments';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -18,61 +25,97 @@ interface PaymentModalProps {
   onPaymentComplete: () => void;
 }
 
+type Step = 'confirm' | 'pay' | 'submitted';
+
+function screenshotError(file: File): string | null {
+  if (!SCREENSHOT_TYPES.includes(file.type)) return 'Screenshot must be a JPG, PNG or WebP image.';
+  if (file.size > MAX_SCREENSHOT_BYTES) return 'Screenshot must be 5 MB or smaller.';
+  return null;
+}
+
 export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: PaymentModalProps) {
-  const [step, setStep] = useState<'confirm' | 'pending' | 'success' | 'failed'>('confirm');
-  const [transaction, setTransaction] = useState<PaymentTransactionResponse | null>(null);
+  const [step, setStep] = useState<Step>('confirm');
+  const [checkout, setCheckout] = useState<UpiCheckoutResponse | null>(null);
+  const [screenshot, setScreenshot] = useState<File | null>(null);
+  const [utr, setUtr] = useState('');
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handlePay = async () => {
-    if (!plan) return;
+  const planSlug = plan?.slug;
+
+  // Each time the modal opens for a plan, start over and load its UPI price.
+  useEffect(() => {
+    if (!isOpen || !planSlug) return;
+    let cancelled = false;
+    setStep('confirm');
+    setCheckout(null);
+    setScreenshot(null);
+    setUtr('');
+    setError(null);
+    setLoading(true);
+    paymentsApi
+      .getCheckout(planSlug)
+      .then((data) => {
+        if (!cancelled) setCheckout(data);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message || 'Could not load payment details');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, planSlug]);
+
+  const utrValid = UTR_PATTERN.test(normalizeUtr(utr));
+  const canSubmit = Boolean(checkout && screenshot && utrValid && !loading);
+
+  const handleFile = (file: File | undefined) => {
+    if (!file) return;
+    const problem = screenshotError(file);
+    setError(problem);
+    setScreenshot(problem ? null : file);
+  };
+
+  const handleSubmit = async () => {
+    if (!checkout || !screenshot || !utrValid) return;
     setLoading(true);
     setError(null);
     try {
-      const tx = await subscriptionApi.initiatePayment(plan.slug, 'manual', 'Manual payment initiated from UI');
-      setTransaction(tx);
-      setStep('pending');
+      await paymentsApi.submit({
+        plan_slug: checkout.plan_slug,
+        utr_number: normalizeUtr(utr),
+        screenshot,
+      });
+      setStep('submitted');
     } catch (err: any) {
-      setError(err.message || 'Failed to initiate payment');
+      setError(err.message || 'Failed to submit payment');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleVerify = async (status: 'success' | 'failed') => {
-    if (!transaction) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const updated = await subscriptionApi.verifyPayment(transaction.payment_uuid, status, `Admin verified: ${status}`);
-      setTransaction(updated);
-      setStep(status === 'success' ? 'success' : 'failed');
-      if (status === 'success') {
-        onPaymentComplete();
-      }
-    } catch (err: any) {
-      setError(err.message || 'Failed to verify payment');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const copyUpiId = async () => {
+    if (!checkout) return;
+    await navigator.clipboard.writeText(checkout.upi_id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
   if (!isOpen || !plan) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl max-w-md w-full">
+      <div className="bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 lg:p-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-white font-['Syne',sans-serif]">
               {step === 'confirm' && 'Complete Payment'}
-              {step === 'pending' && 'Payment Pending'}
-              {step === 'success' && 'Payment Successful'}
-              {step === 'failed' && 'Payment Failed'}
+              {step === 'pay' && 'Pay with UPI'}
+              {step === 'submitted' && 'Payment Submitted'}
             </h2>
             <button
               onClick={onClose}
@@ -102,20 +145,20 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-neutral-300">Amount</span>
                   <span className="text-sm font-bold text-white">
-                    {plan.price_monthly === 0 ? 'Free' : `${plan.currency} ${plan.price_monthly}`}
+                    {checkout ? formatAmount(checkout.amount, checkout.currency) : '—'}
                   </span>
                 </div>
               </div>
 
               <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
                 <p className="text-xs text-amber-300 leading-relaxed">
-                  You will be redirected to complete your payment. After successful payment, your credits will be added to your account automatically.
+                  Pay by scanning our UPI QR code with any UPI app, then upload the payment screenshot and UTR. Your plan is activated as soon as we verify the payment.
                 </p>
               </div>
 
               <button
-                onClick={handlePay}
-                disabled={loading}
+                onClick={() => setStep('pay')}
+                disabled={loading || !checkout}
                 className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-sm shadow-md shadow-amber-500/15 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
@@ -130,84 +173,123 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
             </div>
           )}
 
-          {step === 'pending' && transaction && (
-            <div className="space-y-6">
+          {step === 'pay' && checkout && (
+            <div className="space-y-5">
+              <div className="flex flex-col items-center gap-3">
+                {/* QR codes need a light background to scan reliably. */}
+                <div className="p-3 rounded-xl bg-white">
+                  <img src={checkout.qr_image} alt={`UPI QR code to pay ${checkout.payee_name}`} className="w-52 h-52" />
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-white">{formatAmount(checkout.amount, checkout.currency)}</p>
+                  <p className="text-xs text-neutral-400">to {checkout.payee_name}</p>
+                </div>
+                <a
+                  href={checkout.upi_uri}
+                  className="md:hidden flex items-center gap-1.5 text-xs font-bold text-amber-400 hover:text-amber-300"
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  Open UPI app
+                </a>
+              </div>
+
               <div className="p-4 rounded-xl bg-neutral-950 border border-neutral-800">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-neutral-300">Payment UUID</span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-neutral-400">UPI ID</span>
                   <button
-                    onClick={() => copyToClipboard(transaction.payment_uuid)}
+                    onClick={copyUpiId}
                     className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300"
                   >
-                    <Copy className="w-3 h-3" />
-                    Copy
+                    {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                    {copied ? 'Copied' : 'Copy'}
                   </button>
                 </div>
-                <p className="text-xs font-mono text-neutral-400 break-all">{transaction.payment_uuid}</p>
+                <p className="text-sm font-mono text-white break-all">{checkout.upi_id}</p>
               </div>
 
               <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
                 <p className="text-xs text-amber-300 leading-relaxed">
-                  Your payment is pending verification. Use the UUID above to verify your payment. Once verified, your credits will be added automatically.
+                  After paying, upload the screenshot and enter the UTR / transaction ID.
                 </p>
               </div>
 
-              <div className="p-4 rounded-xl bg-neutral-950 border border-neutral-800">
-                <p className="text-xs text-neutral-400 mb-2">Admin Actions</p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleVerify('success')}
-                    disabled={loading}
-                    className="flex-1 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold text-xs active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Verify Success
-                  </button>
-                  <button
-                    onClick={() => handleVerify('failed')}
-                    disabled={loading}
-                    className="flex-1 py-2 rounded-xl bg-red-500 hover:bg-red-400 text-white font-bold text-xs active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-1"
-                  >
-                    <XCircle className="w-3.5 h-3.5" />
-                    Mark Failed
-                  </button>
-                </div>
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="text-xs font-bold text-neutral-300">Payment screenshot</span>
+                  <div className="mt-1.5 flex items-center gap-3 p-3 rounded-xl bg-neutral-950 border border-dashed border-neutral-700 hover:border-amber-500/50 cursor-pointer transition-colors">
+                    <ImageUp className="w-5 h-5 text-neutral-400 shrink-0" />
+                    <span className="text-xs text-neutral-300 truncate">
+                      {screenshot ? screenshot.name : 'JPG, PNG or WebP, up to 5 MB'}
+                    </span>
+                  </div>
+                  <input
+                    type="file"
+                    accept={SCREENSHOT_TYPES.join(',')}
+                    className="sr-only"
+                    onChange={(e) => {
+                      handleFile(e.target.files?.[0]);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="text-xs font-bold text-neutral-300">UTR / transaction ID</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="12-digit UTR number"
+                    value={utr}
+                    onChange={(e) => setUtr(e.target.value)}
+                    maxLength={16}
+                    className="mt-1.5 w-full px-3 py-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-sm font-mono text-white placeholder:text-neutral-600 focus:outline-none focus:border-amber-500/60"
+                  />
+                  {utr && !utrValid && (
+                    <span className="mt-1 block text-[11px] text-red-400">UTR must be exactly 12 digits.</span>
+                  )}
+                </label>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setStep('confirm')}
+                  disabled={loading}
+                  className="px-4 py-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-sm active:scale-95 transition-all disabled:opacity-50"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={!canSubmit}
+                  className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-sm shadow-md shadow-amber-500/15 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <div className="w-5 h-5 border-2 border-neutral-900/30 border-t-neutral-900 rounded-full animate-spin" />
+                  ) : (
+                    'Submit Payment'
+                  )}
+                </button>
               </div>
             </div>
           )}
 
-          {step === 'success' && (
+          {step === 'submitted' && (
             <div className="space-y-4 text-center py-4">
               <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-8 h-8 text-emerald-400" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">Payment Verified!</h3>
-                <p className="text-sm text-neutral-400 mt-1">Your {plan.credit_minutes} credits have been added to your account.</p>
+                <h3 className="text-lg font-bold text-white">Payment submitted</h3>
+                <p className="text-sm text-neutral-400 mt-1">
+                  Verification usually takes a few minutes. Track it under Settings → Plan &amp; Billing → My Payments.
+                </p>
               </div>
               <button
-                onClick={onClose}
+                onClick={onPaymentComplete}
                 className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-sm shadow-md shadow-amber-500/15 active:scale-95 transition-all"
               >
                 Done
-              </button>
-            </div>
-          )}
-
-          {step === 'failed' && (
-            <div className="space-y-4 text-center py-4">
-              <div className="w-16 h-16 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center mx-auto">
-                <XCircle className="w-8 h-8 text-red-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-white">Payment Failed</h3>
-                <p className="text-sm text-neutral-400 mt-1">The payment could not be verified. Please try again.</p>
-              </div>
-              <button
-                onClick={onClose}
-                className="px-6 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-bold text-sm active:scale-95 transition-all"
-              >
-                Close
               </button>
             </div>
           )}

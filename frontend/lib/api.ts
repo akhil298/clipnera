@@ -58,6 +58,7 @@ export interface UserProfileResponse {
   ai_credits_total: number;
   active_workspace_id: string | null;
   providers: string[];
+  role: 'user' | 'admin';
 }
 
 export interface WorkspaceResponse {
@@ -433,7 +434,8 @@ async function authedRequest<T>(path: string, options?: RequestInit): Promise<T>
   const res = await fetch(`${API_BASE}/api/v1${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      // The browser sets the multipart boundary itself for FormData bodies.
+      ...(options?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options?.headers || {}),
     },
@@ -867,6 +869,7 @@ export interface PlanResponse {
   credit_minutes: number;
   price_monthly: number;
   currency: string;
+  price_inr: number | null;
   is_active: boolean;
   features: string | null;
   created_at: string;
@@ -943,15 +946,89 @@ export const subscriptionApi = {
     }),
   getMyTransactions: () => authedRequest<PaymentTransactionResponse[]>('/subscription/transactions'),
   getCreditLedger: (limit?: number) => authedRequest<CreditLedgerResponse[]>(`/subscription/ledger${limit ? `?limit=${limit}` : ''}`),
-  initiatePayment: (planSlug: string, paymentMethod?: string, notes?: string) =>
-    authedRequest<PaymentTransactionResponse>('/subscription/payment/initiate', {
-      method: 'POST',
-      body: JSON.stringify({ plan_slug: planSlug, payment_method: paymentMethod, notes }),
-    }),
-  verifyPayment: (paymentUuid: string, status: string, notes?: string) =>
-    authedRequest<PaymentTransactionResponse>('/subscription/payment/verify', {
-      method: 'POST',
-      body: JSON.stringify({ payment_uuid: paymentUuid, status, notes }),
+};
+
+// Manual UPI payments. Mirrors backend/payment/schema.py.
+
+export type PaymentStatus = 'pending' | 'success' | 'failed' | 'rejected';
+
+export interface UpiCheckoutResponse {
+  plan_slug: string;
+  plan_name: string;
+  amount: number;
+  currency: string;
+  upi_id: string;
+  payee_name: string;
+  /** upi://pay deep link with the amount pre-filled. */
+  upi_uri: string;
+  /** SVG data URI of the QR code for upi_uri. */
+  qr_image: string;
+}
+
+export interface PaymentResponse {
+  id: string;
+  plan_slug: string;
+  plan_name: string;
+  amount: number;
+  currency: string;
+  utr_number: string | null;
+  status: PaymentStatus;
+  rejection_reason: string | null;
+  /** Short-lived signed URL; refetch the payment when it expires. */
+  screenshot_url: string | null;
+  verified_at: string | null;
+  created_at: string;
+}
+
+export interface AdminPaymentResponse extends PaymentResponse {
+  user_id: string;
+  user_email: string;
+  user_name: string | null;
+  verified_by: string | null;
+}
+
+export interface SubmitPaymentPayload {
+  plan_slug: string;
+  utr_number: string;
+  screenshot: File;
+}
+
+export const paymentsApi = {
+  getCheckout: (planSlug: string) =>
+    authedRequest<UpiCheckoutResponse>(`/payments/qr?plan_slug=${encodeURIComponent(planSlug)}`),
+  submit: ({ plan_slug, utr_number, screenshot }: SubmitPaymentPayload) => {
+    const form = new FormData();
+    form.append('plan_slug', plan_slug);
+    form.append('utr_number', utr_number);
+    form.append('screenshot', screenshot);
+    return authedRequest<PaymentResponse>('/payments', { method: 'POST', body: form });
+  },
+  getMine: () => authedRequest<PaymentResponse[]>('/payments/my'),
+};
+
+export interface AdminPaymentListParams {
+  status?: PaymentStatus;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export const adminPaymentsApi = {
+  list: (params: AdminPaymentListParams = {}) => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') query.set(key, String(value));
+    });
+    const qs = query.toString();
+    return authedRequest<AdminPaymentResponse[]>(`/admin/payments${qs ? `?${qs}` : ''}`);
+  },
+  get: (id: string) => authedRequest<AdminPaymentResponse>(`/admin/payments/${id}`),
+  approve: (id: string) =>
+    authedRequest<AdminPaymentResponse>(`/admin/payments/${id}/approve`, { method: 'PATCH' }),
+  reject: (id: string, reason: string) =>
+    authedRequest<AdminPaymentResponse>(`/admin/payments/${id}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
     }),
 };
 

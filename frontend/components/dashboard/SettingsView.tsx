@@ -23,6 +23,7 @@ import { workspaceApi, subscriptionApi } from '@/lib/api';
 import { TableSkeleton } from '@/components/skeletons';
 import { PlanSelectionModal } from './PlanSelectionModal';
 import { PaymentModal } from './PaymentModal';
+import { MyPaymentsCard } from '@/components/payments/MyPaymentsCard';
 
 interface SettingsViewProps {
   user: UserProfile;
@@ -52,6 +53,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [selectedPlan, setSelectedPlan] = useState<{ id: string; name: string; slug: string; credit_minutes: number; price_monthly: number; currency: string } | null>(null);
   const [subscription, setSubscription] = useState<{ plan: string; credit_minutes_total: number; credit_minutes_remaining: number; subscription_status: string; current_period_end: string | null } | null>(null);
   const [loadingSub, setLoadingSub] = useState(false);
+  const [paymentsRefreshKey, setPaymentsRefreshKey] = useState(0);
 
   const loadSubscription = async () => {
     setLoadingSub(true);
@@ -403,6 +405,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               ))}
             </div>
           </div>
+
+          <div className="lg:col-span-12">
+            <MyPaymentsCard refreshKey={paymentsRefreshKey} />
+          </div>
         </div>
       )}
 
@@ -631,6 +637,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           setIsPaymentModalOpen(false);
           setSelectedPlan(null);
           loadSubscription();
+          setPaymentsRefreshKey((k) => k + 1);
         }}
       />
     </div>

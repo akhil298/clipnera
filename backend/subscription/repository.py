@@ -10,6 +10,15 @@ from core.logging_config import get_logger
 log = get_logger(__name__)
 
 
+async def _save(session: AsyncSession, obj: object, commit: bool) -> None:
+    """Commit and reload ``obj``, or only flush it when the caller owns the transaction."""
+    if commit:
+        await session.commit()
+        await session.refresh(obj)
+    else:
+        await session.flush()
+
+
 class PlanRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -56,7 +65,7 @@ class UserSubscriptionRepository:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
-    async def create(self, user_id: str, plan_id: str, period_start: datetime, period_end: datetime) -> UserSubscription:
+    async def create(self, user_id: str, plan_id: str, period_start: datetime, period_end: datetime, commit: bool = True) -> UserSubscription:
         sub = UserSubscription(
             user_id=user_id,
             plan_id=plan_id,
@@ -65,8 +74,7 @@ class UserSubscriptionRepository:
             current_period_end=period_end,
         )
         self._session.add(sub)
-        await self._session.commit()
-        await self._session.refresh(sub)
+        await _save(self._session, sub, commit)
         return sub
 
     async def cancel(self, subscription_id: str) -> UserSubscription | None:
@@ -84,39 +92,6 @@ class UserSubscriptionRepository:
 class PaymentTransactionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
-
-    async def create(self, user_id: str, plan_id: str, amount: float, currency: str, payment_uuid: str, payment_method: str | None = None, notes: str | None = None) -> PaymentTransaction:
-        tx = PaymentTransaction(
-            user_id=user_id,
-            plan_id=plan_id,
-            amount=amount,
-            currency=currency,
-            status=PaymentStatus.PENDING,
-            payment_uuid=payment_uuid,
-            payment_method=payment_method,
-            notes=notes,
-        )
-        self._session.add(tx)
-        await self._session.commit()
-        await self._session.refresh(tx)
-        return tx
-
-    async def get_by_payment_uuid(self, payment_uuid: str) -> PaymentTransaction | None:
-        stmt = select(PaymentTransaction).where(PaymentTransaction.payment_uuid == payment_uuid)
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def update_status(self, payment_uuid: str, status: PaymentStatus, notes: str | None = None) -> PaymentTransaction | None:
-        tx = await self.get_by_payment_uuid(payment_uuid)
-        if tx:
-            tx.status = status
-            if status == PaymentStatus.SUCCESS:
-                tx.verified_at = datetime.utcnow()
-            if notes:
-                tx.notes = notes
-            await self._session.commit()
-            await self._session.refresh(tx)
-        return tx
 
     async def get_by_user(self, user_id: str) -> list[PaymentTransaction]:
         stmt = (
@@ -154,7 +129,7 @@ class CreditLedgerRepository:
         entry = result.scalar_one_or_none()
         return entry.balance_after if entry else 0
 
-    async def add_entry(self, user_id: str, amount: int, balance_after: int, reason: str, reference_id: str | None = None, reference_type: str | None = None) -> CreditLedger:
+    async def add_entry(self, user_id: str, amount: int, balance_after: int, reason: str, reference_id: str | None = None, reference_type: str | None = None, commit: bool = True) -> CreditLedger:
         entry = CreditLedger(
             user_id=user_id,
             amount=amount,
@@ -164,8 +139,7 @@ class CreditLedgerRepository:
             reference_type=reference_type,
         )
         self._session.add(entry)
-        await self._session.commit()
-        await self._session.refresh(entry)
+        await _save(self._session, entry, commit)
         return entry
 
     async def get_history(self, user_id: str, limit: int = 50) -> list[CreditLedger]:
