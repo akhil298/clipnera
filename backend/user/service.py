@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from auth.model import User, AuthProvider
+from core.exceptions import CustomException
 from user.repository import UserRepository
 from subscription.service import SubscriptionService
 from user.schema import UserProfileResponse
@@ -16,6 +17,12 @@ class UserService:
 
     async def get_profile(self, user_id: str) -> User | None:
         return await self._repository.get_by_id(user_id)
+
+    async def get_me(self, user_id: str) -> UserProfileResponse:
+        user = await self.get_profile(user_id)
+        if not user:
+            raise CustomException(message="User not found", code="NOT_FOUND", status_code=404)
+        return await self.to_full_response(user)
 
     @staticmethod
     def _get_initials(name: str | None, email: str) -> str:

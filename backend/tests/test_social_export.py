@@ -130,7 +130,7 @@ class TestExportSelectionFields:
 class TestExportEntitlements:
     @staticmethod
     def _check(plan: str, **fields):
-        from pipeline.route import _check_export_entitlements
+        from pipeline.service import _check_export_entitlements
         from subscription.entitlements import entitlements_for
 
         _check_export_entitlements(entitlements_for(plan), SocialExportRequest(platforms=["tiktok"], **fields))

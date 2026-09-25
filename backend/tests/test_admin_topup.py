@@ -71,19 +71,19 @@ def test_topup_request_requires_a_reason():
         CreditTopupRequest(user_email="a@example.com", amount=10, reason="")
 
 
+class _Users:
+    def __init__(self, user=None) -> None:
+        self._user = user
+
+    async def get_user_by_email(self, email):
+        return self._user
+
+
 @pytest.mark.asyncio
-async def test_topup_for_unknown_email_is_404(monkeypatch):
-    class _Users:
-        def __init__(self, session):
-            pass
-
-        async def get_user_by_email(self, email):
-            return None
-
-    monkeypatch.setattr(route, "UserRepository", _Users)
-    body = CreditTopupRequest(user_email="ghost@example.com", amount=10, reason="Refund")
+async def test_topup_for_unknown_email_is_404():
+    service = SubscriptionService(None, None, None, _LedgerRepo(), user_repo=_Users())
     with pytest.raises(CustomException) as exc:
-        await route.topup_credits(SimpleNamespace(id="admin-1"), _service(_LedgerRepo()), None, body)
+        await service.admin_topup_by_email("ghost@example.com", 10, "Refund", "admin-1")
     assert exc.value.status_code == 404
 
 
@@ -91,15 +91,8 @@ async def test_topup_for_unknown_email_is_404(monkeypatch):
 async def test_topup_credits_the_named_user_not_the_admin(monkeypatch):
     target = SimpleNamespace(id="user-9", email="target@example.com", full_name="Target", username=None)
 
-    class _Users:
-        def __init__(self, session):
-            pass
-
-        async def get_user_by_email(self, email):
-            return target
-
     ledger = _LedgerRepo(balance=0)
-    service = _service(ledger)
+    service = SubscriptionService(None, None, None, ledger, user_repo=_Users(target))
 
     async def _admin_topup(user_id, amount, reason, admin_id):
         entry = await SubscriptionService.admin_topup(service, user_id, amount, reason, admin_id)
@@ -108,10 +101,8 @@ async def test_topup_credits_the_named_user_not_the_admin(monkeypatch):
         entry.created_at = datetime(2026, 9, 25)
         return entry
 
-    monkeypatch.setattr(route, "UserRepository", _Users)
     monkeypatch.setattr(service, "admin_topup", _admin_topup)
-    body = CreditTopupRequest(user_email="target@example.com", amount=25, reason="  Goodwill  ")
-    result = await route.topup_credits(SimpleNamespace(id="admin-1"), service, None, body)
+    result = await service.admin_topup_by_email("target@example.com", 25, "  Goodwill  ", "admin-1")
 
     assert result.user_id == "user-9"
     assert result.amount == 25

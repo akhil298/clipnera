@@ -32,7 +32,7 @@ async def list_users(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> list[AdminUserResponse]:
-    return await service.list_users((q or "").strip() or None, limit, offset)
+    return await service.list_users(q, limit, offset)
 
 
 @admin.patch("/users/{user_id}/plan", response_model=AdminUserResponse)

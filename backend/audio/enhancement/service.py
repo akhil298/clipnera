@@ -4,12 +4,14 @@ import asyncio
 import io
 import time
 import logging
+import httpx
 import numpy as np
 from scipy import signal
 from scipy.io import wavfile
 import noisereduce as nr
 
 from audio.enhancement.schema import AudioEnhanceRequest, AudioEnhanceResponse, AudioPreviewRequest
+from core.exceptions import CustomException
 from core.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -189,6 +191,24 @@ def generate_test_tone(frequency_hz: float, duration_seconds: float, sr: int = S
 
 
 class AudioService:
+    @staticmethod
+    def list_presets() -> dict:
+        return {
+            "zones": [
+                {"key": k, "label": v["label"], "strength_range": "0-30" if k == "mild" else "31-70" if k == "balanced" else "71-100"}
+                for k, v in ZONE_PRESETS.items()
+            ]
+        }
+
+    async def process_audio_from_url(self, request: AudioEnhanceRequest) -> AudioEnhanceResponse:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(request.audio_url)
+        if resp.status_code != 200:
+            raise CustomException(
+                message="Failed to fetch audio from provided URL", code="AUDIO_FETCH_FAILED", status_code=400
+            )
+        return await self.process_audio(request, resp.content)
+
     async def process_audio(self, request: AudioEnhanceRequest, audio_bytes: bytes) -> AudioEnhanceResponse:
         start = time.time()
         try:

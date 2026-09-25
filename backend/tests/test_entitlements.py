@@ -15,7 +15,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from core.exceptions import CustomException
-from pipeline.route import _apply_entitlements
+from pipeline.service import _apply_entitlements
 from subscription.entitlements import (
     ENTITLEMENTS,
     FREE_CAPTION_STYLES,

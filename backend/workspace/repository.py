@@ -9,7 +9,7 @@ from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
-from auth.model import User
+from auth.model import AuthProvider, User, UserAccount
 from workspace.model import (
     Workspace,
     WorkspaceMember,
@@ -120,6 +120,21 @@ class WorkspaceRepository:
         stmt = select(User).where(User.email == email)
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def add_password_user(self, email: str, full_name: str | None, password_hash: str) -> User:
+        """Stage a password-login user; committed by the caller's next write."""
+        user = User(email=email, full_name=full_name, username=email.split("@")[0])
+        self._session.add(user)
+        await self._session.flush()
+        self._session.add(
+            UserAccount(
+                user_id=user.id,
+                provider=AuthProvider.PASSWORD,
+                provider_user_id=email,
+                password_hash=password_hash,
+            )
+        )
+        return user
 
     async def get_users_by_ids(self, user_ids: list[str]) -> dict[str, User]:
         if not user_ids:

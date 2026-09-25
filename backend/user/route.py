@@ -31,9 +31,4 @@ async def dismiss_plan_notice(current_user: CurrentUserDep, service: UserService
 
 @router.get("/me", response_model=UserProfileResponse)
 async def get_me(current_user: CurrentUserDep, service: UserServiceDep) -> UserProfileResponse:
-    user = await service.get_profile(current_user["user_id"])
-    if not user:
-        from core.exceptions import CustomException
-
-        raise CustomException(message="User not found", code="NOT_FOUND", status_code=404)
-    return await service.to_full_response(user)
+    return await service.get_me(current_user["user_id"])

@@ -24,6 +24,7 @@ class AdminService:
         self._subscription_service = subscription_service
 
     async def list_users(self, query: str | None, limit: int, offset: int) -> list[AdminUserResponse]:
+        query = (query or "").strip() or None
         return [
             self._to_response(user, plan, expires_at)
             for user, plan, expires_at in await self._repo.list_users(query, limit, offset)

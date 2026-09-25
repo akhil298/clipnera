@@ -1,15 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.concurrency import run_in_threadpool
 
 from audio.extraction.schema import (
-    AudioCodec,
-    AudioChannel,
     BatchExtractionRequest,
     BatchExtractionResult,
-    ExtractionProgress,
     ExtractionRequest,
     ExtractionResult,
-    OutputFormat,
 )
 from audio.extraction.service import AudioExtractionService
 from core.exceptions import CustomException
@@ -20,8 +15,6 @@ log = get_logger(__name__)
 
 extraction = APIRouter(prefix="/audio/extraction", tags=["audio-extraction"])
 _service = AudioExtractionService()
-
-_progress_store: dict[str, ExtractionProgress] = {}
 
 
 @extraction.post("/extract", response_model=ExtractionResult)

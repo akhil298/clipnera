@@ -314,6 +314,24 @@ class DepthCaptionJobResponse(BaseModel):
     retryable: bool = False
 
 
+class DepthCaptionsRenderRequest(BaseModel):
+    project_id: str
+    clip_id: str
+    style: StylePreset = StylePreset.GIANT_EDITORIAL
+    depth_mode: DepthMode = DepthMode.AUTO
+    language: str = "en"
+
+
+class DepthCaptionsJobStatusResponse(BaseModel):
+    job_id: str
+    status: DepthCaptionJobStatus
+    progress: int
+    stage: str
+    preview_url: Optional[str] = None
+    output_url: Optional[str] = None
+    error: Optional[str] = None
+
+
 class MaskQualityMetrics(BaseModel):
     temporal_stability: float = Field(ge=0, le=1)
     boundary_quality: float = Field(ge=0, le=1)

@@ -2,7 +2,6 @@ from fastapi import APIRouter
 
 from auth.dependencies import CurrentUserDep
 from analytics.service import AnalyticsService
-from analytics.schema import DashboardStatsResponse
 from core.logging_config import get_logger
 
 log = get_logger(__name__)

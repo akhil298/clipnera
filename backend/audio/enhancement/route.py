@@ -1,12 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from auth.dependencies import CurrentUserDep
 from audio.enhancement.schema import AudioEnhanceRequest, AudioEnhanceResponse, AudioPreviewRequest
 from audio.enhancement.service import AudioService
-from core.logging_config import get_logger
 from subscription.dependencies import check_limit
-
-log = get_logger(__name__)
 
 audio = APIRouter(prefix="/audio", tags=["audio"])
 _service = AudioService()
@@ -17,13 +14,7 @@ _service = AudioService()
     dependencies=[Depends(check_limit("audio_enhancements"))],
 )
 async def process_audio(request: AudioEnhanceRequest, user: CurrentUserDep):
-    import httpx
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(request.audio_url)
-        if resp.status_code != 200:
-            raise HTTPException(status_code=400, detail="Failed to fetch audio from provided URL")
-        audio_bytes = resp.content
-    return await _service.process_audio(request, audio_bytes)
+    return await _service.process_audio_from_url(request)
 
 
 @audio.post("/preview", response_model=AudioEnhanceResponse)
@@ -33,10 +24,4 @@ async def preview_audio(request: AudioPreviewRequest, user: CurrentUserDep):
 
 @audio.get("/presets", tags=["audio"])
 async def get_presets(user: CurrentUserDep = None):
-    from audio.enhancement.service import ZONE_PRESETS
-    return {
-        "zones": [
-            {"key": k, "label": v["label"], "strength_range": "0-30" if k == "mild" else "31-70" if k == "balanced" else "71-100"}
-            for k, v in ZONE_PRESETS.items()
-        ]
-    }
+    return _service.list_presets()

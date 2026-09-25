@@ -4,7 +4,7 @@ import pytest
 
 from core.exceptions import CustomException
 from pipeline.model import PipelineStepType
-from pipeline.route import RUNNABLE_PIPELINE_STEPS, _resolve_steps
+from pipeline.service import RUNNABLE_PIPELINE_STEPS, _resolve_steps
 
 
 class TestStepResolution:

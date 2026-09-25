@@ -2,33 +2,50 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import json
+import secrets
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import get_settings
 from core.exceptions import CustomException
 from core.logging_config import get_logger
 from feature_flags.registry import SOCIAL_PUBLISHING, social_platform_flag
 from feature_flags.service import FeatureFlagService
-from social import audit
+from social import audit, quota
 from social.credentials import fresh_tokens
-from social.model import AccountStatus, AuditAction, ConnectedAccount, ScheduledPost, SocialPlatform
+from social.model import (
+    AccountStatus,
+    AuditAction,
+    ConnectedAccount,
+    DataDeletionRequest,
+    ScheduledPost,
+    SocialPlatform,
+)
 from social.oauth_state import OAuthStateStore
 from social.providers import get_provider
 from social.providers.base import ErrorKind, PkcePair, PlatformError, PlatformProvider, Profile, TokenSet
 from social.repository import SocialRepository
 from social.schema import (
+    AdminAccountListResponse,
+    AdminAccountResponse,
+    AdminFailure,
+    AdminPlatformStats,
+    AdminSocialOverviewResponse,
     ConnectedAccountResponse,
     ConnectionsResponse,
     ConnectStartResponse,
+    DeletionStatusResponse,
     DisconnectPreviewResponse,
     PlatformInfo,
     TikTokCreatorInfoResponse,
 )
 from social.tokens import TokenStore
+from social.webhooks import parse_meta_signed_request, verify_tiktok_signature
 from subscription.entitlements import Entitlements
 from subscription.service import SubscriptionService, pro_required
 
@@ -312,6 +329,71 @@ class SocialAccountService:
         await self._session.commit()
         return 1
 
+    async def admin_force_disconnect(self, account_id: str, admin_id: str) -> DisconnectPreviewResponse:
+        account = await self._repo.get_account_by_id(account_id)
+        if not account:
+            raise not_found()
+        cancelled = await self.disconnect(account, "admin", admin_id)
+        log.info(f"Admin {admin_id} force-disconnected social account={account_id}")
+        return DisconnectPreviewResponse(account_id=account_id, pending_posts=cancelled)
+
+    # -- platform callbacks --------------------------------------------------
+
+    @staticmethod
+    def _meta_payload(signed_request: str) -> dict:
+        payload = parse_meta_signed_request(signed_request)
+        if not payload or not payload.get("user_id"):
+            raise CustomException(message="Invalid signature", code="INVALID_SIGNATURE", status_code=400)
+        return payload
+
+    async def meta_deauthorize(self, signed_request: str) -> None:
+        payload = self._meta_payload(signed_request)
+        await self.platform_removed(SocialPlatform.INSTAGRAM, str(payload["user_id"]), delete_data=False)
+
+    async def meta_data_deletion(self, signed_request: str) -> dict:
+        """Delete what we hold for the Meta user and return the status URL Meta
+        shows them, in Meta's response shape."""
+        payload = self._meta_payload(signed_request)
+        deleted = await self.platform_removed(SocialPlatform.INSTAGRAM, str(payload["user_id"]), delete_data=True)
+        code = secrets.token_hex(8)
+        self._session.add(
+            DataDeletionRequest(
+                confirmation_code=code, platform=SocialPlatform.INSTAGRAM, accounts_deleted=deleted, completed=True
+            )
+        )
+        await self._session.commit()
+        status_url = f"{get_settings().PUBLIC_APP_URL.rstrip('/')}/data-deletion?code={code}"
+        return {"url": status_url, "confirmation_code": code}
+
+    async def tiktok_event(self, signature: str | None, body: bytes) -> None:
+        if not verify_tiktok_signature(signature, body):
+            raise CustomException(message="Invalid signature", code="INVALID_SIGNATURE", status_code=400)
+        try:
+            event = json.loads(body)
+        except json.JSONDecodeError as exc:
+            raise CustomException(message="Invalid body", code="INVALID_BODY", status_code=400) from exc
+        if event.get("client_key") != get_settings().TIKTOK_CLIENT_KEY:
+            raise CustomException(message="Unknown client", code="INVALID_BODY", status_code=400)
+        if event.get("event") == "authorization.removed" and event.get("user_openid"):
+            try:
+                reason = int(json.loads(event.get("content") or "{}").get("reason", 0))
+            except (ValueError, TypeError, json.JSONDecodeError):
+                reason = 0
+            # reason 2: the TikTok account itself was deleted, so delete what we hold too.
+            await self.platform_removed(SocialPlatform.TIKTOK, str(event["user_openid"]), delete_data=reason == 2)
+
+    async def deletion_status(self, code: str) -> DeletionStatusResponse:
+        record = await self._session.get(DataDeletionRequest, code[:32])
+        if not record:
+            raise not_found("Deletion request")
+        return DeletionStatusResponse(
+            confirmation_code=record.confirmation_code,
+            platform=record.platform.value,
+            completed=record.completed,
+            accounts_deleted=record.accounts_deleted,
+            requested_at=record.created_at,
+        )
+
     async def purge_user(self, user_id: str) -> None:
         """Revoke and delete every connected account of a user being deleted.
         Call before deleting the user row; the FK cascade then removes the rest."""
@@ -320,3 +402,66 @@ class SocialAccountService:
             if account:
                 await self._repo.cancel_pending_posts(account.id, "Account deleted")
                 await self.finalize_disconnect(account)
+
+
+class SocialAdminService:
+    """Platform-wide publishing health for the admin panel."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+        self._repo = SocialRepository(session)
+
+    async def overview(self, days: int) -> AdminSocialOverviewResponse:
+        accounts: dict[SocialPlatform, dict[str, int]] = {p: {} for p in SocialPlatform}
+        for platform, status, count in await self._repo.account_counts():
+            accounts[platform][status.value] = count
+        posts: dict[SocialPlatform, dict[str, int]] = {p: {} for p in SocialPlatform}
+        for platform, status, count in await self._repo.post_counts(datetime.utcnow() - timedelta(days=days)):
+            posts[platform][status.value] = count
+        stats = []
+        for platform in SocialPlatform:
+            done = posts[platform].get("published", 0) + posts[platform].get("failed", 0)
+            stats.append(
+                AdminPlatformStats(
+                    platform=platform.value,
+                    accounts=accounts[platform],
+                    posts=posts[platform],
+                    success_rate=round(posts[platform].get("published", 0) / done, 4) if done else None,
+                )
+            )
+        failures = [
+            AdminFailure(
+                post_id=post.id,
+                platform=post.platform.value,
+                account_handle=account.handle,
+                user_email=user.email,
+                error_code=post.error_code,
+                error_message=post.error_message,
+                attempts=post.attempts,
+                failed_at=post.updated_at,
+            )
+            for post, account, user in await self._repo.recent_failures(25)
+        ]
+        return AdminSocialOverviewResponse(
+            window_days=days, platforms=stats, quota=await quota.usage(self._session), recent_failures=failures
+        )
+
+    async def accounts(self, query: str | None, limit: int, offset: int) -> AdminAccountListResponse:
+        rows = await self._repo.admin_accounts((query or "").strip() or None, limit, offset)
+        return AdminAccountListResponse(
+            accounts=[
+                AdminAccountResponse(
+                    id=account.id,
+                    platform=account.platform.value,
+                    handle=account.handle,
+                    display_name=account.display_name,
+                    follower_count=account.follower_count,
+                    status=account.status.value,
+                    status_reason=account.status_reason,
+                    user_id=user.id,
+                    user_email=user.email,
+                    connected_at=account.connected_at,
+                )
+                for account, user in rows
+            ]
+        )

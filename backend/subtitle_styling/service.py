@@ -12,12 +12,15 @@ from clip_generation.hook import Hook, on_output_timeline
 from hook_transitions.graph import BridgePlan, MediaInfo, timeline_graph
 from hook_transitions.resolver import TransitionSpec
 from hook_transitions.text import write_bridge_ass
+from core.database import AsyncSessionLocal
 from core.logging_config import get_logger
 from core.exceptions import CustomException
 from video_processor.ffmpeg_service import FFmpegService
 from subtitle_styling.ass_generator import AssGenerator, ass_filter, build_ass_file, burn_filter_args
 from subtitle_styling.templates import get_template, get_template_info, get_template_names
 from subtitle_styling.phrase_segmenter import segment_phrases, segment_for_captions
+from subtitle_styling.schema import SubtitleBurnRequest
+from subscription.service import SubscriptionService, require_caption_style, require_hook_transition
 
 log = get_logger(__name__)
 
@@ -111,6 +114,31 @@ def _style_overrides(custom_config: Optional[dict]) -> dict[str, Any]:
     if family and family.lower() not in _GENERIC_FONT_FAMILIES:
         overrides["font_family"] = family
     return overrides
+
+async def prepare_burn_payload(user_id: str, data: SubtitleBurnRequest) -> dict:
+    """The burn request clamped to the caller's plan, counted as one export.
+
+    Shared by every route that burns captions, since each is reachable
+    directly and the editor only hides locked options.
+    """
+    payload = data.model_dump()
+    # The model itself, not its dump: a dump marks every unset field as sent,
+    # which would override the preset's parts with blanks.
+    payload["hook_transition"] = data.hook_transition
+
+    async with AsyncSessionLocal() as session:
+        subscription_service = SubscriptionService.for_session(session)
+        entitlements = await subscription_service.get_entitlements(user_id)
+
+        require_caption_style(entitlements, payload.get("style_type"))
+        if data.hook_transition:
+            require_hook_transition(entitlements, data.hook_transition.mode)
+        await subscription_service.consume_daily_quota(user_id, "exports")
+
+    if entitlements.watermark_forced:
+        payload["enable_watermark"] = True
+    return payload
+
 
 class SubtitleStylingService:
     def __init__(self) -> None:

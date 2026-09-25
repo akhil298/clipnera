@@ -8,8 +8,11 @@ from typing import get_args
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from subscription.model import Plan, UserSubscription, PaymentTransaction, CreditLedger, PlanSlug, SubscriptionStatus
+from auth.repository import UserRepository
 from subscription.entitlements import (
     CREDIT_CYCLE_DAYS,
+    PLAN_PRICES,
+    PURCHASABLE_PLAN,
     Entitlements,
     Feature,
     UsageKey,
@@ -21,6 +24,16 @@ from subscription.repository import (
     PaymentTransactionRepository,
     CreditLedgerRepository,
     UsageRepository,
+)
+from subscription.schema import (
+    AdminCreditTopupResponse,
+    CreditLedgerResponse,
+    EntitlementsResponse,
+    PaymentTransactionResponse,
+    PlanOfferResponse,
+    PlanPriceResponse,
+    PlansResponse,
+    UserCreditsResponse,
 )
 from core.exceptions import CustomException
 from core.logging_config import get_logger
@@ -51,6 +64,47 @@ def plan_slug(plan: Plan) -> str:
     return str(getattr(plan.slug, "value", plan.slug))
 
 
+def entitlements_response(summary: PlanSummary) -> EntitlementsResponse:
+    ent = summary.entitlements
+    return EntitlementsResponse(
+        **ent.to_dict(),
+        credit_minutes_total=ent.credit_minutes,
+        credit_minutes_remaining=summary.credit_minutes_remaining,
+        current_period_end=summary.current_period_end,
+        subscription_status=summary.subscription_status,
+        plan_expires_at=summary.plan_expires_at,
+        next_credit_reset_at=summary.next_credit_reset_at,
+        usage_today=summary.usage_today,
+        has_pending_payment=summary.has_pending_payment,
+        show_plan_notice=summary.show_plan_notice,
+    )
+
+
+def credits_response(summary: PlanSummary) -> UserCreditsResponse:
+    return UserCreditsResponse(
+        plan=summary.entitlements.plan,
+        credit_minutes_total=summary.entitlements.credit_minutes,
+        credit_minutes_remaining=summary.credit_minutes_remaining,
+        subscription_status=summary.subscription_status,
+        current_period_end=summary.current_period_end,
+    )
+
+
+def topup_response(entry: CreditLedger) -> AdminCreditTopupResponse:
+    return AdminCreditTopupResponse(
+        id=entry.id,
+        user_id=entry.user_id,
+        user_email=entry.user.email,
+        user_name=entry.user.full_name or entry.user.username,
+        amount=entry.amount,
+        balance_after=entry.balance_after,
+        reason=entry.reason,
+        created_by=entry.created_by,
+        created_by_email=entry.creator.email if entry.creator else None,
+        created_at=entry.created_at,
+    )
+
+
 def pro_required(feature: str) -> CustomException:
     return CustomException(
         message="Upgrade to Pro to use this feature.",
@@ -58,6 +112,49 @@ def pro_required(feature: str) -> CustomException:
         status_code=403,
         extra={"feature": feature},
     )
+
+
+def require_caption_style(entitlements: Entitlements, style: str | None) -> None:
+    """403 when the plan does not include ``style``; no style is always allowed."""
+    if style and not entitlements.allows_caption_style(str(style)):
+        raise CustomException(
+            message=(
+                f"The '{style}' caption style requires a paid plan. "
+                "Upgrade to unlock the full caption library."
+            ),
+            code="CAPTION_STYLE_NOT_ENTITLED",
+            status_code=403,
+        )
+
+
+def require_hook_transition(entitlements: Entitlements, mode: str | None) -> None:
+    if not entitlements.allows_hook_transition(mode):
+        raise pro_required("all_hook_transitions")
+
+
+def aspect_ratio_not_entitled(entitlements: Entitlements) -> CustomException:
+    return CustomException(
+        message=(
+            f"Your {entitlements.plan} plan supports "
+            f"{', '.join(entitlements.aspect_ratios)}. Upgrade to export other formats."
+        ),
+        code="ASPECT_RATIO_NOT_ENTITLED",
+        status_code=403,
+    )
+
+
+def permitted_aspect_ratios(entitlements: Entitlements, requested: list[str]) -> list[str]:
+    """The requested ratios the plan covers; 403 if it covers none of them."""
+    allowed_ratios = [r for r in requested if entitlements.allows_aspect_ratio(r)]
+    if not allowed_ratios:
+        raise aspect_ratio_not_entitled(entitlements)
+    if len(allowed_ratios) != len(requested):
+        log.info(
+            "Dropped aspect ratios not covered by plan %s: %s",
+            entitlements.plan,
+            sorted(set(requested) - set(allowed_ratios)),
+        )
+    return allowed_ratios
 
 
 @dataclass(frozen=True)
@@ -82,12 +179,21 @@ PAID_PLAN_SLUGS = frozenset({PlanSlug.PRO.value, PlanSlug.PRO_PLUS.value})
 
 
 class SubscriptionService:
-    def __init__(self, plan_repo: PlanRepository, sub_repo: UserSubscriptionRepository, tx_repo: PaymentTransactionRepository, ledger_repo: CreditLedgerRepository, usage_repo: UsageRepository | None = None) -> None:
+    def __init__(
+        self,
+        plan_repo: PlanRepository,
+        sub_repo: UserSubscriptionRepository,
+        tx_repo: PaymentTransactionRepository,
+        ledger_repo: CreditLedgerRepository,
+        usage_repo: UsageRepository | None = None,
+        user_repo: UserRepository | None = None,
+    ) -> None:
         self._plan_repo = plan_repo
         self._sub_repo = sub_repo
         self._tx_repo = tx_repo
         self._ledger_repo = ledger_repo
         self._usage_repo = usage_repo
+        self._user_repo = user_repo
 
     @classmethod
     def for_session(cls, session: AsyncSession) -> "SubscriptionService":
@@ -97,10 +203,47 @@ class SubscriptionService:
             PaymentTransactionRepository(session),
             CreditLedgerRepository(session),
             UsageRepository(session),
+            UserRepository(session),
         )
 
     async def list_plans(self) -> list[Plan]:
         return await self._plan_repo.get_all_active()
+
+    async def plan_offers(self) -> PlansResponse:
+        """Plans on sale, their prices and what each includes, for the pricing page."""
+        offers = []
+        for plan in await self.list_plans():
+            slug = plan_slug(plan)
+            prices = PLAN_PRICES if slug == PURCHASABLE_PLAN else {}
+            offers.append(
+                PlanOfferResponse(
+                    slug=slug,
+                    name=plan.name,
+                    capabilities=entitlements_for(slug).to_dict(),
+                    prices=[
+                        PlanPriceResponse(plan_type=period.value, amount=price.amount_inr, currency="INR", days=price.days)
+                        for period, price in prices.items()
+                    ],
+                )
+            )
+        return PlansResponse(plans=offers)
+
+    async def entitlements_summary(self, user_id: str) -> EntitlementsResponse:
+        return entitlements_response(await self.get_plan_summary(user_id))
+
+    async def credits_summary(self, user_id: str) -> UserCreditsResponse:
+        return credits_response(await self.get_plan_summary(user_id))
+
+    async def activate_free(self, user_id: str) -> UserCreditsResponse:
+        await self.activate_free_plan(user_id)
+        return await self.credits_summary(user_id)
+
+    async def transaction_history(self, user_id: str) -> list[PaymentTransactionResponse]:
+        return [PaymentTransactionResponse.model_validate(t) for t in await self.get_user_transactions(user_id)]
+
+    async def ledger_history(self, user_id: str, limit: int = 50) -> list[CreditLedgerResponse]:
+        entries = await self.get_user_credit_history(user_id, limit)
+        return [CreditLedgerResponse.model_validate(e) for e in entries]
 
     async def get_user_subscription(self, user_id: str) -> UserSubscription | None:
         return await self._sub_repo.get_active_by_user(user_id)
@@ -386,8 +529,23 @@ class SubscriptionService:
             user_id, amount, reason, reference_type=ADMIN_TOPUP_REFERENCE, created_by=admin_id
         )
 
+    async def admin_topup_by_email(
+        self, user_email: str, amount: int, reason: str, admin_id: str
+    ) -> AdminCreditTopupResponse:
+        """Credit the user with ``user_email``; 404 if there is none."""
+        user = await self._user_repo.get_user_by_email(user_email)
+        if not user:
+            raise CustomException(message="No user with that email", code="NOT_FOUND", status_code=404)
+        entry = await self.admin_topup(user.id, amount, reason.strip(), admin_id)
+        return topup_response(entry)
+
     async def list_admin_topups(self, query: str | None, limit: int, offset: int) -> list[CreditLedger]:
+        query = (query or "").strip() or None
         return await self._ledger_repo.search_by_reference_type(ADMIN_TOPUP_REFERENCE, query, limit, offset)
+
+    async def admin_topup_history(self, query: str | None, limit: int, offset: int) -> list[AdminCreditTopupResponse]:
+        """Audit log of manual top-ups, newest first."""
+        return [topup_response(e) for e in await self.list_admin_topups(query, limit, offset)]
 
     def calculate_video_credit_cost(self, duration_seconds: int) -> int:
         return max(1, math.ceil(duration_seconds / 120))

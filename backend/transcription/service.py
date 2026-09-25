@@ -10,6 +10,12 @@ from typing import Any, Callable, Optional
 from transcription.chunker import TranscriptionChunker
 from transcription.checkpoint import CheckpointManager
 from transcription.formatter import TranscriptionFormatter
+from transcription.schema import (
+    BatchTranscriptionRequest,
+    BatchTranscriptionResult,
+    TranscriptionRequest,
+    TranscriptionResult,
+)
 from core.exceptions import CustomException
 from core.logging_config import get_logger
 
@@ -263,6 +269,42 @@ class WhisperXTranscriptionService(TranscriptionService):
             "warnings": [],
             "checkpoint_path": checkpoint_path,
         }
+
+    async def transcribe_request(self, request: TranscriptionRequest) -> TranscriptionResult:
+        def _progress(percent: float, message: str) -> None:
+            log.info(f"Transcription progress: {percent:.1f}% - {message}")
+
+        return TranscriptionResult(**await self.transcribe(request, progress_callback=_progress))
+
+    async def batch_transcribe(self, request: BatchTranscriptionRequest) -> BatchTranscriptionResult:
+        """Transcribe every input, at most ``max_workers`` at a time. The first
+        failure aborts the batch."""
+        semaphore = asyncio.Semaphore(request.max_workers)
+
+        async def _run(input_path: str) -> dict[str, Any]:
+            single = TranscriptionRequest(
+                input_path=input_path,
+                model_size=request.model_size,
+                language=request.language,
+                chunk_duration=request.chunk_duration,
+                chunk_overlap=request.chunk_overlap,
+                word_timestamps=request.word_timestamps,
+                diarization=request.diarization,
+                output_format=request.output_format,
+                output_dir=request.output_dir,
+                device=request.device,
+            )
+            async with semaphore:
+                return await self.transcribe(single)
+
+        results = await asyncio.gather(*[_run(path) for path in request.input_paths])
+        return BatchTranscriptionResult(
+            total=len(request.input_paths),
+            completed=len(results),
+            failed=0,
+            results=[TranscriptionResult(**r) for r in results],
+            processing_time_seconds=0.0,
+        )
 
     @staticmethod
     def _cpu_threads() -> int:

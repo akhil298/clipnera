@@ -165,7 +165,7 @@ def test_plans_endpoint_lists_prices_from_config(client_for, monkeypatch):
 @pytest.mark.parametrize(("plan", "refused"), [("free", True), ("pro", False)])
 def test_export_with_a_preset_hook_transition_needs_pro(plan, refused):
     from clip_generation.schema import SocialExportRequest
-    from pipeline.route import _check_export_entitlements
+    from pipeline.service import _check_export_entitlements
 
     request = SocialExportRequest(hook_transition={"mode": "preset", "preset_id": "viral_rewind"})
     if refused:
@@ -178,6 +178,6 @@ def test_export_with_a_preset_hook_transition_needs_pro(plan, refused):
 
 def test_export_with_auto_hook_transition_is_free():
     from clip_generation.schema import SocialExportRequest
-    from pipeline.route import _check_export_entitlements
+    from pipeline.service import _check_export_entitlements
 
     _check_export_entitlements(entitlements_for("free"), SocialExportRequest(hook_transition={"mode": "auto"}))

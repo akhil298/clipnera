@@ -6,6 +6,8 @@ import os
 import shutil
 import time
 from pathlib import Path
+from collections.abc import AsyncIterator, Awaitable
+from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from core.logging_config import get_logger
@@ -19,12 +21,25 @@ from transcription.service import WhisperXTranscriptionService
 from transcription.schema import TranscriptionRequest
 from clip.repository import ClipRepository
 from clip.model import ProjectStatus
+from clip_generation.model import SOCIAL_PLATFORM_DEFAULTS, SocialPlatform
+from clip_generation.schema import SocialExportRequest, SocialExportResponse
 from clip_generation.service import ClipService
 from depth_captions.pipeline import create_depth_captions_job
 from depth_captions.schema import DepthCaptionRequest, StylePreset, DepthMode, TranscriptSegment
 from core.database import AsyncSessionLocal
 
 from pipeline.model import PipelineStepType, StepStatus
+from core.exceptions import CustomException
+from notifications.service import NotificationService, notify_pipeline_outcome
+from subscription.entitlements import Entitlements
+from subscription.service import (
+    SubscriptionService,
+    aspect_ratio_not_entitled,
+    permitted_aspect_ratios,
+    require_caption_style,
+    require_hook_transition,
+)
+from video_processor.geometry import SUPPORTED_ASPECT_RATIOS
 from hook_transitions.schema import HookTransitionConfig
 
 log = get_logger(__name__)
@@ -1084,3 +1099,676 @@ class PipelineOrchestrator:
             resp = await client.get(url)
             resp.raise_for_status()
             return resp.content
+
+
+# -- run management ------------------------------------------------------------
+# Starting, resuming, cancelling and reporting on pipeline runs for the API.
+
+# Clip generation plus a burn-in pass so a default run yields captioned clips.
+# Re-styling later goes through /subtitle-styling/burn/{clip_id}, which replaces
+# the burned track with the style the user picks.
+DEFAULT_PIPELINE_STEPS = [
+    "audio_extraction",
+    "ai_noise_cancellation",
+    "transcription",
+    "topic_research",
+    "visual_analysis",
+    "content_classification",
+    "highlight_detection",
+    "scoring",
+    "metadata_generation",
+    "aspect_ratio_render",
+    "clip_generation",
+    # Without this the pipeline produced clips with no captions at all, because
+    # nothing else in a default run ever calls the burner.
+    "burn_in_export",
+]
+
+# Steps the orchestrator can actually run. A request naming anything else --
+# the UI has long sent "bounding_box_detection", which has no handler -- would
+# otherwise get a step row that stays "pending" forever, leaving a stuck entry
+# in the UI and holding overall progress below 100% for the whole run.
+RUNNABLE_PIPELINE_STEPS = {
+    PipelineStepType.AUDIO_EXTRACTION,
+    PipelineStepType.AI_NOISE_CANCELLATION,
+    PipelineStepType.TRANSCRIPTION,
+    PipelineStepType.TOPIC_RESEARCH,
+    PipelineStepType.VISUAL_ANALYSIS,
+    PipelineStepType.CONTENT_CLASSIFICATION,
+    PipelineStepType.HIGHLIGHT_DETECTION,
+    PipelineStepType.SCORING,
+    PipelineStepType.METADATA_GENERATION,
+    PipelineStepType.ASPECT_RATIO_RENDER,
+    PipelineStepType.CLIP_GENERATION,
+    PipelineStepType.SUBTITLE_STYLING,
+    PipelineStepType.BURN_IN_EXPORT,
+    PipelineStepType.DEPTH_CAPTIONS,
+}
+
+DEFAULT_AUDIO_CONFIG = {
+    "ai_denoise": True,
+    "noise_suppression_strength": 90,
+    "de_reverb": True,
+    "vocal_clarity_eq": True,
+    "hum_filter": True,
+}
+
+_TERMINAL_PROGRESS_STATUSES = ("completed", "error", "cancelled")
+
+_progress_store: dict[str, dict[str, Any]] = {}
+_active_orchestrators: dict[str, PipelineOrchestrator] = {}
+# The event loop only weakly references tasks; an unreferenced run can be
+# garbage-collected mid-flight and vanish without ever recording an outcome.
+_run_tasks: set[asyncio.Task] = set()
+_progress_lock = asyncio.Lock()
+_status_semaphore = asyncio.Semaphore(10)
+
+
+def _pipeline_repository(session):
+    # Imported late: pipeline.repository imports this module.
+    from pipeline.repository import PipelineRepository
+
+    return PipelineRepository(session)
+
+
+def _resolve_steps(requested: list[str]) -> list[PipelineStepType]:
+    """Map requested step names onto the steps the orchestrator implements."""
+    resolved: list[PipelineStepType] = []
+    for name in requested:
+        try:
+            step = PipelineStepType.resolve(name)
+        except ValueError:
+            log.warning("Ignoring unknown pipeline step requested by client: %s", name)
+            continue
+        if step not in RUNNABLE_PIPELINE_STEPS:
+            log.info("Ignoring pipeline step with no handler: %s", step.value)
+            continue
+        if step not in resolved:
+            resolved.append(step)
+    if not resolved:
+        raise CustomException(
+            message="No runnable pipeline steps were requested.",
+            code="NO_RUNNABLE_STEPS",
+            status_code=400,
+        )
+    return resolved
+
+
+def _apply_entitlements(
+    entitlements: Entitlements,
+    output_aspect_ratios: list[str],
+    watermark_enabled: bool,
+    clip_settings: dict | None,
+) -> tuple[list[str], bool, dict | None]:
+    """Clamp a run request to what the caller's plan permits.
+
+    Enforced here rather than only in the UI, because hiding a control does not
+    stop a crafted request. Over-reach is clamped rather than rejected, so a
+    downgraded user's existing presets keep working at their new tier instead of
+    erroring; an outright unusable request (no permitted ratio) still raises.
+    """
+    # An empty request means "decide from the content category later", which is
+    # not over-reach and must not 403; the renderer clamps its own choice to the
+    # plan. Only a request that named ratios, none of them permitted, is refused.
+    allowed_ratios = permitted_aspect_ratios(entitlements, output_aspect_ratios) if output_aspect_ratios else []
+
+    # A forced watermark cannot be switched off by the client.
+    effective_watermark = True if entitlements.watermark_forced else watermark_enabled
+
+    return allowed_ratios, effective_watermark, _clamp_clip_settings(entitlements, clip_settings)
+
+
+def _clamp_clip_settings(entitlements: Entitlements, clip_settings: dict | None) -> dict:
+    """Clamp clip count to the plan's cap and refuse styles it does not include."""
+    settings = dict(clip_settings or {})
+    requested_clips = settings.get("max_clips")
+    cap = entitlements.max_clips_per_video
+    if not isinstance(requested_clips, int) or requested_clips <= 0:
+        settings["max_clips"] = cap
+    else:
+        settings["max_clips"] = min(requested_clips, cap)
+
+    require_caption_style(entitlements, settings.get("caption_style") or settings.get("style_type"))
+    return settings
+
+
+def _resolve_aspect_ratios(raw: Any) -> list[str]:
+    """Validate the requested output formats; empty means "let the pipeline pick".
+
+    An empty list is passed through rather than filled in here, so the renderer
+    can choose from the video's content category -- naming every ratio at this
+    point rendered four files per clip for content published in one shape. A
+    client that does name ratios still gets exactly those.
+    """
+    if isinstance(raw, str):
+        raw = [item.strip() for item in raw.split(",")]
+    if not isinstance(raw, list) or not raw:
+        return []
+
+    resolved: list[str] = []
+    for item in raw:
+        ratio = str(item).strip()
+        if ratio in SUPPORTED_ASPECT_RATIOS and ratio not in resolved:
+            resolved.append(ratio)
+        elif ratio and ratio not in SUPPORTED_ASPECT_RATIOS:
+            log.warning("Ignoring unsupported aspect ratio: %s", ratio)
+    return resolved
+
+
+def _check_export_entitlements(entitlements: Entitlements, request: SocialExportRequest) -> None:
+    """Refuse an export the plan does not cover.
+
+    Checked here as well as in the editor, which only hides locked options; the
+    endpoint is reachable directly.
+    """
+    if request.aspect_ratio and request.aspect_ratio not in SUPPORTED_ASPECT_RATIOS:
+        raise CustomException(
+            message=f"Unsupported aspect ratio: {request.aspect_ratio}",
+            code="INVALID_ASPECT_RATIO",
+            status_code=400,
+        )
+    ratios = (
+        {request.aspect_ratio}
+        if request.aspect_ratio
+        else {
+            SOCIAL_PLATFORM_DEFAULTS[p.lower()]["aspect_ratio"]
+            for p in request.platforms
+            if p.lower() in SOCIAL_PLATFORM_DEFAULTS
+        }
+    )
+    if any(not entitlements.allows_aspect_ratio(r) for r in ratios):
+        raise aspect_ratio_not_entitled(entitlements)
+    require_caption_style(entitlements, request.style_type)
+    if request.hook_transition:
+        require_hook_transition(entitlements, request.hook_transition.mode)
+
+
+async def _update_progress(project_id: str, default: dict[str, Any], **fields: Any) -> None:
+    async with _progress_lock:
+        entry = _progress_store.get(project_id, dict(default))
+        entry.update(fields)
+        _progress_store[project_id] = entry
+
+
+_IDLE_PROGRESS = {"status": "idle", "percent": 0, "message": ""}
+_BLANK_PROGRESS = {"percent": 0, "message": ""}
+
+
+def _progress_callback_factory(project_id: str) -> ProgressCallback:
+    async def callback(message: str, percent: int, _: str | None, step: str | None = None, step_status: str | None = None) -> None:
+        fields: dict[str, Any] = {"message": message, "percent": percent, "status": "running"}
+        if step:
+            fields["current_step"] = step
+        if step_status:
+            fields["step_status"] = step_status
+        await _update_progress(project_id, _IDLE_PROGRESS, **fields)
+    return callback
+
+
+async def _mark_cancelled(project_id: str) -> None:
+    await _update_progress(
+        project_id, _BLANK_PROGRESS,
+        status="cancelled", message="Pipeline cancelled by user", step_status="cancelled",
+    )
+
+
+def _clip_count(results: dict) -> int | None:
+    gen_result = results.get("clip_generation") or results.get("metadata_generation")
+    if gen_result:
+        clips = gen_result.get("clips") or []
+        if isinstance(clips, list):
+            return len(clips)
+    return None
+
+
+async def _run_pipeline(
+    orchestrator: PipelineOrchestrator,
+    project_id: str,
+    user: dict | None = None,
+    credit_refund_callback: Callable[[], Awaitable[None]] | None = None,
+) -> None:
+    try:
+        results = await orchestrator.run()
+        if orchestrator.is_cancelled:
+            await _mark_cancelled(project_id)
+            return
+        await _update_progress(
+            project_id, _IDLE_PROGRESS,
+            status="completed", percent=100, message="Pipeline completed", step_status="completed",
+        )
+
+        if user:
+            await notify_pipeline_outcome(user["user_id"], project_id, success=True)
+
+        if user and (user.get("email") or user.get("phone")):
+            await NotificationService().notify_pipeline_complete(
+                user_email=user.get("email"),
+                user_phone=user.get("phone"),
+                project_id=project_id,
+                success=True,
+                clip_count=_clip_count(results),
+            )
+    except asyncio.CancelledError:
+        # Raised when the server shuts down mid-run. It is not an Exception, so
+        # the handler below never saw it and the run stayed "running" forever.
+        log.warning(f"Pipeline interrupted: project={project_id}")
+        await orchestrator._mark_pipeline_failed(INTERRUPTED_ERROR)
+        if credit_refund_callback:
+            await credit_refund_callback()
+        raise
+    except Exception as exc:
+        log.error(f"Pipeline failed: project={project_id} error={exc}")
+        await _update_progress(
+            project_id, _IDLE_PROGRESS,
+            status="error", percent=0, message=str(exc), step_status="failed",
+        )
+
+        # orchestrator.run() persists the failure itself, but it can also raise
+        # before reaching that point (or while persisting) — make sure the DB
+        # reflects the failure so /status does not report a stale running job.
+        try:
+            await orchestrator._mark_pipeline_failed(str(exc))
+        except Exception as mark_exc:
+            log.error(f"Could not persist pipeline failure: project={project_id} error={mark_exc}")
+
+        if credit_refund_callback:
+            await credit_refund_callback()
+
+        if user:
+            await notify_pipeline_outcome(
+                user["user_id"], project_id, success=False, refunded=credit_refund_callback is not None
+            )
+            await NotificationService().notify_pipeline_complete(
+                user_email=user.get("email"),
+                user_phone=user.get("phone"),
+                project_id=project_id,
+                success=False,
+                error=str(exc),
+            )
+    finally:
+        _active_orchestrators.pop(project_id, None)
+
+
+def _launch_pipeline(
+    orchestrator: PipelineOrchestrator, project_id: str, user: dict, credit_refund_callback: Callable[[], Awaitable[None]]
+) -> None:
+    _active_orchestrators[project_id] = orchestrator
+    task = asyncio.create_task(
+        _run_pipeline(orchestrator, project_id, user=user, credit_refund_callback=credit_refund_callback)
+    )
+    _run_tasks.add(task)
+    task.add_done_callback(_run_tasks.discard)
+
+
+def _serialize_step(log_entry) -> dict[str, Any]:
+    return {
+        "step": log_entry.step,
+        "status": log_entry.status,
+        "progress_percent": log_entry.progress_percent,
+        "message": log_entry.message,
+        "artifact_path": log_entry.artifact_path,
+        "started_at": log_entry.started_at.isoformat() if log_entry.started_at else None,
+        "finished_at": log_entry.finished_at.isoformat() if log_entry.finished_at else None,
+    }
+
+
+def _overall_status(state, steps: list[dict[str, Any]]) -> str:
+    if state.error:
+        return "error"
+    if state.is_completed:
+        return "completed"
+    if any(s["status"] == "running" for s in steps):
+        return "running"
+    return "pending"
+
+
+def _status_payload(project_id: str, state, steps: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "project_id": project_id,
+        "status": _overall_status(state, steps),
+        "current_step": state.current_step,
+        "is_completed": state.is_completed,
+        "error": state.error,
+        "steps": steps,
+    }
+
+
+def _not_started(project_id: str) -> dict[str, Any]:
+    return {"project_id": project_id, "status": "not_started", "steps": []}
+
+
+@dataclass
+class _RunPlan:
+    """A run request resolved against the caller's plan and already charged."""
+
+    selected_steps: list[PipelineStepType]
+    output_aspect_ratios: list[str]
+    audio_config: dict
+    watermark_enabled: bool
+    clip_settings: dict | None
+    is_pro: bool
+    credit_cost: int
+    refund: Callable[[], Awaitable[None]]
+
+    def orchestrator(self, project, user_id: str, resume: bool = False) -> PipelineOrchestrator:
+        return PipelineOrchestrator(
+            project_id=project.id,
+            user_id=user_id,
+            url=project.source_url or "",
+            selected_steps=self.selected_steps,
+            audio_config=self.audio_config,
+            progress_callback=_progress_callback_factory(project.id),
+            watermark_enabled=self.watermark_enabled,
+            output_aspect_ratios=self.output_aspect_ratios,
+            clip_settings=self.clip_settings,
+            is_pro=self.is_pro,
+            resume=resume,
+        )
+
+    def response(self, project_id: str, status: str) -> dict[str, Any]:
+        return {
+            "project_id": project_id,
+            "status": status,
+            "selected_steps": [s.value for s in self.selected_steps],
+            "output_aspect_ratios": self.output_aspect_ratios,
+            "watermark_enabled": self.watermark_enabled,
+            "credits_deducted": self.credit_cost,
+            "is_pro": self.is_pro,
+        }
+
+
+class PipelineRunService:
+    """Starts, resumes, cancels and reports on pipeline runs."""
+
+    @staticmethod
+    async def _require_project(clip_repo: ClipRepository, project_id: str, user_id: str):
+        project = await clip_repo.get_project(project_id, user_id)
+        if not project:
+            raise CustomException(message="Project not found", code="NOT_FOUND", status_code=404)
+        return project
+
+    @staticmethod
+    async def _plan_run(session, project, user_id: str, body: dict | None, resume: bool) -> _RunPlan:
+        """Resolve the request, clamp it to the plan and charge credits for it."""
+        project_id = project.id
+        body = body or {}
+        # Subtitles are burned at export time from the style the user picks, so
+        # caption steps are deliberately absent from the default run.
+        selected_steps = _resolve_steps(body.get("steps", DEFAULT_PIPELINE_STEPS))
+        output_aspect_ratios = _resolve_aspect_ratios(body.get("output_aspect_ratios"))
+        audio_config = body.get("audio_config", DEFAULT_AUDIO_CONFIG)
+        watermark_enabled = body.get("watermark_enabled", True)
+        clip_settings = body.get("clip_settings") if isinstance(body.get("clip_settings"), dict) else None
+
+        subscription_service = SubscriptionService.for_session(session)
+
+        # Which AI provider this run uses. Resolved once, here, so the whole
+        # run is consistent even if the plan changes while it is in flight.
+        entitlements = await subscription_service.get_entitlements(user_id)
+        is_pro = entitlements.pro_ai_provider
+        log.info(
+            "Pipeline provider tier resolved: project=%s user=%s plan=%s is_pro=%s",
+            project_id, user_id, entitlements.plan, is_pro,
+        )
+
+        output_aspect_ratios, watermark_enabled, clip_settings = _apply_entitlements(
+            entitlements, output_aspect_ratios, watermark_enabled, clip_settings
+        )
+
+        duration_seconds = project.duration_seconds or 0
+        if duration_seconds <= 0:
+            message = (
+                "Video duration not available."
+                if resume
+                else "Video duration not available. Please wait for download to complete."
+            )
+            raise CustomException(message=message, code="DURATION_UNAVAILABLE", status_code=400)
+        if duration_seconds > entitlements.max_upload_duration_seconds:
+            raise CustomException(
+                message=(
+                    f"This video is {duration_seconds // 60} minutes. Your {entitlements.plan} plan "
+                    f"supports up to {entitlements.max_upload_duration_seconds // 60} minutes per video."
+                ),
+                code="DURATION_NOT_ENTITLED",
+                status_code=403,
+            )
+
+        credit_cost = subscription_service.calculate_video_credit_cost(duration_seconds)
+        try:
+            await subscription_service.deduct_credits(
+                user_id=user_id,
+                amount=credit_cost,
+                reason=f"Video processing{' (resume)' if resume else ''}: {duration_seconds}s",
+                reference_id=project_id,
+                reference_type="video_project_resume" if resume else "video_project",
+            )
+        except Exception as exc:
+            raise CustomException(message=str(exc), code="INSUFFICIENT_CREDITS", status_code=402)
+
+        async def refund_credits() -> None:
+            async with AsyncSessionLocal() as refund_session:
+                refund_service = SubscriptionService.for_session(refund_session)
+                try:
+                    await refund_service.refund_credits(
+                        user_id=user_id,
+                        amount=credit_cost,
+                        reason=(
+                            f"Pipeline failed{' (resume)' if resume else ''}, "
+                            f"refunding credits for project {project_id}"
+                        ),
+                        reference_id=project_id,
+                        reference_type="video_project_refund",
+                    )
+                except Exception as refund_exc:
+                    log.error(f"Credit refund failed: project={project_id} error={refund_exc}")
+
+        return _RunPlan(
+            selected_steps=selected_steps,
+            output_aspect_ratios=output_aspect_ratios,
+            audio_config=audio_config,
+            watermark_enabled=watermark_enabled,
+            clip_settings=clip_settings,
+            is_pro=is_pro,
+            credit_cost=credit_cost,
+            refund=refund_credits,
+        )
+
+    async def start(self, project_id: str, user: dict, body: dict | None) -> dict[str, Any]:
+        async with AsyncSessionLocal() as session:
+            project = await self._require_project(ClipRepository(session), project_id, user["user_id"])
+
+            if project.status != ProjectStatus.UPLOADED or not project.duration_seconds:
+                raise CustomException(
+                    message="Video download and metadata save are not complete yet. Please wait for the upload to finish.",
+                    code="VIDEO_NOT_READY",
+                    status_code=409,
+                )
+
+            plan = await self._plan_run(session, project, user["user_id"], body, resume=False)
+
+            # After the charge, so a refused charge leaves no run that looks in progress.
+            try:
+                await _pipeline_repository(session).create_pipeline(project_id, plan.selected_steps)
+            except Exception:
+                await plan.refund()
+                raise
+
+            _launch_pipeline(plan.orchestrator(project, user["user_id"]), project_id, user, plan.refund)
+            return plan.response(project_id, "started")
+
+    async def resume(self, project_id: str, user: dict, body: dict | None) -> dict[str, Any]:
+        async with AsyncSessionLocal() as session:
+            clip_repo = ClipRepository(session)
+            project = await self._require_project(clip_repo, project_id, user["user_id"])
+
+            state = await _pipeline_repository(session).get_pipeline(project_id)
+            if not state:
+                raise CustomException(message="Pipeline not found", code="NOT_FOUND", status_code=404)
+
+            plan = await self._plan_run(session, project, user["user_id"], body, resume=True)
+
+            # Clients read either field as "failed", so a resumed run that kept them
+            # showed as failed throughout, and even after it succeeded.
+            state.error = None
+            await session.commit()
+            await clip_repo.update_project_status(project_id, ProjectStatus.PROCESSING)
+
+            _launch_pipeline(plan.orchestrator(project, user["user_id"], resume=True), project_id, user, plan.refund)
+            return plan.response(project_id, "resumed")
+
+    async def cancel(self, project_id: str, user_id: str) -> dict[str, Any]:
+        async with AsyncSessionLocal() as session:
+            await self._require_project(ClipRepository(session), project_id, user_id)
+
+        orchestrator = _active_orchestrators.get(project_id)
+        if not orchestrator:
+            raise CustomException(message="No active pipeline found", code="PIPELINE_NOT_RUNNING", status_code=409)
+        orchestrator.cancel()
+        await _mark_cancelled(project_id)
+        return {"project_id": project_id, "status": "cancelled"}
+
+    @staticmethod
+    async def progress_events(project_id: str) -> AsyncIterator[str]:
+        """Server-sent events with the run's progress, once a second until it ends."""
+        while True:
+            async with _progress_lock:
+                data = dict(_progress_store.get(project_id, _IDLE_PROGRESS))
+            yield f"data: {json.dumps(data)}\n\n"
+            if data.get("status") in _TERMINAL_PROGRESS_STATUSES:
+                break
+            await asyncio.sleep(1)
+
+    async def status_batch(self, body: dict[str, Any], user_id: str) -> dict[str, Any]:
+        """Status for many projects in one round trip.
+
+        The dashboard previously issued one GET /status/{id} per project on load.
+        Those calls share a semaphore and a 15-connection pool, so a user with a
+        dozen projects queued them and every other request -- including the ones
+        behind a button click -- waited on the pool. This answers the whole list
+        with three queries regardless of project count.
+        """
+        project_ids = body.get("project_ids") or []
+        if not isinstance(project_ids, list):
+            raise CustomException(message="project_ids must be a list", code="INVALID_BODY", status_code=400)
+        project_ids = [str(pid) for pid in project_ids][:200]
+        if not project_ids:
+            return {"statuses": {}}
+
+        async with AsyncSessionLocal() as session:
+            pipeline_repo = _pipeline_repository(session)
+
+            owned = await ClipRepository(session).list_projects(user_id)
+            owned_ids = {p.id for p in owned} & set(project_ids)
+            if not owned_ids:
+                return {"statuses": {}}
+
+            states = await pipeline_repo.get_latest_pipelines(list(owned_ids))
+            logs_by_pipeline = await pipeline_repo.get_step_logs_for_pipelines(
+                [state.id for state in states.values()]
+            )
+
+            statuses: dict[str, Any] = {}
+            for project_id in owned_ids:
+                state = states.get(project_id)
+                if not state:
+                    statuses[project_id] = _not_started(project_id)
+                    continue
+                steps = [_serialize_step(entry) for entry in logs_by_pipeline.get(state.id, [])]
+                statuses[project_id] = _status_payload(project_id, state, steps)
+            return {"statuses": statuses}
+
+    async def status(self, project_id: str, user_id: str) -> dict[str, Any]:
+        async with _status_semaphore:
+            try:
+                async with AsyncSessionLocal() as session:
+                    pipeline_repo = _pipeline_repository(session)
+
+                    project = await ClipRepository(session).get_project(project_id, user_id)
+                    if not project:
+                        return _not_started(project_id)
+
+                    state = await pipeline_repo.get_pipeline(project_id)
+                    if not state:
+                        return _not_started(project_id)
+
+                    steps = [_serialize_step(entry) for entry in await pipeline_repo.get_step_logs(state.id)]
+                    return _status_payload(project_id, state, steps)
+            except Exception as exc:
+                log.error(f"Pipeline status failed: project={project_id} error={exc}")
+                return {
+                    "project_id": project_id,
+                    "status": "error",
+                    "error": str(exc),
+                    "steps": [],
+                }
+
+    async def revert_step(self, project_id: str, step: str, user_id: str) -> dict[str, Any]:
+        async with AsyncSessionLocal() as session:
+            pipeline_repo = _pipeline_repository(session)
+            project = await self._require_project(ClipRepository(session), project_id, user_id)
+
+            try:
+                step_enum = PipelineStepType.resolve(step)
+            except ValueError:
+                raise CustomException(message=f"Invalid step: {step}", code="INVALID_STEP", status_code=400)
+
+            state = await pipeline_repo.get_pipeline(project_id)
+            if not state:
+                raise CustomException(message="Pipeline not found", code="NOT_FOUND", status_code=404)
+
+            await pipeline_repo.mark_step_reverted(state.id, step_enum)
+
+            if step_enum == PipelineStepType.AI_NOISE_CANCELLATION:
+                await pipeline_repo.save_artifact(state.id, step_enum, project.presigned_url or "")
+
+            await pipeline_repo.update_pipeline_current_step(project_id, step_enum)
+
+            return {"project_id": project_id, "step": step, "status": "reverted"}
+
+    @staticmethod
+    def social_platforms() -> dict[str, Any]:
+        platforms = []
+        for platform in SocialPlatform:
+            defaults = SOCIAL_PLATFORM_DEFAULTS[platform.value]
+            platforms.append({
+                "platform": platform.value,
+                "aspect_ratio": defaults["aspect_ratio"],
+                "dimensions": defaults["dimensions"],
+                "default_style": defaults["subtitle_style"],
+                "max_duration": defaults["max_duration"],
+                "emoji_enabled": defaults["emoji_enabled"],
+            })
+        return {"platforms": platforms}
+
+    async def export_for_social(
+        self, project_id: str, request: SocialExportRequest, user_id: str
+    ) -> SocialExportResponse:
+        async with AsyncSessionLocal() as session:
+            await self._require_project(ClipRepository(session), project_id, user_id)
+            subscription_service = SubscriptionService.for_session(session)
+            entitlements = await subscription_service.get_entitlements(user_id)
+            _check_export_entitlements(entitlements, request)
+            # Each exported clip counts toward the daily export limit.
+            await subscription_service.consume_daily_quota(
+                user_id, "exports", len(request.clip_ids) if request.clip_ids else max(1, request.max_clips or 1)
+            )
+
+        # A forced watermark cannot be switched off by the client.
+        watermark_enabled = request.watermark_enabled or entitlements.watermark_forced
+
+        return await ClipService().export_clips_for_social(
+            project_id=project_id,
+            user_id=user_id,
+            platforms=request.platforms,
+            clip_ids=request.clip_ids,
+            aspect_ratio=request.aspect_ratio,
+            style_type=request.style_type,
+            custom_config=request.custom_config,
+            max_clips=request.max_clips,
+            max_duration_override=request.max_duration,
+            enable_emoji=request.enable_emoji,
+            watermark_enabled=watermark_enabled,
+            burn_subtitles=request.burn_subtitles,
+            animation_speed=request.animation_speed,
+            hook_transition=request.hook_transition,
+        )

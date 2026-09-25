@@ -141,7 +141,8 @@ class SocialPostService:
             return await self._responses(user_id, await self._repo.get_posts_by_keys(keys))
         return await self._responses(user_id, posts)
 
-    async def list(self, user_id: str, statuses: list[PostStatus] | None, limit: int, offset: int) -> PostListResponse:
+    async def list(self, user_id: str, statuses: list[str] | None, limit: int, offset: int) -> PostListResponse:
+        statuses = [PostStatus(s) for s in statuses] if statuses else None
         rows = await self._repo.list_posts(user_id, statuses, limit, offset)
         return PostListResponse(posts=[post_response(post, account, clip.title) for post, account, clip in rows])
 

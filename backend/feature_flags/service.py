@@ -10,6 +10,7 @@ from core.exceptions import CustomException
 from core.logging_config import get_logger
 from feature_flags.model import FeatureFlag
 from feature_flags.registry import FLAGS
+from feature_flags.schema import AdminFeatureFlagListResponse, AdminFeatureFlagResponse
 
 log = get_logger(__name__)
 
@@ -69,3 +70,22 @@ class FeatureFlagService:
     async def rows(self) -> dict[str, FeatureFlag]:
         result = await self._session.execute(select(FeatureFlag))
         return {row.key: row for row in result.scalars().all()}
+
+    async def admin_list(self) -> AdminFeatureFlagListResponse:
+        """Every declared flag with its stored and effective state."""
+        rows = await self.rows()
+        effective = resolve({key: row.enabled for key, row in rows.items()})
+        return AdminFeatureFlagListResponse(
+            flags=[
+                AdminFeatureFlagResponse(
+                    key=flag.key,
+                    label=flag.label,
+                    description=flag.description,
+                    parent=flag.parent,
+                    enabled=bool(rows.get(flag.key) and rows[flag.key].enabled),
+                    effective=effective[flag.key],
+                    updated_at=rows[flag.key].updated_at if flag.key in rows else None,
+                )
+                for flag in FLAGS.values()
+            ]
+        )
