@@ -65,6 +65,22 @@ interface VideoEditorStudioProps {
   onScheduleClip: (clip: ViralClip) => void;
 }
 
+/** Player clock, e.g. 75.4 -> "1:15". */
+const formatClock = (seconds: number): string => {
+  const whole = Math.max(0, Math.floor(seconds || 0));
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+};
+
+/** Preview width per aspect ratio; the transport bar shares it so the two line up. */
+const stageWidthClass = (aspectRatio: string): string =>
+  aspectRatio === '9:16'
+    ? 'w-[280px] sm:w-[320px]'
+    : aspectRatio === '1:1'
+    ? 'w-[320px] sm:w-[360px]'
+    : aspectRatio === '4:5'
+    ? 'w-[300px] sm:w-[340px]'
+    : 'w-full';
+
 /** CSS entrance for a caption line; mirrors _entrance() in ass_generator.py. */
 const captionEntrance = (animation: CaptionConfig['animation'], speed: number): string | undefined => {
   const pace = Math.max(0.25, speed || 1);
@@ -220,6 +236,17 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
   const playedSfxSet = useRef<Set<string>>(new Set());
   const videoRef = useRef<HTMLVideoElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+
+  // Moves the video too: while it plays, its own clock overwrites currentTime,
+  // so setting the state alone snapped straight back.
+  const seekTo = (time: number) => {
+    const target = Math.min(Math.max(0, time), duration);
+    setCurrentTime(target);
+    if (videoRef.current) {
+      videoRef.current.currentTime = target;
+    }
+    playedSfxSet.current.clear();
+  };
 
   // Caption and title sizes in CaptionConfig are authored against a 1080px-wide
   // frame, and the burner scales them by frame width. Scaling the preview by
@@ -567,7 +594,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
     <div className="space-y-4 animate-in fade-in duration-300 pb-12">
       {/* Top Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-neutral-900/90 border border-neutral-800 p-4 rounded-2xl">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={onBackToGenerator}
             className="p-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors"
@@ -575,7 +602,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/20">
                 Score {safeClip.viralityScore}/100
@@ -590,7 +617,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {/* AI Noise Reduction Quick Toggle */}
           <button
             onClick={() => {
@@ -699,14 +726,14 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
           {/* Vertical Video Stage */}
           <div
             ref={stageRef}
-            className={`relative rounded-2xl bg-black border-2 border-neutral-800 shadow-2xl overflow-hidden flex items-center justify-center select-none transition-all duration-300 ${
+            className={`relative rounded-2xl bg-black border-2 border-neutral-800 shadow-2xl overflow-hidden flex items-center justify-center select-none transition-all duration-300 ${stageWidthClass(aspectRatio)} ${
               aspectRatio === '9:16'
-                ? 'w-[280px] sm:w-[320px] aspect-[9/16]'
+                ? 'aspect-[9/16]'
                 : aspectRatio === '1:1'
-                ? 'w-[320px] sm:w-[360px] aspect-square'
+                ? 'aspect-square'
                 : aspectRatio === '4:5'
-                ? 'w-[300px] sm:w-[340px] aspect-[4/5]'
-                : 'w-full aspect-video'
+                ? 'aspect-[4/5]'
+                : 'aspect-video'
             }`}
           >
             {/* Raw Video / Animated Background Stream */}
@@ -747,7 +774,6 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                    <p className="text-neutral-400 text-xs">Video not available</p>
                  </div>
                )}
-              <div className="absolute inset-0 bg-black/50" />
             </div>
 
             {/* B-Roll Video Overlay (if active at currentTime) */}
@@ -865,7 +891,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                 </div>
                 <div className="flex justify-between items-end pb-2">
                   <div className="space-y-1 max-w-[180px]">
-                    <p className="text-xs font-bold">@opuscreator</p>
+                    <p className="text-xs font-bold">@clipnera</p>
                     <p className="text-[10px] opacity-90 line-clamp-2">
                       {safeClip.title} {safeClip.socialOptimization.hashtags.slice(0, 3).join(' ')}
                     </p>
@@ -892,7 +918,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                   <div className="space-y-1 max-w-[180px]">
                     <div className="flex items-center gap-1.5">
                       <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-amber-400 to-rose-500" />
-                      <p className="text-xs font-bold">opus.official</p>
+                      <p className="text-xs font-bold">clipnera</p>
                     </div>
                     <p className="text-[10px] opacity-90">{safeClip.title}</p>
                   </div>
@@ -904,14 +930,39 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                 </div>
               </div>
             )}
+
+            {socialOverlay === 'shorts' && (
+              <div className="absolute inset-0 z-40 pointer-events-none p-3 flex flex-col justify-between text-white">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span>Shorts</span>
+                  <Smartphone className="w-4 h-4" />
+                </div>
+                <div className="flex justify-between items-end pb-2">
+                  <div className="space-y-1.5 max-w-[180px]">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-rose-500 to-red-600" />
+                      <p className="text-xs font-bold">@clipnera</p>
+                      <span className="px-2 py-0.5 rounded-full bg-white text-black text-[9px] font-bold">Subscribe</span>
+                    </div>
+                    <p className="text-[10px] opacity-90 line-clamp-2">{safeClip.title}</p>
+                  </div>
+                  <div className="flex flex-col items-center gap-2 text-[10px]">
+                    <span>👍 18K</span>
+                    <span>👎</span>
+                    <span>💬 640</span>
+                    <span>↗️ 2.1K</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Player Transport Controls */}
-          <div className="w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-2xl p-3 space-y-2.5 shadow-lg">
+          <div className={`${stageWidthClass(aspectRatio)} max-w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-3 space-y-2.5 shadow-lg`}>
             {/* Scrubber Bar */}
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-mono text-neutral-400 min-w-[38px]">
-                00:{String(Math.floor(currentTime)).padStart(2, '0')}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono text-neutral-400 min-w-[34px]">
+                {formatClock(currentTime)}
               </span>
               <input
                 type="range"
@@ -919,26 +970,19 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                 max={duration}
                 step={0.1}
                 value={currentTime}
-                onChange={(e) => {
-                  const time = Number(e.target.value);
-                  setCurrentTime(time);
-                  if (videoRef.current) {
-                    videoRef.current.currentTime = time;
-                  }
-                  playedSfxSet.current.clear();
-                }}
+                onChange={(e) => seekTo(Number(e.target.value))}
                 className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
               />
-              <span className="text-xs font-mono text-neutral-400 min-w-[38px]">
-                00:{String(Math.floor(duration)).padStart(2, '0')}
+              <span className="text-xs font-mono text-neutral-400 min-w-[34px] text-right">
+                {formatClock(duration)}
               </span>
             </div>
 
             {/* Buttons Row */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-1">
                 <button
-                  onClick={() => setCurrentTime((t) => Math.max(0, t - 2))}
+                  onClick={() => seekTo(currentTime - 2)}
                   className="p-2 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 text-xs font-semibold"
                   title="Jump Back 2s"
                 >
@@ -957,7 +1001,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                 </button>
 
                 <button
-                  onClick={() => setCurrentTime((t) => Math.min(duration, t + 2))}
+                  onClick={() => seekTo(currentTime + 2)}
                   className="p-2 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 text-xs font-semibold"
                   title="Jump Forward 2s"
                 >
@@ -965,10 +1009,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                 </button>
 
                 <button
-                  onClick={() => {
-                    setCurrentTime(0);
-                    playedSfxSet.current.clear();
-                  }}
+                  onClick={() => seekTo(0)}
                   className="p-2 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800"
                   title="Restart"
                 >
@@ -1496,7 +1537,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                           <span
                             key={word.id}
                             onClick={() => {
-                              setCurrentTime(word.start);
+                              seekTo(word.start);
                               handleToggleWordHighlight(word.id);
                             }}
                             className={`cursor-pointer px-1.5 py-0.5 rounded transition-all select-none ${
