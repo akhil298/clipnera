@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
-from auth.dependencies import CurrentUserDep
+from auth.dependencies import CurrentAdminDep, CurrentUserDep
+from auth.repository import UserRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 from subscription.repository import (
     PlanRepository,
@@ -20,6 +21,7 @@ from subscription.schema import (
     CreditLedgerResponse,
     UserCreditsResponse,
     CreditTopupRequest,
+    AdminCreditTopupResponse,
     EntitlementsResponse,
     PlanCatalogEntry,
 )
@@ -133,30 +135,47 @@ async def activate_free_plan(current_user: CurrentUserDep, service: Subscription
         raise CustomException(message=str(exc), code="INVALID_PLAN", status_code=400)
 
 
-@router.post("/topup", response_model=UserCreditsResponse)
-async def topup_credits(current_user: CurrentUserDep, service: SubscriptionServiceDep, body: CreditTopupRequest):
-    try:
-        await service.topup_credits(
-            user_id=current_user["user_id"],
-            amount=body.amount,
-            reason=body.notes or "Credit top-up",
-            reference_type="credit_topup",
-        )
-        balance = await service.get_user_credit_balance(current_user["user_id"])
-        sub = await service.get_user_subscription(current_user["user_id"])
-        plan = sub.plan.slug.value if sub else "free"
-        total = sub.plan.credit_minutes if sub else 0
-        status = sub.status.value if sub else "none"
-        period_end = sub.current_period_end if sub else None
-        return UserCreditsResponse(
-            plan=plan,
-            credit_minutes_total=total,
-            credit_minutes_remaining=balance,
-            subscription_status=status,
-            current_period_end=period_end,
-        )
-    except ValueError as exc:
-        raise CustomException(message=str(exc), code="INVALID_AMOUNT", status_code=400)
+@router.post("/topup", response_model=AdminCreditTopupResponse)
+async def topup_credits(
+    admin: CurrentAdminDep,
+    service: SubscriptionServiceDep,
+    session: Annotated[AsyncSession, Depends(get_db)],
+    body: CreditTopupRequest,
+):
+    """Add credit minutes to any user. Admin only; the entry records who did it."""
+    user = await UserRepository(session).get_user_by_email(body.user_email)
+    if not user:
+        raise CustomException(message="No user with that email", code="NOT_FOUND", status_code=404)
+    entry = await service.admin_topup(user.id, body.amount, body.reason.strip(), admin.id)
+    return _topup_response(entry)
+
+
+@router.get("/topups", response_model=list[AdminCreditTopupResponse])
+async def list_topups(
+    _: CurrentAdminDep,
+    service: SubscriptionServiceDep,
+    q: str | None = Query(None, max_length=100),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """Audit log of manual top-ups, newest first. Admin only."""
+    entries = await service.list_admin_topups((q or "").strip() or None, limit, offset)
+    return [_topup_response(e) for e in entries]
+
+
+def _topup_response(entry) -> AdminCreditTopupResponse:
+    return AdminCreditTopupResponse(
+        id=entry.id,
+        user_id=entry.user_id,
+        user_email=entry.user.email,
+        user_name=entry.user.full_name or entry.user.username,
+        amount=entry.amount,
+        balance_after=entry.balance_after,
+        reason=entry.reason,
+        created_by=entry.created_by,
+        created_by_email=entry.creator.email if entry.creator else None,
+        created_at=entry.created_at,
+    )
 
 
 @router.get("/transactions", response_model=list[PaymentTransactionResponse])

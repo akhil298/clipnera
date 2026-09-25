@@ -939,11 +939,6 @@ export const subscriptionApi = {
   getPlanCatalog: () => authedRequest<PlanCatalogEntry[]>('/subscription/catalog'),
   getMySubscription: () => authedRequest<{ plan: string; credit_minutes_total: number; credit_minutes_remaining: number; subscription_status: string; current_period_end: string | null }>('/subscription/me'),
   activateFreePlan: () => authedRequest<{ plan: string; credit_minutes_total: number; credit_minutes_remaining: number; subscription_status: string; current_period_end: string | null }>('/subscription/activate-free', { method: 'POST' }),
-  topupCredits: (amount: number, notes?: string) =>
-    authedRequest<{ plan: string; credit_minutes_total: number; credit_minutes_remaining: number; subscription_status: string; current_period_end: string | null }>('/subscription/topup', {
-      method: 'POST',
-      body: JSON.stringify({ amount, notes }),
-    }),
   getMyTransactions: () => authedRequest<PaymentTransactionResponse[]>('/subscription/transactions'),
   getCreditLedger: (limit?: number) => authedRequest<CreditLedgerResponse[]>(`/subscription/ledger${limit ? `?limit=${limit}` : ''}`),
 };
@@ -1030,6 +1025,43 @@ export const adminPaymentsApi = {
       method: 'PATCH',
       body: JSON.stringify({ reason }),
     }),
+};
+
+// Manual credit top-ups. Mirrors CreditTopupRequest / AdminCreditTopupResponse
+// in backend/subscription/schema.py. Admin only.
+export interface CreditTopupRequest {
+  user_email: string;
+  amount: number;
+  reason: string;
+}
+
+export interface AdminCreditTopupResponse {
+  id: string;
+  user_id: string;
+  user_email: string;
+  user_name: string | null;
+  amount: number;
+  balance_after: number;
+  reason: string;
+  created_by: string | null;
+  created_by_email: string | null;
+  created_at: string;
+}
+
+export const adminCreditsApi = {
+  topup: (body: CreditTopupRequest) =>
+    authedRequest<AdminCreditTopupResponse>('/subscription/topup', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  list: (params: { q?: string; limit?: number; offset?: number } = {}) => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') query.set(key, String(value));
+    });
+    const qs = query.toString();
+    return authedRequest<AdminCreditTopupResponse[]>(`/subscription/topups${qs ? `?${qs}` : ''}`);
+  },
 };
 
 export interface DashboardStatsResponse {

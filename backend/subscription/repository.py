@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth.model import User
 from subscription.model import Plan, UserSubscription, PaymentTransaction, CreditLedger, PlanSlug, SubscriptionStatus, PaymentStatus
 from core.logging_config import get_logger
 
@@ -129,7 +130,7 @@ class CreditLedgerRepository:
         entry = result.scalar_one_or_none()
         return entry.balance_after if entry else 0
 
-    async def add_entry(self, user_id: str, amount: int, balance_after: int, reason: str, reference_id: str | None = None, reference_type: str | None = None, commit: bool = True) -> CreditLedger:
+    async def add_entry(self, user_id: str, amount: int, balance_after: int, reason: str, reference_id: str | None = None, reference_type: str | None = None, commit: bool = True, created_by: str | None = None) -> CreditLedger:
         entry = CreditLedger(
             user_id=user_id,
             amount=amount,
@@ -137,6 +138,7 @@ class CreditLedgerRepository:
             reason=reason,
             reference_id=reference_id,
             reference_type=reference_type,
+            created_by=created_by,
         )
         self._session.add(entry)
         await _save(self._session, entry, commit)
@@ -149,5 +151,19 @@ class CreditLedgerRepository:
             .order_by(desc(CreditLedger.created_at))
             .limit(limit)
         )
+        result = await self._session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def search_by_reference_type(
+        self, reference_type: str, query: str | None, limit: int, offset: int
+    ) -> list[CreditLedger]:
+        """Entries of one kind, newest first; ``query`` matches the user's email or name."""
+        stmt = select(CreditLedger).where(CreditLedger.reference_type == reference_type)
+        if query:
+            pattern = f"%{query}%"
+            stmt = stmt.join(User, User.id == CreditLedger.user_id).where(
+                or_(User.email.ilike(pattern), User.full_name.ilike(pattern))
+            )
+        stmt = stmt.order_by(desc(CreditLedger.created_at)).limit(limit).offset(offset)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())

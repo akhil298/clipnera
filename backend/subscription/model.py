@@ -137,4 +137,11 @@ class CreditLedger(Base):
     reason: Mapped[str] = mapped_column(String(255), nullable=False)
     reference_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     reference_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # The admin who made a manual adjustment; null for system entries.
+    created_by: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="selectin")
+    creator: Mapped["User"] = relationship("User", foreign_keys=[created_by], lazy="selectin")

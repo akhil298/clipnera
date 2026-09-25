@@ -12,7 +12,6 @@ import {
   Trash2,
   ExternalLink,
   Smartphone,
-  Sparkles,
   Layers,
   Settings,
   Bell
@@ -297,7 +296,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       {/* SETTINGS TAB 2: BILLING & AI CREDITS */}
       {activeSettingsTab === 'billing' && (
         <div className="grid lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-7 p-6 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-5 shadow-xl">
+          <div className="lg:col-span-12 p-6 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-5 shadow-xl">
             <div className="flex items-center justify-between">
               <div>
                 {loadingSub ? (
@@ -362,48 +361,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 Upgrade Plan
               </button>
             )}
-          </div>
-
-          <div className="lg:col-span-5 p-6 rounded-2xl bg-gradient-to-br from-amber-950/30 via-neutral-900 to-neutral-950 border border-amber-500/30 space-y-4 shadow-xl">
-            <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>Need More AI Rendering Time?</span>
-            </h3>
-            <p className="text-xs text-neutral-300">
-              Refill minutes instantly without changing your base subscription billing tier.
-            </p>
-
-            <div className="space-y-2">
-              {[
-                { mins: '+100 Mins', price: '$15', desc: '~25 full long video projects', amount: 100 },
-                { mins: '+300 Mins', price: '$39', desc: '~80 full long video projects', amount: 300 },
-                { mins: '+1,000 Mins', price: '$99', desc: 'Agency bulk rendering volume', amount: 1000 },
-              ].map((pack, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between hover:border-amber-500/40 transition-colors"
-                >
-                  <div>
-                    <span className="text-xs font-bold text-white font-mono">{pack.mins}</span>
-                    <p className="text-[10px] text-neutral-400">{pack.desc}</p>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      try {
-                        await subscriptionApi.topupCredits(pack.amount, `Credit top-up: ${pack.mins}`);
-                        await loadSubscription();
-                        alert(`Refilled ${pack.mins} successfully!`);
-                      } catch {
-                        alert('Failed to refill credits. Please try again.');
-                      }
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500 text-neutral-950 font-bold text-xs hover:bg-amber-400 transition-colors"
-                  >
-                    Buy {pack.price}
-                  </button>
-                </div>
-              ))}
-            </div>
           </div>
 
           <div className="lg:col-span-12">

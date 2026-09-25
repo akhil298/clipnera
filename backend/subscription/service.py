@@ -29,6 +29,9 @@ def pro_override_emails() -> frozenset[str]:
 
 CREDIT_COST_PER_2_MINUTES = 1
 
+# Ledger reference_type for credits an admin added by hand.
+ADMIN_TOPUP_REFERENCE = "admin_topup"
+
 
 # Plans that buy the higher-quality AI path. Listed explicitly so adding a tier
 # is a deliberate decision rather than anything that merely is not "free".
@@ -207,7 +210,7 @@ class SubscriptionService:
         log.info(f"Credits refunded: user={user_id} amount={amount} reason={reason} balance={new_balance}")
         return entry
 
-    async def topup_credits(self, user_id: str, amount: int, reason: str, reference_id: str | None = None, reference_type: str | None = None) -> CreditLedger:
+    async def topup_credits(self, user_id: str, amount: int, reason: str, reference_id: str | None = None, reference_type: str | None = None, created_by: str | None = None) -> CreditLedger:
         if amount <= 0:
             raise ValueError("Top-up amount must be positive")
 
@@ -220,9 +223,19 @@ class SubscriptionService:
             reason=reason,
             reference_id=reference_id,
             reference_type=reference_type,
+            created_by=created_by,
         )
-        log.info(f"Credits topped up: user={user_id} amount={amount} reason={reason} balance={new_balance}")
+        log.info(f"Credits topped up: user={user_id} amount={amount} reason={reason} balance={new_balance} by={created_by}")
         return entry
+
+    async def admin_topup(self, user_id: str, amount: int, reason: str, admin_id: str) -> CreditLedger:
+        """Credit a user by hand. The ledger entry records which admin did it."""
+        return await self.topup_credits(
+            user_id, amount, reason, reference_type=ADMIN_TOPUP_REFERENCE, created_by=admin_id
+        )
+
+    async def list_admin_topups(self, query: str | None, limit: int, offset: int) -> list[CreditLedger]:
+        return await self._ledger_repo.search_by_reference_type(ADMIN_TOPUP_REFERENCE, query, limit, offset)
 
     def calculate_video_credit_cost(self, duration_seconds: int) -> int:
         return max(1, math.ceil(duration_seconds / 120))

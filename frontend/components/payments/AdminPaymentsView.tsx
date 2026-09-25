@@ -1,11 +1,9 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle2, Copy, Search, XCircle } from 'lucide-react';
-import { adminPaymentsApi, userApi, AdminPaymentResponse, PaymentStatus } from '@/lib/api';
-import { getToken } from '@/lib/auth';
+import { CheckCircle2, Copy, Search, XCircle } from 'lucide-react';
+import { adminPaymentsApi, AdminPaymentResponse, PaymentStatus } from '@/lib/api';
+import { AdminLayout } from '@/components/admin/AdminLayout';
 import { formatAmount, formatDateTime } from '@/lib/utils/payments';
 import { PaymentStatusBadge } from './PaymentStatusBadge';
 
@@ -18,30 +16,7 @@ const TABS: { id: PaymentStatus | 'all'; label: string }[] = [
 ];
 const REJECT_PRESETS = ['UTR not found', 'Amount mismatch', 'Screenshot unclear'];
 
-/** Redirects anyone who is not an admin. The API enforces this independently. */
-function useAdminGate(): boolean {
-  const router = useRouter();
-  const [allowed, setAllowed] = useState(false);
-
-  useEffect(() => {
-    if (!getToken()) {
-      router.replace('/login');
-      return;
-    }
-    userApi
-      .getMe()
-      .then((profile) => {
-        if (profile.role === 'admin') setAllowed(true);
-        else router.replace('/dashboard');
-      })
-      .catch(() => router.replace('/login'));
-  }, [router]);
-
-  return allowed;
-}
-
 export function AdminPaymentsView() {
-  const allowed = useAdminGate();
   const [tab, setTab] = useState<PaymentStatus | 'all'>('pending');
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
@@ -82,8 +57,8 @@ export function AdminPaymentsView() {
   );
 
   useEffect(() => {
-    if (allowed) load(0);
-  }, [allowed, load]);
+    load(0);
+  }, [load]);
 
   useEffect(() => {
     if (!preview) return;
@@ -131,187 +106,169 @@ export function AdminPaymentsView() {
     }
   };
 
-  if (!allowed) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-950">
-        <div className="w-6 h-6 border-2 border-neutral-700 border-t-amber-400 rounded-full animate-spin" />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 font-['Plus_Jakarta_Sans',sans-serif]">
-      <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <Link href="/dashboard" className="inline-flex items-center gap-1 text-xs text-neutral-400 hover:text-white">
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Dashboard
-            </Link>
-            <h1 className="text-2xl font-bold text-white font-['Syne',sans-serif] mt-1">UPI Payments</h1>
-            <p className="text-xs text-neutral-400">
-              Match each amount and UTR against your bank or UPI app before approving.
-            </p>
-          </div>
-          <div className="relative w-full sm:w-72">
-            <Search className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search UTR, user or amount"
-              className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-amber-500/60"
-            />
-          </div>
+    <AdminLayout
+      title="UPI Payments"
+      subtitle="Match each amount and UTR against your bank or UPI app before approving."
+      actions={
+        <div className="relative w-full sm:w-72">
+          <Search className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search UTR, user or amount"
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-amber-500/60"
+          />
         </div>
+      }
+    >
+      <div className="flex gap-1 p-1 rounded-xl bg-neutral-900 border border-neutral-800 w-fit">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+              tab === t.id ? 'bg-amber-500 text-neutral-950' : 'text-neutral-300 hover:text-white'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-        <div className="flex gap-1 p-1 rounded-xl bg-neutral-900 border border-neutral-800 w-fit">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                tab === t.id ? 'bg-amber-500 text-neutral-950' : 'text-neutral-300 hover:text-white'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+      {error && (
+        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">{error}</div>
+      )}
 
-        {error && (
-          <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">{error}</div>
-        )}
+      {!loading && payments.length === 0 && (
+        <p className="text-sm text-neutral-400 py-12 text-center">No payments here.</p>
+      )}
 
-        {!loading && payments.length === 0 && (
-          <p className="text-sm text-neutral-400 py-12 text-center">No payments here.</p>
-        )}
+      <ul className="space-y-3">
+        {payments.map((p) => (
+          <li key={p.id} className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-3">
+            <div className="flex flex-wrap items-start gap-4">
+              {p.screenshot_url ? (
+                <button
+                  onClick={() => openPreview(p)}
+                  className="w-16 h-16 rounded-lg overflow-hidden border border-neutral-700 hover:border-amber-500/60 shrink-0"
+                  title="View screenshot"
+                >
+                  <img src={p.screenshot_url} alt="Payment screenshot" className="w-full h-full object-cover" />
+                </button>
+              ) : (
+                <div className="w-16 h-16 rounded-lg bg-neutral-800 shrink-0" />
+              )}
 
-        <ul className="space-y-3">
-          {payments.map((p) => (
-            <li key={p.id} className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-3">
-              <div className="flex flex-wrap items-start gap-4">
-                {p.screenshot_url ? (
-                  <button
-                    onClick={() => openPreview(p)}
-                    className="w-16 h-16 rounded-lg overflow-hidden border border-neutral-700 hover:border-amber-500/60 shrink-0"
-                    title="View screenshot"
-                  >
-                    <img src={p.screenshot_url} alt="Payment screenshot" className="w-full h-full object-cover" />
-                  </button>
-                ) : (
-                  <div className="w-16 h-16 rounded-lg bg-neutral-800 shrink-0" />
+              <div className="flex-1 min-w-[12rem] space-y-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold text-white">{p.user_name || p.user_email}</p>
+                  <PaymentStatusBadge status={p.status} />
+                </div>
+                <p className="text-xs text-neutral-400">{p.user_email}</p>
+                <p className="text-[11px] text-neutral-500">Submitted {formatDateTime(p.created_at)}</p>
+                {p.rejection_reason && <p className="text-[11px] text-red-400">Reason: {p.rejection_reason}</p>}
+                {p.verified_at && (
+                  <p className="text-[11px] text-neutral-500">Reviewed {formatDateTime(p.verified_at)}</p>
                 )}
-
-                <div className="flex-1 min-w-[12rem] space-y-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-white">{p.user_name || p.user_email}</p>
-                    <PaymentStatusBadge status={p.status} />
-                  </div>
-                  <p className="text-xs text-neutral-400">{p.user_email}</p>
-                  <p className="text-[11px] text-neutral-500">Submitted {formatDateTime(p.created_at)}</p>
-                  {p.rejection_reason && <p className="text-[11px] text-red-400">Reason: {p.rejection_reason}</p>}
-                  {p.verified_at && (
-                    <p className="text-[11px] text-neutral-500">Reviewed {formatDateTime(p.verified_at)}</p>
-                  )}
-                </div>
-
-                <div className="space-y-1 text-right">
-                  <p className="text-lg font-bold text-white">{formatAmount(p.amount, p.currency)}</p>
-                  <p className="text-xs text-neutral-400">{p.plan_name}</p>
-                  {p.utr_number && (
-                    <button
-                      onClick={() => navigator.clipboard.writeText(p.utr_number!)}
-                      className="inline-flex items-center gap-1 text-xs font-mono text-amber-400 hover:text-amber-300"
-                      title="Copy UTR"
-                    >
-                      {p.utr_number}
-                      <Copy className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
               </div>
 
-              {p.status === 'pending' && rejecting?.id !== p.id && (
+              <div className="space-y-1 text-right">
+                <p className="text-lg font-bold text-white">{formatAmount(p.amount, p.currency)}</p>
+                <p className="text-xs text-neutral-400">{p.plan_name}</p>
+                {p.utr_number && (
+                  <button
+                    onClick={() => navigator.clipboard.writeText(p.utr_number!)}
+                    className="inline-flex items-center gap-1 text-xs font-mono text-amber-400 hover:text-amber-300"
+                    title="Copy UTR"
+                  >
+                    {p.utr_number}
+                    <Copy className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {p.status === 'pending' && rejecting?.id !== p.id && (
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setRejecting({ id: p.id, reason: '' })}
+                  disabled={busyId === p.id}
+                  className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-red-500/20 text-red-300 font-bold text-xs transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                  Reject
+                </button>
+                <button
+                  onClick={() => approve(p)}
+                  disabled={busyId === p.id}
+                  className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold text-xs transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  Approve
+                </button>
+              </div>
+            )}
+
+            {rejecting?.id === p.id && (
+              <div className="p-3 rounded-xl bg-neutral-950 border border-red-500/30 space-y-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {REJECT_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      onClick={() => setRejecting({ id: p.id, reason: preset })}
+                      className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-[11px] text-neutral-200"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  value={rejecting.reason}
+                  onChange={(e) => setRejecting({ id: p.id, reason: e.target.value })}
+                  placeholder="Reason shown to the user (required)"
+                  rows={2}
+                  maxLength={500}
+                  className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-red-500/60"
+                />
                 <div className="flex gap-2 justify-end">
                   <button
-                    onClick={() => setRejecting({ id: p.id, reason: '' })}
-                    disabled={busyId === p.id}
-                    className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-red-500/20 text-red-300 font-bold text-xs transition-colors disabled:opacity-50 flex items-center gap-1"
+                    onClick={() => setRejecting(null)}
+                    className="px-3 py-1.5 rounded-lg text-xs text-neutral-300 hover:text-white"
                   >
-                    <XCircle className="w-3.5 h-3.5" />
-                    Reject
+                    Cancel
                   </button>
                   <button
-                    onClick={() => approve(p)}
-                    disabled={busyId === p.id}
-                    className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-bold text-xs transition-colors disabled:opacity-50 flex items-center gap-1"
+                    onClick={() => runAction(p.id, () => adminPaymentsApi.reject(p.id, rejecting.reason.trim()))}
+                    disabled={busyId === p.id || rejecting.reason.trim().length < 3}
+                    className="px-4 py-1.5 rounded-lg bg-red-500 hover:bg-red-400 text-white font-bold text-xs disabled:opacity-50"
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Approve
+                    Confirm Reject
                   </button>
                 </div>
-              )}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
 
-              {rejecting?.id === p.id && (
-                <div className="p-3 rounded-xl bg-neutral-950 border border-red-500/30 space-y-2">
-                  <div className="flex flex-wrap gap-1.5">
-                    {REJECT_PRESETS.map((preset) => (
-                      <button
-                        key={preset}
-                        onClick={() => setRejecting({ id: p.id, reason: preset })}
-                        className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-[11px] text-neutral-200"
-                      >
-                        {preset}
-                      </button>
-                    ))}
-                  </div>
-                  <textarea
-                    value={rejecting.reason}
-                    onChange={(e) => setRejecting({ id: p.id, reason: e.target.value })}
-                    placeholder="Reason shown to the user (required)"
-                    rows={2}
-                    maxLength={500}
-                    className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-red-500/60"
-                  />
-                  <div className="flex gap-2 justify-end">
-                    <button
-                      onClick={() => setRejecting(null)}
-                      className="px-3 py-1.5 rounded-lg text-xs text-neutral-300 hover:text-white"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => runAction(p.id, () => adminPaymentsApi.reject(p.id, rejecting.reason.trim()))}
-                      disabled={busyId === p.id || rejecting.reason.trim().length < 3}
-                      className="px-4 py-1.5 rounded-lg bg-red-500 hover:bg-red-400 text-white font-bold text-xs disabled:opacity-50"
-                    >
-                      Confirm Reject
-                    </button>
-                  </div>
-                </div>
-              )}
-            </li>
-          ))}
-        </ul>
+      {loading && (
+        <div className="flex justify-center py-6">
+          <div className="w-6 h-6 border-2 border-neutral-700 border-t-amber-400 rounded-full animate-spin" />
+        </div>
+      )}
 
-        {loading && (
-          <div className="flex justify-center py-6">
-            <div className="w-6 h-6 border-2 border-neutral-700 border-t-amber-400 rounded-full animate-spin" />
-          </div>
-        )}
-
-        {hasMore && !loading && (
-          <div className="flex justify-center">
-            <button
-              onClick={() => load(payments.length)}
-              className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-bold text-white"
-            >
-              Load more
-            </button>
-          </div>
-        )}
-      </div>
+      {hasMore && !loading && (
+        <div className="flex justify-center">
+          <button
+            onClick={() => load(payments.length)}
+            className="px-4 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-bold text-white"
+          >
+            Load more
+          </button>
+        </div>
+      )}
 
       {preview?.screenshot_url && (
         <div
@@ -336,6 +293,6 @@ export function AdminPaymentsView() {
           </div>
         </div>
       )}
-    </div>
+    </AdminLayout>
   );
 }

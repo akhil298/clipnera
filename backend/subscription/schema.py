@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
 from typing import Optional, List
 
@@ -49,8 +49,26 @@ class PaymentTransactionResponse(BaseModel):
 
 
 class CreditTopupRequest(BaseModel):
+    """An admin adding credit minutes to a user's balance by hand."""
+
+    user_email: EmailStr
+    amount: int = Field(gt=0, le=100_000)
+    reason: str = Field(min_length=3, max_length=255)
+
+
+class AdminCreditTopupResponse(BaseModel):
+    """One manual top-up, for the admin audit log."""
+
+    id: str
+    user_id: str
+    user_email: str
+    user_name: Optional[str] = None
     amount: int
-    notes: Optional[str] = None
+    balance_after: int
+    reason: str
+    created_by: Optional[str] = None
+    created_by_email: Optional[str] = None
+    created_at: datetime
 
 
 class CreditLedgerResponse(BaseModel):
