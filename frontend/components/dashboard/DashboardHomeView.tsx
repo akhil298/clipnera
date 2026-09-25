@@ -8,7 +8,6 @@ import {
   CalendarDays,
   Play,
   UploadCloud,
-  Youtube,
   Clock,
   Flame,
   ArrowRight,
@@ -27,7 +26,7 @@ import {
   FolderOpen
 } from 'lucide-react';
 import { VideoProject, ViralClip, UserProfile, TabType, Workspace } from '@/lib/types';
-import { clipApi, pipelineApi, analyticsApi, startPipelineWhenReady, mapBackendClip } from '@/lib/api';
+import { analyticsApi } from '@/lib/api';
 import { StatsSkeleton } from '@/components/skeletons';
 import { usePlan } from '@/hooks/usePlan';
 
@@ -57,10 +56,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   onUpgradePlan,
 }) => {
   const { isPro, hasPendingPayment } = usePlan();
-  const [quickUrl, setQuickUrl] = useState('');
   const [selectedGenreFilter, setSelectedGenreFilter] = useState<string>('all');
-  const [isQuickProcessing, setIsQuickProcessing] = useState(false);
-  const [quickStatus, setQuickStatus] = useState('');
   const [stats, setStats] = useState<{
     total_viral_shorts: number;
     manual_hours_saved: number;
@@ -103,109 +99,6 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
       ? projects
       : projects.filter((p) => p.genre.toLowerCase().includes(selectedGenreFilter.toLowerCase()));
 
-  const handleQuickIngest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!quickUrl.trim() || isQuickProcessing) return;
-
-    setIsQuickProcessing(true);
-    setQuickStatus('Fetching video metadata...');
-
-    try {
-      const downloadResult: any = await clipApi.downloadYoutube(quickUrl);
-      const projectId = downloadResult?.id;
-
-      if (!projectId) {
-        setQuickStatus('Failed to create project.');
-        setIsQuickProcessing(false);
-        return;
-      }
-
-      setQuickStatus('Downloading video...');
-
-      const newProject: VideoProject = {
-        id: projectId,
-        title: downloadResult.title || 'Untitled Project',
-        folderName: downloadResult.title || 'Untitled Project',
-        folderCategory: 'YouTube Ingest',
-        folderColor: 'amber',
-        sourceUrl: quickUrl,
-        sourceChannel: downloadResult.channel_title || 'YouTube',
-        description: `Project for ${downloadResult.title}`,
-        tags: ['Viral', 'Shorts', 'AI'],
-        genre: 'YouTube',
-        duration: 0,
-        sourceType: 'youtube_url',
-        videoUrl: downloadResult.presigned_url || '',
-        posterUrl: downloadResult.thumbnail_url || '',
-        uploadedAt: downloadResult.created_at || new Date().toISOString(),
-        syncStatus: 'syncing',
-        offlineAvailable: false,
-        clips: [],
-        transcript: [],
-        processingProgress: 0,
-        processingStatus: 'processing',
-      };
-
-      onSelectProject(newProject);
-
-      // Wait for the download to finish before starting; the pipeline rejects
-      // with 409 VIDEO_NOT_READY until the project is marked UPLOADED.
-      await startPipelineWhenReady(projectId, {
-        audioConfig: {
-          aiDenoise: true,
-          noiseSuppressionStrength: 90,
-          deReverb: true,
-          vocalClarityEq: true,
-          humFilter: true,
-        },
-        onDownloadProgress: (progress) => {
-          if (progress.status === 'done') {
-            setQuickStatus('Download complete! Starting AI pipeline...');
-          } else {
-            setQuickStatus(`Downloading video... ${Math.round(progress.percent || 0)}%`);
-          }
-        },
-      });
-
-      setQuickStatus('AI pipeline running...');
-      onNavigateTab('generator');
-
-      const unsubPipeline = pipelineApi.subscribeProgress(
-        projectId,
-        (progress) => {
-          if (progress.status === 'completed') {
-            void clipApi.listClips(projectId)
-              .then((clipResponse) => {
-                const clips = (clipResponse.clips || []).map(mapBackendClip);
-                if (clips.length === 0) {
-                  setQuickStatus('Pipeline completed, but no clips were generated.');
-                  return;
-                }
-                onSelectProject({ ...newProject, clips, processingStatus: 'completed', processingProgress: 100 });
-                setQuickStatus(`${clips.length} clips ready.`);
-              })
-              .catch(() => setQuickStatus('Pipeline completed, but clips could not be loaded.'))
-              .finally(() => {
-                setIsQuickProcessing(false);
-                unsubPipeline();
-              });
-          } else if (progress.status === 'error') {
-            setQuickStatus(`Pipeline error: ${progress.message}`);
-            setIsQuickProcessing(false);
-            unsubPipeline();
-          }
-        },
-        () => {
-          setQuickStatus('Pipeline stream error');
-          setIsQuickProcessing(false);
-        }
-      );
-    } catch (err) {
-      setQuickStatus('Failed to start processing. Please try again.');
-      setIsQuickProcessing(false);
-    }
-  };
-
   return (
     <div className="space-y-8 animate-in fade-in duration-300 pb-8">
       {/* 1. HERO BANNER: Welcome, AI Credit Quota & Ingest Hub */}
@@ -238,40 +131,6 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
             <p className="text-neutral-300 text-sm leading-relaxed max-w-xl">
               Upload podcasts, webinars, keynote speeches, or YouTube videos. Clipnera extracts top hook moments, auto-generates kinetic captions, centers faces, inserts B-roll, and schedules to TikTok, Instagram Reels, and YouTube Shorts.
             </p>
-
-            {/* Quick URL Ingest Form */}
-            <form onSubmit={handleQuickIngest} className="flex flex-col sm:flex-row gap-2 pt-2 max-w-xl">
-              <div className="relative flex-1">
-                <Youtube className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                <input
-                  type="text"
-                  placeholder="Paste YouTube, Vimeo, Twitch, or Google Drive link..."
-                  value={quickUrl}
-                  onChange={(e) => setQuickUrl(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-neutral-950 border border-neutral-700/80 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 transition-colors shadow-inner"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={isQuickProcessing}
-                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs shadow-md shadow-amber-500/15 active:scale-95 transition-all flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {isQuickProcessing ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-neutral-950/30 border-t-neutral-950 rounded-full animate-spin" />
-                    <span>Processing...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>Get Clips</span>
-                  </>
-                )}
-              </button>
-            </form>
-            {quickStatus && (
-              <p className="text-[11px] text-neutral-400 mt-1.5">{quickStatus}</p>
-            )}
 
             {/* Free Plan Upgrade CTA */}
             {!isPro && (

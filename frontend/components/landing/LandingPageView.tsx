@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import { AuthForm } from '@/components/auth/AuthForm';
@@ -16,7 +16,6 @@ import { PricingSection } from './PricingSection';
 import { FaqSection } from './FaqSection';
 import { BottomCta } from './BottomCta';
 import { Footer } from './Footer';
-import { isAuthenticated } from '@/lib/auth';
 
 export default function LandingPageView() {
   const router = useRouter();
@@ -42,12 +41,6 @@ export default function LandingPageView() {
       a: 'You can directly export or schedule auto-posts to TikTok, YouTube Shorts, Instagram Reels, and X (Twitter), complete with AI-generated hashtags and hook optimization tags.',
     },
   ];
-
-  useEffect(() => {
-    if (isAuthenticated()) {
-      router.replace('/dashboard');
-    }
-  }, [router]);
 
   const handleAuthenticated = () => {
     setIsAuthModalOpen(false);
