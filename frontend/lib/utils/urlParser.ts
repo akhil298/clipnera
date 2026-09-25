@@ -17,19 +17,38 @@ interface SourceOverrides {
   thumbnailUrl?: string;
 }
 
+const YOUTUBE_HOSTS = new Set(['youtube.com', 'www.youtube.com', 'm.youtube.com']);
+const YOUTUBE_ID_PATH_PREFIXES = new Set(['embed', 'shorts', 'live', 'v']);
+const YOUTUBE_VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+
+/**
+ * Video id of a YouTube video link, or null for any other URL — YouTube is the
+ * only supported source. Mirrors `extract_youtube_video_id` in backend/clip/youtube_url.py.
+ */
+export function extractYoutubeVideoId(input: string): string | null {
+  const trimmed = input.trim();
+  let url: URL;
+  try {
+    url = new URL(/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
+  } catch {
+    return null;
+  }
+
+  const host = url.hostname.toLowerCase();
+  const [first = '', second = ''] = url.pathname.split('/').filter(Boolean);
+  let candidate = '';
+  if (host === 'youtu.be') {
+    candidate = first;
+  } else if (YOUTUBE_HOSTS.has(host)) {
+    candidate = first === 'watch' ? url.searchParams.get('v') ?? '' : YOUTUBE_ID_PATH_PREFIXES.has(first) ? second : '';
+  }
+  return YOUTUBE_VIDEO_ID.test(candidate) ? candidate : null;
+}
+
 /** Thumbnail for a YouTube URL (or bare video id), or '' when it is not one. */
 export function youtubeThumbnailUrl(url: string): string {
-  const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
-    /^([a-zA-Z0-9_-]{11})$/,
-  ];
-  for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) {
-      return `https://img.youtube.com/vi/${match[1]}/maxresdefault.jpg`;
-    }
-  }
-  return '';
+  const videoId = extractYoutubeVideoId(url) ?? (YOUTUBE_VIDEO_ID.test(url) ? url : null);
+  return videoId ? `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg` : '';
 }
 
 /**

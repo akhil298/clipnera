@@ -1,14 +1,18 @@
-from pydantic import BaseModel, Field
-from typing import Optional, Union
+from pydantic import AfterValidator, BaseModel, Field
+from typing import Annotated, Optional, Union
 from datetime import datetime
+
+from clip.youtube_url import canonical_youtube_url
+
+YouTubeVideoURL = Annotated[str, AfterValidator(canonical_youtube_url), Field(description="YouTube video URL")]
 
 
 class YouTubeURLRequest(BaseModel):
-    url: str = Field(..., description="YouTube video URL")
+    url: YouTubeVideoURL
 
 
 class YouTubeDownloadRequest(BaseModel):
-    url: str = Field(..., description="YouTube video URL")
+    url: YouTubeVideoURL
     format_id: Optional[str] = Field(None, description="yt-dlp format selector string")
 
 

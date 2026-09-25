@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Refresh YouTube cookies on EC2 from this machine's browser, pull the latest
-# code there and restart the backend service.
+# Pull the latest code on EC2 and restart the backend service. YouTube cookies
+# are exported from this machine's browser and copied over only when the ones
+# already on EC2 are missing, near expiry or rejected by YouTube.
 #
 # Usage: bash update_ec2.sh [address]
 #   address: an IP/hostname, user@host, or a pasted "ssh -i key user@host"
 #   command. Asked for when omitted; Enter reuses the last address.
-# Env overrides: EC2_KEY, COOKIE_BROWSER, COOKIE_FILE (use this cookies.txt
-# as-is instead of exporting from the browser), YOUTUBE_URL.
+# Env overrides: EC2_KEY, COOKIE_BROWSER, COOKIE_FILE (push this cookies.txt
+# as-is instead of exporting from the browser), FORCE_COOKIES=1 (replace the
+# cookies on EC2 even if they still work), COOKIE_MIN_DAYS (default 2),
+# YOUTUBE_URL.
 set -Eeuo pipefail
 
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,6 +17,9 @@ BACKEND_DIR="${REPO_DIR}/backend"
 COOKIE_FILE="${COOKIE_FILE:-}"
 COOKIE_TMP_DIR=""
 COOKIE_BROWSER="${COOKIE_BROWSER:-chrome}"
+FORCE_COOKIES="${FORCE_COOKIES:-0}"
+# Refresh the server's cookies once their sign-in expires within this many days.
+COOKIE_MIN_DAYS="${COOKIE_MIN_DAYS:-2}"
 YOUTUBE_URL="${YOUTUBE_URL:-https://www.youtube.com/watch?v=eaHfex71yO0}"
 EC2_KEY="${EC2_KEY:-${HOME}/Desktop/clipneras.pem}"
 LAST_TARGET_FILE="${HOME}/.config/clipnera/ec2_target"
@@ -72,8 +78,63 @@ if [[ -n "$(git -C "${REPO_DIR}" log '@{u}..' --oneline 2>/dev/null)" ]]; then
 fi
 
 # --- Cookies ---------------------------------------------------------------
-if [[ -n "${COOKIE_FILE}" ]]; then
-    echo "[1/4] Using cookies file ${COOKIE_FILE}..."
+# The backend writes YouTube's rotated cookies back to REMOTE_COOKIE after each
+# use, so the copy on EC2 stays fresh by itself. Overwriting it on every deploy
+# replaced those good cookies with a browser export that goes stale as soon as
+# the browser rotates its session. Only push when the server's copy is missing,
+# close to expiry or refused by YouTube, or when asked to.
+cookies_valid_on_ec2() {
+    ssh -T "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" bash -s -- \
+        "${REMOTE_ROOT}/backend/venv/bin/python" "${REMOTE_COOKIE}" "${YOUTUBE_URL}" "${COOKIE_MIN_DAYS}" <<'CHECK_SCRIPT'
+set -uo pipefail
+PYTHON="$1"; COOKIE="$2"; URL="$3"; MIN_DAYS="$4"
+export PATH="${HOME}/.deno/bin:${PATH}"
+
+[[ -s "${COOKIE}" ]] || { echo "      no cookies on EC2 yet"; exit 1; }
+[[ -x "${PYTHON}" ]] && command -v deno >/dev/null 2>&1 || { echo "      EC2 is not set up to check cookies"; exit 1; }
+
+# Signed-in session cookies; the file is useless once these lapse.
+"${PYTHON}" - "${COOKIE}" "${MIN_DAYS}" <<'PY' || exit 1
+import sys, time
+path, min_days = sys.argv[1], float(sys.argv[2])
+expiries = []
+for line in open(path, encoding="utf-8", errors="ignore"):
+    fields = line.removeprefix("#HttpOnly_").rstrip("\n").split("\t")
+    if len(fields) == 7 and "youtube.com" in fields[0] and fields[5] in ("LOGIN_INFO", "__Secure-3PSID"):
+        expiries.append(int(fields[4] or 0))
+if not expiries:
+    print("      cookies on EC2 are not signed in")
+    sys.exit(1)
+days_left = (min(expiries) - time.time()) / 86400
+if days_left < min_days:
+    print(f"      cookies on EC2 expire in {days_left:.1f} days")
+    sys.exit(1)
+print(f"      cookies on EC2 are valid for {days_left:.0f} more days")
+PY
+
+"${PYTHON}" -m yt_dlp --cookies "${COOKIE}" --js-runtimes deno --remote-components ejs:github \
+    --skip-download --quiet --no-warnings --print '%(title)s' "${URL}" >/dev/null 2>&1 \
+    || { echo "      YouTube refused the cookies on EC2"; exit 1; }
+CHECK_SCRIPT
+}
+
+PUSH_COOKIES=1
+if [[ -n "${COOKIE_FILE}" || "${FORCE_COOKIES}" == "1" ]]; then
+    echo "[1/4] Refreshing YouTube cookies as requested..."
+else
+    echo "[1/4] Checking YouTube cookies on EC2..."
+    if cookies_valid_on_ec2; then
+        PUSH_COOKIES=0
+        echo "      Keeping them (set FORCE_COOKIES=1 to replace them anyway)."
+    else
+        echo "      Exporting fresh cookies from ${COOKIE_BROWSER}..."
+    fi
+fi
+
+if [[ "${PUSH_COOKIES}" == "0" ]]; then
+    :
+elif [[ -n "${COOKIE_FILE}" ]]; then
+    echo "      Using cookies file ${COOKIE_FILE}."
     if [[ ! -s "${COOKIE_FILE}" ]]; then
         echo "Cookies file is missing or empty: ${COOKIE_FILE}" >&2
         exit 1
@@ -92,7 +153,6 @@ else
     COOKIE_TMP_DIR="$(mktemp -d /tmp/clipnera-youtube-cookies.XXXXXX)"
     COOKIE_FILE="${COOKIE_TMP_DIR}/cookies.txt"
 
-    echo "[1/4] Exporting fresh YouTube cookies from ${COOKIE_BROWSER}..."
     "${BACKEND_DIR}/venv/bin/python" -m yt_dlp \
         --cookies-from-browser "${COOKIE_BROWSER}" \
         --cookies "${COOKIE_FILE}" \
@@ -108,9 +168,13 @@ else
     fi
 fi
 
-echo "[2/4] Copying cookies to ${EC2_USER}@${EC2_HOST}:${REMOTE_COOKIE}..."
-ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "install -d -m 700 '$(dirname "${REMOTE_COOKIE}")'"
-scp -q "${SSH_OPTS[@]}" "${COOKIE_FILE}" "${EC2_USER}@${EC2_HOST}:${REMOTE_COOKIE}"
+if [[ "${PUSH_COOKIES}" == "1" ]]; then
+    echo "[2/4] Copying cookies to ${EC2_USER}@${EC2_HOST}:${REMOTE_COOKIE}..."
+    ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "install -d -m 700 '$(dirname "${REMOTE_COOKIE}")'"
+    scp -q "${SSH_OPTS[@]}" "${COOKIE_FILE}" "${EC2_USER}@${EC2_HOST}:${REMOTE_COOKIE}"
+else
+    echo "[2/4] Cookies on EC2 are still good; not copying."
+fi
 
 # --- Server update ---------------------------------------------------------
 echo "[3/4] Updating code, validating YouTube access and restarting backend..."

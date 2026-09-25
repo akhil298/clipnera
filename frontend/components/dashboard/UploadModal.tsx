@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { VideoProject, AudioEnhancementConfig, DownloadProgress } from '@/lib/types';
 import { useEntitlements } from '@/hooks/useEntitlements';
-import { analyzeVideoSource } from '@/lib/utils/urlParser';
+import { analyzeVideoSource, extractYoutubeVideoId } from '@/lib/utils/urlParser';
 import { clipApi, pipelineApi, YouTubeMetadataResponse } from '@/lib/api';
 import { PipelineProgressTracker } from './PipelineProgressTracker';
 
@@ -70,9 +70,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     const trimmed = urlInput.trim();
     setYtMeta(null);
     setYtMetaError(false);
-    if (!trimmed || trimmed.length < 8) return;
-    const isYoutube = /^(https?:\/\/)?(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)/.test(trimmed);
-    if (!isYoutube) return;
+    if (!extractYoutubeVideoId(trimmed)) return;
 
     let cancelled = false;
     const timeoutId = setTimeout(async () => {
@@ -110,6 +108,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   }, []);
 
   if (!isOpen) return null;
+
+  const isYoutubeUrl = extractYoutubeVideoId(urlInput) !== null;
 
   const handleUrlChange = (newUrl: string) => {
     setUrlInput(newUrl);
@@ -381,6 +381,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     />
                   </div>
                 </div>
+
+                {urlInput.trim() && !isYoutubeUrl && (
+                  <div className="flex items-center gap-2 text-[11px] text-rose-400">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>Only YouTube video links are supported (youtube.com/watch, youtu.be, or Shorts).</span>
+                  </div>
+                )}
 
                 {/* YouTube thumbnail + metadata preview */}
                 <div className="rounded-xl border border-amber-500/30 bg-neutral-950/80 overflow-hidden">
@@ -760,7 +767,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               <button
                 id="btn-start-ai-generate"
                 onClick={startAiProcessing}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-violet-600 hover:from-amber-400 hover:to-violet-500 text-white text-xs font-bold shadow-lg shadow-rose-500/25 active:scale-95 transition-all flex items-center gap-2"
+                disabled={!isYoutubeUrl}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-violet-600 hover:from-amber-400 hover:to-violet-500 text-white text-xs font-bold shadow-lg shadow-rose-500/25 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
               >
                 <Sparkles className="w-4 h-4" />
                 <span>Generate Viral Clips Now</span>

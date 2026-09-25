@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import re
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -11,6 +10,7 @@ from typing import Any, Dict, Optional
 import httpx
 import time
 from clients.services.s3 import S3
+from clip.youtube_url import extract_youtube_video_id
 from core.config import get_settings
 from core.logging_config import get_logger
 
@@ -52,10 +52,6 @@ class DownloadResult:
 
 class YouTubeService:
     """Fetch and download YouTube videos."""
-
-    VIDEO_ID_PATTERNS = [
-        r"(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})",
-    ]
 
     _progress_store: Dict[str, Dict[str, Any]] = {}
     _progress_lock = asyncio.Lock()
@@ -107,6 +103,8 @@ class YouTubeService:
             "quiet": True,
             "no_warnings": True,
             "noplaylist": True,
+            # YouTube is the only supported source; never fall through to other sites or the generic extractor.
+            "allowed_extractors": ["youtube"],
             "socket_timeout": 15,
             "retries": 1,
             "fragment_retries": 1,
@@ -219,14 +217,6 @@ class YouTubeService:
 
         return options
 
-    @staticmethod
-    def extract_video_id(url: str) -> Optional[str]:
-        for pattern in YouTubeService.VIDEO_ID_PATTERNS:
-            match = re.search(pattern, url)
-            if match:
-                return match.group(1)
-        return None
-
     async def fetch_metadata(self, url: str) -> PrefetchResult | None:
         """Extract metadata and quality options from a URL without downloading. Raises ValueError on failure."""
         try:
@@ -329,7 +319,7 @@ class YouTubeService:
             log.error("yt-dlp Python package not installed. Install with: pip install yt-dlp")
             raise ValueError("yt-dlp not installed")
 
-        video_id = self.extract_video_id(url)
+        video_id = extract_youtube_video_id(url)
         if not video_id:
             raise ValueError("Invalid YouTube URL")
 
