@@ -20,7 +20,9 @@ COOKIE_BROWSER="${COOKIE_BROWSER:-chrome}"
 FORCE_COOKIES="${FORCE_COOKIES:-0}"
 # Refresh the server's cookies once their sign-in expires within this many days.
 COOKIE_MIN_DAYS="${COOKIE_MIN_DAYS:-2}"
-YOUTUBE_URL="${YOUTUBE_URL:-https://www.youtube.com/watch?v=eaHfex71yO0}"
+# Any public video works; this one ("Me at the zoo", YouTube's first upload)
+# has stayed up since 2005, so a failed check means cookies, not the video.
+YOUTUBE_URL="${YOUTUBE_URL:-https://www.youtube.com/watch?v=jNQXAC9IVRw}"
 EC2_KEY="${EC2_KEY:-${HOME}/Desktop/clipneras.pem}"
 LAST_TARGET_FILE="${HOME}/.config/clipnera/ec2_target"
 
@@ -97,11 +99,22 @@ export PATH="${HOME}/.deno/bin:${PATH}"
 "${PYTHON}" - "${COOKIE}" "${MIN_DAYS}" <<'PY' || exit 1
 import sys, time
 path, min_days = sys.argv[1], float(sys.argv[2])
+
+
+def unix_seconds(raw: str) -> float:
+    value = int(raw or 0)
+    if value > 10**13:  # Chrome's format: microseconds since 1601
+        return value / 1_000_000 - 11_644_473_600
+    if value > 10**11:  # milliseconds
+        return value / 1000
+    return value
+
+
 expiries = []
 for line in open(path, encoding="utf-8", errors="ignore"):
     fields = line.removeprefix("#HttpOnly_").rstrip("\n").split("\t")
     if len(fields) == 7 and "youtube.com" in fields[0] and fields[5] in ("LOGIN_INFO", "__Secure-3PSID"):
-        expiries.append(int(fields[4] or 0))
+        expiries.append(unix_seconds(fields[4]))
 if not expiries:
     print("      cookies on EC2 are not signed in")
     sys.exit(1)
@@ -112,9 +125,15 @@ if days_left < min_days:
 print(f"      cookies on EC2 are valid for {days_left:.0f} more days")
 PY
 
-"${PYTHON}" -m yt_dlp --cookies "${COOKIE}" --js-runtimes deno --remote-components ejs:github \
-    --skip-download --quiet --no-warnings --print '%(title)s' "${URL}" >/dev/null 2>&1 \
-    || { echo "      YouTube refused the cookies on EC2"; exit 1; }
+if ! ERR="$("${PYTHON}" -m yt_dlp --cookies "${COOKIE}" --js-runtimes deno --remote-components ejs:github \
+    --skip-download --quiet --no-warnings --print '%(title)s' "${URL}" 2>&1 >/dev/null)"; then
+    if grep -qE "Video unavailable|Private video|has been removed" <<<"${ERR}"; then
+        echo "      Test video ${URL} is unavailable; set YOUTUBE_URL to a public video." >&2
+        exit 2
+    fi
+    echo "      YouTube refused the cookies on EC2: $(tail -1 <<<"${ERR}")"
+    exit 1
+fi
 CHECK_SCRIPT
 }
 
@@ -123,9 +142,13 @@ if [[ -n "${COOKIE_FILE}" || "${FORCE_COOKIES}" == "1" ]]; then
     echo "[1/4] Refreshing YouTube cookies as requested..."
 else
     echo "[1/4] Checking YouTube cookies on EC2..."
-    if cookies_valid_on_ec2; then
+    CHECK_STATUS=0
+    cookies_valid_on_ec2 || CHECK_STATUS=$?
+    if [[ "${CHECK_STATUS}" == "0" ]]; then
         PUSH_COOKIES=0
         echo "      Keeping them (set FORCE_COOKIES=1 to replace them anyway)."
+    elif [[ "${CHECK_STATUS}" == "2" ]]; then
+        exit 1  # the test video is gone; new cookies would not help
     else
         echo "      Exporting fresh cookies from ${COOKIE_BROWSER}..."
     fi
