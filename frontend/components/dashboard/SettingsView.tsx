@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, Workspace } from '@/lib/types';
 import { Avatar } from './Avatar';
-import { workspaceApi } from '@/lib/api';
+import { workspaceApi, type AssignableWorkspaceRole } from '@/lib/api';
 import { TableSkeleton } from '@/components/skeletons';
 import { PlanSelectionModal, type SelectedPlan } from './PlanSelectionModal';
 import { ProLockBadge } from './ProLockBadge';
@@ -75,7 +75,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [newMemberName, setNewMemberName] = useState('');
   const [newMemberEmail, setNewMemberEmail] = useState('');
   const [newMemberPassword, setNewMemberPassword] = useState('');
-  const [newMemberRole, setNewMemberRole] = useState('member');
+  const [newMemberRole, setNewMemberRole] = useState<AssignableWorkspaceRole>('member');
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
@@ -107,12 +107,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   }, [activeSettingsTab, activeWorkspaceId]);
 
+  // Keeps the form open so the success message (rendered inside it) stays visible.
   const resetForm = () => {
     setNewMemberName('');
     setNewMemberEmail('');
     setNewMemberPassword('');
     setNewMemberRole('member');
-    setShowAddForm(false);
   };
 
   const handleAddMember = async (e: React.FormEvent) => {
@@ -122,7 +122,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     if (!newMemberName.trim() || !newMemberEmail.trim() || !newMemberPassword || !activeWorkspaceId) return;
     setInviting(true);
     try {
-      console.log('Adding member to workspace:', activeWorkspaceId);
       const member = await workspaceApi.createAndAddMember(
         activeWorkspaceId,
         newMemberEmail.trim(),
@@ -130,7 +129,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         newMemberName.trim(),
         newMemberRole
       );
-      console.log('Member added successfully:', member);
       setTeamMembers((prev) => [
         ...prev,
         {
@@ -144,7 +142,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       setInviteSuccess(`${member.name || member.email} added successfully!`);
       resetForm();
     } catch (err) {
-      console.error('Failed to add member:', err);
       setInviteError(err instanceof Error ? err.message : 'Failed to add member');
     } finally {
       setInviting(false);
@@ -403,11 +400,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <label className="text-xs text-neutral-400 block mb-1">Role</label>
                     <select
                       value={newMemberRole}
-                      onChange={(e) => setNewMemberRole(e.target.value)}
+                      onChange={(e) => setNewMemberRole(e.target.value as AssignableWorkspaceRole)}
                       className="w-full p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-white focus:outline-none focus:border-amber-400"
                     >
                       <option value="member">Member</option>
-                      <option value="admin">Admin</option>
                       <option value="viewer">Viewer</option>
                     </select>
                   </div>

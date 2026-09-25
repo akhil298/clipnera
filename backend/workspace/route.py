@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import CurrentUserDep, get_db
+from auth.model import AuthProvider, User, UserAccount
 from auth.schema import MessageResponse
+from core.security import hash_password
+from workspace.model import Workspace, WorkspaceMember, WorkspaceRole
 from workspace.repository import WorkspaceRepository
 from workspace.schema import (
     CreateWorkspaceRequest,
@@ -31,22 +35,69 @@ WorkspaceRepoDep = Annotated[WorkspaceRepository, Depends(get_workspace_repo)]
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 
+async def _require_membership(repo: WorkspaceRepository, workspace_id: str, user_id: str) -> WorkspaceMember:
+    """The caller's membership; 404 for non-members so workspace ids don't leak."""
+    workspace = await repo.get_workspace(workspace_id)
+    membership = await repo.get_membership(workspace_id, user_id) if workspace else None
+    if not membership:
+        raise CustomException(message="Workspace not found", code="NOT_FOUND", status_code=404)
+    return membership
+
+
+async def _require_owner(repo: WorkspaceRepository, workspace_id: str, user_id: str) -> None:
+    """Only the owner may add, re-role or remove members."""
+    membership = await _require_membership(repo, workspace_id, user_id)
+    if membership.role != WorkspaceRole.OWNER:
+        raise CustomException(
+            message="Only the workspace owner can manage members", code="FORBIDDEN", status_code=403
+        )
+
+
+async def _get_editable_member(repo: WorkspaceRepository, workspace_id: str, member_id: str) -> WorkspaceMember:
+    member = await repo.get_member(member_id)
+    if not member or member.workspace_id != workspace_id:
+        raise CustomException(message="Member not found", code="NOT_FOUND", status_code=404)
+    if member.role == WorkspaceRole.OWNER:
+        raise CustomException(message="The workspace owner cannot be changed", code="FORBIDDEN", status_code=403)
+    return member
+
+
+def _workspace_response(workspace: Workspace, role: str, member_count: int) -> WorkspaceResponse:
+    return WorkspaceResponse(
+        id=workspace.id,
+        name=workspace.name,
+        slug=workspace.slug,
+        owner_id=workspace.owner_id,
+        role=role,
+        member_count=member_count,
+        created_at=workspace.created_at.isoformat(),
+    )
+
+
+def _member_response(member: WorkspaceMember, name: str | None = None) -> WorkspaceMemberResponse:
+    return WorkspaceMemberResponse(
+        id=member.id,
+        workspace_id=member.workspace_id,
+        user_id=member.user_id,
+        email=member.email,
+        name=name,
+        avatar_url=None,
+        role=member.role.value,
+        status=member.status.value,
+        created_at=member.created_at.isoformat(),
+    )
+
+
 @router.post("", response_model=WorkspaceResponse, status_code=201)
 async def create_workspace(
     data: CreateWorkspaceRequest,
     current_user: CurrentUserDep,
     repo: WorkspaceRepoDep,
 ):
-    workspace = await repo.create_workspace(data.name, current_user["user_id"], "")
-    return WorkspaceResponse(
-        id=workspace.id,
-        name=workspace.name,
-        slug=workspace.slug,
-        owner_id=workspace.owner_id,
-        role="owner",
-        member_count=1,
-        created_at=workspace.created_at.isoformat(),
-    )
+    user_id = current_user["user_id"]
+    user = (await repo.get_users_by_ids([user_id]))[user_id]
+    workspace = await repo.create_workspace(data.name, user_id, user.email)
+    return _workspace_response(workspace, WorkspaceRole.OWNER.value, 1)
 
 
 @router.get("", response_model=list[WorkspaceResponse])
@@ -54,19 +105,16 @@ async def list_workspaces(
     current_user: CurrentUserDep,
     repo: WorkspaceRepoDep,
 ):
-    results = await repo.list_for_user(current_user["user_id"])
-    return [
-        WorkspaceResponse(
-            id=ws.id,
-            name=ws.name,
-            slug=ws.slug,
-            owner_id=ws.owner_id,
-            role=role,
-            member_count=count,
-            created_at=ws.created_at.isoformat(),
-        )
-        for ws, role, count in results
-    ]
+    """The caller's workspaces. Anyone without one gets a personal workspace,
+    so there is always somewhere to add team members."""
+    user_id = current_user["user_id"]
+    results = await repo.list_for_user(user_id)
+    if not results:
+        user = (await repo.get_users_by_ids([user_id]))[user_id]
+        owner_name = user.full_name or user.email.split("@")[0]
+        workspace = await repo.create_workspace(f"{owner_name}'s Workspace", user_id, user.email)
+        return [_workspace_response(workspace, WorkspaceRole.OWNER.value, 1)]
+    return [_workspace_response(ws, role.value, count) for ws, role, count in results]
 
 
 @router.get("/{workspace_id}", response_model=WorkspaceResponse)
@@ -75,18 +123,10 @@ async def get_workspace(
     current_user: CurrentUserDep,
     repo: WorkspaceRepoDep,
 ):
+    membership = await _require_membership(repo, workspace_id, current_user["user_id"])
     workspace = await repo.get_workspace(workspace_id)
-    if not workspace:
-        raise CustomException(message="Workspace not found", code="NOT_FOUND", status_code=404)
-    return WorkspaceResponse(
-        id=workspace.id,
-        name=workspace.name,
-        slug=workspace.slug,
-        owner_id=workspace.owner_id,
-        role="owner",
-        member_count=0,
-        created_at=workspace.created_at.isoformat(),
-    )
+    member_count = len(await repo.list_members(workspace_id))
+    return _workspace_response(workspace, membership.role.value, member_count)
 
 
 # Adding members is Pro; existing members can still be viewed, re-roled and removed.
@@ -100,26 +140,14 @@ async def invite_member(
     current_user: CurrentUserDep,
     repo: WorkspaceRepoDep,
 ):
-    workspace = await repo.get_workspace(workspace_id)
-    if not workspace:
-        raise CustomException(message="Workspace not found", code="NOT_FOUND", status_code=404)
+    await _require_owner(repo, workspace_id, current_user["user_id"])
     member = await repo.add_member(
         workspace_id=workspace_id,
         email=data.email,
-        role=data.role,
+        role=WorkspaceRole(data.role),
         invited_by=current_user["user_id"],
     )
-    return WorkspaceMemberResponse(
-        id=member.id,
-        workspace_id=member.workspace_id,
-        user_id=member.user_id,
-        email=member.email,
-        name=None,
-        avatar_url=None,
-        role=member.role.value,
-        status=member.status.value,
-        created_at=member.created_at.isoformat(),
-    )
+    return _member_response(member)
 
 
 @router.post(
@@ -132,21 +160,13 @@ async def create_and_add_member(
     current_user: CurrentUserDep,
     repo: WorkspaceRepoDep,
 ):
-    """Create a new user account and add them to the workspace."""
-    from auth.repository import UserRepository
-    from auth.model import AuthProvider
-    from core.security import hash_password
-    import asyncio
+    """Create a regular user account and add it to the workspace.
 
-    workspace = await repo.get_workspace(workspace_id)
-    if not workspace:
-        raise CustomException(message="Workspace not found", code="NOT_FOUND", status_code=404)
-
-    session = repo._session
-    user_repo = UserRepository(session)
-
-    existing_user = await user_repo.get_user_by_email(data.email)
-    if existing_user:
+    The account always gets the default ``user`` platform role; this route
+    can never create a platform admin.
+    """
+    await _require_owner(repo, workspace_id, current_user["user_id"])
+    if await repo.get_user_by_email(data.email):
         raise CustomException(
             message="A user with this email already exists. Use invite instead.",
             code="EMAIL_EXISTS",
@@ -154,50 +174,27 @@ async def create_and_add_member(
         )
 
     hashed = await asyncio.to_thread(hash_password, data.password)
-
-    from auth.model import User, UserAccount
-    user = User(
-        email=data.email,
-        full_name=data.full_name,
-        username=data.email.split("@")[0],
-    )
+    session = repo._session
+    user = User(email=data.email, full_name=data.full_name, username=data.email.split("@")[0])
     session.add(user)
     await session.flush()
-
-    account = UserAccount(
-        user_id=user.id,
-        provider=AuthProvider.PASSWORD,
-        provider_user_id=data.email,
-        password_hash=hashed,
+    session.add(
+        UserAccount(
+            user_id=user.id,
+            provider=AuthProvider.PASSWORD,
+            provider_user_id=data.email,
+            password_hash=hashed,
+        )
     )
-    session.add(account)
-    await session.flush()
-
-    from workspace.model import WorkspaceRole
-    try:
-        role = WorkspaceRole(data.role)
-    except ValueError:
-        raise CustomException(message="Invalid role", code="INVALID_ROLE", status_code=400)
 
     member = await repo.add_member(
         workspace_id=workspace_id,
         email=data.email,
-        role=role,
+        role=WorkspaceRole(data.role),
         invited_by=current_user["user_id"],
         user_id=user.id,
     )
-
-    return WorkspaceMemberResponse(
-        id=member.id,
-        workspace_id=member.workspace_id,
-        user_id=member.user_id,
-        email=member.email,
-        name=data.full_name,
-        avatar_url=None,
-        role=member.role.value,
-        status=member.status.value,
-        created_at=member.created_at.isoformat(),
-    )
+    return _member_response(member, data.full_name)
 
 
 @router.get("/{workspace_id}/members", response_model=list[WorkspaceMemberResponse])
@@ -206,22 +203,11 @@ async def list_members(
     current_user: CurrentUserDep,
     repo: WorkspaceRepoDep,
 ):
-    workspace = await repo.get_workspace(workspace_id)
-    if not workspace:
-        raise CustomException(message="Workspace not found", code="NOT_FOUND", status_code=404)
+    await _require_membership(repo, workspace_id, current_user["user_id"])
     members = await repo.list_members(workspace_id)
+    users = await repo.get_users_by_ids([m.user_id for m in members if m.user_id])
     return [
-        WorkspaceMemberResponse(
-            id=m.id,
-            workspace_id=m.workspace_id,
-            user_id=m.user_id,
-            email=m.email,
-            name=None,
-            avatar_url=None,
-            role=m.role.value,
-            status=m.status.value,
-            created_at=m.created_at.isoformat(),
-        )
+        _member_response(m, users[m.user_id].full_name if m.user_id in users else None)
         for m in members
     ]
 
@@ -234,29 +220,10 @@ async def update_member_role(
     current_user: CurrentUserDep,
     repo: WorkspaceRepoDep,
 ):
-    workspace = await repo.get_workspace(workspace_id)
-    if not workspace:
-        raise CustomException(message="Workspace not found", code="NOT_FOUND", status_code=404)
-    member = await repo.get_member(member_id)
-    if not member or member.workspace_id != workspace_id:
-        raise CustomException(message="Member not found", code="NOT_FOUND", status_code=404)
-    from workspace.model import WorkspaceRole
-    try:
-        role = WorkspaceRole(data.role)
-    except ValueError:
-        raise CustomException(message="Invalid role", code="INVALID_ROLE", status_code=400)
-    member = await repo.update_member_role(member, role)
-    return WorkspaceMemberResponse(
-        id=member.id,
-        workspace_id=member.workspace_id,
-        user_id=member.user_id,
-        email=member.email,
-        name=None,
-        avatar_url=None,
-        role=member.role.value,
-        status=member.status.value,
-        created_at=member.created_at.isoformat(),
-    )
+    await _require_owner(repo, workspace_id, current_user["user_id"])
+    member = await _get_editable_member(repo, workspace_id, member_id)
+    member = await repo.update_member_role(member, WorkspaceRole(data.role))
+    return _member_response(member)
 
 
 @router.delete("/{workspace_id}/members/{member_id}", response_model=MessageResponse)
@@ -266,11 +233,7 @@ async def remove_member(
     current_user: CurrentUserDep,
     repo: WorkspaceRepoDep,
 ):
-    workspace = await repo.get_workspace(workspace_id)
-    if not workspace:
-        raise CustomException(message="Workspace not found", code="NOT_FOUND", status_code=404)
-    member = await repo.get_member(member_id)
-    if not member or member.workspace_id != workspace_id:
-        raise CustomException(message="Member not found", code="NOT_FOUND", status_code=404)
+    await _require_owner(repo, workspace_id, current_user["user_id"])
+    member = await _get_editable_member(repo, workspace_id, member_id)
     await repo.remove_member(member)
     return MessageResponse(message="Member removed")

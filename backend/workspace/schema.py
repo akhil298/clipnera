@@ -1,8 +1,13 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
+
+
+# Roles an owner can give someone. Owner and admin are never assignable, so
+# nobody can be promoted to manage a workspace through the API.
+AssignableRole = Literal["member", "viewer"]
 
 
 class CreateWorkspaceRequest(BaseModel):
@@ -13,16 +18,16 @@ class CreateMemberRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     full_name: str = Field(min_length=1, max_length=255)
-    role: str = "member"  # owner | admin | member | viewer
+    role: AssignableRole = "member"
 
 
 class InviteMemberRequest(BaseModel):
     email: EmailStr
-    role: str = "member"  # owner | admin | member | viewer
+    role: AssignableRole = "member"
 
 
 class UpdateMemberRoleRequest(BaseModel):
-    role: str
+    role: AssignableRole
 
 
 class WorkspaceMemberResponse(BaseModel):

@@ -78,6 +78,9 @@ export interface WorkspaceResponse {
   created_at: string;
 }
 
+/** Roles an owner can assign. Mirrors AssignableRole in backend/workspace/schema.py. */
+export type AssignableWorkspaceRole = 'member' | 'viewer';
+
 export interface WorkspaceMemberResponse {
   id: string;
   workspace_id: string;
@@ -510,15 +513,15 @@ export const workspaceApi = {
   }),
   get: (id: string) => authedRequest<WorkspaceResponse>(`/workspaces/${id}`),
   listMembers: (workspaceId: string) => authedRequest<WorkspaceMemberResponse[]>(`/workspaces/${workspaceId}/members`),
-  inviteMember: (workspaceId: string, email: string, role: string) => authedRequest<WorkspaceMemberResponse>(`/workspaces/${workspaceId}/members`, {
+  inviteMember: (workspaceId: string, email: string, role: AssignableWorkspaceRole) => authedRequest<WorkspaceMemberResponse>(`/workspaces/${workspaceId}/members`, {
     method: 'POST',
     body: JSON.stringify({ email, role }),
   }),
-  createAndAddMember: (workspaceId: string, email: string, password: string, fullName: string, role: string) => authedRequest<WorkspaceMemberResponse>(`/workspaces/${workspaceId}/members/create`, {
+  createAndAddMember: (workspaceId: string, email: string, password: string, fullName: string, role: AssignableWorkspaceRole) => authedRequest<WorkspaceMemberResponse>(`/workspaces/${workspaceId}/members/create`, {
     method: 'POST',
     body: JSON.stringify({ email, password, full_name: fullName, role }),
   }),
-  updateMemberRole: (workspaceId: string, memberId: string, role: string) => authedRequest<WorkspaceMemberResponse>(`/workspaces/${workspaceId}/members/${memberId}`, {
+  updateMemberRole: (workspaceId: string, memberId: string, role: AssignableWorkspaceRole) => authedRequest<WorkspaceMemberResponse>(`/workspaces/${workspaceId}/members/${memberId}`, {
     method: 'PATCH',
     body: JSON.stringify({ role }),
   }),

@@ -7,6 +7,7 @@ from typing import Optional
 
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from auth.model import User
 from workspace.model import (
@@ -46,11 +47,14 @@ class WorkspaceRepository:
         return workspace
 
     async def list_for_user(self, user_id: str) -> list[tuple[Workspace, str, int]]:
+        others = aliased(WorkspaceMember)
+        member_count = (
+            select(func.count(others.id)).where(others.workspace_id == Workspace.id).scalar_subquery()
+        )
         stmt = (
-            select(Workspace, WorkspaceMember.role, func.count(WorkspaceMember.id))
+            select(Workspace, WorkspaceMember.role, member_count)
             .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.id)
             .where(WorkspaceMember.user_id == user_id, Workspace.is_active.is_(True))
-            .group_by(Workspace.id, WorkspaceMember.role)
         )
         result = await self._session.execute(stmt)
         return list(result.all())
@@ -89,6 +93,13 @@ class WorkspaceRepository:
         )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def get_membership(self, workspace_id: str, user_id: str) -> WorkspaceMember | None:
+        stmt = select(WorkspaceMember).where(
+            WorkspaceMember.workspace_id == workspace_id, WorkspaceMember.user_id == user_id
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def get_member(self, member_id: str) -> WorkspaceMember | None:
         stmt = select(WorkspaceMember).where(WorkspaceMember.id == member_id)
