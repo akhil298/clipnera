@@ -18,8 +18,14 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
-  X
+  X,
+  ShieldCheck,
+  Users,
+  CreditCard,
+  Coins,
+  Share2,
 } from 'lucide-react';
+import Link from 'next/link';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
 import { Skeleton } from '@/components/skeletons';
 import { useEntitlements, planLabel, isPaidPlan, daysUntil } from '@/hooks/useEntitlements';
@@ -130,6 +136,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Settings,
       description: 'Workspace, keys & subscriptions',
     },
+  ];
+
+  // Same pages as the admin panel's own tabs (components/admin/AdminLayout.tsx).
+  const adminNavItems = [
+    { href: '/admin/overview', label: 'Admin Overview', icon: ShieldCheck },
+    { href: '/admin/users', label: 'Users', icon: Users },
+    { href: '/admin/payments', label: 'Payments', icon: CreditCard },
+    { href: '/admin/credits', label: 'Credits', icon: Coins },
+    { href: '/admin/social', label: 'Social Accounts', icon: Share2 },
   ];
 
   const handleNavClick = (tab: TabType) => {
@@ -425,6 +440,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
             );
           })}
         </div>
+
+        {/* Admin Group: only for platform admins; the API checks the role again. */}
+        {user.role === 'admin' && (
+          <div className="space-y-1 mb-4">
+            {!isCollapsed && (
+              <div className="px-3 text-[10px] font-bold text-violet-300 uppercase tracking-wider mb-1.5">
+                Admin
+              </div>
+            )}
+            {adminNavItems.map((item) => {
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={onCloseMobile}
+                  title={isCollapsed ? item.label : undefined}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900/50 transition-all ${
+                    isCollapsed ? 'justify-center px-2' : ''
+                  }`}
+                >
+                  <Icon className="w-4 h-4 shrink-0 text-violet-400" />
+                  {!isCollapsed && <span className="truncate">{item.label}</span>}
+                </Link>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Bottom Section: AI Credits Meter & User Profile */}

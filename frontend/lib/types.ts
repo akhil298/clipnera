@@ -303,6 +303,7 @@ export interface UserProfile {
   aiCreditsTotal: number;
   activeWorkspaceId: string;
   providers: string[];
+  role: 'user' | 'admin';
 }
 
 export interface Workspace {

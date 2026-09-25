@@ -28,6 +28,21 @@ import { useNotificationInbox } from '@/hooks/useNotificationInbox';
 import { userApi, workspaceApi, authApi, pipelineApi, subscriptionApi, clipApi, mapBackendClip } from '@/lib/api';
 import { isAuthenticated, clearAuth } from '@/lib/auth';
 import { youtubeThumbnailUrl } from '@/lib/utils/urlParser';
+import type { UserProfileResponse } from '@/lib/api';
+
+const toUserProfile = (profile: UserProfileResponse, fallbackWorkspaceId: string): UserProfile => ({
+  id: profile.id,
+  name: profile.name,
+  email: profile.email,
+  avatarUrl: profile.avatar_url || '',
+  avatarInitials: profile.avatar_initials,
+  plan: profile.plan as UserProfile['plan'],
+  aiCreditsMinutesRemaining: profile.ai_credits_minutes_remaining,
+  aiCreditsTotal: profile.ai_credits_total,
+  activeWorkspaceId: profile.active_workspace_id || fallbackWorkspaceId,
+  providers: profile.providers,
+  role: profile.role,
+});
 
 const getTabFromPathname = (pathname: string): TabType => {
   const segments = pathname.split('/').filter(Boolean);
@@ -216,19 +231,7 @@ export default function DashboardApp() {
           clipApi.listProjects(),
         ]);
         if (cancelled) return;
-        const mappedUser: UserProfile = {
-          id: profile.id,
-          name: profile.name,
-          email: profile.email,
-          avatarUrl: profile.avatar_url || '',
-          avatarInitials: profile.avatar_initials,
-          plan: profile.plan as UserProfile['plan'],
-          aiCreditsMinutesRemaining: profile.ai_credits_minutes_remaining,
-          aiCreditsTotal: profile.ai_credits_total,
-          activeWorkspaceId: profile.active_workspace_id || wsList[0]?.id || '',
-          providers: profile.providers,
-        };
-        setCurrentUser(mappedUser);
+        setCurrentUser(toUserProfile(profile, wsList[0]?.id || ''));
         setWorkspaces(
           wsList.map((ws) => ({
             id: ws.id,
@@ -660,19 +663,7 @@ export default function DashboardApp() {
     try {
       const profile = await userApi.getMe();
       if (!cancelled) {
-        const mappedUser: UserProfile = {
-          id: profile.id,
-          name: profile.name,
-          email: profile.email,
-          avatarUrl: profile.avatar_url || '',
-          avatarInitials: profile.avatar_initials,
-          plan: profile.plan as UserProfile['plan'],
-          aiCreditsMinutesRemaining: profile.ai_credits_minutes_remaining,
-          aiCreditsTotal: profile.ai_credits_total,
-          activeWorkspaceId: profile.active_workspace_id || currentUser?.activeWorkspaceId || '',
-          providers: profile.providers,
-        };
-        setCurrentUser(mappedUser);
+        setCurrentUser(toUserProfile(profile, currentUser?.activeWorkspaceId || ''));
       }
     } catch {
       // ignore
