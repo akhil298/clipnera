@@ -757,7 +757,6 @@ export default function DashboardApp() {
               onDeleteFolder={handleDeleteFolder}
               onRenameFolder={handleRenameFolder}
               onOpenUploadModal={() => setIsUploadOpen(true)}
-              onUpdateProject={handleUpdateProject}
               onCancelPipeline={handleCancelPipeline}
             />
           )}

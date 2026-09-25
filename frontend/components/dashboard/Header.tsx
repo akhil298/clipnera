@@ -20,6 +20,7 @@ import {
   Clock
 } from 'lucide-react';
 import { useEntitlements, planLabel, isPaidPlan } from '@/hooks/useEntitlements';
+import { Skeleton } from '@/components/skeletons';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
 import { Avatar } from './Avatar';
 
@@ -63,7 +64,9 @@ export const Header: React.FC<HeaderProps> = ({
   onNavigateTab,
   onUpgradePlan,
 }) => {
-  const { entitlements } = useEntitlements();
+  // Until the real plan arrives, entitlements hold a Free placeholder; showing
+  // it made Pro users see "Free" and an Upgrade button for a moment.
+  const { entitlements, isLoading: planLoading } = useEntitlements();
   const activeWorkspace = workspaces.find((w) => w.id === user.activeWorkspaceId) || workspaces[0];
   const CurrentIcon = TAB_TITLES[activeTab]?.icon || LayoutDashboard;
 
@@ -140,6 +143,9 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         {/* Current plan badge */}
+        {planLoading ? (
+          <Skeleton className="hidden sm:block h-8 w-16 rounded-xl" />
+        ) : (
         <button
           onClick={() => onNavigateTab('settings')}
           className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition-all ${
@@ -152,6 +158,7 @@ export const Header: React.FC<HeaderProps> = ({
           {isPaidPlan(entitlements) && <Crown className="w-3.5 h-3.5" />}
           <span>{planLabel(entitlements.plan)}</span>
         </button>
+        )}
 
         {/* AI Credits remaining badge */}
         <button
@@ -170,7 +177,7 @@ export const Header: React.FC<HeaderProps> = ({
         </button>
 
         {/* Upgrade Plan Button for Free Users, or the pending state once they have paid */}
-        {!isPaidPlan(entitlements) && entitlements.has_pending_payment && (
+        {!planLoading && !isPaidPlan(entitlements) && entitlements.has_pending_payment && (
           <span
             className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold"
             title="We'll switch your plan as soon as your payment is approved"
@@ -179,7 +186,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span>Pro activation pending verification</span>
           </span>
         )}
-        {!isPaidPlan(entitlements) && !entitlements.has_pending_payment && (
+        {!planLoading && !isPaidPlan(entitlements) && !entitlements.has_pending_payment && (
           <button
             onClick={onUpgradePlan || (() => onNavigateTab('settings'))}
             className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/15 active:scale-95 transition-all"

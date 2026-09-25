@@ -67,7 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
 }) => {
   const [foldersExpanded, setFoldersExpanded] = useState(true);
-  const { entitlements } = useEntitlements();
+  const { entitlements, isLoading: planLoading } = useEntitlements();
   const { flags } = useFeatureFlags();
   // Credits reset every 30 days on every plan, Free included.
   const renewalDays = daysUntil(entitlements.next_credit_reset_at);
@@ -218,7 +218,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {activeWorkspace?.name || 'My Workspace'}
                 </div>
                 <div className="text-[10px] text-neutral-400">
-                  {planLabel(entitlements.plan)} Plan • {workspaces.length} Spaces
+                  {planLoading ? '…' : `${planLabel(entitlements.plan)} Plan`} • {workspaces.length} Spaces
                 </div>
               </div>
             </div>
