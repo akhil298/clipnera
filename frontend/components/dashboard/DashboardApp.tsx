@@ -16,11 +16,13 @@ import { BrandKitView } from './BrandKitView';
 import { SettingsView } from './SettingsView';
 import { NotificationsDrawer } from './NotificationsDrawer';
 import { AuthModal } from './AuthModal';
-import { PlanSelectionModal } from './PlanSelectionModal';
+import { PlanSelectionModal, type SelectedPlan } from './PlanSelectionModal';
+import { PlanBanner } from './PlanBanner';
 import { EntitlementsProvider } from './EntitlementsProvider';
 import { PaymentModal } from './PaymentModal';
 import { VideoProject, ViralClip, TabType, UserProfile, Workspace, AppNotification, PipelineStep, PipelineStatus } from '@/lib/types';
 import { DashboardSkeleton } from '@/components/skeletons';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { userApi, workspaceApi, authApi, pipelineApi, subscriptionApi, clipApi, mapBackendClip } from '@/lib/api';
 import { isAuthenticated, clearAuth } from '@/lib/auth';
 import { youtubeThumbnailUrl } from '@/lib/utils/urlParser';
@@ -93,6 +95,14 @@ export default function DashboardApp() {
   // Navigation State
   const activeTab = getTabFromPathname(pathname);
   const [activeSettingsTab, setActiveSettingsTab] = useState<'account' | 'billing' | 'social' | 'team'>('account');
+  const { flags } = useFeatureFlags();
+
+  // Deep links such as /dashboard/settings?tab=social (where connecting an
+  // account returns to). Read after mount so the server render matches.
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    if (tab === 'billing' || tab === 'social' || tab === 'team') setActiveSettingsTab(tab);
+  }, []);
 
   // Projects State
   const [projects, setProjects] = useState<VideoProject[]>([]);
@@ -148,7 +158,7 @@ export default function DashboardApp() {
     setIsPlanModalOpen(true);
   }, []);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<{ id: string; name: string; slug: string; credit_minutes: number; price_monthly: number; currency: string } | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
 
   // Delete confirmation modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -648,21 +658,7 @@ export default function DashboardApp() {
     return () => { cancelled = true; };
   };
 
-  const handleActivateFree = async () => {
-    setIsPlanModalOpen(false);
-    let cancelled = false;
-    try {
-      await subscriptionApi.activateFreePlan();
-      if (!cancelled) {
-        await handlePaymentComplete();
-      }
-    } catch {
-      // ignore
-    }
-    return () => { cancelled = true; };
-  };
-
-  const handlePlanSelected = (plan: { id: string; name: string; slug: string; credit_minutes: number; price_monthly: number; currency: string }) => {
+  const handlePlanSelected = (plan: SelectedPlan) => {
     setSelectedPlan(plan);
     setIsPaymentModalOpen(true);
   };
@@ -719,6 +715,7 @@ export default function DashboardApp() {
 
         {/* Main View Area */}
         <main className="flex-1 min-h-0 w-full p-4 sm:p-6 lg:p-8">
+          <PlanBanner />
           {/* TAB 1: DASHBOARD HOME */}
           {activeTab === 'dashboard' && (
             <DashboardHomeView
@@ -794,8 +791,8 @@ export default function DashboardApp() {
             />
           )}
 
-          {/* TAB 5: POST TIMING & AI SCHEDULER (HIDDEN — preserved for later) */}
-          {false && activeTab === 'scheduler' && (
+          {/* TAB 5: POST TIMING & AI SCHEDULER (shown while social publishing is switched on) */}
+          {flags.social_publishing && activeTab === 'scheduler' && (
             <SocialSchedulerView
               clips={activeProject?.clips || projects[0]?.clips || []}
               selectedClip={selectedClip || activeProject?.clips?.[0] || projects[0]?.clips?.[0]}
@@ -858,7 +855,6 @@ export default function DashboardApp() {
           setUpgradeReason(undefined);
         }}
         onPlanSelected={handlePlanSelected}
-        onActivateFree={handleActivateFree}
       />
 
       {/* Delete Confirmation Modal */}

@@ -6,7 +6,7 @@ from uuid import uuid4
 from sqlalchemy import String, cast, func, or_, select, update, desc
 
 from auth.model import User
-from subscription.model import PaymentStatus, PaymentTransaction
+from subscription.model import BillingPeriod, PaymentStatus, PaymentTransaction
 from subscription.repository import PaymentTransactionRepository
 
 
@@ -22,6 +22,7 @@ class ManualPaymentRepository(PaymentTransactionRepository):
         utr_number: str,
         screenshot_key: str,
         payment_method: str,
+        plan_type: BillingPeriod,
     ) -> PaymentTransaction:
         tx = PaymentTransaction(
             user_id=user_id,
@@ -33,6 +34,7 @@ class ManualPaymentRepository(PaymentTransactionRepository):
             payment_method=payment_method,
             utr_number=utr_number,
             screenshot_key=screenshot_key,
+            plan_type=plan_type,
         )
         self._session.add(tx)
         await self._session.commit()

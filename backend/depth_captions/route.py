@@ -7,6 +7,7 @@ import asyncio
 from auth.dependencies import CurrentUserDep
 from core.logging_config import get_logger
 from core.exceptions import CustomException
+from subscription.dependencies import require_feature
 from depth_captions.schema import (
     DepthCaptionRequest,
     DepthCaptionJobResponse,
@@ -47,7 +48,11 @@ class DepthCaptionsJobStatusResponse(BaseModel):
 _job_store: dict[str, DepthCaptionJobResponse] = {}
 
 
-@depth_captions.post("/render", response_model=DepthCaptionJobResponse)
+@depth_captions.post(
+    "/render",
+    response_model=DepthCaptionJobResponse,
+    dependencies=[Depends(require_feature("depth_captions"))],
+)
 async def start_depth_captions_render(
     request: DepthCaptionsRenderRequest,
     user: CurrentUserDep,

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from auth.dependencies import CurrentUserDep
 from audio.enhancement.schema import AudioEnhanceRequest, AudioEnhanceResponse, AudioPreviewRequest
 from audio.enhancement.service import AudioService
 from core.logging_config import get_logger
+from subscription.dependencies import check_limit
 
 log = get_logger(__name__)
 
@@ -11,7 +12,10 @@ audio = APIRouter(prefix="/audio", tags=["audio"])
 _service = AudioService()
 
 
-@audio.post("/process", response_model=AudioEnhanceResponse)
+@audio.post(
+    "/process", response_model=AudioEnhanceResponse,
+    dependencies=[Depends(check_limit("audio_enhancements"))],
+)
 async def process_audio(request: AudioEnhanceRequest, user: CurrentUserDep):
     import httpx
     async with httpx.AsyncClient() as client:

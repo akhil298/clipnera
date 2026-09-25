@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { BrandKit } from '@/lib/types';
 import { brandKitApi } from '@/lib/api';
+import { FEATURE_LABELS, usePlan } from '@/hooks/usePlan';
+import { ProLockBadge } from './ProLockBadge';
 import { BrandKitSkeleton } from '@/components/skeletons';
 import { CAPTION_PRESETS } from '@/lib/data/captionPresets';
 
@@ -37,6 +39,8 @@ const DEFAULT_BRAND_KIT: BrandKit = {
 };
 
 export const BrandKitView: React.FC = () => {
+  const { canUse, promptUpgrade } = usePlan();
+  const canEdit = canUse('brand_kit_edit');
   const [brandKit, setBrandKit] = useState<BrandKit>(DEFAULT_BRAND_KIT);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -76,6 +80,11 @@ export const BrandKitView: React.FC = () => {
   }, [fetchBrandKit]);
 
   const handleSave = async () => {
+    // Free plans keep their existing kit visible; saving changes is Pro.
+    if (!canEdit) {
+      promptUpgrade(FEATURE_LABELS.brand_kit_edit);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -150,6 +159,7 @@ export const BrandKitView: React.FC = () => {
         >
           {savedSuccess ? <Check className="w-4 h-4 text-neutral-950" /> : <Save className="w-4 h-4" />}
           <span>{saving ? 'Saving...' : savedSuccess ? 'Brand Kit Saved!' : 'Save Brand Settings'}</span>
+          {!canEdit && <ProLockBadge feature={FEATURE_LABELS.brand_kit_edit} className="bg-neutral-950/20 text-neutral-950 ring-neutral-950/30" />}
         </button>
       </div>
 

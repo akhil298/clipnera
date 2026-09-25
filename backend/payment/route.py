@@ -15,12 +15,8 @@ from payment.schema import (
     UpiCheckoutResponse,
 )
 from payment.service import MAX_SCREENSHOT_BYTES, PaymentService
-from subscription.model import PaymentStatus
-from subscription.repository import (
-    CreditLedgerRepository,
-    PlanRepository,
-    UserSubscriptionRepository,
-)
+from subscription.model import BillingPeriod, PaymentStatus
+from subscription.repository import PlanRepository
 from subscription.service import SubscriptionService
 
 payments = APIRouter(prefix="/payments", tags=["payments"])
@@ -35,14 +31,7 @@ async def get_payment_service(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PaymentService:
     tx_repo = ManualPaymentRepository(session)
-    plan_repo = PlanRepository(session)
-    subscription_service = SubscriptionService(
-        plan_repo,
-        UserSubscriptionRepository(session),
-        tx_repo,
-        CreditLedgerRepository(session),
-    )
-    return PaymentService(tx_repo, plan_repo, subscription_service)
+    return PaymentService(tx_repo, PlanRepository(session), SubscriptionService.for_session(session))
 
 
 PaymentServiceDep = Annotated[PaymentService, Depends(get_payment_service)]
@@ -53,8 +42,9 @@ async def get_upi_checkout(
     _: CurrentUserDep,
     service: PaymentServiceDep,
     plan_slug: str = Query(...),
+    plan_type: BillingPeriod = Query(...),
 ) -> UpiCheckoutResponse:
-    return await service.get_checkout(plan_slug)
+    return await service.get_checkout(plan_slug, plan_type)
 
 
 @payments.post("", response_model=PaymentResponse, status_code=201)
@@ -62,6 +52,7 @@ async def submit_payment(
     current_user: CurrentUserDep,
     service: PaymentServiceDep,
     plan_slug: str = Form(...),
+    plan_type: BillingPeriod = Form(...),
     utr_number: str = Form(...),
     screenshot: UploadFile = File(...),
 ) -> PaymentResponse:
@@ -71,6 +62,7 @@ async def submit_payment(
     return await service.submit(
         user_id=current_user["user_id"],
         plan_slug=plan_slug,
+        plan_type=plan_type,
         utr_number=utr_number,
         screenshot=data,
         content_type=screenshot.content_type,

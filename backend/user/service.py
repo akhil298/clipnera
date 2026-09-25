@@ -46,21 +46,19 @@ class UserService:
         from user.schema import UserProfileResponse
 
         display_name = user.full_name or user.username or user.email.split("@")[0]
-        plan = "free"
-        ai_credits_minutes_remaining = 0
-        ai_credits_total = 0
-
+        plan_fields = {}
         if self._subscription_service:
-            credits = await self._subscription_service.get_user_credit_balance(user.id)
-            sub = await self._subscription_service.get_user_subscription(user.id)
-            if sub:
-                plan = sub.plan.slug.value
-                ai_credits_total = sub.plan.credit_minutes
-                ai_credits_minutes_remaining = credits
-            else:
-                plan = "free"
-                ai_credits_total = 0
-                ai_credits_minutes_remaining = credits
+            summary = await self._subscription_service.get_plan_summary(user.id)
+            ent = summary.entitlements
+            plan_fields = {
+                "plan": ent.plan,
+                "plan_expires_at": summary.plan_expires_at,
+                "ai_credits_minutes_remaining": summary.credit_minutes_remaining,
+                "ai_credits_total": ent.credit_minutes,
+                "features": ent.features(),
+                "daily_limits": ent.daily_limits,
+                "usage_today": summary.usage_today,
+            }
 
         return UserProfileResponse(
             id=user.id,
@@ -68,10 +66,11 @@ class UserService:
             email=user.email,
             avatar_url=user.avatar_url,
             avatar_initials=UserService._get_initials(display_name, user.email),
-            plan=plan,
-            ai_credits_minutes_remaining=ai_credits_minutes_remaining,
-            ai_credits_total=ai_credits_total,
             active_workspace_id=None,
             providers=[a.provider.value for a in user.accounts],
             role=user.role.value,
+            **plan_fields,
         )
+
+    async def dismiss_plan_notice(self, user_id: str) -> None:
+        await self._repository.clear_plan_notice(user_id)

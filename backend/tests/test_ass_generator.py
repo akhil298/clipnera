@@ -7,7 +7,7 @@ from subtitle_styling.ass_generator import (
     ass_time,
     escape_ass,
     _hex_to_ass_style,
-    _hex_to_ass_alpha_style,
+    _box_colour,
     build_ass_file,
 )
 
@@ -36,9 +36,13 @@ class TestColorConversion:
     def test_hex_to_ass_style_yellow(self):
         assert _hex_to_ass_style("#FFE000") == "&H0000E0FF"
 
-    def test_hex_to_ass_alpha_style(self):
-        result = _hex_to_ass_alpha_style("#000000", "40")
-        assert result == "&H40000000"
+    def test_box_colour_default_opacity(self):
+        # 75% opaque -> ASS alpha (transparency) 0x40.
+        assert _box_colour("#000000") == "&H40000000"
+
+    def test_box_colour_reads_css_alpha(self):
+        # CSS alpha is opacity; ASS alpha is transparency, so CC -> 33.
+        assert _box_colour("#1A1A1ACC") == "&H331A1A1A"
 
     def test_hex_to_ass_style_no_hash(self):
         assert _hex_to_ass_style("00FFCC") == "&H00CCFF00"
@@ -160,3 +164,34 @@ class TestAssGenerator:
             content = f.read()
         assert "[Events]" in content
         os.unlink(path)
+
+
+class TestAnimatedPlateCaptions:
+    WORDS = [{"start": 0.2 + i * 0.4, "end": 0.5 + i * 0.4, "text": w} for i, w in enumerate("why did nobody tell me so this".split())]
+
+    def _events(self, **kw):
+        doc = AssGenerator().build_ass(self.WORDS, 0.0, 6.0, **kw)
+        return doc, [l for l in doc.splitlines() if l.startswith("Dialogue: 0")]
+
+    def test_clean_dark_draws_a_real_plate(self):
+        doc, _ = self._events(style_id="clean_dark")
+        caption_style = next(l for l in doc.splitlines() if l.startswith("Style: Caption"))
+        # BorderStyle 3 = opaque box; the old code only tinted the shadow.
+        assert caption_style.split(",")[15] == "3"
+
+    def test_lines_animate_in_once(self):
+        _, events = self._events(style_id="clean_dark")
+        moving = [e for e in events if "\\move(" in e]
+        assert moving and all("\\fad(" in e for e in moving)
+        assert len(moving) < len(events)  # later words of a line hold still
+
+    def test_none_animation_has_no_highlight_or_motion(self):
+        _, events = self._events(style_id="clean_dark", style_overrides={"animation": "none"})
+        assert not any("\\move(" in e or "\\t(" in e or "\\3c" in e for e in events)
+
+    def test_no_line_spans_the_hook_break(self):
+        # Hook words end at 2.0; the clip's words follow the bridge.
+        _, events = self._events(style_id="clean_dark", segment_breaks=[1.5])
+        for event in events:
+            text = event.split(",,", 1)[1]
+            assert not ("tell" in text and "so" in text.replace("so\\", "")), event

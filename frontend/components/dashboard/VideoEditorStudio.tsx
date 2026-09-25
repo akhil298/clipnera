@@ -46,6 +46,7 @@ import {
   WordTimestamp,
   AudioEnhancementConfig,
   HookTransitionConfig,
+  CaptionConfig,
 } from '@/lib/types';
 import { getCaptionConfig, getAllCaptionStyles } from '@/lib/utils/captionStyles';
 import { useEntitlements, canUseAspectRatio, canUseCaptionStyle } from '@/hooks/useEntitlements';
@@ -63,6 +64,46 @@ interface VideoEditorStudioProps {
   onBackToGenerator: () => void;
   onScheduleClip: (clip: ViralClip) => void;
 }
+
+/** CSS entrance for a caption line; mirrors _entrance() in ass_generator.py. */
+const captionEntrance = (animation: CaptionConfig['animation'], speed: number): string | undefined => {
+  const pace = Math.max(0.25, speed || 1);
+  if (animation === 'pop' || animation === 'wave') return `caption-rise ${Math.round(170 / pace)}ms ease-out`;
+  if (animation === 'fade' || animation === 'glow') return `caption-fade ${Math.round(200 / pace)}ms ease-out`;
+  return undefined;
+};
+
+/**
+ * One caption word's look; mirrors _active_word_tags() in ass_generator.py. On
+ * a plate the spoken word sits in a pill of the secondary highlight colour,
+ * and the emphasis colour is not used for text.
+ */
+const activeWordStyle = (config: CaptionConfig, isActive: boolean, highlighted: boolean): React.CSSProperties => {
+  const onPlate = config.hasBgBox;
+  if (!isActive) {
+    return {
+      color: highlighted && !onPlate ? config.secondaryHighlightColor : config.textColor,
+      transform: 'scale(1)',
+    };
+  }
+  const motion =
+    config.animation === 'pop' ? 'scale(1.09)' : config.animation === 'wave' ? 'translateY(-8%) scale(1.06)' : 'scale(1)';
+  if (onPlate) {
+    const pill = config.secondaryHighlightColor;
+    return {
+      color: pill === config.highlightColor ? config.textColor : config.highlightColor,
+      backgroundColor: pill,
+      borderRadius: '0.3em',
+      padding: '0 0.2em',
+      transform: motion,
+    };
+  }
+  return {
+    color: config.highlightColor,
+    transform: motion,
+    ...(config.animation === 'glow' ? { textShadow: `0 0 12px ${config.highlightColor}` } : {}),
+  };
+};
 
 // The studio holds a large amount of hook state derived from `clip`, so the
 // "no clip" case is handled by this thin wrapper. Bailing out inside the studio
@@ -131,6 +172,8 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [exportComplete, setExportComplete] = useState(false);
+  // The file this export rendered; the download button serves exactly this.
+  const [exportedUrl, setExportedUrl] = useState<string | null>(null);
 
   // Editable safeClip properties
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(safeClip.aspectRatio || '9:16');
@@ -459,6 +502,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
     setIsExporting(true);
     setExportProgress(5);
     setExportComplete(false);
+    setExportedUrl(null);
 
     try {
       const projectId = safeClip.projectId;
@@ -479,11 +523,15 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
       if (result?.exported_clips && result.exported_clips.length > 0) {
         const exported = result.exported_clips[0];
         if (exported.burned_presigned_url) {
+          setExportedUrl(exported.burned_presigned_url);
           // The editor keeps previewing the raw cut: the export has captions and
           // the hook bridge baked in, so playing it under the live caption
           // overlay would show captions twice and out of step after the hook.
           syncChangesToParent({ burnedPresignedUrl: exported.burned_presigned_url });
         }
+      }
+      if (!result?.exported_clips?.some((item) => item.burned_presigned_url)) {
+        throw new Error('The export finished without producing a file.');
       }
 
       const interval = setInterval(() => {
@@ -761,12 +809,13 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                   }}
                 >
                   <p
+                    // A new key per caption line replays its entrance animation.
+                    key={currentActiveWords[0]?.id}
                     className={`font-black tracking-tight leading-tight transition-all duration-100 ${
                       captionConfig.uppercase ? 'uppercase' : ''
-                    } ${
-                      captionConfig.animation === 'pop' ? 'scale-105' : ''
                     }`}
                     style={{
+                      animation: captionEntrance(captionConfig.animation, captionConfig.animationSpeed),
                       fontFamily: captionConfig.fontFamily,
                       fontSize: `${captionFontPx}px`,
                       color: captionConfig.textColor,
@@ -778,19 +827,13 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                   >
                     {currentActiveWords.map((word, idx) => {
                       const isActive =
+                        captionConfig.animation !== 'none' &&
                         currentTime >= word.start && currentTime <= word.end;
                       return (
                         <span
                           key={word.id}
                           className="inline-block mx-1 transition-all"
-                          style={{
-                            color: isActive
-                              ? captionConfig.highlightColor
-                              : word.highlighted
-                              ? captionConfig.secondaryHighlightColor
-                              : captionConfig.textColor,
-                            transform: isActive ? 'scale(1.15)' : 'scale(1)',
-                          }}
+                          style={activeWordStyle(captionConfig, isActive, Boolean(word.highlighted))}
                         >
                           {word.text}
                           {word.emoji && captionConfig.emojisEnabled && (
@@ -1803,13 +1846,16 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
             {exportComplete && (
               <div className="space-y-2 pt-2">
                 <button
+                  disabled={!exportedUrl}
                   onClick={() => {
+                    if (!exportedUrl) return;
                     setIsExporting(false);
-                    const exportUrl = safeClip.burnedPresignedUrl || safeClip.presignedUrl || safeClip.posterUrl || '#';
+                    // The URL is signed to download as an attachment, so a
+                    // same-tab click saves the file without leaving the editor.
+                    // Never fall back to the raw cut: it has no captions.
                     const link = document.createElement('a');
-                    link.href = exportUrl;
+                    link.href = exportedUrl;
                     link.download = `${safeClip.title.replace(/\s+/g, '_')}_Clipnera.mp4`;
-                    link.target = '_blank';
                     document.body.appendChild(link);
                     link.click();
                     link.remove();

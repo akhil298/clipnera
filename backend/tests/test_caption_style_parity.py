@@ -19,7 +19,7 @@ from subtitle_styling.templates import (
 
 class TestTemplates:
     def test_expected_style_count(self) -> None:
-        assert len(CAPTION_TEMPLATES) == 27
+        assert len(CAPTION_TEMPLATES) == 28
 
     def test_every_template_is_fully_populated(self) -> None:
         for name in get_template_names():

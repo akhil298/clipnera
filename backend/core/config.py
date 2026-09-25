@@ -99,6 +99,27 @@ class BaseConfig(BaseSettings):
     YOUTUBE_COOKIES_BROWSER: str = ""
     YOUTUBE_COOKIES_PATH: str = "~/.clipnera/youtube_cookies.txt"
 
+    # Connected publishing platforms (social/). OAuth callbacks land on the
+    # frontend, so redirect URIs are built from PUBLIC_APP_URL and must match
+    # each platform's developer console exactly.
+    PUBLIC_APP_URL: str = "http://localhost:3000"
+    PUBLIC_API_URL: str = "http://localhost:8000"
+    # AES-256-GCM key ring for stored platform tokens: "<version>:<base64 32-byte key>"
+    # pairs, comma-separated. New tokens use SOCIAL_TOKEN_ACTIVE_KEY_VERSION; older
+    # versions stay listed until `python -m social.rotate_keys` has re-encrypted them.
+    SOCIAL_TOKEN_ENCRYPTION_KEYS: str = ""
+    SOCIAL_TOKEN_ACTIVE_KEY_VERSION: int = 1
+    YOUTUBE_CLIENT_ID: str = ""
+    YOUTUBE_CLIENT_SECRET: str = ""
+    TIKTOK_CLIENT_KEY: str = ""
+    TIKTOK_CLIENT_SECRET: str = ""
+    INSTAGRAM_APP_ID: str = ""
+    INSTAGRAM_APP_SECRET: str = ""
+    X_CLIENT_ID: str = ""
+    X_CLIENT_SECRET: str = ""
+    # X bills every post; publishing to X stops for the month once this is spent.
+    X_MONTHLY_BUDGET_USD: float = 25.0
+
 
 class DevelopmentConfig(BaseConfig):
     model_config = SettingsConfigDict(

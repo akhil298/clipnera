@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from typing import Any, Callable
 
 from transcription.schema import (
@@ -9,6 +9,7 @@ from transcription.schema import (
 )
 from transcription.service import WhisperXTranscriptionService
 from core.exceptions import CustomException
+from subscription.dependencies import require_feature
 from core.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -32,7 +33,11 @@ async def transcribe_audio(request: TranscriptionRequest):
         raise HTTPException(status_code=500, detail={"error": "TRANSCRIPTION_FAILED", "message": str(exc)})
 
 
-@transcription.post("/batch", response_model=BatchTranscriptionResult)
+@transcription.post(
+    "/batch",
+    response_model=BatchTranscriptionResult,
+    dependencies=[Depends(require_feature("batch_processing"))],
+)
 async def batch_transcribe_audio(request: BatchTranscriptionRequest):
     try:
         tasks = []

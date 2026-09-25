@@ -15,8 +15,6 @@ from core.exceptions import CustomException
 from core.logging_config import get_logger
 from core.security import create_access_token, verify_password
 from subscription.model import PlanSlug
-from subscription.repository import PlanRepository, UserSubscriptionRepository, PaymentTransactionRepository, CreditLedgerRepository
-from subscription.service import SubscriptionService
 
 settings = get_settings()
 log = get_logger(__name__)
@@ -35,12 +33,10 @@ class AuthService:
 
     async def _activate_free_plan(self, user_id: str) -> None:
         from core.database import AsyncSessionLocal
+        from subscription.service import SubscriptionService
+
         async with AsyncSessionLocal() as session:
-            plan_repo = PlanRepository(session)
-            sub_repo = UserSubscriptionRepository(session)
-            tx_repo = PaymentTransactionRepository(session)
-            ledger_repo = CreditLedgerRepository(session)
-            service = SubscriptionService(plan_repo, sub_repo, tx_repo, ledger_repo)
+            service = SubscriptionService.for_session(session)
             try:
                 await service.activate_free_plan(user_id)
             except Exception as exc:

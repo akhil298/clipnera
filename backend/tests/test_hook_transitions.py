@@ -169,7 +169,8 @@ class TestTimeline:
         chains, video, audio = timeline_graph(BridgePlan.make(spec, 2.0, MEDIA), "ass=bridge.ass")
         graph = ";".join(chains)
         assert (video, audio) == ("vcat", "acat")
-        assert "concat=n=3:v=1:a=1[vcat][acat]" in graph
+        assert "concat=n=3:v=1:a=1[vjoin][acat]" in graph and "[vjoin]fps=30[vcat]" in graph
+        assert "tpad" not in graph
         assert "ass=bridge.ass[gv]" in graph
         assert "areverse" in graph  # hook_rewind sound
 
@@ -216,7 +217,33 @@ class TestRender:
              "-map", f"[{video}]", "-map", f"[{audio}]", "-c:v", "libx264", "-preset", "ultrafast", str(out)],
             check=True,
         )
-        probe = json.loads(subprocess.check_output(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", str(out)],
-        ))
-        assert float(probe["format"]["duration"]) == pytest.approx(6.0, abs=0.1)
+        # Count video frames, not container duration: the audio alone filled
+        # the duration while tpad left freeze bridges with no frames at all.
+        frames = subprocess.check_output(
+            ["ffprobe", "-v", "error", "-select_streams", "v", "-count_frames",
+             "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", str(out)],
+        )
+        assert int(frames) == pytest.approx(6.0 * 30, abs=2)
+
+    def test_freeze_bridge_has_every_frame(self, tmp_path):
+        src = tmp_path / "cut.mp4"
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=320x568:rate=30:duration=5",
+             "-f", "lavfi", "-i", "sine=frequency=330:duration=5", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+             "-c:a", "aac", "-shortest", str(src)],
+            check=True,
+        )
+        spec = resolve_transition({"mode": "custom", "source": "blur_card", "sound": "whoosh", "text_id": "none",
+                                   "duration": 1.0}, ClipContext("c"))
+        chains, video, audio = timeline_graph(BridgePlan.make(spec, 1.5, MediaInfo(320, 568, 30.0, 5.0, True)))
+        out = tmp_path / "out.mp4"
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-filter_complex", ";".join(chains),
+             "-map", f"[{video}]", "-map", f"[{audio}]", "-c:v", "libx264", "-preset", "ultrafast", str(out)],
+            check=True,
+        )
+        frames = subprocess.check_output(
+            ["ffprobe", "-v", "error", "-select_streams", "v", "-count_frames",
+             "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", str(out)],
+        )
+        assert int(frames) == pytest.approx(6.0 * 30, abs=2)

@@ -18,8 +18,7 @@ from clip.model import ProjectStatus
 from core.logging_config import get_logger
 from core.database import AsyncSessionLocal
 from core.exceptions import CustomException
-from subscription.service import SubscriptionService
-from subscription.repository import PlanRepository, UserSubscriptionRepository, PaymentTransactionRepository, CreditLedgerRepository
+from subscription.service import SubscriptionService, pro_required
 
 log = get_logger(__name__)
 
@@ -111,7 +110,17 @@ def _apply_entitlements(
             entitlements, clip_settings
         )
 
-    allowed_ratios = [r for r in output_aspect_ratios if entitlements.allows_aspect_ratio(r)]
+    allowed_ratios = permitted_aspect_ratios(entitlements, output_aspect_ratios)
+
+    # A forced watermark cannot be switched off by the client.
+    effective_watermark = True if entitlements.watermark_forced else watermark_enabled
+
+    return allowed_ratios, effective_watermark, _clamp_clip_settings(entitlements, clip_settings)
+
+
+def permitted_aspect_ratios(entitlements, requested: list[str]) -> list[str]:
+    """The requested ratios the plan covers; 403 if it covers none of them."""
+    allowed_ratios = [r for r in requested if entitlements.allows_aspect_ratio(r)]
     if not allowed_ratios:
         raise CustomException(
             message=(
@@ -121,17 +130,13 @@ def _apply_entitlements(
             code="ASPECT_RATIO_NOT_ENTITLED",
             status_code=403,
         )
-    if len(allowed_ratios) != len(output_aspect_ratios):
+    if len(allowed_ratios) != len(requested):
         log.info(
             "Dropped aspect ratios not covered by plan %s: %s",
             entitlements.plan,
-            sorted(set(output_aspect_ratios) - set(allowed_ratios)),
+            sorted(set(requested) - set(allowed_ratios)),
         )
-
-    # A forced watermark cannot be switched off by the client.
-    effective_watermark = True if entitlements.watermark_forced else watermark_enabled
-
-    return allowed_ratios, effective_watermark, _clamp_clip_settings(entitlements, clip_settings)
+    return allowed_ratios
 
 
 def _clamp_clip_settings(entitlements, clip_settings: dict | None) -> dict:
@@ -319,11 +324,7 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
         watermark_enabled = body.get("watermark_enabled", True)
         clip_settings = body.get("clip_settings") if isinstance(body.get("clip_settings"), dict) else None
 
-        plan_repo = PlanRepository(session)
-        sub_repo = UserSubscriptionRepository(session)
-        tx_repo = PaymentTransactionRepository(session)
-        ledger_repo = CreditLedgerRepository(session)
-        subscription_service = SubscriptionService(plan_repo, sub_repo, tx_repo, ledger_repo)
+        subscription_service = SubscriptionService.for_session(session)
 
         # Which AI provider this run uses. Resolved once, here, so the whole
         # run is consistent even if the plan changes while it is in flight.
@@ -365,11 +366,7 @@ async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | Non
 
         async def refund_credits():
             async with AsyncSessionLocal() as refund_session:
-                refund_plan_repo = PlanRepository(refund_session)
-                refund_sub_repo = UserSubscriptionRepository(refund_session)
-                refund_tx_repo = PaymentTransactionRepository(refund_session)
-                refund_ledger_repo = CreditLedgerRepository(refund_session)
-                refund_service = SubscriptionService(refund_plan_repo, refund_sub_repo, refund_tx_repo, refund_ledger_repo)
+                refund_service = SubscriptionService.for_session(refund_session)
                 try:
                     await refund_service.refund_credits(
                         user_id=user["user_id"],
@@ -623,11 +620,7 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
         watermark_enabled = body.get("watermark_enabled", True)
         clip_settings = body.get("clip_settings") if isinstance(body.get("clip_settings"), dict) else None
 
-        plan_repo = PlanRepository(session)
-        sub_repo = UserSubscriptionRepository(session)
-        tx_repo = PaymentTransactionRepository(session)
-        ledger_repo = CreditLedgerRepository(session)
-        subscription_service = SubscriptionService(plan_repo, sub_repo, tx_repo, ledger_repo)
+        subscription_service = SubscriptionService.for_session(session)
 
         entitlements = await subscription_service.get_entitlements(user["user_id"])
         is_pro = entitlements.pro_ai_provider
@@ -662,11 +655,7 @@ async def resume_pipeline(project_id: str, user: CurrentUserDep, body: dict | No
 
         async def refund_credits():
             async with AsyncSessionLocal() as refund_session:
-                refund_plan_repo = PlanRepository(refund_session)
-                refund_sub_repo = UserSubscriptionRepository(refund_session)
-                refund_tx_repo = PaymentTransactionRepository(refund_session)
-                refund_ledger_repo = CreditLedgerRepository(refund_session)
-                refund_service = SubscriptionService(refund_plan_repo, refund_sub_repo, refund_tx_repo, refund_ledger_repo)
+                refund_service = SubscriptionService.for_session(refund_session)
                 try:
                     await refund_service.refund_credits(
                         user_id=user["user_id"],
@@ -771,6 +760,8 @@ def _check_export_entitlements(entitlements, request: SocialExportRequest) -> No
             code="CAPTION_STYLE_NOT_ENTITLED",
             status_code=403,
         )
+    if request.hook_transition and not entitlements.allows_hook_transition(request.hook_transition.mode):
+        raise pro_required("all_hook_transitions")
 
 
 @pipeline.post("/export/{project_id}", response_model=SocialExportResponse)
@@ -780,14 +771,14 @@ async def export_clips_for_social(project_id: str, request: SocialExportRequest,
         project = await clip_repo.get_project(project_id, user["user_id"])
         if not project:
             raise CustomException(message="Project not found", code="NOT_FOUND", status_code=404)
-        entitlements = await SubscriptionService(
-            PlanRepository(session),
-            UserSubscriptionRepository(session),
-            PaymentTransactionRepository(session),
-            CreditLedgerRepository(session),
-        ).get_entitlements(user["user_id"])
+        subscription_service = SubscriptionService.for_session(session)
+        entitlements = await subscription_service.get_entitlements(user["user_id"])
+        _check_export_entitlements(entitlements, request)
+        # Each exported clip counts toward the daily export limit.
+        await subscription_service.consume_daily_quota(
+            user["user_id"], "exports", len(request.clip_ids) if request.clip_ids else max(1, request.max_clips or 1)
+        )
 
-    _check_export_entitlements(entitlements, request)
     # A forced watermark cannot be switched off by the client.
     watermark_enabled = request.watermark_enabled or entitlements.watermark_forced
 

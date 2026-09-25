@@ -14,15 +14,21 @@ import {
   Smartphone,
   Layers,
   Settings,
-  Bell
+  Bell,
+  Crown
 } from 'lucide-react';
 import { UserProfile, Workspace } from '@/lib/types';
 import { Avatar } from './Avatar';
-import { workspaceApi, subscriptionApi } from '@/lib/api';
+import { workspaceApi } from '@/lib/api';
 import { TableSkeleton } from '@/components/skeletons';
-import { PlanSelectionModal } from './PlanSelectionModal';
+import { PlanSelectionModal, type SelectedPlan } from './PlanSelectionModal';
+import { ProLockBadge } from './ProLockBadge';
+import { useEntitlements, planLabel } from '@/hooks/useEntitlements';
+import { FEATURE_LABELS, usePlan } from '@/hooks/usePlan';
+import { formatDate } from '@/lib/utils/dates';
 import { PaymentModal } from './PaymentModal';
 import { MyPaymentsCard } from '@/components/payments/MyPaymentsCard';
+import { ConnectedPlatformsPanel, useSocialTabVisible } from '@/components/social/ConnectedPlatformsPanel';
 
 interface SettingsViewProps {
   user: UserProfile;
@@ -49,64 +55,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
 }) => {
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<{ id: string; name: string; slug: string; credit_minutes: number; price_monthly: number; currency: string } | null>(null);
-  const [subscription, setSubscription] = useState<{ plan: string; credit_minutes_total: number; credit_minutes_remaining: number; subscription_status: string; current_period_end: string | null } | null>(null);
-  const [loadingSub, setLoadingSub] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
   const [paymentsRefreshKey, setPaymentsRefreshKey] = useState(0);
+  const { entitlements, isLoading: loadingSub, refresh: refreshPlan } = useEntitlements();
+  const { isPro, canUse, promptUpgrade } = usePlan();
+  const canAddMembers = canUse('team_members');
 
-  const loadSubscription = async () => {
-    setLoadingSub(true);
-    try {
-      const data = await subscriptionApi.getMySubscription();
-      setSubscription(data);
-    } catch {
-      // ignore
-    } finally {
-      setLoadingSub(false);
-    }
-  };
-
+  // Pick up payments approved or plans changed since the dashboard loaded.
   useEffect(() => {
-    if (activeSettingsTab === 'billing') {
-      loadSubscription();
-    }
-  }, [activeSettingsTab]);
+    if (activeSettingsTab === 'billing') void refreshPlan();
+  }, [activeSettingsTab, refreshPlan]);
 
-  // Social account connection state
-  const [connectedSocials, setConnectedSocials] = useState([
-    {
-      id: 'tiktok',
-      name: 'TikTok Creator Account',
-      handle: '@akhil_creates',
-      connected: true,
-      followers: '142.8K',
-      color: 'from-pink-500 to-rose-600',
-    },
-    {
-      id: 'instagram',
-      name: 'Instagram Reels',
-      handle: '@akhil.media',
-      connected: true,
-      followers: '89.4K',
-      color: 'from-purple-500 to-pink-500',
-    },
-    {
-      id: 'youtube',
-      name: 'YouTube Shorts Channel',
-      handle: 'Akhil Shorts AI',
-      connected: true,
-      followers: '230.1K',
-      color: 'from-red-600 to-rose-700',
-    },
-    {
-      id: 'x',
-      name: 'X (Twitter)',
-      handle: '@akhil_builds',
-      connected: false,
-      followers: '--',
-      color: 'from-neutral-700 to-neutral-900',
-    },
-  ]);
+  const showSocialTab = useSocialTabVisible();
 
   const activeWorkspaceId = user.activeWorkspaceId || workspaces[0]?.id;
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -153,12 +113,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     setNewMemberPassword('');
     setNewMemberRole('member');
     setShowAddForm(false);
-  };
-
-  const handleToggleSocial = (id: string) => {
-    setConnectedSocials(
-      connectedSocials.map((s) => (s.id === id ? { ...s, connected: !s.connected } : s))
-    );
   };
 
   const handleAddMember = async (e: React.FormEvent) => {
@@ -221,7 +175,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           {[
             { id: 'account' as const, label: 'Profile', icon: User },
             { id: 'billing' as const, label: 'Plan & Billing', icon: CreditCard },
-            { id: 'social' as const, label: 'Social Accounts', icon: Share2 },
+            ...(showSocialTab ? [{ id: 'social' as const, label: 'Social Accounts', icon: Share2 }] : []),
             { id: 'team' as const, label: 'Team & Workspace', icon: Users },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -307,25 +261,28 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 ) : (
                   <>
                     <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                      {subscription?.subscription_status === 'active' ? 'Active Subscription' : 'No Active Subscription'}
+                      {isPro ? 'Active Subscription' : entitlements.has_pending_payment ? 'Pending Verification' : 'Free Plan'}
                     </span>
-                    <h3 className="text-lg font-bold text-white mt-1">
-                      {subscription?.plan ? subscription.plan.toUpperCase() : 'FREE'} Plan
+                    <h3 className="text-lg font-bold text-white mt-1 flex items-center gap-1.5">
+                      {isPro && <Crown className="w-4 h-4 text-amber-400" />}
+                      {planLabel(entitlements.plan)} Plan
                     </h3>
                     <p className="text-xs text-neutral-400">
-                      {subscription?.current_period_end ? `Renews ${new Date(subscription.current_period_end).toLocaleDateString()}` : 'No active subscription'}
+                      {entitlements.plan_expires_at
+                        ? `Pro until ${formatDate(entitlements.plan_expires_at)}`
+                        : 'Free forever. Upgrade any time.'}
                     </p>
                   </>
                 )}
               </div>
               <div className="text-right">
-                {!loadingSub && subscription && (
-                  <span className="text-xs text-neutral-400 block">Credits Remaining</span>
-                )}
-                {!loadingSub && subscription && (
-                  <span className="text-xs font-mono font-bold text-white">
-                    {subscription.credit_minutes_remaining} / {subscription.credit_minutes_total} mins
-                  </span>
+                {!loadingSub && (
+                  <>
+                    <span className="text-xs text-neutral-400 block">Credits Remaining</span>
+                    <span className="text-xs font-mono font-bold text-white">
+                      {entitlements.credit_minutes_remaining} / {entitlements.credit_minutes_total} mins
+                    </span>
+                  </>
                 )}
               </div>
             </div>
@@ -338,27 +295,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <span>AI Rendering Quota</span>
                 </span>
                 <span className="font-mono text-amber-400 font-bold">
-                  {subscription?.credit_minutes_remaining || 0} of {subscription?.credit_minutes_total || 0} mins
+                  {entitlements.credit_minutes_remaining} of {entitlements.credit_minutes_total} mins
                 </span>
               </div>
               <div className="h-2.5 w-full bg-neutral-900 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-amber-500 to-rose-500"
-                  style={{ width: `${subscription && subscription.credit_minutes_total > 0 ? ((subscription.credit_minutes_remaining / subscription.credit_minutes_total) * 100) : 0}%` }}
+                  style={{ width: `${entitlements.credit_minutes_total > 0 ? Math.min(100, (entitlements.credit_minutes_remaining / entitlements.credit_minutes_total) * 100) : 0}%` }}
                 />
               </div>
               <p className="text-[11px] text-neutral-500">
-                Quota handles automated speaker tracking, kinetic karaoke captions, and 4K HDR export.
+                {entitlements.next_credit_reset_at
+                  ? `Resets to ${entitlements.credit_minutes} mins on ${formatDate(entitlements.next_credit_reset_at)}. Unused minutes don't roll over.`
+                  : `Resets to ${entitlements.credit_minutes} mins every 30 days.`}
               </p>
             </div>
 
-            {/* Upgrade Button for Free / Low Credits */}
-            {(user.plan === 'free' || (subscription && subscription.credit_minutes_remaining < 10)) && (
+            {entitlements.has_pending_payment ? (
+              <div className="w-full py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold text-sm text-center">
+                Pro activation pending verification
+              </div>
+            ) : (
               <button
                 onClick={() => setIsPlanModalOpen(true)}
                 className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-sm shadow-md shadow-amber-500/15 active:scale-95 transition-all"
               >
-                Upgrade Plan
+                {isPro ? 'Renew Pro' : 'Upgrade to Pro'}
               </button>
             )}
           </div>
@@ -370,46 +332,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       )}
 
       {/* SETTINGS TAB 3: CONNECTED SOCIAL ACCOUNTS */}
-      {activeSettingsTab === 'social' && (
-        <div className="p-6 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-5 shadow-xl">
-          <div>
-            <h3 className="text-sm font-bold text-white">Connected Publishing Platforms</h3>
-            <p className="text-xs text-neutral-400 mt-0.5">
-              Authorize your creator profiles for 1-click scheduling and automated viral distribution.
-            </p>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            {connectedSocials.map((social) => (
-              <div
-                key={social.id}
-                className="p-4 rounded-xl bg-neutral-950 border border-neutral-800 flex items-center justify-between space-x-3"
-              >
-                <div>
-                  <h4 className="text-xs font-bold text-white">{social.name}</h4>
-                  <p className="text-[11px] text-neutral-400">{social.handle}</p>
-                  {social.connected && (
-                    <span className="text-[10px] text-emerald-400 font-mono">
-                      {social.followers} Audience
-                    </span>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => handleToggleSocial(social.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    social.connected
-                      ? 'bg-neutral-800 text-neutral-300 hover:text-rose-400 hover:bg-neutral-800/80 border border-neutral-700'
-                      : 'bg-gradient-to-r from-amber-500 to-rose-500 text-neutral-950'
-                  }`}
-                >
-                  {social.connected ? 'Disconnect' : 'Connect Account'}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {activeSettingsTab === 'social' && <ConnectedPlatformsPanel />}
 
       {/* SETTINGS TAB 4: TEAM & WORKSPACE */}
       {activeSettingsTab === 'team' && (
@@ -427,14 +350,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </p>
               </div>
               <button
-                onClick={() => setShowAddForm(!showAddForm)}
-                className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold border border-neutral-700 transition-colors"
+                onClick={() =>
+                  canAddMembers ? setShowAddForm(!showAddForm) : promptUpgrade(FEATURE_LABELS.team_members)
+                }
+                className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold border border-neutral-700 transition-colors flex items-center gap-1.5"
               >
                 {showAddForm ? 'Cancel' : '+ New Member'}
+                {!canAddMembers && <ProLockBadge feature={FEATURE_LABELS.team_members} />}
               </button>
             </div>
 
-            {showAddForm && (
+            {showAddForm && canAddMembers && (
               <form onSubmit={handleAddMember} className="space-y-3 pt-3 border-t border-neutral-800">
                 <div className="grid sm:grid-cols-2 gap-3">
                   <div>
@@ -573,15 +499,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           setSelectedPlan(plan);
           setIsPaymentModalOpen(true);
         }}
-        onActivateFree={async () => {
-          setIsPlanModalOpen(false);
-          try {
-            await subscriptionApi.activateFreePlan();
-            await loadSubscription();
-          } catch {
-            // ignore
-          }
-        }}
       />
       <PaymentModal
         isOpen={isPaymentModalOpen}
@@ -593,7 +510,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         onPaymentComplete={() => {
           setIsPaymentModalOpen(false);
           setSelectedPlan(null);
-          loadSubscription();
+          void refreshPlan();
           setPaymentsRefreshKey((k) => k + 1);
         }}
       />

@@ -17,6 +17,7 @@ from workspace.schema import (
     UpdateMemberRoleRequest,
 )
 from core.exceptions import CustomException
+from subscription.dependencies import require_feature
 
 
 async def get_workspace_repo(
@@ -88,7 +89,11 @@ async def get_workspace(
     )
 
 
-@router.post("/{workspace_id}/members", response_model=WorkspaceMemberResponse, status_code=201)
+# Adding members is Pro; existing members can still be viewed, re-roled and removed.
+@router.post(
+    "/{workspace_id}/members", response_model=WorkspaceMemberResponse, status_code=201,
+    dependencies=[Depends(require_feature("team_members"))],
+)
 async def invite_member(
     workspace_id: str,
     data: InviteMemberRequest,
@@ -117,7 +122,10 @@ async def invite_member(
     )
 
 
-@router.post("/{workspace_id}/members/create", response_model=WorkspaceMemberResponse, status_code=201)
+@router.post(
+    "/{workspace_id}/members/create", response_model=WorkspaceMemberResponse, status_code=201,
+    dependencies=[Depends(require_feature("team_members"))],
+)
 async def create_and_add_member(
     workspace_id: str,
     data: CreateMemberRequest,

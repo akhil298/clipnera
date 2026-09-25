@@ -16,7 +16,8 @@ from core.exceptions import CustomException
 from core.logging_config import get_logger
 from payment.repository import ManualPaymentRepository
 from payment.schema import AdminPaymentResponse, PaymentResponse, UpiCheckoutResponse
-from subscription.model import PaymentStatus, PaymentTransaction, Plan
+from subscription.entitlements import PLAN_PRICES, PURCHASABLE_PLAN
+from subscription.model import BillingPeriod, PaymentStatus, PaymentTransaction, Plan
 from subscription.repository import PlanRepository
 from subscription.service import SubscriptionService
 
@@ -99,15 +100,19 @@ class PaymentService:
 
     # User side
 
-    async def get_checkout(self, plan_slug: str) -> UpiCheckoutResponse:
+    async def get_checkout(self, plan_slug: str, plan_type: BillingPeriod) -> UpiCheckoutResponse:
         plan = await self._get_purchasable_plan(plan_slug)
-        amount = float(plan.price_inr)
+        amount = float(PLAN_PRICES[plan_type].amount_inr)
         upi_uri = build_upi_uri(
-            self._settings.UPI_ID, self._settings.UPI_PAYEE_NAME, amount, f"{self._settings.APP_NAME} {plan.name}"
+            self._settings.UPI_ID,
+            self._settings.UPI_PAYEE_NAME,
+            amount,
+            f"{self._settings.APP_NAME} {plan.name} {plan_type.value}",
         )
         return UpiCheckoutResponse(
             plan_slug=_slug(plan),
             plan_name=plan.name,
+            plan_type=plan_type.value,
             amount=amount,
             currency="INR",
             upi_id=self._settings.UPI_ID,
@@ -120,6 +125,7 @@ class PaymentService:
         self,
         user_id: str,
         plan_slug: str,
+        plan_type: BillingPeriod,
         utr_number: str,
         screenshot: bytes,
         content_type: str | None,
@@ -139,8 +145,10 @@ class PaymentService:
             tx = await self._tx_repo.create(
                 user_id=user_id,
                 plan_id=plan.id,
-                amount=float(plan.price_inr),
+                # Always the server's price for this period, never the client's.
+                amount=float(PLAN_PRICES[plan_type].amount_inr),
                 currency="INR",
+                plan_type=plan_type,
                 utr_number=utr,
                 screenshot_key=key,
                 payment_method=PAYMENT_METHOD,
@@ -151,7 +159,7 @@ class PaymentService:
             await asyncio.to_thread(_storage().delete_object, bucket, key)
             raise _duplicate_utr()
 
-        log.info(f"UPI payment submitted: user={user_id} plan={_slug(plan)} tx={tx.id}")
+        log.info(f"UPI payment submitted: user={user_id} plan={_slug(plan)} period={plan_type.value} tx={tx.id}")
         return self._to_response(tx)
 
     async def list_for_user(self, user_id: str) -> list[PaymentResponse]:
@@ -169,18 +177,14 @@ class PaymentService:
         return self._to_admin_response(await self._get_tx(tx_id))
 
     async def approve(self, tx_id: str, admin_id: str) -> AdminPaymentResponse:
-        """Mark the payment SUCCESS and activate its plan in one transaction."""
+        """Mark the payment SUCCESS and give the user its plan for the period
+        bought, in one transaction. A renewal extends the current end date."""
         tx = await self._get_tx(tx_id)
         if not await self._tx_repo.resolve_pending(tx_id, PaymentStatus.SUCCESS, verified_by=admin_id):
             raise _already_resolved()
 
-        await self._subscription_service.start_subscription(
-            tx.user_id,
-            tx.plan,
-            reason=f"UPI payment approved: {tx.plan.name}",
-            reference_type="payment_transaction",
-            reference_id=tx.id,
-            commit=False,
+        await self._subscription_service.extend_plan(
+            tx.user_id, tx.plan, PLAN_PRICES[BillingPeriod(tx.plan_type)].days, commit=False
         )
         await self._tx_repo.commit()
         log.info(f"UPI payment approved: tx={tx_id} user={tx.user_id} by={admin_id}")
@@ -206,7 +210,7 @@ class PaymentService:
                 status_code=503,
             )
         plan = await self._plan_repo.get_by_slug(plan_slug)
-        if not plan or not plan.is_active or not plan.price_inr or plan.price_inr <= 0:
+        if plan_slug != PURCHASABLE_PLAN or not plan or not plan.is_active:
             raise CustomException(
                 message="This plan cannot be purchased with UPI",
                 code="PLAN_NOT_PURCHASABLE",
@@ -253,6 +257,7 @@ class PaymentService:
             "id": tx.id,
             "plan_slug": _slug(tx.plan),
             "plan_name": tx.plan.name,
+            "plan_type": str(getattr(tx.plan_type, "value", tx.plan_type)),
             "amount": float(tx.amount),
             "currency": tx.currency,
             "utr_number": tx.utr_number,

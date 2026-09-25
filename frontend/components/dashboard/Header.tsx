@@ -16,7 +16,8 @@ import {
   Settings,
   LayoutDashboard,
   Folder,
-  Crown
+  Crown,
+  Clock
 } from 'lucide-react';
 import { useEntitlements, planLabel, isPaidPlan } from '@/hooks/useEntitlements';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
@@ -168,8 +169,17 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
         </button>
 
-        {/* Upgrade Plan Button for Free Users */}
-        {!isPaidPlan(entitlements) && (
+        {/* Upgrade Plan Button for Free Users, or the pending state once they have paid */}
+        {!isPaidPlan(entitlements) && entitlements.has_pending_payment && (
+          <span
+            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-bold"
+            title="We'll switch your plan as soon as your payment is approved"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Pro activation pending verification</span>
+          </span>
+        )}
+        {!isPaidPlan(entitlements) && !entitlements.has_pending_payment && (
           <button
             onClick={onUpgradePlan || (() => onNavigateTab('settings'))}
             className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/15 active:scale-95 transition-all"

@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Check, Search, Shuffle, Sparkles, Wand2 } from 'lucide-react';
 import { hookTransitionApi } from '@/lib/api';
 import { useHookTransitionCatalog } from '@/hooks/useHookTransitionCatalog';
+import { FEATURE_LABELS, usePlan } from '@/hooks/usePlan';
+import { ProLockBadge } from './ProLockBadge';
 import type {
   HookTransitionApplied,
   HookTransitionCatalog,
@@ -32,6 +34,9 @@ const CUSTOM_BASE: Omit<HookTransitionPreset, 'id' | 'name' | 'group' | 'fits' |
   duration: 0.8,
 };
 
+// Presets and custom mixes are Pro; Auto and Off are on every plan.
+const PRO_MODES: ReadonlySet<HookTransitionMode> = new Set(['preset', 'custom']);
+
 const MODES: Array<{ id: HookTransitionMode; label: string }> = [
   { id: 'auto', label: 'Auto' },
   { id: 'preset', label: 'Presets' },
@@ -52,12 +57,17 @@ const nameOf = (parts: HookTransitionPart[], id: string | null | undefined) =>
  */
 export const HookTransitionPanel: React.FC<HookTransitionPanelProps> = ({ clipId, config, onChange }) => {
   const { catalog, error } = useHookTransitionCatalog();
+  const { canUse, promptUpgrade } = usePlan();
   const [resolved, setResolved] = useState<HookTransitionApplied | null | undefined>(undefined);
   const [resolveError, setResolveError] = useState<string | null>(null);
+  const isLocked = (mode: HookTransitionMode) => !canUse('all_hook_transitions') && PRO_MODES.has(mode);
+  const configLocked = isLocked(config.mode);
 
   const configKey = JSON.stringify(config);
   useEffect(() => {
-    if (!clipId) return;
+    // A config the plan no longer covers (saved before a downgrade) would only
+    // be refused, and the refusal would pop the upsell on open.
+    if (!clipId || configLocked) return;
     let active = true;
     // Debounced: sliders and typing fire a change per step.
     const timer = setTimeout(() => {
@@ -76,7 +86,7 @@ export const HookTransitionPanel: React.FC<HookTransitionPanelProps> = ({ clipId
     };
     // configKey stands in for config: the object is rebuilt on every change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clipId, configKey]);
+  }, [clipId, configKey, configLocked]);
 
   if (error) {
     return <p className="text-xs text-rose-400">{error}</p>;
@@ -87,6 +97,10 @@ export const HookTransitionPanel: React.FC<HookTransitionPanelProps> = ({ clipId
 
   const setMode = (mode: HookTransitionMode) => {
     if (mode === config.mode) return;
+    if (isLocked(mode)) {
+      promptUpgrade(FEATURE_LABELS.all_hook_transitions);
+      return;
+    }
     if (mode === 'preset') {
       onChange({ mode, preset_id: config.preset_id ?? resolved?.preset_id ?? catalog.default_preset });
     } else if (mode === 'custom') {
@@ -115,11 +129,12 @@ export const HookTransitionPanel: React.FC<HookTransitionPanelProps> = ({ clipId
           <button
             key={mode.id}
             onClick={() => setMode(mode.id)}
-            className={`py-1.5 rounded-lg text-xs font-bold transition-all ${
+            className={`py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 ${
               config.mode === mode.id ? 'bg-neutral-800 text-fuchsia-300 shadow' : 'text-neutral-400 hover:text-neutral-200'
             }`}
           >
             {mode.label}
+            {isLocked(mode.id) && <ProLockBadge feature={FEATURE_LABELS.all_hook_transitions} />}
           </button>
         ))}
       </div>

@@ -66,6 +66,85 @@ def burn_filter_args(
     ]
 
 
+# Caption animations the burner renders; the editor offers the same names.
+CAPTION_ANIMATIONS = frozenset({"pop", "wave", "karaoke", "glow", "fade", "none"})
+
+
+def _box_colour(css_hex: str, default_opacity: float = 0.75) -> str:
+    """'#RRGGBB' or '#RRGGBBAA' -> ASS '&HAABBGGRR' for a caption plate.
+
+    ASS alpha counts transparency, CSS alpha opacity, so the byte is inverted.
+    """
+    clean = css_hex.strip().lstrip("#")
+    if len(clean) >= 8:
+        opacity = int(clean[6:8], 16) / 255.0
+    else:
+        opacity = default_opacity
+    r, g, b = (clean[0:2], clean[2:4], clean[4:6]) if len(clean) >= 6 else ("00", "00", "00")
+    return f"&H{round((1.0 - opacity) * 255):02X}{b}{g}{r}".upper()
+
+
+def _entrance(animation: str, speed: float, x: int, y: int, height: int) -> str | None:
+    """Override block that animates a caption line onto the screen, or None."""
+    speed = max(0.25, speed)
+    if animation in ("pop", "wave"):
+        rise = round(height * 0.02)
+        ms = round(170 / speed)
+        return f"{{\\an5\\q2\\move({x},{y + rise},{x},{y},0,{ms})\\fad({round(120 / speed)},0)}}"
+    if animation in ("fade", "glow"):
+        return f"{{\\an5\\q2\\pos({x},{y})\\fad({round(200 / speed)},0)}}"
+    return None
+
+
+def _active_word_tags(
+    template: dict[str, Any],
+    animation: str,
+    speed: float,
+    highlight: str,
+    pill: str | None,
+    word_box: str | None,
+    outline_width: int,
+    primary: str,
+) -> str:
+    """Override tags for the word being spoken, per animation style."""
+    speed = max(0.25, speed)
+    if pill:
+        # On a plate: light the word with a pill. Text that would vanish into
+        # a same-coloured pill keeps the base colour instead.
+        colour = primary if pill == highlight else highlight
+        tags = f"\\c{colour}\\3c{pill}\\3a&H00&"
+    elif word_box:
+        tags = f"\\c{highlight}\\bord{outline_width}\\3c{word_box}"
+    else:
+        tags = f"\\c{highlight}"
+
+    if animation == "pop" and template.get("word_pop", True):
+        ms = max(10, round(70 / speed))
+        tags += f"\\fscx100\\fscy100\\t(0,{ms},\\fscx109\\fscy109)"
+    elif animation == "wave":
+        ms = max(10, round(90 / speed))
+        tags += f"\\fscx100\\fscy100\\t(0,{ms},\\fscx106\\fscy118)\\t({ms},{ms * 2},\\fscx100\\fscy100)"
+    elif animation == "glow" and not pill:
+        tags += f"\\3c{highlight}\\bord{outline_width + 2}\\blur4"
+    return tags
+
+
+def _split_at_breaks(groups: list[list[dict[str, Any]]], breaks: list[float]) -> list[list[dict[str, Any]]]:
+    """Split any caption line whose words straddle a segment break."""
+    if not breaks:
+        return groups
+    split: list[list[dict[str, Any]]] = []
+    for group in groups:
+        current: list[dict[str, Any]] = []
+        for word in group:
+            if current and any(current[-1]["start"] < b <= word["start"] for b in breaks):
+                split.append(current)
+                current = []
+            current.append(word)
+        split.append(current)
+    return split
+
+
 def ass_time(sec: float) -> str:
     clamped = max(0.0, sec)
     h = math.floor(clamped / 3600)
@@ -93,15 +172,6 @@ def _hex_to_ass_style(hex_color: str) -> str:
     else:
         r, g, b = "FF", "FF", "FF"
     return f"&H00{b}{g}{r}".upper()
-
-
-def _hex_to_ass_alpha_style(hex_color: str, alpha_hex: str) -> str:
-    clean = hex_color.lstrip("#")
-    if len(clean) >= 6:
-        r, g, b = clean[0:2], clean[2:4], clean[4:6]
-    else:
-        r, g, b = "FF", "FF", "FF"
-    return f"&H{alpha_hex}{b}{g}{r}".upper()
 
 
 def ass_font_size(em_px: float, win_span_ratio: float | None = None) -> int:
@@ -179,8 +249,13 @@ class AssGenerator:
         animation_speed: float = 1.0,
         emoji_collection: str | None = None,
         style_overrides: dict[str, Any] | None = None,
+        segment_breaks: list[float] | None = None,
     ) -> str:
+        """``segment_breaks`` are times (on the words' timeline) where the picture
+        cuts to a different segment, e.g. the end of the hook teaser; no caption
+        line spans one, or it would carry the hook's words over into the clip."""
         template = {**get_template(style_id), **(style_overrides or {})}
+        breaks = sorted(segment_breaks or [])
 
         # Templates are authored against a 1080-wide vertical frame. Scaling by
         # height made the same template 1.78x larger on 9:16 (h=1920) than on
@@ -200,11 +275,6 @@ class AssGenerator:
         )
         back_color = "&H80000000"
 
-        if template.get("background") and template.get("background_color"):
-            bg = _hex_to_ass_alpha_style(template["background_color"], "40")
-            if len(bg) == 10:
-                back_color = bg
-
         highlight_color = _hex_to_ass_style(template["highlight_color"])
         emphasis_color = (
             _hex_to_ass_style(template["emphasis_color"])
@@ -214,6 +284,26 @@ class AssGenerator:
 
         outline_width = max(1, round(template.get("stroke_width", 3) * 0.8))
         shadow_width = round(template.get("stroke_width", 3)) if template.get("shadow", True) else 0
+        border_style = 1
+
+        # A boxed template sits on a solid plate, as the editor preview draws
+        # it. BorderStyle 3 makes libass paint the outline as an opaque box,
+        # with the outline width as its padding. This used to only tint the
+        # drop shadow, so "background" templates burned with no plate at all.
+        boxed = bool(template.get("background") and template.get("background_color"))
+        pill_color: str | None = None
+        if boxed:
+            border_style = 3
+            outline_color = back_color = _box_colour(template["background_color"])
+            outline_width = max(4, round(font_size * 0.18))
+            shadow_width = 0
+            # The preview lights the active word with a pill in the secondary
+            # highlight colour (emphasis, else highlight); the burn does the same.
+            pill_color = emphasis_color or highlight_color
+
+        animation = template.get("animation")
+        if animation not in CAPTION_ANIMATIONS:
+            animation = "karaoke"
 
         # --- Build header ---
         header_lines = [
@@ -233,7 +323,7 @@ class AssGenerator:
             (
                 f"Style: Caption,{template['font_family']},{font_size},"
                 f"{primary_color},{primary_color},{outline_color},{back_color},"
-                f"{1 if template.get('bold', True) else 0},0,0,0,100,100,0,0,1,"
+                f"{1 if template.get('bold', True) else 0},0,0,0,100,100,0,0,{border_style},"
                 f"{outline_width},{shadow_width},5,{margin_h},{margin_h},0,1"
             ),
         ]
@@ -297,7 +387,7 @@ class AssGenerator:
             return "\n".join(header_lines) + "\n"
 
         max_chars = caption_layout_budget(template["max_words_per_line"], width, height)
-        groups = group_words(words_in_clip, max_chars, template["max_words_per_line"])
+        groups = _split_at_breaks(group_words(words_in_clip, max_chars, template["max_words_per_line"]), breaks)
 
         emoji_by_index, emphasis_indices = annotate_caption_words(
             words_in_clip, ai_cues,
@@ -314,10 +404,19 @@ class AssGenerator:
                 group_end = max(last_word_end, min(next_word_start, last_word_end + 0.5))
             else:
                 group_end = clip_duration
+            # A line never outlives its segment (the hook must not hang over
+            # the bridge that follows it).
+            cut = next((b - clip_start for b in breaks if b > group[0]["start"]), None)
+            if cut is not None:
+                group_end = max(last_word_end, min(group_end, cut))
 
-            anchor = f"{{\\an5\\q2\\pos({caption_x},{caption_y})}}"
+            still = f"{{\\an5\\q2\\pos({caption_x},{caption_y})}}"
+            # Each caption line animates in once, on its first word's event;
+            # the events for its later words hold it in place.
+            entering = _entrance(animation, animation_speed, caption_x, caption_y, height) or still
 
             for wi, word in enumerate(group):
+                anchor = entering if wi == 0 else still
                 w_start_clip = max(0.0, word["start"] - clip_start)
                 if wi < len(group) - 1:
                     w_end_clip = max(0.0, group[wi + 1]["start"] - clip_start)
@@ -342,6 +441,8 @@ class AssGenerator:
                     primary_color=primary_color,
                     outline_width=max(1, round(template.get("stroke_width", 3))),
                     animation_speed=animation_speed,
+                    animation=animation,
+                    pill_color=pill_color,
                 )
 
                 lines.append(
@@ -366,6 +467,8 @@ class AssGenerator:
         primary_color: str,
         outline_width: int,
         animation_speed: float = 1.0,
+        animation: str = "pop",
+        pill_color: str | None = None,
     ) -> str:
         parts: list[str] = []
         for i, word in enumerate(group):
@@ -377,20 +480,14 @@ class AssGenerator:
                 parts.append("{\\r}")
                 continue
 
-            if is_active:
-                # Scale pop animation duration by animation_speed (default 70ms at 1.0x)
-                pop_duration = max(10, round(70 / animation_speed))
-                pop = f"\\t(0,{pop_duration},\\fscx109\\fscy109)"
-                if box_color:
-                    parts.append(
-                        f"{{\\c{highlight_color}\\bord{outline_width}\\3c{box_color}"
-                        f"\\fscx100\\fscy100{pop}}}{text}{{\\r}}"
-                    )
-                else:
-                    parts.append(
-                        f"{{\\c{highlight_color}\\fscx100\\fscy100{pop}}}{text}{{\\r}}"
-                    )
-            elif is_emphasized and emphasis_color:
+            if is_active and animation != "none":
+                parts.append(
+                    f"{{{_active_word_tags(template, animation, animation_speed, highlight_color, pill_color, box_color, outline_width, primary_color)}}}"
+                    f"{text}{{\\r}}"
+                )
+            elif is_emphasized and emphasis_color and not pill_color:
+                # On a plate the emphasis colour is the active word's pill, so
+                # it is not also used for text.
                 parts.append(f"{{\\c{emphasis_color}}}{text}{{\\r}}")
             else:
                 parts.append(f"{{\\c{primary_color}}}{text}{{\\r}}")
@@ -485,6 +582,7 @@ def build_ass_file(
     animation_speed: float = 1.0,
     emoji_collection: str | None = None,
     style_overrides: dict[str, Any] | None = None,
+    segment_breaks: list[float] | None = None,
 ) -> str:
     """Generate an ASS subtitle file and return its path."""
     generator = AssGenerator()
@@ -500,6 +598,7 @@ def build_ass_file(
         animation_speed=animation_speed,
         emoji_collection=emoji_collection,
         style_overrides=style_overrides,
+        segment_breaks=segment_breaks,
     )
 
     if output_path:

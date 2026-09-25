@@ -16,6 +16,7 @@ export type CaptionPreset =
   | "sunset"
   | "pastel"
   | "luxury"
+  | "clean_dark"
   | "minimal"
   | "podcast"
   | "news"
@@ -325,6 +326,32 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
       emojisEnabled: false,
       maxWordsPerLine: 5,
       shadowIntensity: 0.8,
+      titleFontSize: 56,
+      titlePositionY: 7,
+    },
+  },
+  clean_dark: {
+    id: "clean_dark",
+    name: "Clean Dark",
+    brandName: "CLEAN DARK",
+    description: "Animated white captions on a soft dark plate; the spoken word lights up",
+    badge: "High CTR",
+    config: {
+      preset: "clean_dark",
+      fontSize: 42,
+      fontFamily: "DejaVu Sans",
+      textColor: "#F4F4F5",
+      highlightColor: "#FFFFFF",
+      secondaryHighlightColor: "#3F3F46",
+      hasBgBox: true,
+      bgBoxColor: "#0B0B0FD9",
+      uppercase: false,
+      animation: "pop",
+      animationSpeed: 1.0,
+      positionY: 78,
+      emojisEnabled: false,
+      maxWordsPerLine: 3,
+      shadowIntensity: 0.0,
       titleFontSize: 56,
       titlePositionY: 7,
     },

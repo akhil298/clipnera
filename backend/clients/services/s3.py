@@ -107,11 +107,21 @@ class S3:
                 code="AWS_S3_ERROR",
             ) from e
 
-    def generate_presigned_url(self, bucket: str, key: str, expires_in: int = 3600) -> str:
+    def generate_presigned_url(
+        self, bucket: str, key: str, expires_in: int = 3600, download_name: str | None = None,
+    ) -> str:
+        """A signed GET URL. ``download_name`` makes S3 serve it as an attachment.
+
+        Browsers ignore the ``download`` attribute on cross-origin links, so
+        without the header a presigned video opens in a tab instead of saving.
+        """
+        params = {"Bucket": bucket, "Key": key}
+        if download_name:
+            params["ResponseContentDisposition"] = f'attachment; filename="{download_name}"'
         try:
             return self._client.generate_presigned_url(
                 "get_object",
-                Params={"Bucket": bucket, "Key": key},
+                Params=params,
                 ExpiresIn=expires_in,
             )
         except ClientError as e:

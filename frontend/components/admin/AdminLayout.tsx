@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 
 const NAV: { href: string; label: string }[] = [
+  { href: '/admin/overview', label: 'Overview' },
+  { href: '/admin/users', label: 'Users' },
   { href: '/admin/payments', label: 'Payments' },
   { href: '/admin/credits', label: 'Credits' },
 ];

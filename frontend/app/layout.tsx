@@ -22,6 +22,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=Bangers&family=Bebas+Neue&family=DM+Serif+Display&family=Luckiest+Guy&family=Permanent+Marker&display=swap"
           rel="stylesheet"
         />
+        {/* React Grab (dev only): hover a component and press ⌘C to copy its source location and context. */}
+        {process.env.NODE_ENV === "development" && (
+          <Script
+            src="https://unpkg.com/react-grab/dist/index.global.js"
+            crossOrigin="anonymous"
+            strategy="beforeInteractive"
+          />
+        )}
         <Script
           id="hydration-fix"
           strategy="beforeInteractive"

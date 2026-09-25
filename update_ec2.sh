@@ -199,6 +199,37 @@ rm -f .backend.pid
 sleep 2
 
 sudo systemctl start "${SERVICE}"
+
+# The social publisher worker (python -m social.worker) runs beside the API. It
+# refuses to start without a token key ring, so only run it once one is set.
+PUBLISHER=clipnera-publisher
+if grep -qsE '^SOCIAL_TOKEN_ENCRYPTION_KEYS=.+' .env .env.production; then
+    sudo tee "/etc/systemd/system/${PUBLISHER}.service" >/dev/null <<UNIT
+[Unit]
+Description=Clipnera social publisher worker
+After=network-online.target ${SERVICE}.service
+Wants=network-online.target
+
+[Service]
+User=$(id -un)
+WorkingDirectory=${BACKEND_DIR}
+Environment=PYTHONPATH=${BACKEND_DIR}
+ExecStart=${VENV_DIR}/bin/python -m social.worker
+Restart=on-failure
+RestartSec=30
+StandardOutput=append:${BACKEND_DIR}/publisher.log
+StandardError=append:${BACKEND_DIR}/publisher.log
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    sudo systemctl daemon-reload
+    sudo systemctl enable --quiet "${PUBLISHER}"
+    sudo systemctl restart "${PUBLISHER}"
+else
+    echo "Skipping ${PUBLISHER}: SOCIAL_TOKEN_ENCRYPTION_KEYS is not set." >&2
+fi
+
 for _ in {1..60}; do
     if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then
         echo "Backend healthy: $(curl -fsS http://127.0.0.1:8000/health)"

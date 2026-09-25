@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 
 from audio.extraction.schema import (
@@ -13,6 +13,7 @@ from audio.extraction.schema import (
 )
 from audio.extraction.service import AudioExtractionService
 from core.exceptions import CustomException
+from subscription.dependencies import require_feature
 from core.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -34,7 +35,11 @@ async def extract_audio(request: ExtractionRequest):
         raise HTTPException(status_code=500, detail={"error": "EXTRACTION_FAILED", "message": str(exc)})
 
 
-@extraction.post("/batch", response_model=BatchExtractionResult)
+@extraction.post(
+    "/batch",
+    response_model=BatchExtractionResult,
+    dependencies=[Depends(require_feature("batch_processing"))],
+)
 async def batch_extract_audio(request: BatchExtractionRequest):
     try:
         return await _service.batch_extract(request)

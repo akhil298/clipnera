@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import re
 import shutil
 import tempfile
 import time
@@ -184,6 +185,12 @@ def stored_cut_key(clip: GeneratedClip, ratio: str) -> str | None:
     return keys.get(ratio) if isinstance(keys, dict) else None
 
 
+def _download_name(title: str | None, platform: str, ratio: str) -> str:
+    """A safe attachment filename such as ``my-clip-tiktok-9x16.mp4``."""
+    slug = re.sub(r"[^a-z0-9]+", "-", (title or "clip").lower()).strip("-")[:60] or "clip"
+    return f"{slug}-{platform}-{ratio.replace(':', 'x')}.mp4"
+
+
 def _sanitize_str(s: str | None) -> str | None:
     if s is None:
         return None
@@ -280,8 +287,13 @@ class ClipService:
             "s3_key": s3_key,
         }
 
-    async def _store_render(self, path: str, s3_key: str, label: str) -> str | None:
-        """Upload a finished render to S3, delete the local file, return a fresh URL."""
+    async def _store_render(
+        self, path: str, s3_key: str, label: str, download_name: str | None = None,
+    ) -> str | None:
+        """Upload a finished render to S3, delete the local file, return a fresh URL.
+
+        ``download_name`` makes the URL download the file rather than open it.
+        """
         started = time.monotonic()
         try:
             size = _mb(path)
@@ -292,13 +304,15 @@ class ClipService:
             "[S3] STORED   %s  %.1fMB in %.1fs  -> s3://%s/%s",
             label, size, time.monotonic() - started, self._bucket, s3_key,
         )
-        return self._presign(self._bucket, s3_key)
+        return self._presign(self._bucket, s3_key, download_name)
 
-    def _presign(self, bucket: str | None, key: str | None) -> str | None:
+    def _presign(self, bucket: str | None, key: str | None, download_name: str | None = None) -> str | None:
         if not key:
             return None
         try:
-            return self._s3.generate_presigned_url(bucket or self._bucket, key, expires_in=PRESIGN_EXPIRES_SECONDS)
+            return self._s3.generate_presigned_url(
+                bucket or self._bucket, key, expires_in=PRESIGN_EXPIRES_SECONDS, download_name=download_name,
+            )
         except Exception as exc:
             log.warning("Presign failed: key=%s error=%s", key, exc)
             return None
@@ -381,7 +395,9 @@ class ClipService:
                             transition=transition,
                         )
                     presigned_url = await self._store_render(
-                        rendered_path, s3_key, label=f"export clip={clip.id} platform={platform.value} ratio={ratio}"
+                        rendered_path, s3_key,
+                        label=f"export clip={clip.id} platform={platform.value} ratio={ratio}",
+                        download_name=_download_name(clip.title, platform.value, ratio),
                     )
 
                     async with AsyncSessionLocal() as session:

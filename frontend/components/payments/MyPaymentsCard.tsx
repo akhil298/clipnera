@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Receipt } from 'lucide-react';
 import { paymentsApi, PaymentResponse } from '@/lib/api';
-import { formatAmount, formatDateTime } from '@/lib/utils/payments';
+import { BILLING_PERIOD_LABELS, formatAmount, formatDateTime } from '@/lib/utils/payments';
 import { PaymentStatusBadge } from './PaymentStatusBadge';
 
 /** The signed-in user's UPI payments and where each one stands. */
@@ -53,7 +53,7 @@ export function MyPaymentsCard({ refreshKey = 0 }: { refreshKey?: number }) {
             >
               <div className="min-w-0">
                 <p className="text-xs font-bold text-white">
-                  {p.plan_name} · {formatAmount(p.amount, p.currency)}
+                  {p.plan_name} {BILLING_PERIOD_LABELS[p.plan_type]} · {formatAmount(p.amount, p.currency)}
                 </p>
                 <p className="text-[11px] text-neutral-400">
                   {formatDateTime(p.created_at)}

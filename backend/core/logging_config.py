@@ -2,6 +2,8 @@ import logging
 import logging.config
 import os
 
+from core.log_redaction import redact
+
 # Attributes the stdlib puts on every LogRecord. Anything outside this set was
 # passed by the caller via extra={...} and is worth printing.
 _STANDARD_RECORD_KEYS = frozenset(
@@ -23,7 +25,7 @@ class ContextFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         base = super().format(record)
         context = self._context(record)
-        return f"{base} | {context}" if context else base
+        return redact(f"{base} | {context}" if context else base)
 
     @staticmethod
     def _context(record: logging.LogRecord) -> str:

@@ -191,6 +191,25 @@ CAPTION_TEMPLATES: dict[str, dict[str, Any]] = {
     },
 
     # --- Clean / professional ------------------------------------------------
+    "clean_dark": {
+        "name": "Clean Dark",
+        "description": "Animated white captions on a soft dark plate; the spoken word lights up",
+        "font_size": 42,
+        "font_color": "#F4F4F5",
+        "highlight_color": "#FFFFFF",
+        # On a plate the emphasis colour is the active word's pill.
+        "emphasis_color": "#3F3F46",
+        "stroke_color": None,
+        "stroke_width": 0,
+        "background": True,
+        "background_color": "#0B0B0FD9",
+        "animation": "pop",
+        "word_pop": True,
+        "emoji": False,
+        "shadow": False,
+        "max_words_per_line": 3,
+        "position_y": 0.78,
+    },
     "minimal": {
         "name": "Minimal",
         "description": "Clean, subtle captions with a soft background",

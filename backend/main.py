@@ -14,8 +14,11 @@ from clip_generation.route import clip_generation as clip_generation_router
 from subtitle_styling.route import subtitle_styling as subtitle_styling_router
 from subscription.route import router as subscription_router
 from payment.route import payments as payments_router, admin_payments as admin_payments_router
+from admin.route import admin as admin_router
 from depth_captions.route import depth_captions as depth_captions_router
 from hook_transitions.route import hook_transitions as hook_transitions_router
+from feature_flags.route import features as features_router, admin_features as admin_features_router
+from social.route import social as social_router, social_webhooks as social_webhooks_router, admin_social as admin_social_router
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -25,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 
 from core import get_settings, register_middlewares
 from core.exceptions import CustomException
+from core.rate_limit import no_rate_limit
 from core.logging_config import setup_logging, get_logger
 
 setup_logging()
@@ -71,8 +75,14 @@ app.include_router(brand_kit_router, prefix="/api/v1")
 app.include_router(subscription_router, prefix="/api/v1")
 app.include_router(payments_router, prefix="/api/v1")
 app.include_router(admin_payments_router, prefix="/api/v1")
+app.include_router(admin_router, prefix="/api/v1")
 app.include_router(depth_captions_router, prefix="/api/v1")
 app.include_router(hook_transitions_router, prefix="/api/v1")
+app.include_router(features_router, prefix="/api/v1")
+app.include_router(admin_features_router, prefix="/api/v1")
+app.include_router(social_router, prefix="/api/v1")
+app.include_router(social_webhooks_router, prefix="/api/v1")
+app.include_router(admin_social_router, prefix="/api/v1")
 
 
 @app.exception_handler(CustomException)
@@ -103,5 +113,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 @app.get("/health", tags=["health"])
+@no_rate_limit
 async def health_check():
     return {"status": "ok", "app": settings.APP_NAME, "version": settings.APP_VERSION}

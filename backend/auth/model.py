@@ -4,7 +4,7 @@ import enum
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import String, Boolean, ForeignKey, Enum, DateTime, Text
+from sqlalchemy import String, Boolean, ForeignKey, Enum, DateTime, Text, false as sa_false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.database import Base
@@ -36,6 +36,11 @@ class User(Base):
         default=UserRole.USER,
         server_default=UserRole.USER.value,
         nullable=False,
+    )
+    # Set for accounts that existed before Pro gating, so they are told once
+    # which features moved to Pro. Cleared when the notice is dismissed.
+    plan_notice_pending: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=sa_false(), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

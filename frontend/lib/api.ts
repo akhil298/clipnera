@@ -13,6 +13,7 @@ import {
 } from '@/lib/types';
 import { getToken, clearAuth, setAuth } from '@/lib/auth';
 import { emojiForKeyword } from '@/lib/data/emojiCatalog.generated';
+import { getCaptionConfig } from '@/lib/utils/captionStyles';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
@@ -53,9 +54,15 @@ export interface UserProfileResponse {
   email: string;
   avatar_url: string | null;
   avatar_initials: string;
+  /** The effective plan: "free" as soon as a paid period ends. */
   plan: string;
+  /** When paid access ends, counting queued renewals; null on Free. */
+  plan_expires_at: string | null;
   ai_credits_minutes_remaining: number;
   ai_credits_total: number;
+  features: Record<PlanFeature, boolean>;
+  daily_limits: Record<UsageKey, number | null>;
+  usage_today: Record<UsageKey, number>;
   active_workspace_id: string | null;
   providers: string[];
   role: 'user' | 'admin';
@@ -260,26 +267,9 @@ export interface ExportProjectOptions {
   hookTransition?: HookTransitionConfig;
 }
 
-const DEFAULT_CAPTION_CONFIG: CaptionConfig = {
-  preset: 'bold_captions',
-  fontSize: 48,
-  fontFamily: 'Inter, sans-serif',
-  textColor: '#ffffff',
-  highlightColor: '#fbbf24',
-  secondaryHighlightColor: '#f8fafc',
-  hasBgBox: true,
-  bgBoxColor: '#000000',
-  uppercase: true,
-  animation: 'pop',
-  animationSpeed: 1.0,
-  positionY: 78,
-   emojisEnabled: true,
-  emojiCollection: 'skull_fire',
-  maxWordsPerLine: 6,
-  shadowIntensity: 0.8,
-  titleFontSize: 56,
-  titlePositionY: 7,
-};
+// New clips start on Clean Dark: animated white captions on a dark plate.
+// Taken from the generated style list so the preview matches what burns.
+const DEFAULT_CAPTION_CONFIG: CaptionConfig = getCaptionConfig('clean_dark');
 
 /**
  * Build the editor's transcript segments on the clip's own timeline.
@@ -424,6 +414,40 @@ export function mapBackendClip(clip: BackendClip): ViralClip {
   };
 }
 
+interface ApiErrorBody {
+  message?: string;
+  error?: string;
+  feature?: string;
+}
+
+/** Errors the API returns when the caller's plan does not cover a request. */
+const PLAN_ERROR_CODES = new Set([
+  'PRO_REQUIRED',
+  'LIMIT_REACHED',
+  'ASPECT_RATIO_NOT_ENTITLED',
+  'CAPTION_STYLE_NOT_ENTITLED',
+  'DURATION_NOT_ENTITLED',
+]);
+
+/** Fired on window for any plan error, so the dashboard can open the upsell
+ * modal wherever the request came from. */
+export const UPGRADE_REQUIRED_EVENT = 'clipnera:upgrade-required';
+
+export interface UpgradeRequiredDetail {
+  error: string;
+  feature?: string;
+  message: string;
+}
+
+function queryString(params: object): string {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') query.set(key, String(value));
+  });
+  const qs = query.toString();
+  return qs ? `?${qs}` : '';
+}
+
 async function authedRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const token = getToken();
   if (!token) {
@@ -447,9 +471,14 @@ async function authedRequest<T>(path: string, options?: RequestInit): Promise<T>
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const message = (data as { message?: string })?.message ?? 'Something went wrong';
+    const { message = 'Something went wrong', error, feature } = data as ApiErrorBody;
     if (res.status === 401) {
       throw new Error(`Unauthorized: ${message}`);
+    }
+    if (error && PLAN_ERROR_CODES.has(error) && typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent<UpgradeRequiredDetail>(UPGRADE_REQUIRED_EVENT, { detail: { error, feature, message } }),
+      );
     }
     throw new Error(message);
   }
@@ -470,6 +499,7 @@ export const authApi = {
 
 export const userApi = {
   getMe: () => authedRequest<UserProfileResponse>('/me'),
+  dismissPlanNotice: () => authedRequest<void>('/me/plan-notice/dismiss', { method: 'POST' }),
 };
 
 export const workspaceApi = {
@@ -903,7 +933,24 @@ export interface CreditLedgerResponse {
   created_at: string;
 }
 
-export interface EntitlementsResponse {
+// Plans. Mirrors PlanCapabilities / EntitlementsResponse / PlansResponse in
+// backend/subscription/schema.py; the rules live in subscription/entitlements.py.
+
+export type PlanFeature =
+  | 'remove_watermark'
+  | 'pro_ai'
+  | 'all_hook_transitions'
+  | 'brand_kit_edit'
+  | 'depth_captions'
+  | 'batch_processing'
+  | 'team_members'
+  | 'social_scheduling';
+
+export type UsageKey = 'exports' | 'audio_enhancements';
+
+export type BillingPeriod = 'monthly' | 'yearly';
+
+export interface PlanCapabilities {
   plan: string;
   aspect_ratios: string[];
   /** null means every caption style is available. */
@@ -913,32 +960,62 @@ export interface EntitlementsResponse {
   pro_ai_provider: boolean;
   priority_rendering: boolean;
   max_upload_duration_seconds: number;
+  /** Credit minutes granted every 30 days. */
+  credit_minutes: number;
+  all_hook_transitions: boolean;
+  brand_kit_edit: boolean;
+  depth_captions: boolean;
+  batch_processing: boolean;
+  team_members: boolean;
+  /** Per UTC day; null means unlimited. */
+  daily_limits: Record<UsageKey, number | null>;
+  /** Connected publishing platforms (backend social/). */
+  social_max_accounts: number;
+  social_platforms: SocialPlatform[];
+  social_scheduling: boolean;
+  social_max_schedule_days: number;
+  social_posts_per_day: number;
+  features: Record<PlanFeature, boolean>;
+}
+
+export interface EntitlementsResponse extends PlanCapabilities {
   credit_minutes_total: number;
   credit_minutes_remaining: number;
   current_period_end: string | null;
   subscription_status: string;
+  /** When paid access ends, counting queued renewals; null on Free. */
+  plan_expires_at: string | null;
+  next_credit_reset_at: string | null;
+  usage_today: Record<UsageKey, number>;
+  has_pending_payment: boolean;
+  /** One-time "features moved to Pro" notice for accounts that predate it. */
+  show_plan_notice: boolean;
 }
 
-export interface PlanCatalogEntry {
-  id: string;
-  name: string;
-  slug: string;
-  credit_minutes: number;
-  price_monthly: number;
+export interface PlanPriceResponse {
+  plan_type: BillingPeriod;
+  amount: number;
   currency: string;
-  features: string[];
-  entitlements: EntitlementsResponse;
-  is_current: boolean;
+  days: number;
+}
+
+export interface PlanOfferResponse {
+  slug: string;
+  name: string;
+  capabilities: PlanCapabilities;
+  /** Empty for plans that are not sold (Free). */
+  prices: PlanPriceResponse[];
+}
+
+export interface PlansResponse {
+  plans: PlanOfferResponse[];
 }
 
 export const subscriptionApi = {
-  listPlans: () => authedRequest<PlanResponse[]>('/subscription/plans'),
+  getPlans: () => authedRequest<PlansResponse>('/subscription/plans'),
   /** Capabilities of the caller's current plan. The UI gates on this rather
    * than reimplementing the tier rules. */
   getEntitlements: () => authedRequest<EntitlementsResponse>('/subscription/entitlements'),
-  getPlanCatalog: () => authedRequest<PlanCatalogEntry[]>('/subscription/catalog'),
-  getMySubscription: () => authedRequest<{ plan: string; credit_minutes_total: number; credit_minutes_remaining: number; subscription_status: string; current_period_end: string | null }>('/subscription/me'),
-  activateFreePlan: () => authedRequest<{ plan: string; credit_minutes_total: number; credit_minutes_remaining: number; subscription_status: string; current_period_end: string | null }>('/subscription/activate-free', { method: 'POST' }),
   getMyTransactions: () => authedRequest<PaymentTransactionResponse[]>('/subscription/transactions'),
   getCreditLedger: (limit?: number) => authedRequest<CreditLedgerResponse[]>(`/subscription/ledger${limit ? `?limit=${limit}` : ''}`),
 };
@@ -950,6 +1027,7 @@ export type PaymentStatus = 'pending' | 'success' | 'failed' | 'rejected';
 export interface UpiCheckoutResponse {
   plan_slug: string;
   plan_name: string;
+  plan_type: BillingPeriod;
   amount: number;
   currency: string;
   upi_id: string;
@@ -964,6 +1042,7 @@ export interface PaymentResponse {
   id: string;
   plan_slug: string;
   plan_name: string;
+  plan_type: BillingPeriod;
   amount: number;
   currency: string;
   utr_number: string | null;
@@ -984,16 +1063,18 @@ export interface AdminPaymentResponse extends PaymentResponse {
 
 export interface SubmitPaymentPayload {
   plan_slug: string;
+  plan_type: BillingPeriod;
   utr_number: string;
   screenshot: File;
 }
 
 export const paymentsApi = {
-  getCheckout: (planSlug: string) =>
-    authedRequest<UpiCheckoutResponse>(`/payments/qr?plan_slug=${encodeURIComponent(planSlug)}`),
-  submit: ({ plan_slug, utr_number, screenshot }: SubmitPaymentPayload) => {
+  getCheckout: (planSlug: string, planType: BillingPeriod) =>
+    authedRequest<UpiCheckoutResponse>(`/payments/qr${queryString({ plan_slug: planSlug, plan_type: planType })}`),
+  submit: ({ plan_slug, plan_type, utr_number, screenshot }: SubmitPaymentPayload) => {
     const form = new FormData();
     form.append('plan_slug', plan_slug);
+    form.append('plan_type', plan_type);
     form.append('utr_number', utr_number);
     form.append('screenshot', screenshot);
     return authedRequest<PaymentResponse>('/payments', { method: 'POST', body: form });
@@ -1009,14 +1090,8 @@ export interface AdminPaymentListParams {
 }
 
 export const adminPaymentsApi = {
-  list: (params: AdminPaymentListParams = {}) => {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== '') query.set(key, String(value));
-    });
-    const qs = query.toString();
-    return authedRequest<AdminPaymentResponse[]>(`/admin/payments${qs ? `?${qs}` : ''}`);
-  },
+  list: (params: AdminPaymentListParams = {}) =>
+    authedRequest<AdminPaymentResponse[]>(`/admin/payments${queryString(params)}`),
   get: (id: string) => authedRequest<AdminPaymentResponse>(`/admin/payments/${id}`),
   approve: (id: string) =>
     authedRequest<AdminPaymentResponse>(`/admin/payments/${id}/approve`, { method: 'PATCH' }),
@@ -1054,14 +1129,52 @@ export const adminCreditsApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  list: (params: { q?: string; limit?: number; offset?: number } = {}) => {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== '') query.set(key, String(value));
-    });
-    const qs = query.toString();
-    return authedRequest<AdminCreditTopupResponse[]>(`/subscription/topups${qs ? `?${qs}` : ''}`);
-  },
+  list: (params: AdminListParams = {}) =>
+    authedRequest<AdminCreditTopupResponse[]>(`/subscription/topups${queryString(params)}`),
+};
+
+// Admin users and overview. Mirrors backend/admin/schema.py.
+
+export interface AdminListParams {
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface AdminUserResponse {
+  id: string;
+  email: string;
+  name: string | null;
+  role: 'user' | 'admin';
+  /** Effective plan right now. */
+  plan: string;
+  plan_expires_at: string | null;
+  created_at: string;
+}
+
+export interface AdminUserPlanRequest {
+  plan: 'pro' | 'free';
+  /** Required when granting Pro. */
+  days?: number;
+}
+
+export interface AdminOverviewResponse {
+  total_users: number;
+  free_users: number;
+  pro_users: number;
+  pending_payments: number;
+  revenue_this_month: number;
+  currency: string;
+}
+
+export const adminUsersApi = {
+  list: (params: AdminListParams = {}) => authedRequest<AdminUserResponse[]>(`/admin/users${queryString(params)}`),
+  setPlan: (userId: string, body: AdminUserPlanRequest) =>
+    authedRequest<AdminUserResponse>(`/admin/users/${userId}/plan`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  getOverview: () => authedRequest<AdminOverviewResponse>('/admin/overview'),
 };
 
 export interface DashboardStatsResponse {
@@ -1073,4 +1186,249 @@ export interface DashboardStatsResponse {
 
 export const analyticsApi = {
   getDashboardStats: () => authedRequest<DashboardStatsResponse>('/analytics/dashboard'),
+};
+
+// -- Connected publishing platforms (backend social/, feature_flags/) ---------
+// These endpoints use the { data, message, error } envelope.
+
+interface ApiEnvelope<T> {
+  data: T | null;
+  message: string | null;
+  error: string | null;
+}
+
+function envelopeRequest<T>(path: string, options?: RequestInit): Promise<T> {
+  return authedRequest<ApiEnvelope<T>>(path, options).then((body) => body.data as T);
+}
+
+export type SocialPlatform = 'youtube' | 'tiktok' | 'instagram' | 'x';
+export type SocialAccountStatus = 'active' | 'needs_reconnect' | 'disconnecting' | 'disconnected';
+export type SocialPostStatus = 'scheduled' | 'publishing' | 'published' | 'failed' | 'cancelled';
+
+export interface SocialPlatformInfo {
+  platform: SocialPlatform;
+  label: string;
+  /** Switched on by an admin and configured on the server. */
+  available: boolean;
+  allowed_by_plan: boolean;
+  caption_max_chars: number;
+  max_duration_seconds: number;
+  pending_review_note: string | null;
+}
+
+export interface ConnectedAccountResponse {
+  id: string;
+  platform: SocialPlatform;
+  handle: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  follower_count: number | null;
+  follower_count_updated_at: string | null;
+  status: SocialAccountStatus;
+  status_reason: string | null;
+  connected_at: string;
+}
+
+export interface SocialConnectionsResponse {
+  platforms: SocialPlatformInfo[];
+  accounts: ConnectedAccountResponse[];
+  max_accounts: number;
+  can_schedule: boolean;
+  max_schedule_days: number;
+  posts_per_day: number;
+}
+
+export interface ConnectStartResponse {
+  authorize_url: string;
+}
+
+export interface ConnectCallbackRequest {
+  code: string;
+  state: string;
+}
+
+export interface DisconnectPreviewResponse {
+  account_id: string;
+  pending_posts: number;
+}
+
+export interface TikTokCreatorInfoResponse {
+  nickname: string | null;
+  username: string | null;
+  avatar_url: string | null;
+  privacy_level_options: string[];
+  comment_disabled: boolean;
+  duet_disabled: boolean;
+  stitch_disabled: boolean;
+  max_video_post_duration_sec: number | null;
+}
+
+export interface SocialPostTarget {
+  account_id: string;
+  caption: string;
+  options: Record<string, unknown>;
+}
+
+export interface CreateSocialPostsRequest {
+  clip_id: string;
+  targets: SocialPostTarget[];
+  /** ISO 8601 with an offset; omit to publish now. */
+  scheduled_at?: string | null;
+  /** Generated once per submit; a retried submit returns the same posts. */
+  idempotency_key: string;
+}
+
+export interface SocialPostResponse {
+  id: string;
+  publish_group_id: string;
+  account_id: string;
+  platform: SocialPlatform;
+  account_handle: string | null;
+  clip_id: string;
+  clip_title: string;
+  caption: string;
+  platform_options: Record<string, unknown>;
+  scheduled_at: string;
+  status: SocialPostStatus;
+  post_url: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  attempts: number;
+  published_at: string | null;
+  created_at: string;
+}
+
+export interface SocialPostListResponse {
+  posts: SocialPostResponse[];
+}
+
+export const socialApi = {
+  getConnections: () => envelopeRequest<SocialConnectionsResponse>('/social/connections'),
+  startConnect: (platform: SocialPlatform) =>
+    envelopeRequest<ConnectStartResponse>(`/social/oauth/${platform}/start`, { method: 'POST' }),
+  completeConnect: (platform: SocialPlatform, body: ConnectCallbackRequest) =>
+    envelopeRequest<ConnectedAccountResponse>(`/social/oauth/${platform}/callback`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  disconnectPreview: (accountId: string) =>
+    envelopeRequest<DisconnectPreviewResponse>(`/social/accounts/${accountId}/disconnect-preview`),
+  disconnect: (accountId: string) =>
+    envelopeRequest<DisconnectPreviewResponse>(`/social/accounts/${accountId}`, { method: 'DELETE' }),
+  getTikTokCreatorInfo: (accountId: string) =>
+    envelopeRequest<TikTokCreatorInfoResponse>(`/social/accounts/${accountId}/tiktok-creator-info`),
+  createPosts: (body: CreateSocialPostsRequest) =>
+    envelopeRequest<SocialPostListResponse>('/social/posts', { method: 'POST', body: JSON.stringify(body) }),
+  listPosts: (statuses: SocialPostStatus[] = [], limit = 50) => {
+    const query = new URLSearchParams({ limit: String(limit) });
+    statuses.forEach((status) => query.append('status', status));
+    return envelopeRequest<SocialPostListResponse>(`/social/posts?${query.toString()}`);
+  },
+  cancelPost: (postId: string) =>
+    envelopeRequest<SocialPostResponse>(`/social/posts/${postId}/cancel`, { method: 'POST' }),
+};
+
+export interface DataDeletionStatusResponse {
+  confirmation_code: string;
+  platform: SocialPlatform;
+  completed: boolean;
+  accounts_deleted: number;
+  requested_at: string;
+}
+
+/** Public: the status page Meta links users to after a data deletion request. */
+export async function getDataDeletionStatus(code: string): Promise<DataDeletionStatusResponse> {
+  const res = await fetch(`${API_BASE}/api/v1/social/webhooks/data-deletion/${encodeURIComponent(code)}`);
+  const body = (await res.json().catch(() => ({}))) as ApiEnvelope<DataDeletionStatusResponse> & { message?: string };
+  if (!res.ok || !body.data) throw new Error(body.message || 'Deletion request not found');
+  return body.data;
+}
+
+export type FeatureFlagKey =
+  | 'social_publishing'
+  | 'social_publishing.youtube'
+  | 'social_publishing.tiktok'
+  | 'social_publishing.instagram'
+  | 'social_publishing.x';
+
+export interface FeatureFlagsResponse {
+  flags: Record<FeatureFlagKey, boolean>;
+}
+
+export interface AdminFeatureFlagResponse {
+  key: FeatureFlagKey;
+  label: string;
+  description: string;
+  parent: FeatureFlagKey | null;
+  /** The switch as set; `effective` is false while the parent is off. */
+  enabled: boolean;
+  effective: boolean;
+  updated_at: string | null;
+}
+
+export interface AdminFeatureFlagListResponse {
+  flags: AdminFeatureFlagResponse[];
+}
+
+export const featuresApi = {
+  get: () => envelopeRequest<FeatureFlagsResponse>('/features'),
+};
+
+export const adminFeaturesApi = {
+  list: () => envelopeRequest<AdminFeatureFlagListResponse>('/admin/features'),
+  set: (key: FeatureFlagKey, enabled: boolean) =>
+    envelopeRequest<AdminFeatureFlagListResponse>(`/admin/features/${encodeURIComponent(key)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ enabled }),
+    }),
+};
+
+export interface AdminSocialPlatformStats {
+  platform: SocialPlatform;
+  accounts: Partial<Record<SocialAccountStatus, number>>;
+  posts: Partial<Record<SocialPostStatus, number>>;
+  success_rate: number | null;
+}
+
+export interface AdminSocialFailure {
+  post_id: string;
+  platform: SocialPlatform;
+  account_handle: string | null;
+  user_email: string;
+  error_code: string | null;
+  error_message: string | null;
+  attempts: number;
+  failed_at: string;
+}
+
+export interface AdminSocialOverviewResponse {
+  window_days: number;
+  platforms: AdminSocialPlatformStats[];
+  quota: Record<string, Record<string, number>>;
+  recent_failures: AdminSocialFailure[];
+}
+
+export interface AdminSocialAccountResponse {
+  id: string;
+  platform: SocialPlatform;
+  handle: string | null;
+  display_name: string | null;
+  follower_count: number | null;
+  status: SocialAccountStatus;
+  status_reason: string | null;
+  user_id: string;
+  user_email: string;
+  connected_at: string;
+}
+
+export interface AdminSocialAccountListResponse {
+  accounts: AdminSocialAccountResponse[];
+}
+
+export const adminSocialApi = {
+  getOverview: (days = 7) => envelopeRequest<AdminSocialOverviewResponse>(`/admin/social/overview?days=${days}`),
+  listAccounts: (params: { q?: string; limit?: number; offset?: number } = {}) =>
+    envelopeRequest<AdminSocialAccountListResponse>(`/admin/social/accounts${queryString(params)}`),
+  forceDisconnect: (accountId: string) =>
+    envelopeRequest<DisconnectPreviewResponse>(`/admin/social/accounts/${accountId}/disconnect`, { method: 'POST' }),
 };

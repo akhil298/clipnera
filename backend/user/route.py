@@ -9,25 +9,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from user.repository import UserRepository
 from user.schema import UserProfileResponse
 from user.service import UserService
-from subscription.repository import PlanRepository, UserSubscriptionRepository, PaymentTransactionRepository, CreditLedgerRepository
 from subscription.service import SubscriptionService
 
 
 async def get_user_service(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserService:
-    user_repo = UserRepository(session)
-    plan_repo = PlanRepository(session)
-    sub_repo = UserSubscriptionRepository(session)
-    tx_repo = PaymentTransactionRepository(session)
-    ledger_repo = CreditLedgerRepository(session)
-    subscription_service = SubscriptionService(plan_repo, sub_repo, tx_repo, ledger_repo)
-    return UserService(user_repo, subscription_service)
+    return UserService(UserRepository(session), SubscriptionService.for_session(session))
 
 
 UserServiceDep = Annotated[UserService, Depends(get_user_service)]
 
 router = APIRouter(tags=["user"])
+
+
+@router.post("/me/plan-notice/dismiss", status_code=204)
+async def dismiss_plan_notice(current_user: CurrentUserDep, service: UserServiceDep):
+    """Hide the one-time "features moved to Pro" notice for good."""
+    await service.dismiss_plan_notice(current_user["user_id"])
 
 
 @router.get("/me", response_model=UserProfileResponse)

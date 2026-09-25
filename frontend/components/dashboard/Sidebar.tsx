@@ -22,7 +22,8 @@ import {
 } from 'lucide-react';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
 import { Skeleton } from '@/components/skeletons';
-import { useEntitlements, planLabel, isPaidPlan, daysUntilRenewal } from '@/hooks/useEntitlements';
+import { useEntitlements, planLabel, isPaidPlan, daysUntil } from '@/hooks/useEntitlements';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -61,7 +62,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [foldersExpanded, setFoldersExpanded] = useState(true);
   const { entitlements } = useEntitlements();
-  const renewalDays = daysUntilRenewal(entitlements.current_period_end);
+  const { flags } = useFeatureFlags();
+  // Credits reset every 30 days on every plan, Free included.
+  const renewalDays = daysUntil(entitlements.next_credit_reset_at);
   const activeWorkspace = workspaces.find((w) => w.id === user.activeWorkspaceId) || workspaces[0];
 
   const primaryNavItems = [
@@ -95,12 +98,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ];
 
   const distributionNavItems: Array<{ id: TabType; label: string; icon: React.FC<{ className?: string }>; description: string }> = [
-    // {
-    //   id: 'scheduler' as TabType,
-    //   label: 'Social Scheduler',
-    //   icon: CalendarDays,
-    //   description: 'TikTok, IG & Shorts auto-post',
-    // },
+    // Shown while an admin has social publishing switched on.
+    ...(flags.social_publishing
+      ? [
+          {
+            id: 'scheduler' as TabType,
+            label: 'Social Scheduler',
+            icon: CalendarDays,
+            description: 'TikTok, IG & Shorts auto-post',
+          },
+        ]
+      : []),
     // {
     //   id: 'analytics' as TabType,
     //   label: 'Virality Analytics',
@@ -442,7 +450,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center justify-between text-[10px] text-neutral-400 pt-0.5">
               <span>
                 {renewalDays === null
-                  ? 'No active billing period'
+                  ? 'Resets every 30 days'
                   : renewalDays === 0
                   ? 'Resets today'
                   : `Resets in ${renewalDays} day${renewalDays === 1 ? '' : 's'}`}

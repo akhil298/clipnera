@@ -1,3 +1,6 @@
+import type { BillingPeriod } from '@/lib/api';
+import { parseApiDate } from './dates';
+
 const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
 
 export function formatAmount(amount: number, currency: string): string {
@@ -5,10 +8,10 @@ export function formatAmount(amount: number, currency: string): string {
   return `${currency} ${amount}`;
 }
 
+export const BILLING_PERIOD_LABELS: Record<BillingPeriod, string> = { monthly: 'Monthly', yearly: 'Yearly' };
+
 export function formatDateTime(iso: string): string {
-  // The API sends naive UTC timestamps; mark them as UTC so they render in local time.
-  const date = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? iso : `${iso}Z`);
-  return date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  return parseApiDate(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 /** UPI UTRs are 12 digits; apps often display them with spaces. */

@@ -26,6 +26,8 @@ from workspace import model as workspace_model
 from pipeline import model as pipeline_model
 from brand_kit import model as brand_kit_model
 from subscription import model as subscription_model
+from feature_flags import model as feature_flags_model
+from social import model as social_model
 
 target_metadata = Base.metadata
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, EmailStr, Field
 from datetime import datetime
-from typing import Optional, List
+from typing import Dict, List, Literal, Optional
 
 
 class PlanResponse(BaseModel):
@@ -90,12 +90,8 @@ class UserCreditsResponse(BaseModel):
     current_period_end: Optional[datetime] = None
 
 
-class EntitlementsResponse(BaseModel):
-    """Capabilities granted by the caller's current plan.
-
-    The UI uses this to disable what the user cannot access and to explain why,
-    instead of hardcoding its own copy of the tier rules.
-    """
+class PlanCapabilities(BaseModel):
+    """What a plan includes. Mirrors Entitlements in subscription/entitlements.py."""
 
     plan: str
     aspect_ratios: List[str]
@@ -105,23 +101,57 @@ class EntitlementsResponse(BaseModel):
     pro_ai_provider: bool
     priority_rendering: bool
     max_upload_duration_seconds: int
-    # Billing context, so the UI can show a real renewal date and quota instead
-    # of a hardcoded placeholder.
+    credit_minutes: int
+    all_hook_transitions: bool
+    brand_kit_edit: bool
+    depth_captions: bool
+    batch_processing: bool
+    team_members: bool
+    # Per UTC day; null means unlimited.
+    daily_limits: Dict[str, Optional[int]]
+    social_max_accounts: int
+    social_platforms: List[str]
+    social_scheduling: bool
+    social_max_schedule_days: int
+    social_posts_per_day: int
+    # Every boolean capability by name, as checked by require_feature.
+    features: Dict[str, bool]
+
+
+class EntitlementsResponse(PlanCapabilities):
+    """The caller's current plan with billing state and today's usage.
+
+    The UI uses this to disable what the user cannot access and to explain why,
+    instead of hardcoding its own copy of the tier rules.
+    """
+
     credit_minutes_total: int = 0
     credit_minutes_remaining: int = 0
     current_period_end: Optional[datetime] = None
     subscription_status: str = "none"
+    # When paid access ends, counting renewals queued after the current period.
+    plan_expires_at: Optional[datetime] = None
+    next_credit_reset_at: Optional[datetime] = None
+    usage_today: Dict[str, int] = {}
+    has_pending_payment: bool = False
+    # One-time notice for accounts that predate Pro gating.
+    show_plan_notice: bool = False
 
 
-class PlanCatalogEntry(BaseModel):
-    """A plan plus the capabilities it would grant, for upgrade comparisons."""
-
-    id: str
-    name: str
-    slug: str
-    credit_minutes: int
-    price_monthly: float
+class PlanPriceResponse(BaseModel):
+    plan_type: Literal["monthly", "yearly"]
+    amount: int
     currency: str
-    features: List[str]
-    entitlements: EntitlementsResponse
-    is_current: bool
+    days: int
+
+
+class PlanOfferResponse(BaseModel):
+    slug: str
+    name: str
+    capabilities: PlanCapabilities
+    # Empty for plans that are not sold (Free).
+    prices: List[PlanPriceResponse]
+
+
+class PlansResponse(BaseModel):
+    plans: List[PlanOfferResponse]

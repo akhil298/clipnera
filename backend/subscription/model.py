@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import enum
-from datetime import datetime
+from datetime import date, datetime
 from uuid import uuid4
 
-from sqlalchemy import String, Integer, Text, Boolean, DateTime, Enum, ForeignKey, Index, Numeric
+from sqlalchemy import String, Integer, Text, Boolean, Date, DateTime, Enum, ForeignKey, Index, Numeric, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.database import Base
@@ -28,6 +28,11 @@ class PaymentStatus(str, enum.Enum):
     SUCCESS = "success"
     FAILED = "failed"
     REJECTED = "rejected"
+
+
+class BillingPeriod(str, enum.Enum):
+    MONTHLY = "monthly"
+    YEARLY = "yearly"
 
 
 class Plan(Base):
@@ -107,6 +112,13 @@ class PaymentTransaction(Base):
     payment_uuid: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
     payment_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Which period was bought; approval extends the plan by that period's days.
+    plan_type: Mapped[BillingPeriod] = mapped_column(
+        Enum(BillingPeriod, values_callable=lambda obj: [e.value for e in obj], name="billing_period"),
+        default=BillingPeriod.MONTHLY,
+        server_default=BillingPeriod.MONTHLY.value,
+        nullable=False,
+    )
     # Unique so one bank transfer cannot be claimed twice.
     utr_number: Mapped[str | None] = mapped_column(String(30), unique=True, nullable=True)
     # S3 key of the payment proof; served only through short-lived signed URLs.
@@ -127,6 +139,7 @@ class PaymentTransaction(Base):
 
 class CreditLedger(Base):
     __tablename__ = "credit_ledger"
+    __table_args__ = (Index("ix_credit_ledger_reference_type_created_at", "reference_type", "created_at"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str] = mapped_column(
@@ -145,3 +158,28 @@ class CreditLedger(Base):
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="selectin")
     creator: Mapped["User"] = relationship("User", foreign_keys=[created_by], lazy="selectin")
+
+
+class UsageTracking(Base):
+    """A per-user counter for one feature in one period.
+
+    Daily limits keep one row per UTC day. Credit resets claim a row per cycle
+    (keys ``credit_refill:*``) so a reset can only ever be applied once.
+    """
+
+    __tablename__ = "usage_tracking"
+    __table_args__ = (
+        UniqueConstraint("user_id", "feature_key", "period_start", name="uq_usage_tracking_user_feature_period"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    feature_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    period_start: Mapped[date] = mapped_column(Date, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )

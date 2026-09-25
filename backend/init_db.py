@@ -36,8 +36,9 @@ async def seed_plans() -> None:
             Plan(
                 name="Pro",
                 slug=PlanSlug.PRO,
-                credit_minutes=300,
+                credit_minutes=600,
                 price_monthly=29,
+                price_inr=499,
                 currency="USD",
                 is_active=True,
                 features="300 AI Processing Minutes / mo, Prompt-to-Shorts Story AI Generator, Full Custom Brand Kits & Watermarks, Multi-Platform Auto Scheduler, 4K 60fps Ultra HD Export",
@@ -48,7 +49,8 @@ async def seed_plans() -> None:
                 credit_minutes=1200,
                 price_monthly=79,
                 currency="USD",
-                is_active=True,
+                # No longer sold; kept for existing subscribers.
+                is_active=False,
                 features="1,200 AI Processing Minutes / mo, Unlimited Client Workspaces, Team Collaboration & Shared Brand Kits, Priority Rendering Pipeline",
             ),
         ]

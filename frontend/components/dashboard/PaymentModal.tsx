@@ -3,7 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import { CreditCard, CheckCircle2, Copy, Check, ImageUp, Smartphone } from 'lucide-react';
 import { paymentsApi, UpiCheckoutResponse } from '@/lib/api';
+import type { SelectedPlan } from './PlanSelectionModal';
 import {
+  BILLING_PERIOD_LABELS,
   formatAmount,
   normalizeUtr,
   MAX_SCREENSHOT_BYTES,
@@ -14,14 +16,7 @@ import {
 interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  plan: {
-    id: string;
-    name: string;
-    slug: string;
-    credit_minutes: number;
-    price_monthly: number;
-    currency: string;
-  } | null;
+  plan: SelectedPlan | null;
   onPaymentComplete: () => void;
 }
 
@@ -43,10 +38,12 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
   const [loading, setLoading] = useState(false);
 
   const planSlug = plan?.slug;
+  const planType = plan?.planType;
 
   // Each time the modal opens for a plan, start over and load its UPI price.
+  // The amount always comes from the server; the user cannot change it.
   useEffect(() => {
-    if (!isOpen || !planSlug) return;
+    if (!isOpen || !planSlug || !planType) return;
     let cancelled = false;
     setStep('confirm');
     setCheckout(null);
@@ -55,7 +52,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
     setError(null);
     setLoading(true);
     paymentsApi
-      .getCheckout(planSlug)
+      .getCheckout(planSlug, planType)
       .then((data) => {
         if (!cancelled) setCheckout(data);
       })
@@ -68,7 +65,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
     return () => {
       cancelled = true;
     };
-  }, [isOpen, planSlug]);
+  }, [isOpen, planSlug, planType]);
 
   const utrValid = UTR_PATTERN.test(normalizeUtr(utr));
   const canSubmit = Boolean(checkout && screenshot && utrValid && !loading);
@@ -87,6 +84,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
     try {
       await paymentsApi.submit({
         plan_slug: checkout.plan_slug,
+        plan_type: checkout.plan_type,
         utr_number: normalizeUtr(utr),
         screenshot,
       });
@@ -139,8 +137,12 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
                   <span className="text-sm font-bold text-white">{plan.name}</span>
                 </div>
                 <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-neutral-300">Billing</span>
+                  <span className="text-sm font-bold text-white">{BILLING_PERIOD_LABELS[plan.planType]}</span>
+                </div>
+                <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-neutral-300">Credits</span>
-                  <span className="text-sm font-bold text-amber-400">{plan.credit_minutes} min</span>
+                  <span className="text-sm font-bold text-amber-400">{plan.creditMinutes} min every 30 days</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-neutral-300">Amount</span>
@@ -282,7 +284,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
               <div>
                 <h3 className="text-lg font-bold text-white">Payment submitted</h3>
                 <p className="text-sm text-neutral-400 mt-1">
-                  Verification usually takes a few minutes. Track it under Settings → Plan &amp; Billing → My Payments.
+                  Pro activation is pending verification, which usually takes a few minutes. Track it under Settings → Plan &amp; Billing → My Payments.
                 </p>
               </div>
               <button

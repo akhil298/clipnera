@@ -1,7 +1,13 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { subscriptionApi, type EntitlementsResponse } from '@/lib/api';
+import {
+  subscriptionApi,
+  UPGRADE_REQUIRED_EVENT,
+  type EntitlementsResponse,
+  type UpgradeRequiredDetail,
+} from '@/lib/api';
+import { upgradeReasonFor } from '@/hooks/usePlan';
 import {
   EntitlementsContext,
   FREE_TIER_FALLBACK,
@@ -55,6 +61,17 @@ export function EntitlementsProvider({
       cancelled = true;
     };
   }, [load, refreshKey]);
+
+  // Any request refused for the plan opens the upsell, wherever it was made,
+  // and refetches so limits and lock states catch up with the server.
+  useEffect(() => {
+    const onUpgradeRequired = (event: Event) => {
+      onPromptUpgrade(upgradeReasonFor((event as CustomEvent<UpgradeRequiredDetail>).detail));
+      void load();
+    };
+    window.addEventListener(UPGRADE_REQUIRED_EVENT, onUpgradeRequired);
+    return () => window.removeEventListener(UPGRADE_REQUIRED_EVENT, onUpgradeRequired);
+  }, [onPromptUpgrade, load]);
 
   const value = useMemo(
     () => ({

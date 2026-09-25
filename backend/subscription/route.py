@@ -7,132 +7,92 @@ from fastapi import APIRouter, Depends, Query
 from auth.dependencies import CurrentAdminDep, CurrentUserDep
 from auth.repository import UserRepository
 from sqlalchemy.ext.asyncio import AsyncSession
-from subscription.repository import (
-    PlanRepository,
-    UserSubscriptionRepository,
-    PaymentTransactionRepository,
-    CreditLedgerRepository,
-)
-from subscription.service import SubscriptionService
+from subscription.dependencies import SubscriptionServiceDep
 from subscription.schema import (
-    PlanResponse,
-    UserSubscriptionResponse,
     PaymentTransactionResponse,
     CreditLedgerResponse,
     UserCreditsResponse,
     CreditTopupRequest,
     AdminCreditTopupResponse,
     EntitlementsResponse,
-    PlanCatalogEntry,
+    PlanOfferResponse,
+    PlanPriceResponse,
+    PlansResponse,
 )
-from subscription.entitlements import entitlements_for
-from subscription.model import PlanSlug
+from subscription.entitlements import PLAN_PRICES, PURCHASABLE_PLAN, entitlements_for
+from subscription.service import PlanSummary, plan_slug
 from core.database import get_db
 from core.exceptions import CustomException
 
 router = APIRouter(prefix="/subscription", tags=["subscription"])
 
 
-async def get_subscription_service(
-    session: Annotated[AsyncSession, Depends(get_db)],
-) -> SubscriptionService:
-    plan_repo = PlanRepository(session)
-    sub_repo = UserSubscriptionRepository(session)
-    tx_repo = PaymentTransactionRepository(session)
-    ledger_repo = CreditLedgerRepository(session)
-    return SubscriptionService(plan_repo, sub_repo, tx_repo, ledger_repo)
+def entitlements_response(summary: PlanSummary) -> EntitlementsResponse:
+    ent = summary.entitlements
+    return EntitlementsResponse(
+        **ent.to_dict(),
+        credit_minutes_total=ent.credit_minutes,
+        credit_minutes_remaining=summary.credit_minutes_remaining,
+        current_period_end=summary.current_period_end,
+        subscription_status=summary.subscription_status,
+        plan_expires_at=summary.plan_expires_at,
+        next_credit_reset_at=summary.next_credit_reset_at,
+        usage_today=summary.usage_today,
+        has_pending_payment=summary.has_pending_payment,
+        show_plan_notice=summary.show_plan_notice,
+    )
 
 
-SubscriptionServiceDep = Annotated[SubscriptionService, Depends(get_subscription_service)]
+def _credits_response(summary: PlanSummary) -> UserCreditsResponse:
+    return UserCreditsResponse(
+        plan=summary.entitlements.plan,
+        credit_minutes_total=summary.entitlements.credit_minutes,
+        credit_minutes_remaining=summary.credit_minutes_remaining,
+        subscription_status=summary.subscription_status,
+        current_period_end=summary.current_period_end,
+    )
 
 
-@router.get("/plans", response_model=list[PlanResponse])
+@router.get("/plans", response_model=PlansResponse)
 async def list_plans(service: SubscriptionServiceDep):
-    plans = await service.list_plans()
-    return [PlanResponse.model_validate(p) for p in plans]
+    """Plans on sale, their prices and what each includes, for the pricing page."""
+    offers = []
+    for plan in await service.list_plans():
+        slug = plan_slug(plan)
+        prices = PLAN_PRICES if slug == PURCHASABLE_PLAN else {}
+        offers.append(
+            PlanOfferResponse(
+                slug=slug,
+                name=plan.name,
+                capabilities=entitlements_for(slug).to_dict(),
+                prices=[
+                    PlanPriceResponse(plan_type=period.value, amount=price.amount_inr, currency="INR", days=price.days)
+                    for period, price in prices.items()
+                ],
+            )
+        )
+    return PlansResponse(plans=offers)
 
 
 @router.get("/me", response_model=UserCreditsResponse)
 async def get_my_subscription(current_user: CurrentUserDep, service: SubscriptionServiceDep):
-    sub = await service.get_user_subscription(current_user["user_id"])
-    balance = await service.get_user_credit_balance(current_user["user_id"])
-
-    if not sub:
-        return UserCreditsResponse(
-            plan="free",
-            credit_minutes_total=0,
-            credit_minutes_remaining=balance,
-            subscription_status="none",
-            current_period_end=None,
-        )
-
-    return UserCreditsResponse(
-        plan=sub.plan.slug.value,
-        credit_minutes_total=sub.plan.credit_minutes,
-        credit_minutes_remaining=balance,
-        subscription_status=sub.status.value,
-        current_period_end=sub.current_period_end,
-    )
+    return _credits_response(await service.get_plan_summary(current_user["user_id"]))
 
 
 @router.get("/entitlements", response_model=EntitlementsResponse)
 async def get_my_entitlements(current_user: CurrentUserDep, service: SubscriptionServiceDep):
-    """What the caller's plan allows. The UI reads this instead of deciding
-    tier rules for itself, so both sides stay in step."""
-    user_id = current_user["user_id"]
-    ent = await service.get_entitlements(user_id)
-    sub = await service.get_user_subscription(user_id)
-    balance = await service.get_user_credit_balance(user_id)
-    return EntitlementsResponse(
-        **ent.to_dict(),
-        credit_minutes_total=sub.plan.credit_minutes if sub else 0,
-        credit_minutes_remaining=balance,
-        current_period_end=sub.current_period_end if sub else None,
-        subscription_status=sub.status.value if sub else "none",
-    )
-
-
-@router.get("/catalog", response_model=list[PlanCatalogEntry])
-async def get_plan_catalog(current_user: CurrentUserDep, service: SubscriptionServiceDep):
-    """Every active plan with the capabilities it grants, for the upgrade view."""
-    plans = await service.list_plans()
-    current_slug = await service.get_user_plan_slug(current_user["user_id"])
-
-    catalog: list[PlanCatalogEntry] = []
-    for plan in plans:
-        slug = str(getattr(plan.slug, "value", plan.slug))
-        ent = entitlements_for(slug)
-        catalog.append(
-            PlanCatalogEntry(
-                id=plan.id,
-                name=plan.name,
-                slug=slug,
-                credit_minutes=plan.credit_minutes,
-                price_monthly=float(plan.price_monthly),
-                currency=plan.currency,
-                features=[f.strip() for f in (plan.features or "").split(",") if f.strip()],
-                entitlements=EntitlementsResponse(**ent.to_dict()),
-                is_current=(slug == current_slug),
-            )
-        )
-    catalog.sort(key=lambda entry: entry.price_monthly)
-    return catalog
+    """What the caller's plan allows, today's usage and billing state. The UI
+    reads this instead of deciding tier rules for itself, so both sides stay
+    in step."""
+    return entitlements_response(await service.get_plan_summary(current_user["user_id"]))
 
 
 @router.post("/activate-free", response_model=UserCreditsResponse)
 async def activate_free_plan(current_user: CurrentUserDep, service: SubscriptionServiceDep):
-    try:
-        sub = await service.activate_free_plan(current_user["user_id"])
-        balance = await service.get_user_credit_balance(current_user["user_id"])
-        return UserCreditsResponse(
-            plan=sub.plan.slug.value,
-            credit_minutes_total=sub.plan.credit_minutes,
-            credit_minutes_remaining=balance,
-            subscription_status=sub.status.value,
-            current_period_end=sub.current_period_end,
-        )
-    except ValueError as exc:
-        raise CustomException(message=str(exc), code="INVALID_PLAN", status_code=400)
+    """Idempotent: grants this cycle's Free credits if not already granted. It
+    never touches a paid subscription."""
+    await service.activate_free_plan(current_user["user_id"])
+    return _credits_response(await service.get_plan_summary(current_user["user_id"]))
 
 
 @router.post("/topup", response_model=AdminCreditTopupResponse)

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { AudioEnhancementConfig } from '@/lib/types';
 import { audioApi } from '@/lib/api';
+import { usePlan } from '@/hooks/usePlan';
 
 interface AudioEnhancerPanelProps {
   config: AudioEnhancementConfig;
@@ -36,6 +37,8 @@ export const AudioEnhancerPanel: React.FC<AudioEnhancerPanelProps> = ({
   onConfigChange,
   onProcessed,
 }) => {
+  const { remainingToday, refresh: refreshPlan } = usePlan();
+  const enhancementsLeft = remainingToday('audio_enhancements');
   const [isProcessing, setIsProcessing] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [lastResult, setLastResult] = useState<{ processedUrl?: string; processingTimeSeconds: number; error?: string } | null>(null);
@@ -80,6 +83,8 @@ export const AudioEnhancerPanel: React.FC<AudioEnhancerPanelProps> = ({
       setLastResult({ error: (e as Error).message, processingTimeSeconds: 0 });
     } finally {
       setIsProcessing(false);
+      // Each run counts toward the Free daily limit shown below.
+      void refreshPlan();
     }
   };
 
@@ -308,6 +313,11 @@ export const AudioEnhancerPanel: React.FC<AudioEnhancerPanelProps> = ({
       </div>
 
       {/* Actions */}
+      {enhancementsLeft !== null && (
+        <p className="text-[11px] text-neutral-500">
+          {enhancementsLeft} free enhancement{enhancementsLeft === 1 ? '' : 's'} left today. Pro is unlimited.
+        </p>
+      )}
       <div className="flex items-center gap-2 pt-1">
         <button
           onClick={handleBackendProcess}

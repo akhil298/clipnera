@@ -12,14 +12,55 @@ between the two sides.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
-from typing import Any
+from dataclasses import dataclass, asdict
+from typing import Any, Literal
 
-from subscription.model import PlanSlug
+from subscription.model import BillingPeriod, PlanSlug
+
+# Boolean capabilities a route can require with ``require_feature``.
+Feature = Literal[
+    "remove_watermark",
+    "pro_ai",
+    "all_hook_transitions",
+    "brand_kit_edit",
+    "depth_captions",
+    "batch_processing",
+    "team_members",
+    "social_scheduling",
+]
+
+# Actions metered per UTC day with ``check_limit``. None in a plan's limits
+# means unlimited.
+UsageKey = Literal["exports", "audio_enhancements"]
+
+# Hook transition modes every plan may use.
+_FREE_HOOK_TRANSITION_MODES = frozenset({"auto", "off"})
+
+# Credit minutes reset to the plan's allowance on this cycle, counted from the
+# subscription start (paid) or the signup date (free). Unused minutes do not
+# roll over.
+CREDIT_CYCLE_DAYS = 30
+
+
+@dataclass(frozen=True)
+class PlanPrice:
+    amount_inr: int
+    days: int
+
+
+# The one plan sold through UPI, and what each billing period costs. Payment
+# amounts are always taken from here on the server, never from the client.
+PURCHASABLE_PLAN = PlanSlug.PRO.value
+PLAN_PRICES: dict[BillingPeriod, PlanPrice] = {
+    BillingPeriod.MONTHLY: PlanPrice(amount_inr=499, days=30),
+    BillingPeriod.YEARLY: PlanPrice(amount_inr=4990, days=365),
+}
 
 # Caption templates available without a paid plan. The rest of the catalogue
 # (see subtitle_styling/templates.py) is a Pro feature.
 FREE_CAPTION_STYLES: tuple[str, ...] = (
+    # The default style for new clips, so it must be usable on every plan.
+    "clean_dark",
     "default",
     "hormozi",
     "mrbeast",
@@ -40,6 +81,20 @@ class Entitlements:
     pro_ai_provider: bool
     priority_rendering: bool
     max_upload_duration_seconds: int
+    credit_minutes: int  # allowance per CREDIT_CYCLE_DAYS
+    all_hook_transitions: bool  # False limits hook transitions to Auto
+    brand_kit_edit: bool
+    depth_captions: bool
+    batch_processing: bool
+    team_members: bool
+    daily_limits: dict[str, int | None]
+    # Connected publishing platforms (social/). Posts per UTC day count every
+    # post created, whether published now or scheduled.
+    social_max_accounts: int
+    social_platforms: tuple[str, ...]
+    social_scheduling: bool
+    social_max_schedule_days: int
+    social_posts_per_day: int
 
     def allows_caption_style(self, style: str) -> bool:
         return self.caption_styles is None or style in self.caption_styles
@@ -47,12 +102,37 @@ class Entitlements:
     def allows_aspect_ratio(self, ratio: str) -> bool:
         return ratio in self.aspect_ratios
 
+    def allows_hook_transition(self, mode: str | None) -> bool:
+        """Free plans get Auto (or no transition); presets and custom mixes are paid."""
+        return self.all_hook_transitions or (mode or "auto") in _FREE_HOOK_TRANSITION_MODES
+
+    def features(self) -> dict[str, bool]:
+        """Every boolean capability by name, for ``require_feature`` and the UI."""
+        return {
+            "remove_watermark": not self.watermark_forced,
+            "pro_ai": self.pro_ai_provider,
+            "all_hook_transitions": self.all_hook_transitions,
+            "brand_kit_edit": self.brand_kit_edit,
+            "depth_captions": self.depth_captions,
+            "batch_processing": self.batch_processing,
+            "team_members": self.team_members,
+            "social_scheduling": self.social_scheduling,
+        }
+
+    def allows(self, feature: Feature) -> bool:
+        return self.features()[feature]
+
+    def daily_limit(self, key: UsageKey) -> int | None:
+        return self.daily_limits.get(key)
+
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)
         data["aspect_ratios"] = list(self.aspect_ratios)
+        data["social_platforms"] = list(self.social_platforms)
         data["caption_styles"] = (
             None if self.caption_styles is None else list(self.caption_styles)
         )
+        data["features"] = self.features()
         return data
 
 
@@ -61,6 +141,21 @@ _ALL_ASPECT_RATIOS = ("9:16", "1:1", "4:5", "16:9")
 # Two hours. Long enough for a full podcast, short enough that one upload cannot
 # monopolise the render queue.
 _PRO_MAX_UPLOAD_SECONDS = 7200
+
+# Capabilities every paid tier shares.
+_PRO_FEATURES: dict[str, Any] = {
+    "all_hook_transitions": True,
+    "brand_kit_edit": True,
+    "depth_captions": True,
+    "batch_processing": True,
+    "team_members": True,
+    "daily_limits": {"exports": None, "audio_enhancements": None},
+    "social_max_accounts": 4,
+    "social_platforms": ("youtube", "tiktok", "instagram", "x"),
+    "social_scheduling": True,
+    "social_max_schedule_days": 30,
+    "social_posts_per_day": 25,
+}
 
 ENTITLEMENTS: dict[str, Entitlements] = {
     PlanSlug.FREE.value: Entitlements(
@@ -72,6 +167,19 @@ ENTITLEMENTS: dict[str, Entitlements] = {
         pro_ai_provider=False,
         priority_rendering=False,
         max_upload_duration_seconds=1800,
+        credit_minutes=60,
+        all_hook_transitions=False,
+        brand_kit_edit=False,
+        depth_captions=False,
+        batch_processing=False,
+        team_members=False,
+        daily_limits={"exports": 10, "audio_enhancements": 3},
+        # X bills every post, so it is paid-only.
+        social_max_accounts=1,
+        social_platforms=("youtube", "tiktok", "instagram"),
+        social_scheduling=False,
+        social_max_schedule_days=0,
+        social_posts_per_day=3,
     ),
     PlanSlug.PRO.value: Entitlements(
         plan=PlanSlug.PRO.value,
@@ -82,7 +190,11 @@ ENTITLEMENTS: dict[str, Entitlements] = {
         pro_ai_provider=True,
         priority_rendering=False,
         max_upload_duration_seconds=_PRO_MAX_UPLOAD_SECONDS,
+        credit_minutes=600,
+        **_PRO_FEATURES,
     ),
+    # No longer sold. Kept so existing Pro Plus subscribers keep these limits
+    # until their current period ends; they renew as Pro.
     PlanSlug.PRO_PLUS.value: Entitlements(
         plan=PlanSlug.PRO_PLUS.value,
         aspect_ratios=_ALL_ASPECT_RATIOS,
@@ -92,6 +204,8 @@ ENTITLEMENTS: dict[str, Entitlements] = {
         pro_ai_provider=True,
         priority_rendering=True,
         max_upload_duration_seconds=_PRO_MAX_UPLOAD_SECONDS,
+        credit_minutes=1200,
+        **_PRO_FEATURES,
     ),
 }
 

@@ -6,6 +6,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 PaymentStatusValue = Literal["pending", "success", "failed", "rejected"]
+PlanTypeValue = Literal["monthly", "yearly"]
 
 
 class UpiCheckoutResponse(BaseModel):
@@ -13,6 +14,7 @@ class UpiCheckoutResponse(BaseModel):
 
     plan_slug: str
     plan_name: str
+    plan_type: PlanTypeValue
     amount: float
     currency: str
     upi_id: str
@@ -27,6 +29,7 @@ class PaymentResponse(BaseModel):
     id: str
     plan_slug: str
     plan_name: str
+    plan_type: PlanTypeValue
     amount: float
     currency: str
     utr_number: Optional[str] = None

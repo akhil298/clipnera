@@ -1,63 +1,109 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Check, CreditCard, Zap, Crown, Sparkles, Shield } from 'lucide-react';
-import { subscriptionApi, PlanResponse, type PlanCatalogEntry } from '@/lib/api';
+import React, { useEffect, useState } from 'react';
+import { Check, Clock, Crown, Lock, X, Zap } from 'lucide-react';
+import {
+  subscriptionApi,
+  type BillingPeriod,
+  type PlanCapabilities,
+  type PlanOfferResponse,
+} from '@/lib/api';
+import { isPaidPlan, useEntitlements } from '@/hooks/useEntitlements';
+import { BILLING_PERIOD_LABELS, formatAmount } from '@/lib/utils/payments';
 import { ModalSkeleton } from '@/components/skeletons';
+
+/** The plan and billing period a user chose to pay for. */
+export interface SelectedPlan {
+  slug: string;
+  name: string;
+  planType: BillingPeriod;
+  creditMinutes: number;
+}
 
 interface PlanSelectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onPlanSelected: (plan: PlanResponse) => void;
-  onActivateFree: () => void;
-  /** What the user tried to do that needed a paid plan, e.g. "The 16:9 format". */
+  onPlanSelected: (plan: SelectedPlan) => void;
+  /** What the user tried to do that needs Pro, e.g. "The 16:9 format". */
   upgradeReason?: string;
 }
 
-export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, onActivateFree, upgradeReason }: PlanSelectionModalProps) {
-  const [plans, setPlans] = useState<PlanCatalogEntry[]>([]);
+const PERIOD_SUFFIX: Record<BillingPeriod, string> = { monthly: '/month', yearly: '/year' };
+
+const limitLabel = (limit: number | null, noun: string) =>
+  limit === null ? `Unlimited ${noun}` : `${limit} ${noun} a day`;
+
+/** The comparison rows for a plan, all derived from the server's plan rules. */
+function comparisonRows(c: PlanCapabilities): { label: string; included: boolean }[] {
+  return [
+    { label: `${c.credit_minutes} AI minutes every 30 days`, included: true },
+    { label: `Videos up to ${Math.round(c.max_upload_duration_seconds / 60)} min`, included: true },
+    { label: `${c.max_clips_per_video} clips per video`, included: true },
+    { label: `Formats: ${c.aspect_ratios.join(', ')}`, included: true },
+    {
+      label: c.caption_styles === null ? 'Every caption style' : `${c.caption_styles.length} caption styles`,
+      included: true,
+    },
+    { label: limitLabel(c.daily_limits.exports, 'exports'), included: true },
+    { label: limitLabel(c.daily_limits.audio_enhancements, 'audio enhancements'), included: true },
+    { label: 'No watermark', included: !c.watermark_forced },
+    { label: 'Pro AI models', included: c.pro_ai_provider },
+    { label: 'All hook transitions', included: c.all_hook_transitions },
+    { label: 'Create and edit brand kits', included: c.brand_kit_edit },
+    { label: 'Add team members', included: c.team_members },
+    { label: 'Depth captions', included: c.depth_captions },
+    { label: 'Batch processing', included: c.batch_processing },
+  ];
+}
+
+export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, upgradeReason }: PlanSelectionModalProps) {
+  const { entitlements } = useEntitlements();
+  const [plans, setPlans] = useState<PlanOfferResponse[]>([]);
+  const [period, setPeriod] = useState<BillingPeriod>('monthly');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
-    async function loadPlans() {
-      try {
-        // The catalog carries each plan's capabilities and flags the current
-        // one, so the modal can show what an upgrade actually unlocks.
-        const data = await subscriptionApi.getPlanCatalog();
-        if (!cancelled) {
-          setPlans(data);
-        }
-      } catch (err) {
+    setLoading(true);
+    setError(null);
+    subscriptionApi
+      .getPlans()
+      .then((data) => {
+        if (!cancelled) setPlans(data.plans);
+      })
+      .catch(() => {
         if (!cancelled) setError('Failed to load plans');
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) setLoading(false);
-      }
-    }
-    loadPlans();
-    return () => { cancelled = true; };
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
-
-  const handleSelectPlan = (plan: PlanCatalogEntry) => {
-    onPlanSelected(plan as unknown as PlanResponse);
-  };
 
   if (!isOpen) return null;
 
+  const pending = entitlements.has_pending_payment;
+  const monthly = plans.flatMap((p) => p.prices).find((price) => price.plan_type === 'monthly');
+  const yearly = plans.flatMap((p) => p.prices).find((price) => price.plan_type === 'yearly');
+  const yearlySavingMonths =
+    monthly && yearly ? Math.round((monthly.amount * 12 - yearly.amount) / monthly.amount) : 0;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 lg:p-8">
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex items-start justify-between gap-4 mb-6">
             <div>
               <h2 className="text-2xl font-bold text-white font-['Syne',sans-serif]">Choose Your Plan</h2>
-              <p className="text-sm text-neutral-400 mt-1">Select a plan that fits your content creation needs</p>
+              <p className="text-sm text-neutral-400 mt-1">Start free. Upgrade when you need more.</p>
               {upgradeReason && (
                 <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-400/10 px-2.5 py-1 text-xs font-semibold text-amber-300 ring-1 ring-amber-400/25">
-                  <Crown className="h-3.5 w-3.5" />
-                  {upgradeReason} requires a paid plan
+                  <Lock className="h-3.5 w-3.5" />
+                  {upgradeReason} — available on Pro
                 </p>
               )}
             </div>
@@ -69,91 +115,120 @@ export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, onActivate
             </button>
           </div>
 
-          {loading && <ModalSkeleton />}
-
-          {error && (
-            <div className="text-center py-20 text-red-400">{error}</div>
+          {pending && (
+            <div className="mb-6 flex items-center gap-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs">
+              <Clock className="w-4 h-4 shrink-0" />
+              Pro activation pending verification. We&apos;ll switch your plan as soon as your payment is approved.
+            </div>
           )}
 
+          {loading && <ModalSkeleton />}
+          {error && <div className="text-center py-20 text-red-400">{error}</div>}
+
           {!loading && !error && (
-            <div className="grid md:grid-cols-3 gap-6">
-              {plans.map((plan) => {
-                const isPro = plan.slug === 'pro';
-                const isProPlus = plan.slug === 'pro_plus';
-                return (
-                  <div
-                    key={plan.id}
-                    className={`relative p-6 rounded-2xl flex flex-col justify-between ${
-                      isPro
-                        ? 'bg-gradient-to-b from-neutral-900 via-neutral-900 to-neutral-950 border-2 border-amber-500/60 shadow-xl shadow-amber-500/10'
-                        : 'bg-neutral-950 border border-neutral-800'
-                    }`}
-                  >
-                    {isPro && (
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-amber-500 text-[10px] font-extrabold text-neutral-950 uppercase tracking-wider">
-                        Most Popular
-                      </div>
-                    )}
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        {plan.slug === 'free' && <Zap className="w-5 h-5 text-neutral-400" />}
-                        {plan.slug === 'pro' && <Crown className="w-5 h-5 text-amber-400" />}
-                        {plan.slug === 'pro_plus' && <Sparkles className="w-5 h-5 text-purple-400" />}
-                        <h3 className="text-base font-bold text-white font-['Syne',sans-serif]">{plan.name}</h3>
-                      </div>
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-extrabold text-white font-mono">
-                          {plan.price_monthly === 0 ? 'Free' : `$${plan.price_monthly}`}
+            <>
+              <div className="flex justify-center mb-6">
+                <div className="flex gap-1 p-1 rounded-xl bg-neutral-950 border border-neutral-800">
+                  {(Object.keys(PERIOD_SUFFIX) as BillingPeriod[]).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setPeriod(p)}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                        period === p ? 'bg-amber-500 text-neutral-950' : 'text-neutral-300 hover:text-white'
+                      }`}
+                    >
+                      {BILLING_PERIOD_LABELS[p]}
+                      {p === 'yearly' && yearlySavingMonths > 0 && (
+                        <span className={period === p ? 'ml-1 text-neutral-900' : 'ml-1 text-emerald-400'}>
+                          · {yearlySavingMonths} months free
                         </span>
-                        {plan.price_monthly > 0 && (
-                          <span className="text-xs text-neutral-400">/month</span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-neutral-300">
-                        <Shield className="w-4 h-4 text-emerald-400" />
-                        <span>{plan.credit_minutes} AI Processing Minutes / mo</span>
-                      </div>
-                      {plan.features.length > 0 && (
-                        <ul className="space-y-2 text-xs text-neutral-300">
-                          {plan.features.map((feature) => (
-                            <li key={feature} className="flex items-center gap-2">
-                              <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                              <span>{feature}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-6">
+                {plans.map((plan) => {
+                  const price = plan.prices.find((p) => p.plan_type === period);
+                  const isCurrent = entitlements.plan === plan.slug;
+                  const isPaid = Boolean(price);
+                  return (
+                    <div
+                      key={plan.slug}
+                      className={`relative p-6 rounded-2xl flex flex-col justify-between ${
+                        isPaid
+                          ? 'bg-gradient-to-b from-neutral-900 via-neutral-900 to-neutral-950 border-2 border-amber-500/60 shadow-xl shadow-amber-500/10'
+                          : 'bg-neutral-950 border border-neutral-800'
+                      }`}
+                    >
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          {isPaid ? <Crown className="w-5 h-5 text-amber-400" /> : <Zap className="w-5 h-5 text-neutral-400" />}
+                          <h3 className="text-base font-bold text-white font-['Syne',sans-serif]">{plan.name}</h3>
+                          {isCurrent && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300 font-bold">
+                              Current
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-extrabold text-white font-mono">
+                            {price ? formatAmount(price.amount, price.currency) : formatAmount(0, 'INR')}
+                          </span>
+                          {price && <span className="text-xs text-neutral-400">{PERIOD_SUFFIX[period]}</span>}
+                        </div>
+                        <ul className="space-y-2 text-xs">
+                          {comparisonRows(plan.capabilities).map((row) => (
+                            <li
+                              key={row.label}
+                              className={`flex items-center gap-2 ${row.included ? 'text-neutral-300' : 'text-neutral-600'}`}
+                            >
+                              {row.included ? (
+                                <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                              ) : (
+                                <X className="w-4 h-4 flex-shrink-0" />
+                              )}
+                              <span>{row.label}</span>
                             </li>
                           ))}
                         </ul>
+                      </div>
+
+                      {isPaid ? (
+                        <button
+                          disabled={pending}
+                          onClick={() =>
+                            onPlanSelected({
+                              slug: plan.slug,
+                              name: plan.name,
+                              planType: period,
+                              creditMinutes: plan.capabilities.credit_minutes,
+                            })
+                          }
+                          className="w-full mt-6 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-md shadow-amber-500/15 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                        >
+                          {pending
+                            ? 'Pending verification'
+                            : isCurrent
+                            ? `Renew ${plan.name}`
+                            : `Upgrade to ${plan.name}`}
+                        </button>
+                      ) : (
+                        <div className="w-full mt-6 py-3 rounded-xl text-sm font-bold text-center bg-neutral-800/60 text-neutral-400 ring-1 ring-neutral-700">
+                          {isCurrent ? 'Current Plan' : 'Always free'}
+                        </div>
                       )}
                     </div>
-                    <button
-                      disabled={plan.is_current}
-                      onClick={() => {
-                        if (plan.is_current) return;
-                        if (plan.slug === 'free') {
-                          onActivateFree();
-                        } else {
-                          handleSelectPlan(plan);
-                        }
-                      }}
-                      className={`w-full mt-6 py-3 rounded-xl text-sm font-bold transition-all ${
-                        plan.is_current
-                          ? 'cursor-default bg-neutral-800/60 text-neutral-400 ring-1 ring-neutral-700'
-                          : isPro
-                          ? 'active:scale-95 bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-md shadow-amber-500/15'
-                          : isProPlus
-                          ? 'active:scale-95 bg-purple-500 hover:bg-purple-400 text-white shadow-md shadow-purple-500/15'
-                          : 'active:scale-95 bg-neutral-800 hover:bg-neutral-700 text-white'
-                      }`}
-                    >
-                      {plan.is_current
-                        ? 'Current Plan'
-                        : plan.price_monthly === 0
-                        ? 'Switch to Free'
-                        : `Choose ${plan.name}`}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+              {isPaidPlan(entitlements) && (
+                <p className="mt-4 text-center text-[11px] text-neutral-500">
+                  Renewing adds the new period on top of your current end date.
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>

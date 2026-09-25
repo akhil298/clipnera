@@ -85,16 +85,19 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
   const downloadExport = (url: string, filename: string) => {
     const link = document.createElement('a');
     link.href = url;
+    // Export URLs are signed to download as attachments; a same-tab click saves
+    // the file. `target="_blank"` only opened a tab showing the video.
     link.download = filename;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
     document.body.appendChild(link);
     link.click();
     link.remove();
   };
 
-  const handleQuickExport = (clip: ViralClip) => {
-    if (!clip.presignedUrl) {
+  // Renders the clip with its own caption style, size and hook transition, then
+  // downloads that. It used to download `presignedUrl`, the raw cut, which has
+  // no title, captions, hook bridge or watermark.
+  const handleQuickExport = async (clip: ViralClip) => {
+    if (!safeProject.id || !clip.presignedUrl) {
       setExportError('This clip is not ready for download yet.');
       return;
     }
@@ -102,8 +105,20 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
     setExportError(null);
     setQuickExportingId(clip.id);
     try {
-      downloadExport(clip.presignedUrl, `${safeProject.title || 'clip'}-${clip.id}.mp4`);
+      const result = await clipApi.exportProject(safeProject.id, {
+        clipIds: [clip.id],
+        aspectRatio: clip.aspectRatio,
+        captionConfig: clip.captionConfig,
+        hookTransition: clip.hookTransition,
+      });
+      const url = result.exported_clips.find((item) => item.clip_id === clip.id)?.burned_presigned_url;
+      if (!url) {
+        throw new Error('The export completed without producing a downloadable file.');
+      }
+      downloadExport(url, `${safeProject.title || 'clip'}-${clip.id}.mp4`);
       confetti({ particleCount: 75, spread: 60, origin: { y: 0.7 } });
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Export failed. Please try again.');
     } finally {
       setQuickExportingId(null);
     }

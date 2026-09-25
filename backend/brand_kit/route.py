@@ -8,6 +8,7 @@ from auth.dependencies import CurrentUserDep, get_db
 from brand_kit.repository import BrandKitRepository
 from brand_kit.schema import CreateBrandKitRequest, BrandKitResponse
 from brand_kit.service import BrandKitService
+from subscription.dependencies import require_feature
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -40,7 +41,11 @@ async def get_my_brand_kit(
     return await service.get_brand_kit(current_user["user_id"])
 
 
-@brand_kit.post("", response_model=BrandKitResponse, status_code=201)
+# Existing kits stay readable and deletable on Free; only creating or editing is Pro.
+@brand_kit.post(
+    "", response_model=BrandKitResponse, status_code=201,
+    dependencies=[Depends(require_feature("brand_kit_edit"))],
+)
 async def create_or_update_brand_kit(
     data: CreateBrandKitRequest,
     current_user: CurrentUserDep,

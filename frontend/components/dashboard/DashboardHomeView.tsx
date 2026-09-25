@@ -29,6 +29,7 @@ import {
 import { VideoProject, ViralClip, UserProfile, TabType, Workspace } from '@/lib/types';
 import { clipApi, pipelineApi, analyticsApi, startPipelineWhenReady, mapBackendClip } from '@/lib/api';
 import { StatsSkeleton } from '@/components/skeletons';
+import { usePlan } from '@/hooks/usePlan';
 
 interface DashboardHomeViewProps {
   user: UserProfile;
@@ -55,6 +56,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   onNavigateTab,
   onUpgradePlan,
 }) => {
+  const { isPro, hasPendingPayment } = usePlan();
   const [quickUrl, setQuickUrl] = useState('');
   const [selectedGenreFilter, setSelectedGenreFilter] = useState<string>('all');
   const [isQuickProcessing, setIsQuickProcessing] = useState(false);
@@ -222,7 +224,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
               <span className="text-xs text-neutral-400">
                 Workspace: <strong className="text-neutral-200">{workspaceName}</strong>
               </span>
-              {user.plan === 'free' && (
+              {!isPro && (
                 <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-neutral-800 text-neutral-300 border border-neutral-700 flex items-center gap-1.5">
                   Free Plan
                 </span>
@@ -272,17 +274,23 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
             )}
 
             {/* Free Plan Upgrade CTA */}
-            {user.plan === 'free' && (
+            {!isPro && (
               <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
                 <p className="text-xs text-amber-300">
                   You're on the Free plan. Upgrade to get more credits and unlock all features.
                 </p>
-                <button
-                  onClick={onUpgradePlan || (() => onNavigateTab('settings'))}
-                  className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs shadow-md shadow-amber-500/15 active:scale-95 transition-all whitespace-nowrap"
-                >
-                  Upgrade Now
-                </button>
+                {hasPendingPayment ? (
+                  <span className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold text-xs whitespace-nowrap">
+                    Pro activation pending verification
+                  </span>
+                ) : (
+                  <button
+                    onClick={onUpgradePlan || (() => onNavigateTab('settings'))}
+                    className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs shadow-md shadow-amber-500/15 active:scale-95 transition-all whitespace-nowrap"
+                  >
+                    Upgrade Now
+                  </button>
+                )}
               </div>
             )}
           </div>

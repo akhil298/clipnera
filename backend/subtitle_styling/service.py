@@ -315,6 +315,8 @@ class SubtitleStylingService:
                 animation_speed=animation_speed,
                 emoji_collection=emoji_collection,
                 style_overrides=style_overrides,
+                # Where the hook teaser ends: no caption line may run across it.
+                segment_breaks=[clip_start + hook.duration] if hook else None,
                 output_path=os.path.join(tmpdir, "captions.ass"),
             )
             return await self._encode(

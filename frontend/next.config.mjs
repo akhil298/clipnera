@@ -6,6 +6,15 @@ const nextConfig = {
   // the running app dies with "Cannot find module ./vendor-chunks/...".
   // Set NEXT_DIST_DIR to build into a scratch directory instead.
   distDir: process.env.NEXT_DIST_DIR || '.next',
+  async headers() {
+    return [
+      {
+        // OAuth callbacks carry an authorization code in the URL; never send it on as a Referer.
+        source: '/dashboard/connect/:platform',
+        headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

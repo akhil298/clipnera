@@ -123,10 +123,16 @@ def _tail(c: _Ctx, length: float) -> tuple[float, float]:
 
 
 def _freeze(c: _Ctx, at: float) -> str:
+    """Hold the frame just before ``at`` for the whole gap.
+
+    ``loop`` plus re-stamping, not ``tpad``: tpad's clone padding silently
+    adds nothing on FFmpeg 7.x (the server's version) after a ``trim``, which
+    left freeze bridges with no video at all.
+    """
     start = max(0.0, at - 2.0 / c.fps)
     return (
         f"trim=start={_n(start)}:end={_n(at)},setpts=PTS-STARTPTS,"
-        f"tpad=stop_mode=clone:stop_duration={_n(c.gap + 0.1)}"
+        f"loop=loop={c.frames(c.gap) + 2}:size=1:start=0,setpts=N/({_n(c.fps)}*TB)"
     )
 
 
@@ -155,27 +161,29 @@ def _src_flash_forward(c: _Ctx) -> tuple[bool, str]:
         f"between(t,{_n(start)},{_n(start + piece)})"
         for start in (_body_window(c, at, piece) for at in (0.35, 0.6, 0.85))
     )
+    return True, f"select='{windows}',setpts=N/({_n(c.fps)}*TB)"
+
+
+def _peek(c: _Ctx, wanted: float) -> tuple[bool, str]:
+    """A window of the clip's payoff retimed to fill the gap exactly.
+
+    Retiming instead of padding keeps the length right on every FFmpeg version
+    even when the clip is shorter than the window asked for.
+    """
+    length = min(wanted, c.body)
+    start = _body_window(c, 0.75, length)
     return True, (
-        f"select='{windows}',setpts=N/({_n(c.fps)}*TB),"
-        f"tpad=stop_mode=clone:stop_duration={_n(c.gap)}"
+        f"trim=start={_n(start)}:duration={_n(length)},"
+        f"setpts=(PTS-STARTPTS)*{_n(c.gap / length)}"
     )
 
 
 def _src_sneak_peek(c: _Ctx) -> tuple[bool, str]:
-    start = _body_window(c, 0.75, c.gap)
-    return True, (
-        f"trim=start={_n(start)}:duration={_n(c.gap)},setpts=PTS-STARTPTS,"
-        f"tpad=stop_mode=clone:stop_duration={_n(c.gap)}"
-    )
+    return _peek(c, c.gap)
 
 
 def _src_sneak_peek_fast(c: _Ctx) -> tuple[bool, str]:
-    length = min(c.gap * 2.0, c.body)
-    start = _body_window(c, 0.75, length)
-    return True, (
-        f"trim=start={_n(start)}:duration={_n(length)},setpts=0.5*(PTS-STARTPTS),"
-        f"tpad=stop_mode=clone:stop_duration={_n(c.gap)}"
-    )
+    return _peek(c, c.gap * 2.0)
 
 
 def _src_color(color: str) -> Callable[[_Ctx], tuple[bool, str]]:
@@ -298,6 +306,16 @@ def _noise(color: str, amp: float, seconds: float, shaping: str) -> str:
     return f"anoisesrc=d={_n(seconds)}:c={color}:r={SAMPLE_RATE}:a={amp},{shaping}"
 
 
+def _swell(seconds: float) -> str:
+    """Rise then fall over ``seconds``.
+
+    ``afade``, not a ``volume`` expression: volume's ``t`` is NaN on generated
+    sources, which FFmpeg turns into a volume of 0 -- the sound went silent.
+    """
+    half = seconds / 2
+    return f"afade=t=in:d={_n(half)}:curve=qsin,afade=t=out:st={_n(half)}:d={_n(half)}:curve=qsin"
+
+
 def _hook_rewind(c: _Ctx, d: float, hook: str | None) -> str:
     if hook is None:
         return _silence(c, d, None)
@@ -324,13 +342,11 @@ def _silence(c: _Ctx, d: float, hook: str | None) -> str:
 
 
 SOUND_BUILDERS: dict[str, Callable[[_Ctx, float, str | None], str]] = {
-    "whoosh": lambda c, d, h: _noise("pink", 0.6, d, f"highpass=f=300,lowpass=f=3500,volume='sin(PI*t/{_n(d)})':eval=frame"),
-    "swoosh": lambda c, d, h: _noise(
-        "white", 0.4, min(d, 0.35), f"highpass=f=1500,lowpass=f=7000,volume='sin(PI*t/{_n(min(d, 0.35))})':eval=frame",
-    ),
+    "whoosh": lambda c, d, h: _noise("pink", 0.6, d, f"highpass=f=300,lowpass=f=3500,{_swell(d)}"),
+    "swoosh": lambda c, d, h: _noise("white", 0.4, min(d, 0.35), f"highpass=f=1500,lowpass=f=7000,{_swell(min(d, 0.35))}"),
     "riser": lambda c, d, h: _eval(f"0.35*sin(2*PI*(150*t+900*t*t/{_n(d)}))*(t/{_n(d)})", d),
     "downlifter": lambda c, d, h: _eval(f"0.35*sin(2*PI*(1500*t-650*t*t/{_n(d)}))*(1-t/{_n(d)})", d),
-    "reverse_cymbal": lambda c, d, h: _noise("white", 0.5, d, f"highpass=f=5000,volume='pow(t/{_n(d)},3)':eval=frame"),
+    "reverse_cymbal": lambda c, d, h: _noise("white", 0.5, d, f"highpass=f=5000,afade=t=in:d={_n(d)}:curve=cub"),
     "boom": lambda c, d, h: _eval("0.9*sin(2*PI*50*t)*exp(-4*t)+0.3*sin(2*PI*90*t)*exp(-9*t)", min(d, 1.5)),
     "sub_drop": lambda c, d, h: _eval(f"0.9*sin(2*PI*(110*t-35*t*t/{_n(d)}))*exp(-1.5*t)", d),
     "impact_hit": lambda c, d, h: _eval("0.8*sin(2*PI*60*t)*exp(-7*t)+0.5*(random(0)*2-1)*exp(-30*t)", min(d, 1.0)),
@@ -428,5 +444,8 @@ def timeline_graph(plan: BridgePlan, text_filter: str | None = None) -> tuple[li
     else:
         chains.append("[ba0]anull[ba]")
 
-    chains.append("[tv][ta][gv][ga][bv][ba]concat=n=3:v=1:a=1[vcat][acat]")
+    chains.append("[tv][ta][gv][ga][bv][ba]concat=n=3:v=1:a=1[vjoin][acat]")
+    # concat reports no frame rate when its inputs' time bases differ, and the
+    # encoder then assumed the microsecond time base: 1,000,000 fps.
+    chains.append(f"[vjoin]fps={_n(c.fps)}[vcat]")
     return chains, "vcat", "acat"

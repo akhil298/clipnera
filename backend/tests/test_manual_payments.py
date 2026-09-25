@@ -16,7 +16,7 @@ from payment.service import (
     sniff_image_type,
     validate_screenshot,
 )
-from subscription.model import PaymentStatus
+from subscription.model import BillingPeriod, PaymentStatus
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 32
@@ -27,12 +27,13 @@ def _plan(price_inr: float | None = 2499.0, is_active: bool = True):
     return SimpleNamespace(id="plan-pro", slug="pro", name="Pro", price_inr=price_inr, is_active=is_active)
 
 
-def _tx(status: PaymentStatus = PaymentStatus.PENDING):
+def _tx(status: PaymentStatus = PaymentStatus.PENDING, plan_type: BillingPeriod = BillingPeriod.MONTHLY):
     return SimpleNamespace(
         id="tx-1",
         user_id="user-1",
         plan=_plan(),
-        amount=2499.0,
+        plan_type=plan_type,
+        amount=499.0,
         currency="INR",
         utr_number="123456789012",
         status=status,
@@ -93,8 +94,8 @@ class _SubscriptionService:
     def __init__(self) -> None:
         self.started: list[dict] = []
 
-    async def start_subscription(self, user_id, plan, **kwargs):
-        self.started.append({"user_id": user_id, "plan": plan, **kwargs})
+    async def extend_plan(self, user_id, plan, days, commit=True):
+        self.started.append({"user_id": user_id, "plan": plan, "days": days, "commit": commit})
 
 
 class _Storage:
@@ -184,21 +185,28 @@ def test_upi_uri_prefills_amount_in_inr():
 # Checkout
 
 
+@pytest.mark.parametrize(
+    "period,amount", [(BillingPeriod.MONTHLY, 499.0), (BillingPeriod.YEARLY, 4990.0)]
+)
 @pytest.mark.asyncio
-async def test_checkout_returns_qr_for_plan_price():
-    checkout = await _service().get_checkout("pro")
-    assert checkout.amount == 2499.0
+async def test_checkout_uses_the_server_price_for_the_period(period, amount):
+    checkout = await _service().get_checkout("pro", period)
+    assert checkout.amount == amount
+    assert checkout.plan_type == period.value
     assert checkout.currency == "INR"
     assert checkout.upi_id == "clipnera@upi"
-    assert "am=2499.00" in checkout.upi_uri
+    assert f"am={amount:.2f}" in checkout.upi_uri
     assert checkout.qr_image.startswith("data:image/svg+xml")
 
 
-@pytest.mark.parametrize("plan", [None, _plan(price_inr=None), _plan(price_inr=0), _plan(is_active=False)])
+@pytest.mark.parametrize(
+    "slug,plan",
+    [("pro", None), ("pro", _plan(is_active=False)), ("pro_plus", _plan()), ("free", _plan())],
+)
 @pytest.mark.asyncio
-async def test_checkout_refuses_plans_without_an_inr_price(plan):
+async def test_checkout_refuses_plans_that_are_not_for_sale(slug, plan):
     with pytest.raises(CustomException) as exc:
-        await _service(plan=plan).get_checkout("pro")
+        await _service(plan=plan).get_checkout(slug, BillingPeriod.MONTHLY)
     assert _code(exc) == "PLAN_NOT_PURCHASABLE"
 
 
@@ -206,7 +214,7 @@ async def test_checkout_refuses_plans_without_an_inr_price(plan):
 async def test_checkout_unavailable_without_upi_id(settings):
     settings.UPI_ID = ""
     with pytest.raises(CustomException) as exc:
-        await _service().get_checkout("pro")
+        await _service().get_checkout("pro", BillingPeriod.MONTHLY)
     assert _code(exc) == "PAYMENTS_UNAVAILABLE"
 
 
@@ -216,15 +224,16 @@ async def test_checkout_unavailable_without_upi_id(settings):
 @pytest.mark.asyncio
 async def test_submit_stores_private_screenshot_and_pending_record(storage):
     repo = _TxRepo()
-    result = await _service(repo).submit("user-1", "pro", "1234 5678 9012", PNG, "image/png")
+    result = await _service(repo).submit("user-1", "pro", BillingPeriod.YEARLY, "1234 5678 9012", PNG, "image/png")
 
     assert result.status == "pending"
     (bucket, key, kwargs) = storage.puts[0]
     assert key.startswith("payment-screenshots/user-1/") and key.endswith(".png")
     assert "ACL" not in kwargs  # never public-read
-    # Amount and currency come from the plan, not from the client.
-    assert repo.created["amount"] == 2499.0
+    # Amount and currency come from the server's price list, not the client.
+    assert repo.created["amount"] == 4990.0
     assert repo.created["currency"] == "INR"
+    assert repo.created["plan_type"] == BillingPeriod.YEARLY
     assert repo.created["utr_number"] == "123456789012"
     assert repo.created["screenshot_key"] == key
 
@@ -232,7 +241,7 @@ async def test_submit_stores_private_screenshot_and_pending_record(storage):
 @pytest.mark.asyncio
 async def test_submit_blocks_duplicate_utr_before_upload(storage):
     with pytest.raises(CustomException) as exc:
-        await _service(_TxRepo(utr_taken=True)).submit("user-1", "pro", "123456789012", PNG, "image/png")
+        await _service(_TxRepo(utr_taken=True)).submit("user-1", "pro", BillingPeriod.MONTHLY, "123456789012", PNG, "image/png")
     assert _code(exc) == "DUPLICATE_UTR"
     assert storage.puts == []
 
@@ -240,7 +249,7 @@ async def test_submit_blocks_duplicate_utr_before_upload(storage):
 @pytest.mark.asyncio
 async def test_submit_rate_limited(storage):
     with pytest.raises(CustomException) as exc:
-        await _service(_TxRepo(recent=5)).submit("user-1", "pro", "123456789012", PNG, "image/png")
+        await _service(_TxRepo(recent=5)).submit("user-1", "pro", BillingPeriod.MONTHLY, "123456789012", PNG, "image/png")
     assert _code(exc) == "RATE_LIMITED"
     assert storage.puts == []
 
@@ -248,17 +257,17 @@ async def test_submit_rate_limited(storage):
 # Review
 
 
+@pytest.mark.parametrize("period,days", [(BillingPeriod.MONTHLY, 30), (BillingPeriod.YEARLY, 365)])
 @pytest.mark.asyncio
-async def test_approve_activates_plan_in_the_same_transaction(storage):
-    repo, subs = _TxRepo(_tx()), _SubscriptionService()
+async def test_approve_grants_the_bought_period_in_the_same_transaction(storage, period, days):
+    repo, subs = _TxRepo(_tx(plan_type=period)), _SubscriptionService()
     result = await _service(repo, subs=subs).approve("tx-1", "admin-1")
 
     assert repo.resolved == [("tx-1", PaymentStatus.SUCCESS, "admin-1", None)]
-    assert subs.started[0]["user_id"] == "user-1"
-    assert subs.started[0]["commit"] is False
-    assert subs.started[0]["reference_id"] == "tx-1"
+    assert subs.started == [{"user_id": "user-1", "plan": repo.tx.plan, "days": days, "commit": False}]
     assert repo.commits == 1
     assert result.status == "success"
+    assert result.plan_type == period.value
 
 
 @pytest.mark.asyncio
