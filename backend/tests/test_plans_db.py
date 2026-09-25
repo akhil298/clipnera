@@ -84,8 +84,7 @@ async def db(monkeypatch):
             ]
         )
         await session.commit()
-    # Keep the always-Pro list and the daily job off the real database.
-    monkeypatch.setattr(subscription.service, "pro_override_emails", lambda: frozenset())
+    # Keep the daily job off the real database.
     monkeypatch.setattr(jobs, "AsyncSessionLocal", maker)
     yield maker
     await engine.dispose()

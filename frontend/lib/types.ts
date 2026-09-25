@@ -333,10 +333,11 @@ export interface AppNotification {
   id: string;
   title: string;
   message: string;
-  type: 'render_complete' | 'scheduled_post' | 'virality_alert' | 'credit_update';
+  type: 'render_complete' | 'render_failed' | 'scheduled_post' | 'virality_alert' | 'credit_update';
   timestamp: string;
   read: boolean;
   actionUrl?: string;
+  projectId?: string;
 }
 
 export interface RetentionPoint {

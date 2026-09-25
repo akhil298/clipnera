@@ -10,6 +10,7 @@ Every table in that database is dropped and recreated.
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 import httpx
@@ -19,10 +20,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import main
-import subscription.service
 from auth.dependencies import get_current_user
 from auth.model import User, UserRole
 from core.database import Base, get_db
+from subscription.model import Plan, PlanSlug, SubscriptionStatus, UserSubscription
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
 pytestmark = [
@@ -30,19 +31,16 @@ pytestmark = [
     pytest.mark.asyncio,
 ]
 
-PRO_EMAIL = "owner@example.com"
-
-
 @pytest_asyncio.fixture
-async def maker(monkeypatch):
+async def maker():
     engine = create_async_engine(TEST_DATABASE_URL)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     maker = async_sessionmaker(engine, expire_on_commit=False)
-    # Team members are Pro-only; the always-pro list makes the owner Pro.
-    monkeypatch.setattr(subscription.service, "AsyncSessionLocal", maker)
-    monkeypatch.setattr(subscription.service, "pro_override_emails", lambda: frozenset({PRO_EMAIL}))
+    async with maker() as session:
+        session.add(Plan(id="plan-pro", name="Pro", slug=PlanSlug.PRO, credit_minutes=600, price_monthly=0))
+        await session.commit()
     yield maker
     await engine.dispose()
 
@@ -70,6 +68,21 @@ async def _user(maker, email: str | None = None) -> str:
         return user.id
 
 
+async def _pro_user(maker) -> str:
+    """A user with an active Pro subscription; team members are Pro-only."""
+    user_id = await _user(maker)
+    now = datetime.utcnow()
+    async with maker() as session:
+        session.add(
+            UserSubscription(
+                user_id=user_id, plan_id="plan-pro", status=SubscriptionStatus.ACTIVE,
+                current_period_start=now, current_period_end=now + timedelta(days=30),
+            )
+        )
+        await session.commit()
+    return user_id
+
+
 def _new_member(role: str = "member") -> dict:
     return {"email": f"{uuid4().hex[:8]}@example.com", "password": "password123", "full_name": "New Member", "role": role}
 
@@ -83,13 +96,13 @@ async def _default_workspace(client: httpx.AsyncClient) -> str:
 
 
 async def test_first_listing_creates_one_personal_workspace(maker, api):
-    client = api(await _user(maker, PRO_EMAIL))
+    client = api(await _pro_user(maker))
     workspace_id = await _default_workspace(client)
     assert await _default_workspace(client) == workspace_id
 
 
 async def test_owner_adds_member_as_regular_user(maker, api):
-    client = api(await _user(maker, PRO_EMAIL))
+    client = api(await _pro_user(maker))
     workspace_id = await _default_workspace(client)
 
     body = _new_member("viewer")
@@ -109,7 +122,7 @@ async def test_owner_adds_member_as_regular_user(maker, api):
 
 @pytest.mark.parametrize("role", ["admin", "owner"])
 async def test_manager_roles_cannot_be_assigned(maker, api, role):
-    client = api(await _user(maker, PRO_EMAIL))
+    client = api(await _pro_user(maker))
     workspace_id = await _default_workspace(client)
 
     create = await client.post(f"/api/v1/workspaces/{workspace_id}/members/create", json=_new_member(role))
@@ -123,7 +136,7 @@ async def test_manager_roles_cannot_be_assigned(maker, api, role):
 
 
 async def test_non_owners_cannot_manage_members(maker, api):
-    owner = api(await _user(maker, PRO_EMAIL))
+    owner = api(await _pro_user(maker))
     workspace_id = await _default_workspace(owner)
     body = _new_member()
     member = (await owner.post(f"/api/v1/workspaces/{workspace_id}/members/create", json=body)).json()
@@ -143,7 +156,7 @@ async def test_non_owners_cannot_manage_members(maker, api):
 
 
 async def test_owner_row_cannot_be_changed_or_removed(maker, api):
-    client = api(await _user(maker, PRO_EMAIL))
+    client = api(await _pro_user(maker))
     workspace_id = await _default_workspace(client)
     members = (await client.get(f"/api/v1/workspaces/{workspace_id}/members")).json()
     owner_row = next(m for m in members if m["role"] == "owner")

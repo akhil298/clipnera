@@ -156,7 +156,6 @@ async def db(monkeypatch, tmp_path: Path):
         monkeypatch.setattr(module, "get_provider", lambda platform: FakeProvider())
     for module in (social.worker, social.publisher):
         monkeypatch.setattr(module, "AsyncSessionLocal", maker)
-    monkeypatch.setattr(subscription.service, "pro_override_emails", lambda: frozenset())
 
     sent = []
 

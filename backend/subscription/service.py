@@ -22,22 +22,11 @@ from subscription.repository import (
     CreditLedgerRepository,
     UsageRepository,
 )
-from core.config import get_settings
-from core.database import AsyncSessionLocal
 from core.exceptions import CustomException
 from core.logging_config import get_logger
 
 log = get_logger(__name__)
 
-
-def pro_override_emails() -> frozenset[str]:
-    """Emails always treated as paid, from PRO_OVERRIDE_EMAILS.
-
-    Normalised to lowercase so a case difference between the settings value and
-    the stored address cannot silently drop someone from the list.
-    """
-    raw = getattr(get_settings(), "PRO_OVERRIDE_EMAILS", "") or ""
-    return frozenset(part.strip().lower() for part in raw.split(",") if part.strip())
 
 CREDIT_COST_PER_2_MINUTES = 1
 
@@ -126,41 +115,12 @@ class SubscriptionService:
         """
         return (await self.get_entitlements(user_id)).pro_ai_provider
 
-    async def _is_override_user(self, user_id: str) -> bool:
-        """Whether this user is on the always-pro list.
-
-        Its own session: this runs inside request handlers that hold a session
-        already busy with other work, and a failed lookup must never upgrade
-        someone, so any error here resolves to False.
-        """
-        overrides = pro_override_emails()
-        if not overrides:
-            return False
-        try:
-            from user.repository import UserRepository
-
-            async with AsyncSessionLocal() as session:
-                user = await UserRepository(session).get_by_id(user_id)
-        except Exception as exc:
-            log.warning("Could not check the pro override list for user=%s (%s)", user_id, exc)
-            return False
-
-        email = (getattr(user, "email", "") or "").strip().lower()
-        if email and email in overrides:
-            log.info("User %s is on the pro override list; treating as %s", email, PlanSlug.PRO.value)
-            return True
-        return False
-
     async def get_user_plan_slug(self, user_id: str) -> str:
         """The user's current plan slug, or "free" when there is no active one.
 
         Errs toward free for the same reason is_pro_user does: a lookup failure
-        must not hand out paid capabilities. The override list is the one
-        deliberate exception.
+        must not hand out paid capabilities.
         """
-        if await self._is_override_user(user_id):
-            return PlanSlug.PRO.value
-
         try:
             subscription = await self._sub_repo.get_active_by_user(user_id)
         except Exception as exc:

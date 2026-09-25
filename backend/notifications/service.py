@@ -3,10 +3,20 @@ from __future__ import annotations
 from typing import Any
 from enum import Enum
 
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from clients.services.email import EmailClient
 from clients.services.sms import SMSClient
+from clip.model import VideoProject
+from clip_generation.model import GeneratedClip
+from core.database import AsyncSessionLocal
 from core.exceptions import CustomException
 from core.logging_config import get_logger
+from notifications.broker import broker
+from notifications.model import Notification, NotificationKind
+from notifications.repository import NotificationRepository
+from notifications.schema import InAppNotificationResponse
 
 log = get_logger(__name__)
 
@@ -92,3 +102,45 @@ class NotificationService:
                 self.send_sms(to=user_phone, message=sms_message)
         except Exception as exc:
             log.warning(f"SMS notification failed (SMS may not be configured): project={project_id} error={exc}")
+
+
+class InboxService:
+    """In-app notifications: what the dashboard's snackbar and drawer show."""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._repo = NotificationRepository(session)
+
+    async def list_recent(self, user_id: str, limit: int) -> list[Notification]:
+        return await self._repo.list_recent(user_id, limit)
+
+    async def mark_all_read(self, user_id: str) -> None:
+        await self._repo.mark_all_read(user_id)
+
+    async def clear(self, user_id: str) -> None:
+        await self._repo.delete_all(user_id)
+
+
+async def notify_pipeline_outcome(user_id: str, project_id: str, success: bool, refunded: bool = False) -> None:
+    """Record a pipeline's outcome in the user's inbox and push it to their open
+    dashboards. Best effort: a failure here never changes the outcome it reports."""
+    try:
+        async with AsyncSessionLocal() as session:
+            title = await session.scalar(select(VideoProject.title).where(VideoProject.id == project_id))
+            name = f'"{title}"' if title else "Your video"
+            if success:
+                clip_count = await session.scalar(
+                    select(func.count()).select_from(GeneratedClip).where(GeneratedClip.project_id == project_id)
+                )
+                kind = NotificationKind.PIPELINE_COMPLETED
+                heading = "Your clips are ready"
+                message = f"{name} finished processing with {clip_count or 0} clip(s)."
+            else:
+                kind = NotificationKind.PIPELINE_FAILED
+                heading = "Processing failed"
+                message = f"{name} could not be processed." + (" Your credits were refunded." if refunded else "")
+            notification = await NotificationRepository(session).create(
+                user_id, kind, heading, message, project_id=project_id
+            )
+        broker.publish(user_id, InAppNotificationResponse.model_validate(notification).model_dump(mode="json"))
+    except Exception as exc:
+        log.warning(f"In-app notification failed: project={project_id} error={type(exc).__name__}")

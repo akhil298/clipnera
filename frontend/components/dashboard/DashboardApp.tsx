@@ -15,6 +15,7 @@ import { ViralAnalyticsView } from './ViralAnalyticsView';
 import { BrandKitView } from './BrandKitView';
 import { SettingsView } from './SettingsView';
 import { NotificationsDrawer } from './NotificationsDrawer';
+import { SnackbarStack } from './SnackbarStack';
 import { AuthModal } from './AuthModal';
 import { PlanSelectionModal, type SelectedPlan } from './PlanSelectionModal';
 import { PlanBanner } from './PlanBanner';
@@ -23,6 +24,7 @@ import { PaymentModal } from './PaymentModal';
 import { VideoProject, ViralClip, TabType, UserProfile, Workspace, AppNotification, PipelineStep, PipelineStatus } from '@/lib/types';
 import { DashboardSkeleton } from '@/components/skeletons';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import { useNotificationInbox } from '@/hooks/useNotificationInbox';
 import { userApi, workspaceApi, authApi, pipelineApi, subscriptionApi, clipApi, mapBackendClip } from '@/lib/api';
 import { isAuthenticated, clearAuth } from '@/lib/auth';
 import { youtubeThumbnailUrl } from '@/lib/utils/urlParser';
@@ -98,11 +100,12 @@ export default function DashboardApp() {
   const { flags } = useFeatureFlags();
 
   // Deep links such as /dashboard/settings?tab=social (where connecting an
-  // account returns to). Read after mount so the server render matches.
+  // account returns to). Read after mount so the server render matches, and
+  // on every route change since the shell stays mounted across tabs.
   useEffect(() => {
     const tab = new URLSearchParams(window.location.search).get('tab');
     if (tab === 'billing' || tab === 'social' || tab === 'team') setActiveSettingsTab(tab);
-  }, []);
+  }, [pathname]);
 
   // Projects State
   const [projects, setProjects] = useState<VideoProject[]>([]);
@@ -137,8 +140,29 @@ export default function DashboardApp() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
 
   // Notifications State
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [snackbars, setSnackbars] = useState<AppNotification[]>([]);
+  const {
+    notifications,
+    pushLocal: pushNotification,
+    markAllRead: handleMarkAllRead,
+    clearAll: handleClearNotifications,
+  } = useNotificationInbox(Boolean(isAuthed), (notification) => {
+    setSnackbars((prev) => [...prev, notification].slice(-3));
+    // The status poll only follows the open project, so reflect the outcome
+    // here for every other one too.
+    if (notification.projectId) {
+      handleUpdateProject(
+        notification.projectId,
+        notification.type === 'render_failed'
+          ? { processingStatus: 'failed' }
+          : { processingStatus: 'completed', processingProgress: 100 },
+      );
+    }
+  });
+  const dismissSnackbar = useCallback((id: string) => {
+    setSnackbars((prev) => prev.filter((n) => n.id !== id));
+  }, []);
 
   // Auth / Workspace Modal
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -467,7 +491,7 @@ export default function DashboardApp() {
       read: false,
       type: 'render_complete',
     };
-    setNotifications([newNotif, ...notifications]);
+    pushNotification(newNotif);
     navigateToTab(
       newProject.processingStatus === 'processing' ? 'folders' : 'generator',
       newProject.id,
@@ -537,7 +561,7 @@ export default function DashboardApp() {
         read: false,
         type: 'render_complete',
       };
-      setNotifications([newNotif, ...notifications]);
+      pushNotification(newNotif);
     } catch (err) {
       console.error('Failed to delete project:', err);
       alert('Failed to delete project. Please try again.');
@@ -618,13 +642,11 @@ export default function DashboardApp() {
     router.replace('/');
   };
 
-  // Notifications helpers
   const unreadCount = notifications.filter((n) => !n.read).length;
-  const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
-  const handleClearNotifications = () => {
-    setNotifications([]);
+
+  const handleViewNotificationProject = (notification: AppNotification) => {
+    const project = projects.find((p) => p.id === notification.projectId);
+    if (project) handleOpenFolder(project);
   };
 
   const handlePaymentComplete = async () => {
@@ -826,6 +848,13 @@ export default function DashboardApp() {
         notifications={notifications}
         onMarkAllRead={handleMarkAllRead}
         onClearAll={handleClearNotifications}
+      />
+
+      {/* Snackbars for notifications that arrive while the dashboard is open */}
+      <SnackbarStack
+        items={snackbars}
+        onDismiss={dismissSnackbar}
+        onView={handleViewNotificationProject}
       />
 
       {/* Auth & Workspace Switcher Modal */}

@@ -37,11 +37,6 @@ class BaseConfig(BaseSettings):
     # pins every run to it, which is what local work and A/B runs want.
     AI_PROVIDER: str = "anthropic"
 
-    # Emails always treated as paid, whatever the subscription table says.
-    # For founders, staff and demo accounts. Comma-separated, case-insensitive.
-    # These users cost real money per run, so keep the list short and explicit.
-    PRO_OVERRIDE_EMAILS: str = "akhilakhi298@gmail.com"
-
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
     ANTHROPIC_API_KEY: str = ""

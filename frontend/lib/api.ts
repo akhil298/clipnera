@@ -692,6 +692,62 @@ export const DEFAULT_PIPELINE_STEPS = [
  * regardless, as this used to, quadrupled render time to produce files nothing
  * read. Only pass a list when the user actually chose one.
  */
+/**
+ * Opens a server-sent event stream (fetch rather than EventSource, which cannot
+ * send the bearer token) and calls `onEvent` with each parsed `data:` payload.
+ * `onEvent` returning false closes the stream. `onError` fires on any failure
+ * or when the server ends the stream, but never after the returned
+ * unsubscribe is called.
+ */
+function subscribeEvents<T>(
+  path: string,
+  onEvent: (data: T) => boolean | void,
+  onError?: (err: Error) => void,
+): () => void {
+  const ctrl = new AbortController();
+  (async () => {
+    const token = getToken();
+    if (!token) throw new Error('Not authenticated');
+    const res = await fetch(`${API_BASE}/api/v1${path}`, {
+      headers: { Accept: 'text/event-stream', Authorization: `Bearer ${token}` },
+      signal: ctrl.signal,
+    });
+    if (res.status === 401) {
+      handleUnauthorized();
+      throw new Error('Session expired');
+    }
+    if (!res.ok || !res.body) throw new Error(`Failed to subscribe: ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) throw new Error('Stream closed');
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop() || '';
+      for (const part of parts) {
+        const line = part.split('\n').find((l) => l.startsWith('data:'));
+        if (!line) continue;
+        let data: T;
+        try {
+          data = JSON.parse(line.slice(5).trim());
+        } catch {
+          continue; // skip malformed
+        }
+        if (onEvent(data) === false) {
+          ctrl.abort();
+          return;
+        }
+      }
+    }
+  })().catch((err: unknown) => {
+    if (!ctrl.signal.aborted) onError?.(err as Error);
+  });
+  return () => ctrl.abort();
+}
+
 export const pipelineApi = {
   start: (
     projectId: string,
@@ -711,67 +767,15 @@ export const pipelineApi = {
     projectId: string,
     onProgress: (data: PipelineProgressEvent) => void,
     onError?: (err: Error) => void,
-  ): (() => void) => {
-    const ctrl = new AbortController();
-    const base = API_BASE;
-    (async () => {
-      try {
-        const token = getToken();
-        if (!token) {
-          onError?.(new Error('Not authenticated'));
-          return;
-        }
-
-        const res = await fetch(`${base}/api/v1/pipeline/progress/${projectId}`, {
-          headers: {
-            Accept: 'text/event-stream',
-            Authorization: `Bearer ${token}`,
-          },
-          signal: ctrl.signal,
-        });
-
-        if (res.status === 401) {
-          handleUnauthorized();
-          onError?.(new Error('Session expired'));
-          return;
-        }
-
-        if (!res.ok || !res.body) {
-          onError?.(new Error(`Failed to subscribe: ${res.status}`));
-          return;
-        }
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split('\n\n');
-          buffer = parts.pop() || '';
-          for (const part of parts) {
-            const line = part.split('\n').find((l) => l.startsWith('data:'));
-            if (!line) continue;
-            try {
-              const data = JSON.parse(line.slice(5).trim());
-              onProgress(data);
-              if (data.status === 'completed' || data.status === 'error' || data.status === 'cancelled') {
-                ctrl.abort();
-                return;
-              }
-            } catch {
-              // skip malformed
-            }
-          }
-        }
-      } catch (err: unknown) {
-        if ((err as Error).name !== 'AbortError') {
-          onError?.(err as Error);
-        }
-      }
-    })();
-    return () => ctrl.abort();
-  },
+  ): (() => void) =>
+    subscribeEvents<PipelineProgressEvent>(
+      `/pipeline/progress/${projectId}`,
+      (data) => {
+        onProgress(data);
+        return data.status !== 'completed' && data.status !== 'error' && data.status !== 'cancelled';
+      },
+      onError,
+    ),
   getStatus: (projectId: string) =>
     authedRequest<PipelineStatus>(`/pipeline/status/${projectId}`),
   /**
@@ -1372,6 +1376,32 @@ export interface AdminFeatureFlagResponse {
 export interface AdminFeatureFlagListResponse {
   flags: AdminFeatureFlagResponse[];
 }
+
+/** Mirrors NotificationKind in backend/notifications/model.py. */
+export type InAppNotificationKind = 'pipeline_completed' | 'pipeline_failed';
+
+export interface InAppNotificationResponse {
+  id: string;
+  kind: InAppNotificationKind;
+  title: string;
+  message: string;
+  project_id: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface InAppNotificationListResponse {
+  notifications: InAppNotificationResponse[];
+}
+
+export const notificationsApi = {
+  list: (limit = 30) => envelopeRequest<InAppNotificationListResponse>(`/notifications?limit=${limit}`),
+  markAllRead: () => envelopeRequest<InAppNotificationListResponse>('/notifications/read-all', { method: 'POST' }),
+  clear: () => envelopeRequest<InAppNotificationListResponse>('/notifications', { method: 'DELETE' }),
+  /** Pushes each notification as it is created. Missed ones come back via list(). */
+  subscribe: (onNotification: (notification: InAppNotificationResponse) => void, onError: (err: Error) => void) =>
+    subscribeEvents<InAppNotificationResponse>('/notifications/stream', onNotification, onError),
+};
 
 export const featuresApi = {
   get: () => envelopeRequest<FeatureFlagsResponse>('/features'),

@@ -10,7 +10,7 @@ from core.logging_config import get_logger
 from subscription.entitlements import PURCHASABLE_PLAN
 from subscription.model import PlanSlug
 from subscription.repository import PlanRepository
-from subscription.service import SubscriptionService, pro_override_emails
+from subscription.service import SubscriptionService
 
 log = get_logger(__name__)
 
@@ -24,9 +24,8 @@ class AdminService:
         self._subscription_service = subscription_service
 
     async def list_users(self, query: str | None, limit: int, offset: int) -> list[AdminUserResponse]:
-        overrides = pro_override_emails()
         return [
-            self._to_response(user, plan, expires_at, overrides)
+            self._to_response(user, plan, expires_at)
             for user, plan, expires_at in await self._repo.list_users(query, limit, offset)
         ]
 
@@ -75,16 +74,13 @@ class AdminService:
         )
 
     @staticmethod
-    def _to_response(
-        user: User, plan: str | None, expires_at: datetime | None, overrides: frozenset[str]
-    ) -> AdminUserResponse:
-        on_override = (user.email or "").strip().lower() in overrides
+    def _to_response(user: User, plan: str | None, expires_at: datetime | None) -> AdminUserResponse:
         return AdminUserResponse(
             id=user.id,
             email=user.email,
             name=user.full_name or user.username,
             role=user.role.value,
-            plan=plan or (PlanSlug.PRO.value if on_override else PlanSlug.FREE.value),
+            plan=plan or PlanSlug.FREE.value,
             plan_expires_at=expires_at,
             created_at=user.created_at,
         )

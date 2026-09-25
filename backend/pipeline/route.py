@@ -18,6 +18,7 @@ from clip.model import ProjectStatus
 from core.logging_config import get_logger
 from core.database import AsyncSessionLocal
 from core.exceptions import CustomException
+from notifications.service import notify_pipeline_outcome
 from subscription.service import SubscriptionService, pro_required
 
 log = get_logger(__name__)
@@ -233,6 +234,9 @@ async def _run_pipeline(orchestrator: PipelineOrchestrator, project_id: str, use
             entry.update({"status": "completed", "percent": 100, "message": "Pipeline completed", "step_status": "completed"})
             _progress_store[project_id] = entry
 
+        if user:
+            await notify_pipeline_outcome(user["user_id"], project_id, success=True)
+
         if user and (user.get("email") or user.get("phone")):
             from notifications.service import NotificationService
             notifier = NotificationService()
@@ -276,6 +280,9 @@ async def _run_pipeline(orchestrator: PipelineOrchestrator, project_id: str, use
             await credit_refund_callback()
 
         if user:
+            await notify_pipeline_outcome(
+                user["user_id"], project_id, success=False, refunded=credit_refund_callback is not None
+            )
             from notifications.service import NotificationService
             notifier = NotificationService()
             await notifier.notify_pipeline_complete(

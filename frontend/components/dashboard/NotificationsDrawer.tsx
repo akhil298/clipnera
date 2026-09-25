@@ -4,6 +4,7 @@ import {
   X,
   Bell,
   CheckCircle2,
+  AlertTriangle,
   CalendarDays,
   Flame,
   Zap,
@@ -68,6 +69,9 @@ export const NotificationsDrawer: React.FC<NotificationsDrawerProps> = ({
                   <div className="flex items-center gap-2">
                     {notif.type === 'render_complete' && (
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    )}
+                    {notif.type === 'render_failed' && (
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
                     )}
                     {notif.type === 'scheduled_post' && (
                       <CalendarDays className="w-3.5 h-3.5 text-sky-400" />

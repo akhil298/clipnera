@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 from enum import Enum
 
-from notifications.service import NotificationType
+from notifications.model import NotificationKind
 
 
 class NotificationChannel(str, Enum):
@@ -36,3 +37,19 @@ class NotificationResponse(BaseModel):
     id: str
     channel: NotificationChannel
     status: str = "sent"
+
+
+class InAppNotificationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    kind: NotificationKind
+    title: str
+    message: str
+    project_id: Optional[str] = None
+    read_at: Optional[datetime] = None
+    created_at: datetime
+
+
+class InAppNotificationListResponse(BaseModel):
+    notifications: list[InAppNotificationResponse]
