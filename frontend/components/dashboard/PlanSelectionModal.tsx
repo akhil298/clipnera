@@ -9,6 +9,7 @@ import {
   type PlanOfferResponse,
 } from '@/lib/api';
 import { isPaidPlan, useEntitlements } from '@/hooks/useEntitlements';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { BILLING_PERIOD_LABELS, formatAmount } from '@/lib/utils/payments';
 import { ModalSkeleton } from '@/components/skeletons';
 
@@ -34,7 +35,7 @@ const limitLabel = (limit: number | null, noun: string) =>
   limit === null ? `Unlimited ${noun}` : `${limit} ${noun} a day`;
 
 /** The comparison rows for a plan, all derived from the server's plan rules. */
-function comparisonRows(c: PlanCapabilities): { label: string; included: boolean }[] {
+function comparisonRows(c: PlanCapabilities, social: boolean): { label: string; included: boolean }[] {
   return [
     { label: `${c.credit_minutes} AI minutes every 30 days`, included: true },
     { label: `Videos up to ${Math.round(c.max_upload_duration_seconds / 60)} min`, included: true },
@@ -53,11 +54,20 @@ function comparisonRows(c: PlanCapabilities): { label: string; included: boolean
     { label: 'Add team members', included: c.team_members },
     { label: 'Depth captions', included: c.depth_captions },
     { label: 'Batch processing', included: c.batch_processing },
+    ...(social
+      ? [
+          { label: `${c.social_max_accounts} connected social account${c.social_max_accounts === 1 ? '' : 's'}`, included: true },
+          { label: `${c.social_posts_per_day} social posts a day`, included: true },
+          { label: 'Schedule social posts', included: c.social_scheduling },
+          { label: 'Publish to X', included: c.social_platforms.includes('x') },
+        ]
+      : []),
   ];
 }
 
 export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, upgradeReason }: PlanSelectionModalProps) {
   const { entitlements } = useEntitlements();
+  const { flags } = useFeatureFlags();
   const [plans, setPlans] = useState<PlanOfferResponse[]>([]);
   const [period, setPeriod] = useState<BillingPeriod>('monthly');
   const [loading, setLoading] = useState(true);
@@ -179,7 +189,7 @@ export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, upgradeRea
                           {price && <span className="text-xs text-neutral-400">{PERIOD_SUFFIX[period]}</span>}
                         </div>
                         <ul className="space-y-2 text-xs">
-                          {comparisonRows(plan.capabilities).map((row) => (
+                          {comparisonRows(plan.capabilities, flags.social_publishing).map((row) => (
                             <li
                               key={row.label}
                               className={`flex items-center gap-2 ${row.included ? 'text-neutral-300' : 'text-neutral-600'}`}

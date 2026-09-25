@@ -273,19 +273,6 @@ export interface VideoProject {
   pipelineSteps?: PipelineStep[];
 }
 
-export interface ScheduledPost {
-  id: string;
-  clipId: string;
-  clipTitle: string;
-  platform: 'tiktok' | 'instagram' | 'youtube' | 'x';
-  scheduledTime: string;
-  status: 'scheduled' | 'published' | 'failed';
-  hookSelected: string;
-  hashtags: string[];
-  predictedViews: string;
-  viralityScore: number;
-}
-
 export interface AnalyticsMetric {
   views: number;
   likes: number;

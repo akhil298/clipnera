@@ -1,7 +1,6 @@
 ﻿"use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  CalendarDays,
   Clock,
   Sparkles,
   TrendingUp,
@@ -19,8 +18,11 @@ import {
   Flame,
   Smartphone
 } from 'lucide-react';
-import { ViralClip, ScheduledPost } from '@/lib/types';
-import confetti from 'canvas-confetti';
+import { ViralClip } from '@/lib/types';
+import { socialApi, type SocialPostResponse } from '@/lib/api';
+import { DEFAULT_TIMEZONE } from '@/lib/utils/timezones';
+import { PublishComposer } from '@/components/social/PublishComposer';
+import { ScheduledPostsQueue } from '@/components/social/ScheduledPostsQueue';
 
 interface SocialSchedulerViewProps {
   clips?: ViralClip[];
@@ -34,9 +36,9 @@ export const SocialSchedulerView: React.FC<SocialSchedulerViewProps> = ({
   onSelectClip,
 }) => {
   const fallbackClip = selectedClip || clips?.[0];
-  const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([]);
+  const [posts, setPosts] = useState<SocialPostResponse[] | null>(null);
   const [activeClip, setActiveClip] = useState<ViralClip | undefined>(fallbackClip);
-  const [selectedTimezone, setSelectedTimezone] = useState('America/New_York (EST)');
+  const [selectedTimezone, setSelectedTimezone] = useState(DEFAULT_TIMEZONE);
   const [selectedPlatform, setSelectedPlatform] = useState<'tiktok' | 'instagram' | 'youtube' | 'x'>('tiktok');
   const [isGeneratingHooks, setIsGeneratingHooks] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
@@ -153,28 +155,22 @@ export const SocialSchedulerView: React.FC<SocialSchedulerViewProps> = ({
     setIsGeneratingHooks(false);
   };
 
-  const handleSchedulePost = () => {
-    if (!activeClip) return;
-    const timing = PLATFORM_TIMINGS.find((p) => p.platform === selectedPlatform);
-    const newPost: ScheduledPost = {
-      id: `sch-${Date.now()}`,
-      clipId: activeClip.id,
-      clipTitle: activeClip.title,
-      platform: selectedPlatform,
-      scheduledTime: `Tomorrow, ${timing?.optimalWindow.split('-')[0].trim() || '7:00 PM'}`,
-      status: 'scheduled',
-      hookSelected: generatedHooks[0]?.text || activeClip.hook,
-      hashtags: timing?.hashtags || ['#viral', '#shorts'],
-      predictedViews: '150K - 380K',
-      viralityScore: activeClip.viralityScore,
-    };
-    setScheduledPosts([newPost, ...scheduledPosts]);
-    confetti({
-      particleCount: 80,
-      spread: 60,
-      origin: { y: 0.6 },
-    });
-  };
+  const loadPosts = useCallback(async () => {
+    try {
+      setPosts((await socialApi.listPosts()).posts);
+    } catch {
+      setPosts((prev) => prev ?? []);
+    }
+  }, []);
+
+  // Refresh while anything is still on its way out, so statuses and links appear on their own.
+  const inFlight = posts?.some((p) => p.status === 'publishing' || p.status === 'scheduled') ?? false;
+  useEffect(() => {
+    void loadPosts();
+    if (!inFlight) return;
+    const timer = window.setInterval(() => void loadPosts(), 15000);
+    return () => window.clearInterval(timer);
+  }, [loadPosts, inFlight]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -210,12 +206,12 @@ export const SocialSchedulerView: React.FC<SocialSchedulerViewProps> = ({
               onChange={(e) => setSelectedTimezone(e.target.value)}
               className="bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer"
             >
-              <option value="America/New_York (EST)">Eastern Time (EST / US)</option>
-              <option value="America/Los_Angeles (PST)">Pacific Time (PST / US)</option>
-              <option value="Europe/London (GMT)">London / GMT</option>
-              <option value="Europe/Berlin (CET)">Central European (CET)</option>
-              <option value="Asia/Singapore (SGT)">Singapore / SGT</option>
-              <option value="Asia/Kolkata (IST)">India / IST</option>
+              <option value="America/New_York">Eastern Time (EST / US)</option>
+              <option value="America/Los_Angeles">Pacific Time (PST / US)</option>
+              <option value="Europe/London">London / GMT</option>
+              <option value="Europe/Berlin">Central European (CET)</option>
+              <option value="Asia/Singapore">Singapore / SGT</option>
+              <option value="Asia/Kolkata">India / IST</option>
             </select>
           </div>
         </div>
@@ -381,78 +377,19 @@ export const SocialSchedulerView: React.FC<SocialSchedulerViewProps> = ({
               </div>
             </div>
 
-            {/* Submit Schedule Button */}
-            <button
-              onClick={handleSchedulePost}
-              className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs shadow-md shadow-amber-500/15 active:scale-95 transition-all flex items-center justify-center gap-2"
-            >
-              <CalendarDays className="w-4 h-4 stroke-[2.5]" />
-              <span>
-                Schedule to {PLATFORM_TIMINGS.find((p) => p.platform === selectedPlatform)?.name}
-              </span>
-            </button>
+            {/* Publish / Schedule to connected accounts */}
+            <PublishComposer
+              clip={activeClip}
+              baseCaption={customCaption}
+              timeZone={selectedTimezone}
+              onPublished={loadPosts}
+            />
           </div>
         </div>
 
         {/* Right: Scheduled Posts Timeline Queue */}
         <div className="lg:col-span-5 space-y-4">
-          <div className="p-5 rounded-xl bg-neutral-900/90 border border-neutral-800 space-y-4 shadow-lg">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
-                <CalendarDays className="w-4 h-4 text-amber-400" />
-                <span>Scheduled Content Queue</span>
-              </h3>
-              <span className="text-xs font-mono text-neutral-400">
-                {scheduledPosts.length} posts
-              </span>
-            </div>
-
-            {/* List of Scheduled Posts */}
-            <div className="space-y-3">
-              {scheduledPosts.map((post) => (
-                <div
-                  key={post.id}
-                  className="p-3.5 rounded-lg bg-neutral-950 border border-neutral-800 space-y-2 hover:border-neutral-700 transition-all"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-neutral-800 text-white">
-                        {post.platform}
-                      </span>
-                      <span className="text-xs font-mono text-amber-400 font-bold">
-                        ⚡ {post.viralityScore} Score
-                      </span>
-                    </div>
-
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                        post.status === 'published'
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}
-                    >
-                      {post.status === 'published' ? 'Published' : 'Auto-Scheduled'}
-                    </span>
-                  </div>
-
-                  <h4 className="text-xs font-bold text-white line-clamp-1">
-                    {post.clipTitle}
-                  </h4>
-
-                  <p className="text-[11px] text-neutral-400 italic line-clamp-2">
-                    "{post.hookSelected}"
-                  </p>
-
-                  <div className="flex items-center justify-between text-[10px] text-neutral-500 pt-1 border-t border-neutral-900 font-mono">
-                    <span className="text-neutral-300">{post.scheduledTime}</span>
-                    <span className="text-emerald-400 font-bold">
-                      Est. Views: {post.predictedViews}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <ScheduledPostsQueue posts={posts} timeZone={selectedTimezone} onChanged={loadPosts} />
         </div>
       </div>
     </div>
