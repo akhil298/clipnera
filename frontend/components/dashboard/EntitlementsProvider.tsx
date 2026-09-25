@@ -13,6 +13,8 @@ import {
   FREE_TIER_FALLBACK,
 } from '@/hooks/useEntitlements';
 
+const PENDING_PAYMENT_POLL_MS = 30_000;
+
 interface EntitlementsProviderProps {
   children: React.ReactNode;
   /** Whether the user is signed in. Entitlements are only fetched when they are. */
@@ -61,6 +63,24 @@ export function EntitlementsProvider({
       cancelled = true;
     };
   }, [load, refreshKey]);
+
+  // A plan can change outside this tab: an admin approving a UPI payment, or a
+  // purchase in another tab. Refetch when the tab comes back into view, and
+  // poll while a payment awaits approval, so the upgrade shows without a reload.
+  useEffect(() => {
+    if (!isAuthed) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    const poll = entitlements.has_pending_payment
+      ? window.setInterval(() => void load(), PENDING_PAYMENT_POLL_MS)
+      : undefined;
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(poll);
+    };
+  }, [isAuthed, load, entitlements.has_pending_payment]);
 
   // Any request refused for the plan opens the upsell, wherever it was made,
   // and refetches so limits and lock states catch up with the server.

@@ -213,7 +213,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <h4 className="text-sm font-bold text-white">{user.name}</h4>
               <p className="text-xs text-neutral-400">{user.email}</p>
               <span className="inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                Clipnera {user.plan.toUpperCase()} Member
+                Clipnera {entitlements.plan.toUpperCase()} Member
               </span>
             </div>
           </div>
