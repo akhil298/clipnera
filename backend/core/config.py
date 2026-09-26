@@ -49,6 +49,9 @@ class BaseConfig(BaseSettings):
     # 0 disables the cap.
     AI_BUDGET_PER_SOURCE_MINUTE_PRO: float = 0.015
     AI_BUDGET_PER_SOURCE_MINUTE_FREE: float = 0.002
+    # Credits charged per minute of source video, rounded up per video with a
+    # minimum of one credit.
+    CREDITS_PER_VIDEO_MINUTE: float = 2.0
     XAI_API_KEY: str = ""
     XAI_MODEL: str = "grok-2-mini"
     GROQ_API_KEY: str = ""

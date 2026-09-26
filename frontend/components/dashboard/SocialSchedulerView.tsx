@@ -23,6 +23,16 @@ import { socialApi, type SocialPostResponse } from '@/lib/api';
 import { DEFAULT_TIMEZONE } from '@/lib/utils/timezones';
 import { PublishComposer } from '@/components/social/PublishComposer';
 import { ScheduledPostsQueue } from '@/components/social/ScheduledPostsQueue';
+import { Select, SelectOption } from '@/components/ui/Select';
+
+const TIMEZONE_OPTIONS: SelectOption<string>[] = [
+  { value: 'America/New_York', label: 'Eastern Time (EST / US)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (PST / US)' },
+  { value: 'Europe/London', label: 'London / GMT' },
+  { value: 'Europe/Berlin', label: 'Central European (CET)' },
+  { value: 'Asia/Singapore', label: 'Singapore / SGT' },
+  { value: 'Asia/Kolkata', label: 'India / IST' },
+];
 
 interface SocialSchedulerViewProps {
   clips?: ViralClip[];
@@ -201,18 +211,13 @@ export const SocialSchedulerView: React.FC<SocialSchedulerViewProps> = ({
             <span className="text-[10px] text-neutral-400 block uppercase font-bold">
               Audience Timezone:
             </span>
-            <select
+            <Select
               value={selectedTimezone}
-              onChange={(e) => setSelectedTimezone(e.target.value)}
-              className="bg-transparent text-xs font-semibold text-white focus:outline-none cursor-pointer"
-            >
-              <option value="America/New_York">Eastern Time (EST / US)</option>
-              <option value="America/Los_Angeles">Pacific Time (PST / US)</option>
-              <option value="Europe/London">London / GMT</option>
-              <option value="Europe/Berlin">Central European (CET)</option>
-              <option value="Asia/Singapore">Singapore / SGT</option>
-              <option value="Asia/Kolkata">India / IST</option>
-            </select>
+              onChange={setSelectedTimezone}
+              options={TIMEZONE_OPTIONS}
+              aria-label="Audience timezone"
+              className="bg-transparent text-xs font-semibold text-white focus:outline-none"
+            />
           </div>
         </div>
       </div>
@@ -291,23 +296,22 @@ export const SocialSchedulerView: React.FC<SocialSchedulerViewProps> = ({
               <label className="text-xs text-neutral-400 block mb-1 font-medium">
                 Selected Clip for Scheduling:
               </label>
-              <select
+              <Select
                 value={activeClip?.id}
-                onChange={(e) => {
-                  const found = clips.find((c) => c.id === e.target.value);
+                onChange={(id) => {
+                  const found = clips.find((c) => c.id === id);
                   if (found) {
                     setActiveClip(found);
                     onSelectClip?.(found);
                   }
                 }}
+                options={clips.map((c) => ({
+                  value: c.id,
+                  label: `${c.title} (${c.viralityScore}/100 Score • ${c.duration}s)`,
+                }))}
+                aria-label="Clip to schedule"
                 className="w-full p-2.5 rounded-lg bg-neutral-950 border border-neutral-800 text-xs text-white focus:outline-none focus:border-amber-400 font-medium"
-              >
-                {clips.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.title} ({c.viralityScore}/100 Score • {c.duration}s)
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             {/* AI Generated Hook Cards */}

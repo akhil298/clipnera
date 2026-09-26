@@ -25,7 +25,7 @@
 - **Emoji annotations**: Curated keyword→emoji map + POWER_WORDS set, rate-limited (max 8/clip, min 3-word gap, 8-word repeat gap)
 - **Hook titles**: AI-written 3-9 word titles burned into top safe area (~4s, translucent pill box)
 - **SSE progress + email notifications**
-- **Credit billing**: credit_minutes per plan, CREDIT_COST_PER_2_MINUTES=1
+- **Credit billing**: credit_minutes per plan, CREDIT_COST_PER_2_MINUTES=4
 
 ### ClipForge (Qt+Remotion desktop)
 - **ASS karaoke captions**: Word-by-word highlighting via ASS Dialogue events

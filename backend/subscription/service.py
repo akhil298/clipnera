@@ -35,13 +35,14 @@ from subscription.schema import (
     PlansResponse,
     UserCreditsResponse,
 )
+from core.config import get_settings
 from core.exceptions import CustomException
 from core.logging_config import get_logger
 
 log = get_logger(__name__)
 
 
-CREDIT_COST_PER_2_MINUTES = 1
+CREDIT_COST_PER_2_MINUTES = 4
 
 # Ledger reference_type for credits an admin added by hand.
 ADMIN_TOPUP_REFERENCE = "admin_topup"
@@ -548,7 +549,8 @@ class SubscriptionService:
         return [topup_response(e) for e in await self.list_admin_topups(query, limit, offset)]
 
     def calculate_video_credit_cost(self, duration_seconds: int) -> int:
-        return max(1, math.ceil(duration_seconds / 120))
+        per_minute = get_settings().CREDITS_PER_VIDEO_MINUTE
+        return max(1, math.ceil(duration_seconds / 60 * per_minute))
 
 
 class InsufficientCreditsError(Exception):

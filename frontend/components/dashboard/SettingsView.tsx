@@ -29,6 +29,12 @@ import { formatDate } from '@/lib/utils/dates';
 import { PaymentModal } from './PaymentModal';
 import { MyPaymentsCard } from '@/components/payments/MyPaymentsCard';
 import { ConnectedPlatformsPanel, useSocialTabVisible } from '@/components/social/ConnectedPlatformsPanel';
+import { Select, SelectOption } from '@/components/ui/Select';
+
+const MEMBER_ROLE_OPTIONS: SelectOption<AssignableWorkspaceRole>[] = [
+  { value: 'member', label: 'Member' },
+  { value: 'viewer', label: 'Viewer' },
+];
 
 interface SettingsViewProps {
   user: UserProfile;
@@ -398,14 +404,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </div>
                   <div>
                     <label className="text-xs text-neutral-400 block mb-1">Role</label>
-                    <select
+                    <Select
                       value={newMemberRole}
-                      onChange={(e) => setNewMemberRole(e.target.value as AssignableWorkspaceRole)}
+                      onChange={setNewMemberRole}
+                      options={MEMBER_ROLE_OPTIONS}
                       className="w-full p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-white focus:outline-none focus:border-amber-400"
-                    >
-                      <option value="member">Member</option>
-                      <option value="viewer">Viewer</option>
-                    </select>
+                    />
                   </div>
                 </div>
 

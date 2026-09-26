@@ -30,6 +30,19 @@ import { VideoProject, ViralClip } from '@/lib/types';
 import { analyzeVideoSource } from '@/lib/utils/urlParser';
 import { StatsSkeleton } from '@/components/skeletons';
 import confetti from 'canvas-confetti';
+import { Select, SelectOption } from '@/components/ui/Select';
+
+type FolderCategory = 'YouTube Ingest' | 'Podcast' | 'Keynote' | 'Webinar' | 'Interview' | 'Masterclass' | 'Upload' | 'AI Story' | 'Custom';
+
+const FOLDER_CATEGORY_OPTIONS: SelectOption<FolderCategory>[] = [
+  { value: 'YouTube Ingest', label: 'YouTube Ingest' },
+  { value: 'Podcast', label: 'Podcast' },
+  { value: 'Keynote', label: 'Keynote Speech' },
+  { value: 'Webinar', label: 'Webinar' },
+  { value: 'Interview', label: 'Interview' },
+  { value: 'Masterclass', label: 'Masterclass' },
+  { value: 'Upload', label: 'Custom Upload' },
+];
 
 interface ProjectFoldersViewProps {
   projects: VideoProject[];
@@ -62,7 +75,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
   const [renameValue, setRenameValue] = useState('');
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  const [newFolderCategory, setNewFolderCategory] = useState<'YouTube Ingest' | 'Podcast' | 'Keynote' | 'Webinar' | 'Interview' | 'Masterclass' | 'Upload' | 'AI Story' | 'Custom'>('YouTube Ingest');
+  const [newFolderCategory, setNewFolderCategory] = useState<FolderCategory>('YouTube Ingest');
   const [newFolderColor, setNewFolderColor] = useState<'amber' | 'sky' | 'emerald' | 'rose' | 'purple' | 'indigo'>('amber');
 
   const handleCreateCustomFolder = (e: React.FormEvent) => {
@@ -708,19 +721,12 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                   <label className="text-xs font-semibold text-neutral-300 block mb-1.5">
                     Category:
                   </label>
-                  <select
+                  <Select
                     value={newFolderCategory}
-                    onChange={(e) => setNewFolderCategory(e.target.value as any)}
+                    onChange={setNewFolderCategory}
+                    options={FOLDER_CATEGORY_OPTIONS}
                     className="w-full px-3 py-2.5 rounded-xl bg-neutral-950 border border-neutral-700 text-xs text-white focus:outline-none focus:border-amber-400"
-                  >
-                    <option value="YouTube Ingest">YouTube Ingest</option>
-                    <option value="Podcast">Podcast</option>
-                    <option value="Keynote">Keynote Speech</option>
-                    <option value="Webinar">Webinar</option>
-                    <option value="Interview">Interview</option>
-                    <option value="Masterclass">Masterclass</option>
-                    <option value="Upload">Custom Upload</option>
-                  </select>
+                  />
                 </div>
 
                 <div>

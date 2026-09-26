@@ -20,6 +20,14 @@ import { FEATURE_LABELS, usePlan } from '@/hooks/usePlan';
 import { ProLockBadge } from './ProLockBadge';
 import { BrandKitSkeleton } from '@/components/skeletons';
 import { CAPTION_PRESETS } from '@/lib/data/captionPresets';
+import { Select, SelectOption } from '@/components/ui/Select';
+
+const LOGO_POSITION_OPTIONS: SelectOption<BrandKit['logoPosition']>[] = [
+  { value: 'top_right', label: 'Top Right' },
+  { value: 'top_left', label: 'Top Left' },
+  { value: 'bottom_right', label: 'Bottom Right' },
+  { value: 'bottom_left', label: 'Bottom Left' },
+];
 
 const DEFAULT_BRAND_KIT: BrandKit = {
   id: '',
@@ -196,21 +204,12 @@ export const BrandKitView: React.FC = () => {
 
               <div>
                 <label className="text-xs text-neutral-400 block mb-1">Watermark Position:</label>
-                <select
+                <Select
                   value={brandKit.logoPosition}
-                  onChange={(e) =>
-                    setBrandKit({
-                      ...brandKit,
-                      logoPosition: e.target.value as BrandKit['logoPosition'],
-                    })
-                  }
-                  className="w-full p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-white focus:outline-none focus:border-amber-400 font-semibold cursor-pointer"
-                >
-                  <option value="top_right">Top Right</option>
-                  <option value="top_left">Top Left</option>
-                  <option value="bottom_right">Bottom Right</option>
-                  <option value="bottom_left">Bottom Left</option>
-                </select>
+                  onChange={(logoPosition) => setBrandKit({ ...brandKit, logoPosition })}
+                  options={LOGO_POSITION_OPTIONS}
+                  className="w-full p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-white focus:outline-none focus:border-amber-400 font-semibold"
+                />
               </div>
             </div>
 

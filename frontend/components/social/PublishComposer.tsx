@@ -15,6 +15,7 @@ import { utcToZonedLocal, zonedLocalToUtc } from '@/lib/utils/timezones';
 import { ProLockBadge } from '@/components/dashboard/ProLockBadge';
 import { usePlan } from '@/hooks/usePlan';
 import { PLATFORM_STYLE, SOCIAL_SETTINGS_PATH } from './platforms';
+import { Select, SelectOption } from '@/components/ui/Select';
 
 type Options = Record<string, unknown>;
 
@@ -24,6 +25,12 @@ const TIKTOK_PRIVACY_LABELS: Record<string, string> = {
   FOLLOWER_OF_CREATOR: 'Followers',
   SELF_ONLY: 'Only me',
 };
+
+const YOUTUBE_PRIVACY_OPTIONS: SelectOption<string>[] = [
+  { value: 'public', label: 'Public' },
+  { value: 'unlisted', label: 'Unlisted' },
+  { value: 'private', label: 'Private' },
+];
 
 function defaultOptions(platform: SocialPlatform, clip: ViralClip | undefined): Options {
   switch (platform) {
@@ -291,11 +298,13 @@ function PlatformOptions({
           className="w-full px-2 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-white focus:outline-none focus:border-amber-400"
         />
         <div className="flex flex-wrap items-center gap-3">
-          <select value={String(options.privacy_status)} onChange={(e) => onChange('privacy_status', e.target.value)} className={select}>
-            <option value="public">Public</option>
-            <option value="unlisted">Unlisted</option>
-            <option value="private">Private</option>
-          </select>
+          <Select
+            value={String(options.privacy_status)}
+            onChange={(value) => onChange('privacy_status', value)}
+            options={YOUTUBE_PRIVACY_OPTIONS}
+            aria-label="YouTube privacy"
+            className={select}
+          />
           <span className="text-[11px] text-neutral-400">Made for kids?</span>
           {[true, false].map((value) => (
             <label key={String(value)} className={check}>
@@ -322,20 +331,18 @@ function PlatformOptions({
         <p className="text-[11px] text-neutral-400">
           Posting as <b className="text-neutral-200">{creator.nickname || creator.username}</b>
         </p>
-        <select
+        <Select
           value={String(options.privacy_level ?? '')}
-          onChange={(e) => onChange('privacy_level', e.target.value)}
+          onChange={(value) => onChange('privacy_level', value)}
+          options={creator.privacy_level_options.map((level) => ({
+            value: level,
+            label: TIKTOK_PRIVACY_LABELS[level] ?? level,
+            disabled: branded && level === 'SELF_ONLY',
+          }))}
+          placeholder="Who can view this video?"
+          aria-label="TikTok privacy"
           className={select}
-        >
-          <option value="" disabled>
-            Who can view this video?
-          </option>
-          {creator.privacy_level_options.map((level) => (
-            <option key={level} value={level} disabled={branded && level === 'SELF_ONLY'}>
-              {TIKTOK_PRIVACY_LABELS[level] ?? level}
-            </option>
-          ))}
-        </select>
+        />
         <div className="flex flex-wrap gap-3">
           {(
             [

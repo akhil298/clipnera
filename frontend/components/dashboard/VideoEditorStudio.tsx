@@ -58,6 +58,15 @@ import confetti from 'canvas-confetti';
 import { AudioEnhancerPanel } from './AudioEnhancerPanel';
 import { HookTransitionPanel } from './HookTransitionPanel';
 import { brandKitApi, clipApi } from '@/lib/api';
+import { Select, SelectOption } from '@/components/ui/Select';
+
+const PLAYBACK_SPEED_OPTIONS: SelectOption<number>[] = [
+  { value: 0.75, label: '0.75x' },
+  { value: 1, label: '1.0x' },
+  { value: 1.25, label: '1.25x' },
+  { value: 1.5, label: '1.5x' },
+  { value: 2, label: '2.0x' },
+];
 
 interface VideoEditorStudioProps {
   clip?: ViralClip;
@@ -1120,17 +1129,13 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
 
               {/* Speed & Audio controls */}
               <div className="flex items-center gap-2">
-                <select
+                <Select
                   value={playbackSpeed}
-                  onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+                  onChange={setPlaybackSpeed}
+                  options={PLAYBACK_SPEED_OPTIONS}
+                  aria-label="Playback speed"
                   className="px-2 py-1 rounded-lg bg-neutral-950 border border-neutral-800 text-xs text-neutral-300 font-mono"
-                >
-                  <option value={0.75}>0.75x</option>
-                  <option value={1}>1.0x</option>
-                  <option value={1.25}>1.25x</option>
-                  <option value={1.5}>1.5x</option>
-                  <option value={2}>2.0x</option>
-                </select>
+                />
 
                 <button
                   onClick={() => setIsMuted(!isMuted)}

@@ -6,6 +6,7 @@ import { hookTransitionApi } from '@/lib/api';
 import { useHookTransitionCatalog } from '@/hooks/useHookTransitionCatalog';
 import { FEATURE_LABELS, usePlan } from '@/hooks/usePlan';
 import { ProLockBadge } from './ProLockBadge';
+import { Select } from '@/components/ui/Select';
 import type {
   HookTransitionApplied,
   HookTransitionCatalog,
@@ -318,20 +319,19 @@ const MixBuilder: React.FC<{
   return (
     <div className="space-y-4">
       <Field label="Start from">
-        <select
+        <Select
           value={config.preset_id ?? ''}
-          onChange={(event) => onChange({ mode: 'custom', preset_id: event.target.value || null, source: event.target.value ? null : base.source })}
+          onChange={(presetId) => onChange({ mode: 'custom', preset_id: presetId || null, source: presetId ? null : base.source })}
+          options={[
+            { value: '', label: 'Blank mix' },
+            ...catalog.groups.flatMap((group) =>
+              catalog.presets
+                .filter((preset) => preset.group === group)
+                .map((preset) => ({ value: preset.id, label: preset.name, group })),
+            ),
+          ]}
           className="w-full px-3 py-2 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-white"
-        >
-          <option value="">Blank mix</option>
-          {catalog.groups.map((group) => (
-            <optgroup key={group} label={group}>
-              {catalog.presets.filter((preset) => preset.group === group).map((preset) => (
-                <option key={preset.id} value={preset.id}>{preset.name}</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+        />
       </Field>
 
       <Field label="Gap footage">
@@ -361,22 +361,20 @@ const MixBuilder: React.FC<{
 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Bridge text">
-          <select
+          <Select
             value={value.textChoice}
-            onChange={(event) => {
-              const choice = event.target.value;
+            onChange={(choice) => {
               if (choice === 'custom') set({ custom_text: config.custom_text ?? '' });
               else set({ text_id: choice, custom_text: null });
             }}
+            options={[
+              { value: 'auto', label: 'Auto — match the hook' },
+              { value: 'none', label: 'No text' },
+              { value: 'custom', label: 'Write my own…' },
+              ...catalog.phrases.map((phrase) => ({ value: phrase.id, label: phrase.text })),
+            ]}
             className="w-full px-3 py-2 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-white"
-          >
-            <option value="auto">Auto — match the hook</option>
-            <option value="none">No text</option>
-            <option value="custom">Write my own…</option>
-            {catalog.phrases.map((phrase) => (
-              <option key={phrase.id} value={phrase.id}>{phrase.text}</option>
-            ))}
-          </select>
+          />
         </Field>
         <Field label="Text style">
           <PartSelect parts={catalog.text_styles} value={value.textStyle} onChange={(id) => set({ text_style: id })} />
@@ -420,15 +418,12 @@ const PartSelect: React.FC<{
   value: string;
   onChange: (id: string) => void;
 }> = ({ parts, value, onChange }) => (
-  <select
+  <Select
     value={value}
-    onChange={(event) => onChange(event.target.value)}
+    onChange={onChange}
+    options={parts.map((part) => ({ value: part.id, label: part.name, title: part.description }))}
     className="w-full px-3 py-2 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-white"
-  >
-    {parts.map((part) => (
-      <option key={part.id} value={part.id} title={part.description}>{part.name}</option>
-    ))}
-  </select>
+  />
 );
 
 const ChipGrid: React.FC<{

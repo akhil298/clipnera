@@ -37,8 +37,22 @@ import { ClipCard } from './ClipCard';
 import { PipelineStepIndicator } from './PipelineStepIndicator';
 import { AudioBeforeAfter } from './AudioBeforeAfter';
 import confetti from 'canvas-confetti';
+import { Select, SelectOption } from '@/components/ui/Select';
 
 type SortMode = 'score' | 'timeline' | 'duration';
+
+const SORT_OPTIONS: SelectOption<SortMode>[] = [
+  { value: 'score', label: 'Highest score' },
+  { value: 'timeline', label: 'Video order' },
+  { value: 'duration', label: 'Longest first' },
+];
+
+const SCORE_FILTER_OPTIONS: SelectOption<number>[] = [
+  { value: 0, label: 'All scores' },
+  { value: 70, label: 'Standard (70+)' },
+  { value: 85, label: 'High (85+)' },
+  { value: 90, label: 'Ultra viral (90+)' },
+];
 
 interface ClipGeneratorViewProps {
   project: VideoProject;
@@ -451,31 +465,24 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5">
               <ArrowDownWideNarrow className="h-3.5 w-3.5 text-neutral-400" />
-              <select
+              <Select
                 value={sortMode}
-                onChange={(e) => setSortMode(e.target.value as SortMode)}
+                onChange={setSortMode}
+                options={SORT_OPTIONS}
                 className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-xs text-white focus:border-amber-400 focus:outline-none"
                 aria-label="Sort clips"
-              >
-                <option value="score">Highest score</option>
-                <option value="timeline">Video order</option>
-                <option value="duration">Longest first</option>
-              </select>
+              />
             </div>
 
             <div className="flex items-center gap-1.5">
               <Filter className="h-3.5 w-3.5 text-neutral-400" />
-              <select
+              <Select
                 value={filterScore}
-                onChange={(e) => setFilterScore(Number(e.target.value))}
+                onChange={setFilterScore}
+                options={SCORE_FILTER_OPTIONS}
                 className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-xs text-white focus:border-amber-400 focus:outline-none"
                 aria-label="Filter clips by score"
-              >
-                <option value={0}>All scores</option>
-                <option value={70}>Standard (70+)</option>
-                <option value={85}>High (85+)</option>
-                <option value={90}>Ultra viral (90+)</option>
-              </select>
+              />
             </div>
           </div>
         </div>
