@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import { AppNotification } from '@/lib/types';
 
@@ -17,16 +17,35 @@ const Snackbar: React.FC<{
   onDismiss: (id: string) => void;
   onView: (notification: AppNotification) => void;
 }> = ({ item, onDismiss, onView }) => {
+  const [isHovered, setIsHovered] = useState(false);
+  const [isTabVisible, setIsTabVisible] = useState(() => document.visibilityState === 'visible');
+  const remainingMs = useRef(AUTO_DISMISS_MS);
+
   useEffect(() => {
-    const timeoutId = setTimeout(() => onDismiss(item.id), AUTO_DISMISS_MS);
-    return () => clearTimeout(timeoutId);
-  }, [item.id, onDismiss]);
+    const onVisibilityChange = () => setIsTabVisible(document.visibilityState === 'visible');
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, []);
+
+  // Counts down only while the tab is visible and the pointer is off the toast,
+  // so one that lands while the user is on another tab waits for them.
+  useEffect(() => {
+    if (!isTabVisible || isHovered) return;
+    const startedAt = Date.now();
+    const timeoutId = setTimeout(() => onDismiss(item.id), remainingMs.current);
+    return () => {
+      clearTimeout(timeoutId);
+      remainingMs.current -= Date.now() - startedAt;
+    };
+  }, [isTabVisible, isHovered, item.id, onDismiss]);
 
   const failed = item.type === 'render_failed';
 
   return (
     <div
       role="status"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       className={`pointer-events-auto w-full sm:w-96 p-3.5 rounded-2xl bg-neutral-900 border shadow-2xl flex items-start gap-3 animate-in slide-in-from-bottom-4 fade-in duration-300 ${
         failed ? 'border-rose-500/40' : 'border-emerald-500/40'
       }`}

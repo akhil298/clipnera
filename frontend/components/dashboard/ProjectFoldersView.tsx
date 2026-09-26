@@ -592,21 +592,13 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                 </div>
 
                 {/* Folder Footer & Open Action */}
-                <div className="p-3.5 bg-neutral-950/60 border-t border-neutral-800/80 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                <div className="mt-auto p-3.5 bg-neutral-950/60 border-t border-neutral-800/80 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold whitespace-nowrap bg-amber-500/10 text-amber-300 border border-amber-500/20">
                       {project.processingStatus === 'processing'
                         ? `Processing ${progress}%`
                         : `Avg ${Math.round(project.clips.reduce((acc, c) => acc + c.viralityScore, 0) / (project.clips.length || 1))}/100`}
                     </span>
-                    {project.aiCostUsd != null && project.aiCostUsd > 0 && (
-                      <span
-                        className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-neutral-800/80 text-neutral-300 border border-neutral-700"
-                        title="AI spend on this video"
-                      >
-                        AI ${project.aiCostUsd < 0.01 ? project.aiCostUsd.toFixed(4) : project.aiCostUsd.toFixed(2)}
-                      </span>
-                    )}
                     {project.processingStatus === 'processing' && onCancelPipeline && (
                       <button
                         onClick={() => onCancelPipeline(project.id)}
@@ -616,13 +608,13 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                       </button>
                     )}
                     {isSelected && project.processingStatus !== 'processing' && (
-                      <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                      <span className="text-[10px] text-emerald-400 font-bold whitespace-nowrap flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3" /> Active
                       </span>
                     )}
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="ml-auto flex items-center gap-1.5 shrink-0">
                     <button
                       onClick={() => {
                         if (project.processingStatus === 'processing') return;
@@ -641,7 +633,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                         onOpenFolder(project);
                       }}
                       disabled={project.processingStatus === 'processing'}
-                      className={`px-3.5 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm active:scale-95 ${
+                      className={`px-3.5 py-1.5 rounded-lg font-bold text-xs whitespace-nowrap transition-all flex items-center gap-1.5 shadow-sm active:scale-95 ${
                         project.processingStatus === 'processing'
                           ? 'bg-neutral-700 text-neutral-500 cursor-not-allowed'
                           : 'bg-amber-500 hover:bg-amber-400 text-neutral-950'
