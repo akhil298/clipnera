@@ -116,7 +116,7 @@ class TestBurnCommand:
         assert cmd[cmd.index("-i") + 1] == "clip.mp4"
         graph = cmd[cmd.index("-filter_complex") + 1]
         assert graph.startswith("[0:v]ass=captions.ass")
-        assert "[base][1:v]overlay=" in graph
+        assert "[1:v]scale=" in graph and "[base][wm]overlay=" in graph
         assert cmd[cmd.index("-map") + 1] == "[v]"
         assert "0:a?" in cmd
 
@@ -128,6 +128,15 @@ class TestBurnCommand:
         graph = cmd[cmd.index("-filter_complex") + 1]
         assert graph.startswith("[0:v]null[vcat];[0:a]anull[acat];[vcat]ass=captions.ass")
         assert "[acat]" in cmd and "0:a?" not in cmd
+
+    def test_watermark_scales_with_the_frame(self) -> None:
+        """A fixed-size mark was easy to miss; it now tracks the short side."""
+        vertical = ";".join(burn_filter_args(["null"], True, frame_size=(1080, 1920)))
+        landscape = ";".join(burn_filter_args(["null"], True, frame_size=(1920, 1080)))
+        small = ";".join(burn_filter_args(["null"], True, frame_size=(540, 960)))
+        assert "[1:v]scale=281:-2[wm]" in vertical and "overlay=x=W-w-38:y=38" in vertical
+        assert "[1:v]scale=281:-2[wm]" in landscape
+        assert "[1:v]scale=140:-2[wm]" in small
 
     def test_missing_watermark_falls_back_to_plain_burn(self, tmp_path, monkeypatch) -> None:
         monkeypatch.setattr(ass_generator, "WATERMARK_PATH", tmp_path / "missing.png")

@@ -41,8 +41,17 @@ async def test_srt_time_format():
 @pytest.mark.asyncio
 async def test_color_to_ass():
     service = SubtitleStylingService()
-    assert service._color_to_ass("#FFFFFF") == "FFFFFFFF"
-    assert service._color_to_ass("#00FFCC") == "FFCCFF00"
+    # ASS alpha counts transparency: 00 is opaque, FF invisible.
+    assert service._color_to_ass("#FFFFFF") == "00FFFFFF"
+    assert service._color_to_ass("#00FFCC") == "00CCFF00"
+    assert service._color_to_ass("#FF000080") == "7F0000FF"
+
+
+def test_style_overrides_carry_the_editor_animation():
+    from subtitle_styling.service import _style_overrides
+
+    assert _style_overrides({"animation": "karaoke"})["animation"] == "karaoke"
+    assert "animation" not in _style_overrides({"animation": "spin"})
 
 
 def test_style_overrides_map_editor_config_onto_template_keys():

@@ -34,6 +34,7 @@ const DEFAULT_BRAND_KIT: BrandKit = {
   defaultPreset: 'hormozi',
   autoEmojis: true,
   outroCtaText: '',
+  isCustomized: false,
   createdAt: '',
   updatedAt: '',
 };
@@ -65,6 +66,7 @@ export const BrandKitView: React.FC = () => {
         defaultPreset: data.defaultPreset as BrandKit['defaultPreset'],
         autoEmojis: data.autoEmojis,
         outroCtaText: data.outroCtaText,
+        isCustomized: data.isCustomized,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
       });
@@ -115,6 +117,7 @@ export const BrandKitView: React.FC = () => {
         defaultPreset: data.defaultPreset as BrandKit['defaultPreset'],
         autoEmojis: data.autoEmojis,
         outroCtaText: data.outroCtaText,
+        isCustomized: data.isCustomized,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
       });

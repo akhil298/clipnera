@@ -18,6 +18,11 @@ DEFAULT_WIN_SPAN_RATIO = 1.75
 # any host instead of depending on what fontconfig happens to have installed.
 FONTS_DIR = Path(__file__).resolve().parent.parent / "static" / "fonts"
 WATERMARK_PATH = Path(__file__).resolve().parent.parent / "static" / "watermark.png"
+# Watermark width and corner inset as fractions of the frame's shorter side, so
+# it reads the same on every export size. A fixed 300px mark was easy to miss
+# on a 1080px-wide reel.
+WATERMARK_WIDTH_RATIO = 0.26
+WATERMARK_MARGIN_RATIO = 0.035
 
 
 def _escape_filter_value(value: str) -> str:
@@ -34,6 +39,7 @@ def burn_filter_args(
     video_filters: list[str],
     enable_watermark: bool,
     timeline: tuple[list[str], str, str] | None = None,
+    frame_size: tuple[int, int] | None = None,
 ) -> list[str]:
     """FFmpeg args applying ``video_filters`` to input 0, plus the watermark.
 
@@ -43,6 +49,7 @@ def burn_filter_args(
     watermark apply to its re-laid output instead of the raw input. The graph
     is labelled explicitly: chaining ``...,[1:v]overlay`` bound the watermark
     as the base layer, so the burned clip came out at the watermark's 300x60 size.
+    ``frame_size`` is the output ``(width, height)``; the watermark scales to it.
     """
     chain = ",".join(video_filters)
     if enable_watermark and not WATERMARK_PATH.exists():
@@ -56,7 +63,11 @@ def burn_filter_args(
     inputs: list[str] = []
     if enable_watermark:
         inputs = ["-i", str(WATERMARK_PATH)]
-        graph.append("[base][1:v]overlay=x=W-w-10:y=10[v]")
+        short_side = min(frame_size) if frame_size else 1080
+        width = round(short_side * WATERMARK_WIDTH_RATIO)
+        margin = round(short_side * WATERMARK_MARGIN_RATIO)
+        graph.append(f"[1:v]scale={width}:-2[wm]")
+        graph.append(f"[base][wm]overlay=x=W-w-{margin}:y={margin}[v]")
     else:
         graph.append("[base]null[v]")
     return [
@@ -377,11 +388,14 @@ class AssGenerator:
             w_end = float(word.get("end", 0))
             if w_end <= clip_start or w_start >= clip_end:
                 continue
-            words_in_clip.append({
+            entry = {
                 "text": str(word.get("text", "")).strip(),
                 "start": w_start,
                 "end": w_end,
-            })
+            }
+            if "highlighted" in word:
+                entry["highlighted"] = bool(word["highlighted"])
+            words_in_clip.append(entry)
 
         if not words_in_clip:
             return "\n".join(header_lines) + "\n"
@@ -394,6 +408,10 @@ class AssGenerator:
             enable_emoji=template.get("emoji", False),
             enable_emphasis=True,
         )
+        # Words highlighted in the editor's Transcript tab replace the automatic
+        # picks, so the export emphasises exactly what the user saw.
+        if any("highlighted" in w for w in words_in_clip):
+            emphasis_indices = {i for i, w in enumerate(words_in_clip) if w.get("highlighted")}
 
         cap_idx = 0
         for gi, group in enumerate(groups):
@@ -449,7 +467,10 @@ class AssGenerator:
                     f"Dialogue: 0,{ass_time(w_start_clip)},{ass_time(w_end_clip)}"
                     f",Caption,,0,0,0,,{anchor}{rendered}"
                 )
-                cap_idx += 1
+            # cap_idx is the index of each group's first word. Advancing it per
+            # word event moved emphasis and emoji one word further along on
+            # every line after a group's first.
+            cap_idx += len(group)
 
         return "\n".join(header_lines) + "\n" + "\n".join(lines) + "\n"
 

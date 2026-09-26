@@ -16,6 +16,7 @@ from clip_generation.hook import Hook, locate_hook, on_output_timeline
 from hook_transitions.resolver import ClipContext, TransitionSpec, hook_text_from, resolve_transition
 from clip_generation.model import ContentCategory, GeneratedClip, SocialPlatform, SOCIAL_PLATFORM_DEFAULTS
 from clip_generation.repository import ClipRepository
+from clip_generation.schema import ClipEditorSettings
 from hook_transitions.schema import HookTransitionConfig
 from subtitle_styling.model import SubtitleStyle
 from subtitle_styling.schema import SubtitleBurnRequest
@@ -283,10 +284,13 @@ class ClipService:
         from subtitle_styling.service import SubtitleStylingService
         styling = SubtitleStylingService()
 
-        if transcript_segments is None and clip.transcript:
-            transcript_segments = json.loads(clip.transcript)
+        if transcript_segments is None:
+            transcript_segments = self._loads(clip.transcript, [])
 
         async with clip_source(clip) as video_path:
+            # No words on record burned an empty caption track; transcribe the cut.
+            if not transcript_segments and not burn_request.get("subtitles"):
+                transcript_segments = await self._transcribe_clip_cut(clip, video_path, user_id)
             burned_path = await styling.burn_subtitles(
                 video_path=video_path,
                 clip_start=clip.start_time,
@@ -398,10 +402,9 @@ class ClipService:
         if not enable_emoji:
             caption_config["emojis_enabled"] = False
 
-        fallback_transcript: list[dict[str, Any]] = []
-        if burn_subtitles and not any(clip.transcript for clip in clips):
-            async with project_source(project) as source:
-                fallback_transcript = await self._transcribe_if_missing(project_id, source, progress_callback)
+        transcripts = {clip.id: self._edited_transcript(clip) for clip in clips}
+        # Clips with no words on record, as opposed to every word cut in the editor.
+        untranscribed = {clip.id for clip in clips if not self._loads(clip.transcript, [])}
 
         recuts = await self._recut_missing_ratios(project, clips, {ratio for _, ratio in targets}, progress_callback)
         exported_clips: list[dict] = []
@@ -417,6 +420,14 @@ class ClipService:
                     s3_key = f"social/{user_id}/{project_id}/{clip.id}_{platform.value}_{ratio.replace(':', 'x')}.mp4"
                     transition = self.hook_transition_for(clip, hook_transition)
                     async with self._export_cut(clip, ratio, recuts) as cut_path:
+                        # A clip stored with no words (its range was missed by the
+                        # project transcript, saved as "[]") exported with no
+                        # captions at all. Transcribe just this cut instead.
+                        if burn_subtitles and clip.id in untranscribed:
+                            untranscribed.discard(clip.id)
+                            transcripts[clip.id] = await self._transcribe_clip_cut(
+                                clip, cut_path, user_id, progress_callback,
+                            )
                         rendered_path = await self._render_export(
                             clip, cut_path,
                             style_type=style_type or SOCIAL_PLATFORM_DEFAULTS[platform.value]["subtitle_style"],
@@ -424,7 +435,7 @@ class ClipService:
                             burn_subtitles=burn_subtitles,
                             watermark_enabled=watermark_enabled,
                             enable_emoji=enable_emoji,
-                            transcript=self._loads(clip.transcript, []) or fallback_transcript,
+                            transcript=transcripts[clip.id],
                             max_duration=max_duration_override,
                             transition=transition,
                         )
@@ -1240,6 +1251,9 @@ class ClipService:
                     "start": w_start,
                     "end": w_end,
                     "speaker": segment.get("speaker") or "Speaker",
+                    # Stable id for Transcript-tab edits: caption order and
+                    # timings change with the hook, the source time does not.
+                    "source_start": round(w_start, 3),
                 })
 
         origin, words = on_output_timeline(words, start, end, hook)
@@ -1341,6 +1355,39 @@ class ClipService:
             })
         return platforms
 
+    async def _transcribe_clip_cut(
+        self,
+        clip: GeneratedClip,
+        cut_path: str,
+        user_id: str,
+        progress_callback: Callable[[str, int, str | None], None] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Transcribe one clip's cut and store it on the clip.
+
+        The cut starts at zero; stored transcripts use source time (see
+        _clip_transcript), so every timing is shifted by the clip's start.
+        """
+        segments = await self._transcribe_if_missing(clip.project_id, cut_path, progress_callback)
+        offset = float(clip.start_time)
+
+        def shifted(item: dict[str, Any]) -> dict[str, Any]:
+            return {
+                **item,
+                "start": float(item.get("start", 0.0)) + offset,
+                "end": float(item.get("end", 0.0)) + offset,
+            }
+
+        transcript = [
+            {**shifted(seg), "words": [shifted(w) for w in seg.get("words") or []]}
+            for seg in segments
+        ]
+        if transcript:
+            async with AsyncSessionLocal() as session:
+                await ClipRepository(session).update_clip(
+                    clip_id=clip.id, user_id=user_id, transcript=_json_dumps(transcript),
+                )
+        return transcript
+
     async def _transcribe_if_missing(
         self,
         project_id: str,
@@ -1371,7 +1418,8 @@ class ClipService:
                 asyncio.create_task(self._notify(progress_callback, f"Transcription: {message}", int(percent)))
 
         result = await transcribe_service.transcribe(request, progress_callback=_progress)
-        segments = getattr(result, "segments", [])
+        # transcribe() returns a dict; reading it as an attribute always gave [].
+        segments = result.get("segments", [])
         if progress_callback:
             await self._notify(progress_callback, "Transcription complete", 100)
         return list(segments)
@@ -1514,8 +1562,50 @@ class ClipService:
             "output_formats": self._loads(clip.output_formats, {}),
             "output_files": self._loads(clip.output_files, {}),
             "analysis_json": analysis,
+            "editor_settings": self._loads(clip.editor_settings, None),
             "created_at": clip.created_at.isoformat() if clip.created_at else None,
         }
+
+    async def save_editor_settings(
+        self, clip_id: str, user_id: str, settings: ClipEditorSettings,
+    ) -> ClipEditorSettings:
+        """Store the editor's state for a clip, so reopening it (and exporting
+        it) uses what the user set rather than the defaults."""
+        async with AsyncSessionLocal() as session:
+            clip = await ClipRepository(session).update_clip(
+                clip_id=clip_id, user_id=user_id, editor_settings=settings.model_dump_json(exclude_none=True),
+            )
+        if not clip:
+            raise CustomException(message="Clip not found", code="NOT_FOUND", status_code=404)
+        return settings
+
+    def _edited_transcript(self, clip: GeneratedClip) -> list[dict[str, Any]]:
+        """The clip's transcript with its saved Transcript-tab edits applied:
+        cut words dropped, and emphasis set to exactly the highlighted words."""
+        transcript = self._loads(clip.transcript, [])
+        edits = (self._loads(clip.editor_settings, {}) or {}).get("transcript_edits")
+        if not edits:
+            return transcript
+        removed = {round(float(t), 3) for t in edits.get("removed", [])}
+        highlighted = {round(float(t), 3) for t in edits.get("highlighted", [])}
+
+        edited: list[dict[str, Any]] = []
+        for segment in transcript:
+            words = segment.get("words")
+            if not words:
+                edited.append(segment)
+                continue
+            kept = [
+                {**word, "highlighted": round(float(word.get("start", 0.0)), 3) in highlighted}
+                for word in words
+                if round(float(word.get("start", 0.0)), 3) not in removed
+            ]
+            # A segment whose words were all cut would otherwise burn its full
+            # text as one caption.
+            if kept:
+                text = " ".join(str(w.get("word", w.get("text", ""))).strip() for w in kept)
+                edited.append({**segment, "words": kept, "text": text})
+        return edited
 
     def _burned_url(self, clip: GeneratedClip) -> str | None:
         # burned_subtitle_path holds the S3 key since renders moved to S3; older

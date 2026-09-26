@@ -47,6 +47,7 @@ import {
   AudioEnhancementConfig,
   HookTransitionConfig,
   CaptionConfig,
+  ClipEditorSettings,
 } from '@/lib/types';
 import { getCaptionConfig, getAllCaptionStyles } from '@/lib/utils/captionStyles';
 import { useEntitlements, canUseAspectRatio, canUseCaptionStyle } from '@/hooks/useEntitlements';
@@ -56,7 +57,7 @@ import { sfxEngine } from '@/lib/utils/audioSynth';
 import confetti from 'canvas-confetti';
 import { AudioEnhancerPanel } from './AudioEnhancerPanel';
 import { HookTransitionPanel } from './HookTransitionPanel';
-import { clipApi } from '@/lib/api';
+import { brandKitApi, clipApi } from '@/lib/api';
 
 interface VideoEditorStudioProps {
   clip?: ViralClip;
@@ -80,6 +81,24 @@ const stageWidthClass = (aspectRatio: string): string =>
     : aspectRatio === '4:5'
     ? 'w-[300px] sm:w-[340px]'
     : 'w-full';
+
+/** Exported frame size per aspect ratio; mirrors output_dimensions() in video_processor/geometry.py. */
+const EXPORT_SIZE: Record<string, string> = {
+  '9:16': '1080×1920',
+  '4:5': '1080×1350',
+  '1:1': '1080×1080',
+  '16:9': '1920×1080',
+};
+
+/** What the export is doing, judged from the paced progress bar. */
+const exportStage = (progress: number): string =>
+  progress < 30
+    ? 'Preparing your clip...'
+    : progress < 60
+    ? 'Burning in captions and title...'
+    : progress < 85
+    ? 'Encoding the video...'
+    : 'Almost done, uploading your file...';
 
 /** CSS entrance for a caption line; mirrors _entrance() in ass_generator.py. */
 const captionEntrance = (animation: CaptionConfig['animation'], speed: number): string | undefined => {
@@ -190,6 +209,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
   const [exportComplete, setExportComplete] = useState(false);
   // The file this export rendered; the download button serves exactly this.
   const [exportedUrl, setExportedUrl] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   // Editable safeClip properties
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(safeClip.aspectRatio || '9:16');
@@ -202,7 +222,9 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
     safeClip.hookTransition ?? { mode: 'auto' },
   );
   // Only paid plans may drop the watermark; the server forces it otherwise.
-  const [watermarkEnabled, setWatermarkEnabled] = useState(true);
+  const [watermarkEnabled, setWatermarkEnabled] = useState(safeClip.watermarkEnabled ?? true);
+  // Source start times of words cut in the Transcript tab; the export drops them too.
+  const [removedWords, setRemovedWords] = useState<number[]>(safeClip.removedWords ?? []);
 
   // A plan change (or a clip saved on a higher tier) can leave a selection the
   // current plan cannot use. Fall back instead of letting the export fail at
@@ -328,6 +350,8 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
       duration,
       audioEnhancement: audioEnhanceConfig,
       hookTransition,
+      watermarkEnabled,
+      removedWords,
       ...overrides,
     });
   };
@@ -476,13 +500,85 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
 
   // Handle filler word removal
   const handleRemoveAllFillers = () => {
+    const isFiller = (w: WordTimestamp) =>
+      w.isFiller || ['um', 'uh', 'you know', 'like'].includes(w.text.toLowerCase());
+    const cut = transcriptSegments
+      .flatMap((seg) => seg.words)
+      .filter((w) => isFiller(w) && w.sourceStart !== undefined)
+      .map((w) => w.sourceStart as number);
     const updated = transcriptSegments.map((seg) => ({
       ...seg,
-      words: seg.words.filter((w) => !w.isFiller && !['um', 'uh', 'you know', 'like'].includes(w.text.toLowerCase())),
+      words: seg.words.filter((w) => !isFiller(w)),
     }));
     setTranscriptSegments(updated);
+    setRemovedWords((prev) => Array.from(new Set([...prev, ...cut])));
     sfxEngine.playDing();
   };
+
+  // What the export uses, saved so reopening the clip restores it.
+  const editorSettings = (): ClipEditorSettings => ({
+    aspect_ratio: aspectRatio,
+    caption_config: captionConfig,
+    hook_transition: hookTransition,
+    watermark_enabled: watermarkEnabled,
+    transcript_edits: {
+      removed: removedWords,
+      highlighted: transcriptSegments
+        .flatMap((seg) => seg.words)
+        .filter((w) => w.highlighted && w.sourceStart !== undefined)
+        .map((w) => w.sourceStart as number),
+    },
+  });
+
+  // A clip nobody has edited yet opens in the user's brand kit style. Fonts are
+  // left to the preset: the kit's fonts are not ones the export can render.
+  useEffect(() => {
+    if (safeClip.hasSavedSettings) return;
+    let cancelled = false;
+    brandKitApi
+      .list()
+      .then(([kit]) => {
+        if (cancelled || !kit?.isCustomized) return;
+        setCaptionConfig({
+          ...getCaptionConfig(kit.defaultPreset),
+          highlightColor: kit.primaryColor,
+          secondaryHighlightColor: kit.secondaryColor,
+          emojisEnabled: kit.autoEmojis,
+        });
+      })
+      .catch(() => {
+        // No kit, or it could not load: keep the default style.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [safeClip.id]);
+
+  const saveTimerRef = useRef<number | null>(null);
+  const isFirstRenderRef = useRef(true);
+  const saveEditorSettings = () => clipApi.saveEditorSettings(safeClip.id, editorSettings());
+
+  // Autosave a moment after the last change, not on every keystroke or slider tick.
+  useEffect(() => {
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null;
+      saveEditorSettings().catch((err) => console.warn('Could not save editor settings:', err));
+    }, 1000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aspectRatio, captionConfig, hookTransition, watermarkEnabled, transcriptSegments, removedWords]);
+
+  useEffect(
+    () => () => {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    },
+    [],
+  );
 
   // Toggle word highlight
   const handleToggleWordHighlight = (wordId: string) => {
@@ -524,18 +620,37 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
     sfxEngine.playEffect(type);
   };
 
-  // Export video via backend
+  // Export video via backend. The request answers once, when the file is
+  // ready, so the bar is paced by elapsed time against a rough render
+  // estimate; it previously sat at 5% for the whole render.
   const handleStartExport = async () => {
     setIsExporting(true);
-    setExportProgress(5);
+    setExportProgress(3);
     setExportComplete(false);
     setExportedUrl(null);
+    setExportError(null);
+
+    const startedAt = Date.now();
+    const expectedMs = Math.max(15_000, duration * 1000);
+    const ticker = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      // Eases toward 95% so it keeps moving but never claims to be done.
+      setExportProgress(Math.min(95, Math.round(3 + 92 * (1 - Math.exp(-elapsed / expectedMs)))));
+    }, 250);
 
     try {
       const projectId = safeClip.projectId;
       if (!projectId) {
         throw new Error('No project ID found for export');
       }
+
+      // The export reads Transcript-tab edits from the saved settings, so save
+      // now rather than racing the autosave.
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      await saveEditorSettings();
 
       // Export this clip at the size picked in the editor, not the project's
       // top-scored clip at the default 9:16.
@@ -561,32 +676,18 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
         throw new Error('The export finished without producing a file.');
       }
 
-      const interval = setInterval(() => {
-        setExportProgress((p) => {
-          if (p >= 95) return p;
-          return p + 10;
-        });
-      }, 300);
-
-      const checkComplete = async () => {
-        clearInterval(interval);
-        setExportProgress(100);
-        setExportComplete(true);
-        confetti({
-          particleCount: 120,
-          spread: 80,
-          origin: { y: 0.6 },
-        });
-      };
-
-      setTimeout(() => {
-        checkComplete();
-      }, 2500);
+      // Ready as soon as the file is: this used to wait another 2.5s here.
+      setExportProgress(100);
+      setExportComplete(true);
+      confetti({
+        particleCount: 120,
+        spread: 80,
+        origin: { y: 0.6 },
+      });
     } catch (err) {
-      setIsExporting(false);
-      setExportProgress(0);
-      setExportComplete(false);
-      alert(`Export failed: ${(err as Error).message}`);
+      setExportError((err as Error).message || 'Something went wrong while exporting.');
+    } finally {
+      window.clearInterval(ticker);
     }
   };
 
@@ -714,7 +815,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
             className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-neutral-950 text-xs font-bold shadow-md shadow-rose-500/20 active:scale-95 transition-all flex items-center gap-1.5"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export 4K</span>
+            <span>Export HD</span>
           </button>
         </div>
       </div>
@@ -1864,16 +1965,41 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
 
             <div>
               <h3 className="text-base font-bold text-white font-['Syne',sans-serif]">
-                {exportComplete ? 'Viral Video Export Ready!' : 'Rendering 4K HDR Short...'}
+                {exportError ? 'Export failed' : exportComplete ? 'Your clip is ready!' : 'Exporting your clip...'}
               </h3>
               <p className="text-xs text-neutral-400 mt-1">
-                {exportComplete
-                  ? 'Burned in Hormozi kinetic subtitles, B-roll overlays & 60fps audio master.'
-                  : 'Compiling video frames, active face centering & audio waveform...'}
+                {exportError
+                  ? exportError
+                  : exportComplete
+                  ? [
+                      `${getAllCaptionStyles().find((s) => s.id === captionConfig.preset)?.name ?? 'Styled'} captions`,
+                      'title',
+                      watermarkEnabled || entitlements.watermark_forced ? 'Clipnera watermark' : 'no watermark',
+                      `${aspectRatio} HD`,
+                    ].join(' · ')
+                  : exportStage(exportProgress)}
               </p>
             </div>
 
+            {exportError && (
+              <div className="space-y-2 pt-2">
+                <button
+                  onClick={handleStartExport}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-neutral-950 font-bold text-xs shadow-lg shadow-rose-500/25 active:scale-95 transition-all"
+                >
+                  Try again
+                </button>
+                <button
+                  onClick={() => setIsExporting(false)}
+                  className="w-full py-2 rounded-xl text-neutral-400 hover:text-white text-xs font-semibold"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+
             {/* Progress Bar */}
+            {!exportError && (
             <div className="space-y-1.5">
               <div className="h-3 w-full bg-neutral-950 rounded-full overflow-hidden border border-neutral-800">
                 <div
@@ -1883,6 +2009,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
               </div>
               <p className="text-xs font-mono text-neutral-400">{exportProgress}% Complete</p>
             </div>
+            )}
 
             {exportComplete && (
               <div className="space-y-2 pt-2">
@@ -1903,7 +2030,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                   }}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-neutral-950 font-bold text-xs shadow-lg shadow-rose-500/25 active:scale-95 transition-all"
                 >
-                  Download Master MP4 (1080x1920)
+                  Download MP4 ({EXPORT_SIZE[aspectRatio] ?? 'HD'})
                 </button>
 
                 <button

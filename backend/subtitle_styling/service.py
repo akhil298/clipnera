@@ -16,7 +16,7 @@ from core.database import AsyncSessionLocal
 from core.logging_config import get_logger
 from core.exceptions import CustomException
 from video_processor.ffmpeg_service import FFmpegService
-from subtitle_styling.ass_generator import AssGenerator, ass_filter, build_ass_file, burn_filter_args
+from subtitle_styling.ass_generator import CAPTION_ANIMATIONS, AssGenerator, ass_filter, build_ass_file, burn_filter_args
 from subtitle_styling.templates import get_template, get_template_info, get_template_names
 from subtitle_styling.phrase_segmenter import segment_phrases, segment_for_captions
 from subtitle_styling.schema import SubtitleBurnRequest
@@ -103,6 +103,11 @@ def _style_overrides(custom_config: Optional[dict]) -> dict[str, Any]:
         overrides["max_words_per_line"] = min(8, max(1, int(config["max_words_per_line"])))
     except (KeyError, TypeError, ValueError):
         pass
+
+    # The animation picked in the editor; without this every export used the
+    # preset's own animation whatever the user chose.
+    if config.get("animation") in CAPTION_ANIMATIONS:
+        overrides["animation"] = config["animation"]
 
     try:
         overrides["shadow"] = float(config["shadow_intensity"]) > 0
@@ -211,7 +216,7 @@ class SubtitleStylingService:
             origin, _ = on_output_timeline([], clip_start, clip_end, hook, gap)
             return await self._encode(
                 video_path, ["null"], enable_watermark, clip_end - origin, tmpdir, timeline,
-                label="plain", error_code="EXPORT_FAILED",
+                label="plain", media=media, error_code="EXPORT_FAILED",
             )
 
     async def _media(self, video_path: str) -> MediaInfo:
@@ -243,11 +248,15 @@ class SubtitleStylingService:
         work_dir: str,
         timeline: Optional[tuple[list[str], str, str]],
         label: str,
+        media: MediaInfo,
         error_code: str = "BURN_IN_FAILED",
     ) -> str:
         """Run one render in ``work_dir`` and return a copy the caller owns."""
         output_path = os.path.join(work_dir, f"{label}_{Path(video_path).stem}.mp4")
-        cmd = self._encode_cmd(video_path, output_path, video_filters, duration, enable_watermark, timeline)
+        cmd = self._encode_cmd(
+            video_path, output_path, video_filters, duration, enable_watermark, timeline,
+            frame_size=(media.width, media.height),
+        )
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=work_dir
         )
@@ -268,14 +277,16 @@ class SubtitleStylingService:
         duration: float,
         enable_watermark: bool,
         timeline: Optional[tuple[list[str], str, str]] = None,
+        frame_size: Optional[tuple[int, int]] = None,
     ) -> list[str]:
-        # No -ss: the input is already the trimmed clip.
+        # No -ss: the input is already the trimmed clip. veryfast renders about
+        # twice as fast as fast; at CRF 23 the difference is only file size.
         return [
             "ffmpeg", "-y",
             "-i", video_path,
-            *burn_filter_args(video_filters, enable_watermark, timeline),
+            *burn_filter_args(video_filters, enable_watermark, timeline, frame_size),
             "-t", str(duration),
-            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             output_path,
@@ -348,7 +359,8 @@ class SubtitleStylingService:
                 output_path=os.path.join(tmpdir, "captions.ass"),
             )
             return await self._encode(
-                video_path, [ass_filter(ass_path)], enable_watermark, duration, tmpdir, timeline, label="burned",
+                video_path, [ass_filter(ass_path)], enable_watermark, duration, tmpdir, timeline,
+                label="burned", media=media,
             )
 
     @staticmethod
@@ -357,11 +369,15 @@ class SubtitleStylingService:
         for seg in segments:
             if seg.get("words"):
                 for w in seg["words"]:
-                    words.append({
+                    word = {
                         "start": float(w.get("start", w.get("s", 0.0))),
                         "end": float(w.get("end", w.get("e", 0.0))),
                         "text": str(w.get("word", w.get("text", ""))),
-                    })
+                    }
+                    # Set by Transcript-tab edits; the burner emphasises these.
+                    if "highlighted" in w:
+                        word["highlighted"] = bool(w["highlighted"])
+                    words.append(word)
             else:
                 words.append({
                     "start": float(seg.get("start", 0.0)),
@@ -414,7 +430,8 @@ class SubtitleStylingService:
                     "box=1:boxcolor=black@0.5:boxborderw=8:x=(w-text_w)/2:y=20"
                 )
             return await self._encode(
-                video_path, filters, enable_watermark, duration, tmpdir, timeline, label="burned_srt",
+                video_path, filters, enable_watermark, duration, tmpdir, timeline,
+                label="burned_srt", media=media,
             )
 
     def _generate_srt(self, subtitles: list[dict], clip_start: float, output_dir: str | None = None) -> str:
@@ -494,14 +511,17 @@ class SubtitleStylingService:
         return ",".join(parts)
 
     def _color_to_ass(self, color: str) -> str:
+        """'#RRGGBB[AA]' -> ASS 'AABBGGRR'. ASS alpha counts transparency, so
+        opaque is 00; writing FF here made every SRT caption invisible."""
         c = color.lstrip("#")
         if len(c) == 6:
             r, g, b = c[0:2], c[2:4], c[4:6]
-            a = "FF"
+            a = "00"
         elif len(c) == 8:
-            r, g, b, a = c[0:2], c[2:4], c[4:6], c[6:8]
+            r, g, b = c[0:2], c[2:4], c[4:6]
+            a = f"{255 - int(c[6:8], 16):02X}"
         else:
-            return "FFFFFF"
+            return "00FFFFFF"
         return f"{a}{b}{g}{r}".upper()
 
     async def get_style_presets(self) -> list[dict]:

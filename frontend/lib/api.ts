@@ -10,6 +10,8 @@ import {
   HookTransitionCatalog,
   HookTransitionConfig,
   HookTransitionResolveResponse,
+  ClipEditorSettings,
+  TranscriptEdits,
 } from '@/lib/types';
 import { getToken, clearAuth, setAuth } from '@/lib/auth';
 import { emojiForKeyword } from '@/lib/data/emojiCatalog.generated';
@@ -218,7 +220,11 @@ export interface BackendClip {
     speaker?: string;
     emoji?: string;
     emphasis?: boolean;
+    /** The word's start in the source video; keys Transcript-tab edits. */
+    source_start?: number;
   }>;
+  /** What the editor last saved for this clip; null until it saves. */
+  editor_settings: ClipEditorSettings | null;
   created_at: string | null;
 }
 
@@ -301,6 +307,7 @@ function buildTranscriptSegments(clip: BackendClip): TranscriptSegment[] {
         end: caption.end,
         highlighted: caption.emphasis ?? false,
         emoji: caption.emoji,
+        sourceStart: caption.source_start,
       };
       const speaker = caption.speaker || 'Speaker';
       const last = segments[segments.length - 1];
@@ -339,6 +346,7 @@ function buildTranscriptSegments(clip: BackendClip): TranscriptSegment[] {
           start: Math.max(0, word.start - clipStart),
           end: Math.max(0, word.end - clipStart),
           emoji: emojiForKeyword(word.word) ?? undefined,
+          sourceStart: Math.round(word.start * 1000) / 1000,
         }))
       : tokens.map((token, wordIdx) => {
           const step = (segEnd - segStart) / Math.max(1, tokens.length);
@@ -363,7 +371,23 @@ function buildTranscriptSegments(clip: BackendClip): TranscriptSegment[] {
   });
 }
 
+/** Re-applies saved Transcript-tab edits to a freshly built transcript. */
+function applyTranscriptEdits(segments: TranscriptSegment[], edits?: TranscriptEdits): TranscriptSegment[] {
+  if (!edits) return segments;
+  const removed = new Set(edits.removed);
+  const highlighted = new Set(edits.highlighted);
+  return segments
+    .map((seg) => ({
+      ...seg,
+      words: seg.words
+        .filter((w) => w.sourceStart === undefined || !removed.has(w.sourceStart))
+        .map((w) => (w.sourceStart === undefined ? w : { ...w, highlighted: highlighted.has(w.sourceStart) })),
+    }))
+    .filter((seg) => seg.words.length > 0);
+}
+
 export function mapBackendClip(clip: BackendClip): ViralClip {
+  const settings: ClipEditorSettings = clip.editor_settings ?? {};
   const viralityScore = Math.round(clip.score ?? 50);
   // Scores arrive normalised to 0-1. A component of exactly 0 is a real
   // reading, not a missing one, so only a non-number falls back to the overall
@@ -394,15 +418,19 @@ export function mapBackendClip(clip: BackendClip): ViralClip {
     rationale: clip.reason || '',
     suggestedAspectRatio: '9:16',
     suggestedLayout: 'single_speaker',
-    aspectRatio: '9:16',
+    aspectRatio: settings.aspect_ratio ?? '9:16',
     layoutMode: 'single_speaker',
     keywords: [],
     emojiHighlights: [],
     autoBrollKeywords: [],
-    transcriptSegments: buildTranscriptSegments(clip),
+    transcriptSegments: applyTranscriptEdits(buildTranscriptSegments(clip), settings.transcript_edits),
     bRollOverlays: [],
     soundEffects: [],
-    captionConfig: DEFAULT_CAPTION_CONFIG,
+    captionConfig: { ...DEFAULT_CAPTION_CONFIG, ...settings.caption_config },
+    hookTransition: settings.hook_transition,
+    watermarkEnabled: settings.watermark_enabled,
+    removedWords: settings.transcript_edits?.removed ?? [],
+    hasSavedSettings: clip.editor_settings != null,
     // Off by default: the render pipeline applies no zoom, so leaving it on
     // made the preview show motion the exported file never has.
     autoZoom: { enabled: false, frequency: 'subtle', scale: 1.1 },
@@ -540,6 +568,12 @@ export const clipApi = {
     method: 'POST',
     body: JSON.stringify({ url }),
   }),
+  /** Saves the editor's state for a clip; the export reads transcript edits from it. */
+  saveEditorSettings: (clipId: string, settings: ClipEditorSettings) =>
+    envelopeRequest<ClipEditorSettings>(`/clips/item/${clipId}/editor-settings`, {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
   downloadYoutube: (url: string, formatId?: string) => authedRequest<Record<string, any>>('/clips/download', {
     method: 'POST',
     body: JSON.stringify({ url, format_id: formatId }),
@@ -555,7 +589,7 @@ export const clipApi = {
       ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
       max_clips: maxClips,
       burn_subtitles: true,
-      enable_emoji: true,
+      enable_emoji: captionConfig?.emojisEnabled ?? true,
       watermark_enabled: watermarkEnabled,
       ...(hookTransition ? { hook_transition: hookTransition } : {}),
       style_type: captionConfig?.preset || 'bold_captions',

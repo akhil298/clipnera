@@ -259,3 +259,24 @@ class SocialExportResponse(BaseModel):
     total_exported: int
     # The watermark actually applied: a free plan gets it whatever was requested.
     watermark_enabled: bool
+
+
+class TranscriptEdits(BaseModel):
+    """Transcript-tab edits, keyed by each word's source start time (``source_start``
+    on the clip's captions), which is stable while caption order is not."""
+
+    removed: list[float] = Field(default_factory=list, description="Words cut from the captions")
+    highlighted: list[float] = Field(
+        default_factory=list, description="The full set of emphasised words; replaces the automatic picks"
+    )
+
+
+class ClipEditorSettings(BaseModel):
+    """What the editor last saved for a clip; each field is omitted until set."""
+
+    aspect_ratio: Optional[str] = None
+    # The editor's CaptionConfig, stored as sent so it round-trips exactly.
+    caption_config: Optional[dict[str, Any]] = None
+    hook_transition: Optional[HookTransitionConfig] = None
+    watermark_enabled: Optional[bool] = None
+    transcript_edits: Optional[TranscriptEdits] = None

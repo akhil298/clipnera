@@ -7,6 +7,8 @@ These cover the sync contract between the two: `_clip_transcript` keeps source
 
 from __future__ import annotations
 
+import pytest
+
 from clip_generation.service import ClipService
 
 SEGMENTS = [
@@ -81,8 +83,16 @@ class TestClipCaptions:
         segments = [{"start": 10.0, "end": 12.0, "text": "no word timings here"}]
         captions = ClipService._clip_captions(segments, 10.0, 12.0)
         assert captions == [
-            {"text": "no word timings here", "start": 0.0, "end": 2.0, "speaker": "Speaker"}
+            {"text": "no word timings here", "start": 0.0, "end": 2.0, "speaker": "Speaker", "source_start": 10.0}
         ]
+
+    def test_words_carry_their_source_start_for_transcript_edits(self):
+        """The editor keys cut/highlighted words on this; it must stay in source
+        time even though caption timings are rebased onto the clip."""
+        transcript = ClipService._clip_transcript(SEGMENTS, 100.0, 110.0)
+        captions = ClipService._clip_captions(transcript, 100.0, 110.0)
+        assert all(c["source_start"] >= 100.0 for c in captions)
+        assert all(c["source_start"] - c["start"] == pytest.approx(100.0) for c in captions)
 
     def test_annotates_emoji_from_the_catalog(self):
         transcript = ClipService._clip_transcript(SEGMENTS, 100.0, 110.0)

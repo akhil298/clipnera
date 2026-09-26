@@ -1,7 +1,9 @@
 from fastapi import APIRouter
 
 from auth.dependencies import CurrentUserDep
+from clip_generation.schema import ClipEditorSettings
 from clip_generation.service import ClipService
+from core.responses import ApiResponse, ok
 from subtitle_styling.schema import SubtitleBurnRequest
 from subscription.dependencies import SubscriptionServiceDep
 
@@ -33,3 +35,8 @@ async def get_clip(clip_id: str, user: CurrentUserDep):
 @clip_generation.post("/item/{clip_id}/burn")
 async def burn_subtitles(clip_id: str, data: SubtitleBurnRequest, user: CurrentUserDep):
     return await ClipService().burn_clip_subtitles(clip_id, user["user_id"], data)
+
+
+@clip_generation.put("/item/{clip_id}/editor-settings", response_model=ApiResponse[ClipEditorSettings])
+async def save_editor_settings(clip_id: str, data: ClipEditorSettings, user: CurrentUserDep):
+    return ok(await ClipService().save_editor_settings(clip_id, user["user_id"], data), message="Saved")

@@ -4,6 +4,21 @@ from brand_kit.model import CaptionPreset, LogoPosition
 from brand_kit.repository import BrandKitRepository
 from brand_kit.schema import CreateBrandKitRequest, BrandKitResponse
 
+# What a user's kit holds until they save their own.
+DEFAULT_BRAND_KIT = {
+    "brand_name": "My Brand",
+    "logo_url": None,
+    "logo_position": LogoPosition.TOP_RIGHT,
+    "logo_opacity": 85,
+    "logo_size": 28,
+    "primary_color": "#f59e0b",
+    "secondary_color": "#f43f5e",
+    "preferred_font": "Syne",
+    "default_preset": CaptionPreset.HORMOZI,
+    "auto_emojis": True,
+    "outro_cta_text": "",
+}
+
 
 class BrandKitService:
     """Business logic for brand kits."""
@@ -14,20 +29,7 @@ class BrandKitService:
     async def get_brand_kit(self, user_id: str) -> BrandKitResponse:
         brand_kit = await self._repository.get_by_user_id(user_id)
         if not brand_kit:
-            brand_kit = await self._repository.create(
-                user_id=user_id,
-                brand_name="My Brand",
-                logo_url=None,
-                logo_position=LogoPosition.TOP_RIGHT,
-                logo_opacity=85,
-                logo_size=28,
-                primary_color="#f59e0b",
-                secondary_color="#f43f5e",
-                preferred_font="Syne",
-                default_preset=CaptionPreset.HORMOZI,
-                auto_emojis=True,
-                outro_cta_text="",
-            )
+            brand_kit = await self._repository.create(user_id=user_id, **DEFAULT_BRAND_KIT)
         return self._to_response(brand_kit)
 
     async def create_or_update_brand_kit(self, user_id: str, data: CreateBrandKitRequest) -> BrandKitResponse:
@@ -92,6 +94,7 @@ class BrandKitService:
             defaultPreset=brand_kit.default_preset.value,
             autoEmojis=brand_kit.auto_emojis,
             outroCtaText=brand_kit.outro_cta_text,
+            isCustomized=any(getattr(brand_kit, key) != value for key, value in DEFAULT_BRAND_KIT.items()),
             createdAt=brand_kit.created_at.isoformat(),
             updatedAt=brand_kit.updated_at.isoformat(),
         )

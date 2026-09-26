@@ -33,5 +33,8 @@ class BrandKitResponse(BaseModel):
     defaultPreset: str
     autoEmojis: bool
     outroCtaText: str
+    # False while the kit still holds the defaults it was auto-created with, so
+    # the editor only applies a kit the user actually set up.
+    isCustomized: bool
     createdAt: str
     updatedAt: str

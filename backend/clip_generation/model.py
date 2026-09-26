@@ -216,6 +216,8 @@ class GeneratedClip(Base):
     output_formats: Mapped[str | None] = mapped_column(Text, nullable=True)
     output_files: Mapped[str | None] = mapped_column(Text, nullable=True)
     analysis_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # ClipEditorSettings as JSON: what the editor last saved for this clip.
+    editor_settings: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False

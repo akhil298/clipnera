@@ -35,6 +35,8 @@ export interface WordTimestamp {
   highlighted?: boolean;
   isFiller?: boolean;
   emoji?: string;
+  /** The word's start in the source video; keys Transcript-tab edits on the server. */
+  sourceStart?: number;
 }
 
 export interface TranscriptSegment {
@@ -153,6 +155,29 @@ export interface ViralClip {
   audioEnhancement?: AudioEnhancementConfig;
   /** Bridge between the hook and the clip; absent means Auto. */
   hookTransition?: HookTransitionConfig;
+  /** The user's watermark choice; paid plans only can turn it off. */
+  watermarkEnabled?: boolean;
+  /** Words cut in the Transcript tab, by source start time. */
+  removedWords?: number[];
+  /** Whether the server has saved editor settings for this clip. */
+  hasSavedSettings?: boolean;
+}
+
+// --- Clip editor settings: mirror backend/clip_generation/schema.py ----------
+
+/** Mirrors backend TranscriptEdits. Words are keyed by their source start time. */
+export interface TranscriptEdits {
+  removed: number[];
+  highlighted: number[];
+}
+
+/** Mirrors backend ClipEditorSettings; each field is omitted until set. */
+export interface ClipEditorSettings {
+  aspect_ratio?: AspectRatio;
+  caption_config?: CaptionConfig;
+  hook_transition?: HookTransitionConfig;
+  watermark_enabled?: boolean;
+  transcript_edits?: TranscriptEdits;
 }
 
 // --- Hook transitions: mirror backend/hook_transitions/schema.py ------------
@@ -326,6 +351,8 @@ export interface BrandKit {
   defaultPreset: CaptionPreset;
   autoEmojis: boolean;
   outroCtaText: string;
+  /** False while the kit still holds its auto-created defaults. */
+  isCustomized: boolean;
   createdAt: string;
   updatedAt: string;
 }
