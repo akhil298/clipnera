@@ -10,6 +10,10 @@ Three backends, the first available one wins:
 * **Haar cascades** otherwise. These ship inside the ``opencv-contrib-python``
   wheel, so this backend needs no downloads and works on a bare EC2 instance.
 
+With both RetinaFace and YuNet present, ``FaceDetector.detect_clip`` runs YuNet
+on every frame and escalates a clip to RetinaFace only when spot checks show
+YuNet missing faces there.
+
 Nothing here calls a network service, which keeps reframing free and keeps the
 pipeline working when an instance has no outbound internet access.
 """
@@ -21,6 +25,7 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from collections.abc import Callable, Iterable
 from typing import Any
 
 import cv2
@@ -62,6 +67,14 @@ MIN_FACE_CONFIDENCE = 0.6
 MIN_FACE_WIDTH_RATIO = 0.02
 # Detections overlapping more than this are treated as the same face.
 DEDUPE_IOU = 0.4
+# detect_clip checks YuNet against RetinaFace on one sampled frame in this many
+# (about once a second at the cutter's sample rate) ...
+PROBE_EVERY = 6
+# ... and switches the clip to RetinaFace when more than this share of checks
+# disagree. A rare miss is absorbed by track smoothing; a steady one is not.
+ESCALATE_RATIO = 0.15
+# Two detections of one face from different backends overlap at least this much.
+MATCH_IOU = 0.3
 
 
 @dataclass(frozen=True)
@@ -186,22 +199,12 @@ class FaceDetector:
 
     def _select_backend(self) -> str:
         self._retinaface = _retinaface_session()
+        self._yunet = self._load_yunet()
         if self._retinaface is not None:
             return "retinaface"
-
-        model_path = _yunet_model_path()
-        if model_path and hasattr(cv2, "FaceDetectorYN"):
-            try:
-                self._yunet = cv2.FaceDetectorYN.create(
-                    model=model_path,
-                    config="",
-                    input_size=(320, 320),
-                    score_threshold=self._min_confidence,
-                )
-                log.info("Face detection backend: YuNet (%s)", model_path)
-                return "yunet"
-            except cv2.error as exc:
-                log.warning("YuNet unavailable, falling back to Haar cascades: %s", exc)
+        if self._yunet is not None:
+            log.info("Face detection backend: YuNet (%s)", _yunet_model_path())
+            return "yunet"
 
         cascade_dir = Path(cv2.data.haarcascades)
         self._frontal = cv2.CascadeClassifier(str(cascade_dir / "haarcascade_frontalface_default.xml"))
@@ -214,6 +217,22 @@ class FaceDetector:
             YUNET_FILENAME,
         )
         return "haar"
+
+    def _load_yunet(self) -> Any | None:
+        model_path = _yunet_model_path()
+        if not model_path or not hasattr(cv2, "FaceDetectorYN"):
+            return None
+        try:
+            detector = cv2.FaceDetectorYN.create(
+                model=model_path,
+                config="",
+                input_size=(320, 320),
+                score_threshold=self._min_confidence,
+            )
+        except cv2.error as exc:
+            log.warning("YuNet unavailable: %s", exc)
+            return None
+        return detector
 
     def detect(self, frame: np.ndarray) -> list[Face]:
         if frame is None or getattr(frame, "size", 0) == 0:
@@ -232,6 +251,42 @@ class FaceDetector:
             self._backend, len(faces), len(kept), [round(f.confidence, 2) for f in kept],
         )
         return kept
+
+    def detect_clip(self, frames: Callable[[], Iterable[np.ndarray]]) -> tuple[list[list[Face]], str]:
+        """Faces in every frame of one clip, and the backend that produced them.
+
+        RetinaFace is the most accurate backend but ~13x slower than YuNet on
+        CPU, and run on every lip-motion sample it was most of a clip's cut
+        time. YuNet takes every frame instead, and RetinaFace checks one frame
+        in ``PROBE_EVERY``. When the two disagree on more than
+        ``ESCALATE_RATIO`` of those checks (small, angled or partly hidden
+        faces YuNet misses), RetinaFace redoes the whole clip, so hard clips
+        keep full accuracy and easy ones pay only for the checks.
+
+        ``frames`` is called once per pass, so decoded frames never all sit in
+        memory at the same time.
+        """
+        if self._backend != "retinaface" or self._yunet is None:
+            return [self.detect(frame) for frame in frames()], self._backend
+
+        fast: list[list[Face]] = []
+        accurate: dict[int, list[Face]] = {}
+        for index, frame in enumerate(frames()):
+            fast.append(self._postprocess(self._detect_yunet(frame)) if _usable(frame) else [])
+            if index % PROBE_EVERY == 0:
+                accurate[index] = self.detect(frame)
+
+        disagreements = sum(1 for index, faces in accurate.items() if not _same_faces(fast[index], faces))
+        if disagreements <= len(accurate) * ESCALATE_RATIO:
+            return fast, "yunet"
+        log.info(
+            "YuNet disagreed with RetinaFace on %d/%d checks; running RetinaFace on every frame",
+            disagreements, len(accurate),
+        )
+        return [
+            accurate[index] if index in accurate else self.detect(frame)
+            for index, frame in enumerate(frames())
+        ], "retinaface"
 
     def _detect_retinaface(self, frame: np.ndarray) -> list[Face]:
         height, width = frame.shape[:2]
@@ -351,3 +406,20 @@ class FaceDetector:
                 continue
             kept.append(face)
         return kept
+
+
+def _usable(frame: np.ndarray | None) -> bool:
+    return frame is not None and getattr(frame, "size", 0) > 0
+
+
+def _same_faces(first: list[Face], second: list[Face]) -> bool:
+    """Whether two detections of one frame found the same faces."""
+    if len(first) != len(second):
+        return False
+    unmatched = list(second)
+    for face in first:
+        match = next((other for other in unmatched if face.box.intersection_over_union(other.box) >= MATCH_IOU), None)
+        if match is None:
+            return False
+        unmatched.remove(match)
+    return True

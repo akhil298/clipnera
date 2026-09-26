@@ -16,6 +16,24 @@ from core.exceptions import CustomException
 log = get_logger(__name__)
 
 CROP_COMMANDS_FILE = "crop.cmd"
+# A crop enlarged more than this (a 1080p source cropped to 9:16 is enlarged
+# 1.78x) is sharpened after scaling, to restore the edge detail upscaling softens.
+SHARPEN_ABOVE_SCALE = 1.2
+UPSCALE_SHARPEN = "unsharp=5:5:0.6:5:5:0.0"
+# The blurred backdrop behind a fitted frame is blurred at this fraction of the
+# output size, which is several times cheaper than blurring at full size.
+BACKDROP_SCALE = 4
+
+
+def upscale_filter(width: int, height: int, factor: float, fit: str = "") -> str:
+    """Lanczos scale to ``width``x``height``, sharpened when ``factor`` enlarges noticeably.
+
+    ``fit`` is an optional ``force_original_aspect_ratio`` mode; with it the
+    caller crops or pads the result to size.
+    """
+    fit_option = f":force_original_aspect_ratio={fit}" if fit else ""
+    chain = f"scale={width}:{height}{fit_option}:flags=lanczos"
+    return f"{chain},{UPSCALE_SHARPEN}" if factor > SHARPEN_ABOVE_SCALE else chain
 
 
 class FFmpegService:
@@ -41,8 +59,14 @@ class FFmpegService:
                 status_code=500,
             )
 
+        # veryfast encodes a 60s 1080x1920 cut ~2.6x faster than fast (4.6s vs
+        # 12.0s on 2 threads) at SSIM 0.993 vs 0.994 against a near-lossless
+        # reference; the difference is invisible and the files are smaller.
+        # CRF 18 because this cut is encoded again when captions are burned,
+        # and each generation loses detail. yuv420p keeps every part of a clip
+        # (crop, stack, fit) in one pixel format, so they join by stream copy.
         candidates = [
-            ("libx264", ["-c:v", "libx264", "-preset", "fast", "-crf", "20"]),
+            ("libx264", ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p"]),
             ("libopenh264", ["-c:v", "libopenh264", "-b:v", "2M"]),
             ("h264_nvenc", ["-c:v", "h264_nvenc", "-preset", "fast", "-cq", "23"]),
             ("mpeg4", ["-c:v", "mpeg4", "-q:v", "5"]),
@@ -250,10 +274,11 @@ class FFmpegService:
         # every frame after. The command file is referenced by bare name with
         # cwd set to its directory, which avoids escaping drive letters and
         # colons inside the filter string.
+        scale = upscale_filter(target_width, target_height, target_height / crop_height)
         video_filter = (
             f"sendcmd=f={CROP_COMMANDS_FILE},"
             f"crop={crop_width}:{crop_height}:{start_x}:{start_y},"
-            f"scale={target_width}:{target_height}:flags=lanczos,setsar=1"
+            f"{scale},setsar=1"
         )
         log.debug("Crop filter graph", extra={"video_filter": video_filter})
 
@@ -318,7 +343,7 @@ class FFmpegService:
             output_file.unlink(missing_ok=True)
             fallback_filter = (
                 f"crop={crop_width}:{crop_height}:(iw-{crop_width})/2:(ih-{crop_height})/2,"
-                f"scale={target_width}:{target_height}:flags=lanczos,setsar=1"
+                f"{scale},setsar=1"
             )
             returncode, fallback_stderr = await self._run_ffmpeg(
                 input_path, output_path, start_time, duration, fallback_filter, encoder_args
@@ -369,9 +394,9 @@ class FFmpegService:
             h = max(2, int(box["height"] * source_height) // 2 * 2)
             x = min(max(0, int(box["x"] * source_width)), source_width - w)
             y = min(max(0, int(box["y"] * source_height)), source_height - h)
+            scale = upscale_filter(target_width, height, max(target_width / w, height / h), fit="increase")
             chains.append(
-                f"[s{index}]crop={w}:{h}:{x}:{y},"
-                f"scale={target_width}:{height}:force_original_aspect_ratio=increase:flags=lanczos,"
+                f"[s{index}]crop={w}:{h}:{x}:{y},{scale},"
                 f"crop={target_width}:{height},setsar=1[c{index}]"
             )
             labels.append(f"[c{index}]")
@@ -380,6 +405,46 @@ class FFmpegService:
             + ";".join(chains) + ";"
             + "".join(labels) + f"vstack=inputs={len(cells)}[v]"
         )
+        await self._render_graph(input_path, output_path, start_time, duration, graph, "STACK_RENDER_FAILED")
+
+    async def render_fit(
+        self,
+        input_path: str,
+        output_path: str,
+        start_time: float,
+        duration: float,
+        target_width: int,
+        target_height: int,
+        source_width: int,
+    ) -> None:
+        """Render the whole source frame, fitted to the output width over a
+        blurred, dimmed copy of itself.
+
+        For shots with nobody in them (animation, B-roll, slides), where any
+        crop would cut an arbitrary slice out of the picture.
+        """
+        back_w = target_width // BACKDROP_SCALE // 2 * 2
+        back_h = target_height // BACKDROP_SCALE // 2 * 2
+        graph = (
+            "[0:v]split=2[bg][fg];"
+            f"[bg]scale={back_w}:{back_h}:force_original_aspect_ratio=increase,crop={back_w}:{back_h},"
+            f"boxblur=16:3,eq=brightness=-0.12,scale={target_width}:{target_height},setsar=1[back];"
+            f"[fg]{upscale_filter(target_width, -2, target_width / source_width)},setsar=1[front];"
+            "[back][front]overlay=(W-w)/2:(H-h)/2[v]"
+        )
+        await self._render_graph(input_path, output_path, start_time, duration, graph, "FIT_RENDER_FAILED")
+
+    async def _render_graph(
+        self,
+        input_path: str,
+        output_path: str,
+        start_time: float,
+        duration: float,
+        graph: str,
+        error_code: str,
+    ) -> None:
+        """Encode ``graph`` (ending in ``[v]``) over a stretch of the source, with
+        the same encoder settings as tracked crops so the parts join by stream copy."""
         encoder_args = await self._get_encoder_args()
         source = input_path if "://" in input_path else str(Path(input_path).resolve())
         cmd = [
@@ -397,8 +462,8 @@ class FFmpegService:
         _, stderr = await proc.communicate()
         if proc.returncode != 0 or not Path(output_path).exists():
             raise CustomException(
-                message=f"Stacked render failed: {stderr.decode('utf-8', errors='ignore')[-300:]}",
-                code="STACK_RENDER_FAILED",
+                message=f"Composite render failed: {stderr.decode('utf-8', errors='ignore')[-300:]}",
+                code=error_code,
                 status_code=500,
             )
 

@@ -37,6 +37,7 @@ export const FREE_TIER_FALLBACK: EntitlementsResponse = {
   social_scheduling: false,
   social_max_schedule_days: 0,
   social_posts_per_day: 3,
+  custom_aspect_ratios: false,
   features: {
     remove_watermark: false,
     pro_ai: false,
@@ -46,6 +47,7 @@ export const FREE_TIER_FALLBACK: EntitlementsResponse = {
     batch_processing: false,
     team_members: false,
     social_scheduling: false,
+    custom_aspect_ratios: false,
   },
   credit_minutes_total: 0,
   credit_minutes_remaining: 0,
@@ -56,6 +58,8 @@ export const FREE_TIER_FALLBACK: EntitlementsResponse = {
   usage_today: { exports: 0, audio_enhancements: 0 },
   has_pending_payment: false,
   show_plan_notice: false,
+  credits_per_video_minute: 2,
+  extra_aspect_ratio_credit_share: 0.5,
 };
 
 /** Whole days until a date (rounded up), or null when there is none or it has passed. */
@@ -97,6 +101,21 @@ export const canUseAspectRatio = (
   entitlements: EntitlementsResponse,
   ratio: string,
 ): boolean => entitlements.aspect_ratios.includes(ratio);
+
+/**
+ * Credits a run will cost: a rate per video minute, plus a share of that for
+ * each output ratio past the first (automatic ratios count as one). Mirrors
+ * SubscriptionService.calculate_video_credit_cost, which is what is charged.
+ */
+export const estimateVideoCredits = (
+  entitlements: EntitlementsResponse,
+  durationSeconds: number,
+  ratioCount: number,
+): number => {
+  const base = (durationSeconds / 60) * entitlements.credits_per_video_minute;
+  const extra = Math.max(0, ratioCount - 1) * entitlements.extra_aspect_ratio_credit_share;
+  return Math.max(1, Math.ceil(base * (1 + extra)));
+};
 
 /** Whether a plan slug is a paid tier. The one place the UI compares slugs. */
 export const isPaidPlanSlug = (plan: string): boolean => plan !== 'free';

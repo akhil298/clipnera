@@ -67,6 +67,7 @@ def plan_slug(plan: Plan) -> str:
 
 def entitlements_response(summary: PlanSummary) -> EntitlementsResponse:
     ent = summary.entitlements
+    settings = get_settings()
     return EntitlementsResponse(
         **ent.to_dict(),
         credit_minutes_total=ent.credit_minutes,
@@ -76,6 +77,8 @@ def entitlements_response(summary: PlanSummary) -> EntitlementsResponse:
         plan_expires_at=summary.plan_expires_at,
         next_credit_reset_at=summary.next_credit_reset_at,
         usage_today=summary.usage_today,
+        credits_per_video_minute=settings.CREDITS_PER_VIDEO_MINUTE,
+        extra_aspect_ratio_credit_share=settings.EXTRA_ASPECT_RATIO_CREDIT_SHARE,
         has_pending_payment=summary.has_pending_payment,
         show_plan_notice=summary.show_plan_notice,
     )
@@ -548,9 +551,14 @@ class SubscriptionService:
         """Audit log of manual top-ups, newest first."""
         return [topup_response(e) for e in await self.list_admin_topups(query, limit, offset)]
 
-    def calculate_video_credit_cost(self, duration_seconds: int) -> int:
-        per_minute = get_settings().CREDITS_PER_VIDEO_MINUTE
-        return max(1, math.ceil(duration_seconds / 60 * per_minute))
+    def calculate_video_credit_cost(self, duration_seconds: int, aspect_ratio_count: int = 1) -> int:
+        """Credits for one run: a rate per video minute, plus a share of that
+        for each output ratio past the first. Mirrored by estimateVideoCredits
+        in frontend/hooks/useEntitlements.ts."""
+        settings = get_settings()
+        base = duration_seconds / 60 * settings.CREDITS_PER_VIDEO_MINUTE
+        extra = max(0, aspect_ratio_count - 1) * settings.EXTRA_ASPECT_RATIO_CREDIT_SHARE
+        return max(1, math.ceil(base * (1 + extra)))
 
 
 class InsufficientCreditsError(Exception):

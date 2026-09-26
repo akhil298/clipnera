@@ -1,10 +1,11 @@
 """Editorial decisions on top of face tracking: layout, shot cuts and beats.
 
 The cutter frames whoever is talking; this module decides how the frame is
-built. For vertical output it can stack two regions (facecam over gameplay,
-one speaker over the other, a screen over its presenter), and within a
-followed shot it places the director's beats: a punch-in zoom where a point
-lands, a cut to the listener's face for a reaction. Everything here is
+built. The frame is decided shot by shot, from the people actually in each
+shot: for vertical output it can stack two regions (facecam over gameplay, one
+speaker over the other, a screen over its presenter), a shot with nobody in it
+is shown whole, and within a followed shot it places the director's beats: a
+punch-in zoom where a point lands, a cut to the listener's face for a reaction. Everything here is
 geometry and timing; FFmpeg work stays in :mod:`video_processor.ffmpeg_service`.
 """
 
@@ -33,6 +34,17 @@ MIN_PART_SECONDS = 0.4
 # A facecam is a small face that stays put.
 FACECAM_MAX_AREA = 0.06
 FACECAM_MAX_DRIFT = 0.05
+# A shot shorter than this joins its neighbour; re-laying the frame for a flash
+# of footage reads as a glitch.
+MIN_SHOT_SECONDS = 1.0
+# A person is in a shot when seen in at least this share of its sampled frames.
+MIN_SHOT_PRESENCE = 0.4
+# A stacked speaker's cell is centred this many face heights below the face, so
+# the face sits in the upper part of the cell with room for the shoulders.
+SPEAKER_HEADROOM = 0.5
+# A faceless shot is shown whole only when cropping would lose this much more
+# width than the output shape keeps; a near match is simply cropped.
+FIT_MIN_ASPECT_GAP = 1.15
 
 
 @dataclass(frozen=True)
@@ -45,7 +57,7 @@ class Cell:
 
 @dataclass
 class Layout:
-    kind: str  # follow | split_gameplay | two_speaker_stack | screen_with_speaker
+    kind: str  # follow | fit | split_gameplay | two_speaker_stack | screen_with_speaker
     cells: list[Cell] = field(default_factory=list)
 
     @property
@@ -80,6 +92,39 @@ def shot_cuts(frames: Iterable[tuple[float, np.ndarray]]) -> list[float]:
     return cuts
 
 
+def shot_windows(start: float, end: float, cuts: list[float]) -> list[tuple[float, float]]:
+    """``start``..``end`` divided at the camera cuts inside it.
+
+    A sliver shorter than ``MIN_SHOT_SECONDS`` joins the shot before it, or
+    the one after when it opens the span.
+    """
+    bounds = [start, *(c for c in sorted(cuts) if start < c < end), end]
+    windows: list[list[float]] = []
+    for low, high in zip(bounds, bounds[1:]):
+        if windows and (high - low < MIN_SHOT_SECONDS or windows[-1][1] - windows[-1][0] < MIN_SHOT_SECONDS):
+            windows[-1][1] = high
+        else:
+            windows.append([low, high])
+    return [(low, high) for low, high in windows]
+
+
+def tracks_in_shot(
+    tracks: list[SpeakerTrack], start: float, end: float, sample_interval: float
+) -> list[SpeakerTrack]:
+    """The people in ``start``..``end``, each cut down to their samples there.
+
+    A track can span camera angles, and a close-up and a wide shot put the same
+    person in different places; averaged over both, the box frames neither.
+    """
+    expected = max(1.0, (end - start) / sample_interval)
+    present = []
+    for track in tracks:
+        samples = [s for s in track.samples if start <= s.timestamp < end]
+        if len(samples) >= expected * MIN_SHOT_PRESENCE:
+            present.append(SpeakerTrack(track_id=track.track_id, samples=samples))
+    return present
+
+
 def choose_layout(
     hint: str,
     detected: str,
@@ -92,9 +137,14 @@ def choose_layout(
 ) -> Layout:
     """How to build the frame, from the director's hint and what was actually detected.
 
-    A composite layout is used only when the faces it needs were found; any
-    doubt falls back to following the speaker, which is always safe.
+    ``tracks`` are the people in the stretch being framed (see
+    :func:`tracks_in_shot`). With nobody there the whole picture is shown, since
+    a crop would cut an arbitrary slice out of it. A composite layout is used
+    only when the faces it needs were found; any other doubt falls back to
+    following the speaker, which is always safe.
     """
+    if not tracks and source_width / max(1, source_height) > output_width / output_height * FIT_MIN_ASPECT_GAP:
+        return Layout("fit")
     if aspect_ratio != VERTICAL or source_width / max(1, source_height) < 1.2:
         return Layout("follow")
     wants_split = hint == "split_gameplay" or detected == "gaming_with_facecam"
@@ -109,12 +159,13 @@ def choose_layout(
                 Cell(_centre_region(output_width / (output_height - top), source_width, source_height), output_height - top),
             ])
     if hint == "two_speaker_stack":
-        pair = sorted(_most_present(tracks, 2), key=lambda t: _mean_box(t).center[0])
+        pair = sorted(_most_present(tracks, 2), key=lambda t: _typical_box(t).center[0])
         if len(pair) == 2:
             half = output_height // 2 // 2 * 2
             heights = (half, output_height - half)
             return Layout("two_speaker_stack", [
-                Cell(region_around(_mean_box(track), 3.2, output_width / h, source_width, source_height), h)
+                Cell(region_around(_with_headroom(_typical_box(track)), 3.2, output_width / h,
+                                   source_width, source_height), h)
                 for track, h in zip(pair, heights)
             ])
     if wants_screen:
@@ -123,7 +174,7 @@ def choose_layout(
             top = round(output_width * source_height / source_width) // 2 * 2
             return Layout("screen_with_speaker", [
                 Cell(Box(0.0, 0.0, 1.0, 1.0), top),
-                Cell(region_around(_mean_box(speaker[0]), 3.5, output_width / (output_height - top),
+                Cell(region_around(_with_headroom(_typical_box(speaker[0])), 3.5, output_width / (output_height - top),
                                    source_width, source_height), output_height - top),
             ])
     return Layout("follow")
@@ -196,13 +247,14 @@ def _centre_region(cell_aspect: float, source_width: int, source_height: int) ->
     return region_around(Box(0.5, 0.5, 0.0, 1.0), 1.0, cell_aspect, source_width, source_height)
 
 
-def _mean_box(track: SpeakerTrack) -> Box:
-    boxes = [s.face.box for s in track.samples]
-    n = max(1, len(boxes))
-    return Box(
-        sum(b.x for b in boxes) / n, sum(b.y for b in boxes) / n,
-        sum(b.width for b in boxes) / n, sum(b.height for b in boxes) / n,
-    )
+def _typical_box(track: SpeakerTrack) -> Box:
+    """Per-coordinate median of the track's boxes; one stray detection cannot drag it."""
+    boxes = [s.face.box for s in track.samples] or [Box()]
+    return Box(*(float(np.median([getattr(b, key) for b in boxes])) for key in ("x", "y", "width", "height")))
+
+
+def _with_headroom(face: Box) -> Box:
+    return Box(face.x, face.y + face.height * SPEAKER_HEADROOM, face.width, face.height)
 
 
 def _most_present(tracks: list[SpeakerTrack], count: int) -> list[SpeakerTrack]:
@@ -212,7 +264,7 @@ def _most_present(tracks: list[SpeakerTrack], count: int) -> list[SpeakerTrack]:
 def _facecam(tracks: list[SpeakerTrack]) -> Box | None:
     """The mean box of a small, stationary face, or None."""
     for track in _most_present(tracks, 3):
-        mean = _mean_box(track)
+        mean = _typical_box(track)
         drift = max(
             (abs(s.face.box.center[0] - mean.center[0]) + abs(s.face.box.center[1] - mean.center[1]))
             for s in track.samples

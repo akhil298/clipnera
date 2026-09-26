@@ -284,13 +284,14 @@ class SubtitleStylingService:
         frame_size: Optional[tuple[int, int]] = None,
     ) -> list[str]:
         # No -ss: the input is already the trimmed clip. veryfast renders about
-        # twice as fast as fast; at CRF 23 the difference is only file size.
+        # twice as fast as fast at the same quality. This is the last encode
+        # the viewer sees, so CRF 18 keeps it visually lossless against the cut.
         return [
             "ffmpeg", "-y",
             "-i", video_path,
             *burn_filter_args(video_filters, enable_watermark, timeline, frame_size),
             "-t", str(duration),
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             output_path,

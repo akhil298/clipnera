@@ -27,6 +27,7 @@ Feature = Literal[
     "batch_processing",
     "team_members",
     "social_scheduling",
+    "custom_aspect_ratios",
 ]
 
 # Actions metered per UTC day with ``check_limit``. None in a plan's limits
@@ -95,6 +96,8 @@ class Entitlements:
     social_scheduling: bool
     social_max_schedule_days: int
     social_posts_per_day: int
+    # Picking output ratios at upload; without it the content category decides.
+    custom_aspect_ratios: bool
 
     def allows_caption_style(self, style: str) -> bool:
         return self.caption_styles is None or style in self.caption_styles
@@ -117,6 +120,7 @@ class Entitlements:
             "batch_processing": self.batch_processing,
             "team_members": self.team_members,
             "social_scheduling": self.social_scheduling,
+            "custom_aspect_ratios": self.custom_aspect_ratios,
         }
 
     def allows(self, feature: Feature) -> bool:
@@ -155,6 +159,7 @@ _PRO_FEATURES: dict[str, Any] = {
     "social_scheduling": True,
     "social_max_schedule_days": 30,
     "social_posts_per_day": 25,
+    "custom_aspect_ratios": True,
 }
 
 ENTITLEMENTS: dict[str, Entitlements] = {
@@ -180,6 +185,7 @@ ENTITLEMENTS: dict[str, Entitlements] = {
         social_scheduling=False,
         social_max_schedule_days=0,
         social_posts_per_day=3,
+        custom_aspect_ratios=False,
     ),
     PlanSlug.PRO.value: Entitlements(
         plan=PlanSlug.PRO.value,

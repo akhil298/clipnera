@@ -17,6 +17,7 @@ export const FEATURE_LABELS: Record<PlanFeature, string> = {
   batch_processing: 'Batch processing',
   team_members: 'Adding team members',
   social_scheduling: 'Scheduling social posts',
+  custom_aspect_ratios: 'Choosing output formats',
 };
 
 const USAGE_LABELS: Record<UsageKey, string> = {

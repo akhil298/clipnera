@@ -17,11 +17,12 @@ import {
   ExternalLink,
   ArrowDown
 } from 'lucide-react';
-import { VideoProject, AudioEnhancementConfig, DownloadProgress } from '@/lib/types';
+import { VideoProject, AudioEnhancementConfig, DownloadProgress, AspectRatio } from '@/lib/types';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { analyzeVideoSource, extractYoutubeVideoId } from '@/lib/utils/urlParser';
 import { clipApi, pipelineApi, YouTubeMetadataResponse } from '@/lib/api';
 import { PipelineProgressTracker } from './PipelineProgressTracker';
+import { OutputFormatPicker } from './OutputFormatPicker';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -39,6 +40,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [customFolderName, setCustomFolderName] = useState('Alex Hormozi — $100M Leads Masterclass');
 
   const { entitlements } = useEntitlements();
+  // Empty means Auto: the pipeline picks formats from the content category.
+  const [outputRatios, setOutputRatios] = useState<AspectRatio[]>([]);
 
   const [autoBroll, setAutoBroll] = useState(true);
   const [autoSfx, setAutoSfx] = useState(true);
@@ -163,6 +166,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           audioEnhancement: audioEnhanceConfig,
         });
         projectPublished = true;
+        // The folder card now tracks progress; reset so reopening shows a fresh form.
+        setIsProcessing(false);
+        setUrlInput('');
         onClose();
       }
 
@@ -228,7 +234,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       setPipelineError(null);
       setPipelineStarted(false);
 
-      const startResult = await pipelineApi.start(projectId!, steps, audioConfig);
+      const startResult = await pipelineApi.start(projectId!, steps, audioConfig, outputRatios);
       setPipelineSteps(startResult.selected_steps || steps);
       setCreditsDeducted(startResult.credits_deducted || 0);
 
@@ -273,10 +279,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       setProcessingLogs((prev) => [...prev, 'Pipeline encountered an issue. Using local simulation fallback...']);
     }
 
-    if (projectPublished) {
-      setIsProcessing(false);
-      return;
-    }
+    if (projectPublished) return;
 
     await new Promise((r) => setTimeout(r, 600));
     setProcessingStep(5);
@@ -589,6 +592,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 )}
               </div>
 
+              <OutputFormatPicker
+                value={outputRatios}
+                onChange={setOutputRatios}
+                durationSeconds={ytMeta?.duration_seconds || null}
+              />
+
               {/* AI Auto-Editing Options */}
               <div className="border-t border-neutral-800/80 pt-4 space-y-4">
                 <div className="flex items-center justify-between">
@@ -597,7 +606,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     <span>Viral Style & Captions Setup</span>
                   </h3>
                   <span className="text-[11px] text-amber-400 font-medium">
-                    Auto-Reframed {entitlements.aspect_ratios.join(' · ')}
+                    {outputRatios.length ? `Reframed ${outputRatios.join(' · ')}` : 'Auto-Reframed'}
                   </span>
                 </div>
 

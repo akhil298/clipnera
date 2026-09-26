@@ -8,7 +8,9 @@ hand and no one place was responsible for the result.
 Design notes:
 
 * Layout is inferred from faces actually detected in the clip, not from a
-  separate analysis pass that had no face data to work with.
+  separate analysis pass that had no face data to work with, and is decided
+  per camera shot: a stack of two speakers must not carry over into a
+  close-up of one of them, or into B-roll with nobody in it.
 * The crop follows the active speaker per frame and is smoothed, rather than
   being a single static window per scene.
 * Output is deliberately caption-free. Subtitles are burned at export time from
@@ -32,7 +34,15 @@ import numpy as np
 from core.exceptions import CustomException
 from clip_generation.hook import Hook
 from core.logging_config import get_logger
-from video_processor.editing import Layout, Part, choose_layout, plan_parts, shot_cuts
+from video_processor.editing import (
+    Layout,
+    Part,
+    choose_layout,
+    plan_parts,
+    shot_cuts,
+    shot_windows,
+    tracks_in_shot,
+)
 from video_processor.face_detection import Face, FaceDetector
 from video_processor.geometry import (
     Box,
@@ -211,14 +221,14 @@ class ClipCutter:
             )
             result.crop_tracking[aspect_ratio] = [point.copy() for point in tracking]
             output_path = self._output_path(request, aspect_ratio)
-            frame = choose_layout(
-                request.layout_hint, layout, tracks, aspect_ratio,
-                source_width, source_height, *output_dimensions(aspect_ratio),
+            shots = _plan_shots(
+                request, layout, tracks, cuts, aspect_ratio, source_width, source_height,
             )
-            if frame.composite:
-                result.layout = frame.kind
+            result.layout = next((frame.kind for _, frame in shots if frame.composite), result.layout)
             log.info("[LAYOUT] clip=%s ratio=%s hint=%s detected=%s used=%s beats=%d",
-                     request.clip_id, aspect_ratio, request.layout_hint, layout, frame.kind, len(request.beats))
+                     request.clip_id, aspect_ratio, request.layout_hint, layout,
+                     " ".join(f"{part.start:.1f}-{part.end:.1f}:{frame.kind}" for part, frame in shots),
+                     len(request.beats))
             try:
                 await self._render(
                     request=request,
@@ -227,7 +237,7 @@ class ClipCutter:
                     aspect_ratio=aspect_ratio,
                     source_width=source_width,
                     source_height=source_height,
-                    frame=frame,
+                    shots=shots,
                     listener_at=_listener_finder(tracks, timestamps, speakers),
                 )
                 result.output_files[aspect_ratio] = str(output_path)
@@ -332,14 +342,16 @@ class ClipCutter:
 
     def _detect_faces(self, clip_id: str, frames: list[tuple[float, bytes]]) -> list[list[Face]]:
         started = time.monotonic()
-        faces_per_frame = [self._faces.detect(frame) for _, frame in _decode_frames(frames)]
+        faces_per_frame, backend = self._faces.detect_clip(
+            lambda: (frame for _, frame in _decode_frames(frames))
+        )
 
         all_faces = [face for faces in faces_per_frame for face in faces]
         frames_with_faces = sum(1 for faces in faces_per_frame if faces)
         log.info(
             "[FACES] clip=%s backend=%s frames=%d with_faces=%d total_faces=%d max_per_frame=%d "
             "avg_confidence=%.2f elapsed=%.2fs",
-            clip_id, self._faces.backend, len(frames), frames_with_faces, len(all_faces),
+            clip_id, backend, len(frames), frames_with_faces, len(all_faces),
             max((len(faces) for faces in faces_per_frame), default=0),
             sum(f.confidence for f in all_faces) / len(all_faces) if all_faces else 0.0,
             time.monotonic() - started,
@@ -496,7 +508,7 @@ class ClipCutter:
         aspect_ratio: str,
         source_width: int,
         source_height: int,
-        frame: Layout | None = None,
+        shots: list[tuple[Part, Layout]],
         listener_at: Any = None,
     ) -> None:
         from video_processor.ffmpeg_service import FFmpegService
@@ -507,8 +519,14 @@ class ClipCutter:
         # Beats reframe inside the crop, so they need a crop smaller than the frame.
         can_reframe = crop_w < source_width or crop_h < source_height
 
-        async def render_part(part: Part, path: Path) -> None:
-            if frame is not None and frame.composite:
+        async def render_part(part: Part, frame: Layout, path: Path) -> None:
+            if frame.kind == "fit":
+                await ffmpeg.render_fit(
+                    request.source_path, str(path), part.start, part.end - part.start,
+                    target_width, target_height, source_width,
+                )
+                return
+            if frame.composite:
                 await ffmpeg.render_stack(
                     request.source_path, str(path), part.start, part.end - part.start,
                     [(cell.box.as_dict(), cell.height) for cell in frame.cells],
@@ -534,22 +552,25 @@ class ClipCutter:
                 zoom=part.zoom,
             )
 
-        parts: list[Part] = [Part(request.hook.start, request.hook.end)] if request.hook else []
-        for start, end in request.body_spans:
-            if can_reframe and not (frame and frame.composite) and request.beats:
-                parts.extend(plan_parts(start, end, request.beats, listener_at or (lambda _t: None)))
+        parts: list[tuple[Part, Layout]] = []
+        for shot, frame in shots:
+            if can_reframe and frame.kind == "follow" and request.beats:
+                parts.extend(
+                    (part, frame)
+                    for part in plan_parts(shot.start, shot.end, request.beats, listener_at or (lambda _t: None))
+                )
             else:
-                parts.append(Part(start, end))
+                parts.append((shot, frame))
 
         if len(parts) == 1:
-            await render_part(parts[0], output_path)
+            await render_part(*parts[0], output_path)
         else:
             # Every part goes through the same encoder settings, so they join by
             # stream copy and the clip is never encoded a second time.
             part_paths = [output_path.with_suffix(f".part{index}.mp4") for index in range(len(parts))]
             try:
-                for part, path in zip(parts, part_paths):
-                    await render_part(part, path)
+                for (part, frame), path in zip(parts, part_paths):
+                    await render_part(part, frame, path)
                 await ffmpeg.concat_segments([str(path) for path in part_paths], str(output_path))
             finally:
                 for path in part_paths:
@@ -561,6 +582,41 @@ class ClipCutter:
                 code="CLIP_RENDER_EMPTY",
                 status_code=500,
             )
+
+
+def _plan_shots(
+    request: CutRequest,
+    detected: str,
+    tracks: list[SpeakerTrack],
+    cuts: list[float],
+    aspect_ratio: str,
+    source_width: int,
+    source_height: int,
+) -> list[tuple[Part, Layout]]:
+    """The clip in play order (hook first), one entry per run of shots sharing a layout.
+
+    Each shot is framed from the people in that shot alone. Neighbouring shots
+    that both follow the speaker, or both show the frame whole, render as one
+    part: the tracked crop already cuts cleanly at shot boundaries, and fewer
+    parts mean fewer encoder runs.
+    """
+    output_size = output_dimensions(aspect_ratio)
+    spans = ([(request.hook.start, request.hook.end)] if request.hook else []) + request.body_spans
+    shots: list[tuple[Part, Layout]] = []
+    for span_start, span_end in spans:
+        joinable = False  # Never join across spans: they are separate stretches of source.
+        for start, end in shot_windows(span_start, span_end, cuts):
+            present = tracks_in_shot(tracks, start, end, SAMPLE_INTERVAL_SECONDS)
+            frame = choose_layout(
+                request.layout_hint, detected, present, aspect_ratio,
+                source_width, source_height, *output_size,
+            )
+            if joinable and not frame.composite and shots[-1][1].kind == frame.kind:
+                shots[-1] = (Part(shots[-1][0].start, end), frame)
+            else:
+                shots.append((Part(start, end), frame))
+            joinable = True
+    return shots
 
 
 def _shot_ranges(timestamps: list[float], cuts: list[float]) -> list[tuple[int, int]]:

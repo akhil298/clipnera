@@ -14,6 +14,8 @@ from video_processor.editing import (
     plan_parts,
     region_around,
     shot_cuts,
+    shot_windows,
+    tracks_in_shot,
 )
 from video_processor.face_detection import Face
 from video_processor.geometry import Box
@@ -57,9 +59,59 @@ class TestLayout:
         assert choose_layout("two_speaker_stack", "single_subject", [_track(1, Box(0.4, 0.3, 0.2, 0.3))],
                              "9:16", 1920, 1080, 1080, 1920).kind == "follow"
 
+    def test_a_shot_with_nobody_is_shown_whole(self):
+        assert choose_layout("two_speaker_stack", "two_subjects_left_right", [], "9:16", 1920, 1080, 1080, 1920).kind == "fit"
+
+    def test_a_faceless_shot_already_in_shape_is_cropped(self):
+        assert choose_layout("auto", "no_subject", [], "16:9", 1920, 1080, 1920, 1080).kind == "follow"
+
+    def test_stacked_speaker_sits_above_the_cell_centre(self):
+        left, right = _track(1, Box(0.15, 0.3, 0.12, 0.2)), _track(2, Box(0.7, 0.3, 0.12, 0.2))
+        top = choose_layout("two_speaker_stack", "two_subjects_left_right", [left, right],
+                            "9:16", 1920, 1080, 1080, 1920).cells[0].box
+        face_cy = 0.3 + 0.1
+        assert top.x < 0.21 < top.x + top.width
+        assert face_cy < top.y + top.height / 2
+
     def test_region_keeps_the_cell_shape(self):
         region = region_around(Box(0.45, 0.4, 0.1, 0.2), 2.0, 1080 / 960, 1920, 1080)
         assert region.width * 1920 / (region.height * 1080) == pytest.approx(1080 / 960, rel=1e-3)
+
+
+class TestShots:
+    def test_windows_split_at_cuts_and_absorb_slivers(self):
+        assert shot_windows(10.0, 30.0, [5.0, 15.0, 15.4, 22.0, 40.0]) == [(10.0, 15.4), (15.4, 22.0), (22.0, 30.0)]
+
+    def test_a_leading_sliver_joins_the_next_shot(self):
+        assert shot_windows(0.0, 10.0, [0.3, 6.0]) == [(0.0, 6.0), (6.0, 10.0)]
+
+    def test_people_are_counted_per_shot(self):
+        """Two speakers in a wide shot, then a close-up of one, then B-roll."""
+        face = lambda box: Face(box=box, confidence=0.9, mouth=box)
+        wide_left = [FaceSample(t / 10, face(Box(0.15, 0.3, 0.1, 0.18))) for t in range(0, 40)]
+        close_left = [FaceSample(t / 10, face(Box(0.4, 0.2, 0.25, 0.4))) for t in range(40, 80)]
+        wide_right = [FaceSample(t / 10, face(Box(0.75, 0.3, 0.1, 0.18))) for t in range(0, 40)]
+        left = SpeakerTrack(1, wide_left + close_left)
+        right = SpeakerTrack(2, wide_right)
+        kinds = []
+        for start, end in shot_windows(0.0, 12.0, [4.0, 8.0]):
+            present = tracks_in_shot([left, right], start, end, 0.1)
+            kinds.append(choose_layout("two_speaker_stack", "two_subjects_left_right", present,
+                                       "9:16", 1920, 1080, 1080, 1920).kind)
+        assert kinds == ["two_speaker_stack", "follow", "fit"]
+
+    def test_the_stack_frames_the_shot_not_the_clip_average(self):
+        face = lambda box: Face(box=box, confidence=0.9, mouth=box)
+        # The same person on the right of a wide shot, then centred in a close-up.
+        samples = [FaceSample(t / 10, face(Box(0.8, 0.3, 0.1, 0.18))) for t in range(0, 40)]
+        samples += [FaceSample(t / 10, face(Box(0.4, 0.2, 0.25, 0.4))) for t in range(40, 80)]
+        right = SpeakerTrack(2, samples)
+        left = _track(1, Box(0.15, 0.3, 0.1, 0.18), samples=40)
+        left.samples = [FaceSample(t / 10, left.samples[0].face) for t in range(0, 40)]
+        present = tracks_in_shot([left, right], 0.0, 4.0, 0.1)
+        bottom = choose_layout("two_speaker_stack", "two_subjects_left_right", present,
+                               "9:16", 1920, 1080, 1080, 1920).cells[1].box
+        assert bottom.x < 0.85 < bottom.x + bottom.width
 
 
 class TestBeats:
@@ -125,6 +177,20 @@ class TestRenders:
             360, 640, 360,
         )
         assert self._size(out) == "360x640"
+
+    @pytest.mark.asyncio
+    async def test_fitted_and_cropped_parts_join_by_copy(self, source, tmp_path):
+        from video_processor.ffmpeg_service import FFmpegService
+
+        ffmpeg = FFmpegService()
+        fitted, cropped, joined = tmp_path / "fit.mp4", tmp_path / "crop.mp4", tmp_path / "joined.mp4"
+        await ffmpeg.render_fit(str(source), str(fitted), 0.0, 1.5, 360, 640, 640)
+        await ffmpeg.crop_with_tracking(input_path=str(source), output_path=str(cropped), start_time=1.5,
+                                        duration=1.5, crop_tracking=[], target_width=360, target_height=640,
+                                        source_width=640, source_height=360)
+        await ffmpeg.concat_segments([str(fitted), str(cropped)], str(joined))
+        assert self._size(fitted) == "360x640"
+        assert self._size(joined) == "360x640"
 
     @pytest.mark.asyncio
     async def test_zoomed_and_plain_parts_join_by_copy(self, source, tmp_path):

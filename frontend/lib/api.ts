@@ -989,7 +989,8 @@ export type PlanFeature =
   | 'depth_captions'
   | 'batch_processing'
   | 'team_members'
-  | 'social_scheduling';
+  | 'social_scheduling'
+  | 'custom_aspect_ratios';
 
 export type UsageKey = 'exports' | 'audio_enhancements';
 
@@ -1020,6 +1021,8 @@ export interface PlanCapabilities {
   social_scheduling: boolean;
   social_max_schedule_days: number;
   social_posts_per_day: number;
+  /** Picking output ratios at upload; without it the content category decides. */
+  custom_aspect_ratios: boolean;
   features: Record<PlanFeature, boolean>;
 }
 
@@ -1035,6 +1038,9 @@ export interface EntitlementsResponse extends PlanCapabilities {
   has_pending_payment: boolean;
   /** One-time "features moved to Pro" notice for accounts that predate it. */
   show_plan_notice: boolean;
+  /** Pricing; see estimateVideoCredits in hooks/useEntitlements.ts. */
+  credits_per_video_minute: number;
+  extra_aspect_ratio_credit_share: number;
 }
 
 export interface PlanPriceResponse {

@@ -52,6 +52,10 @@ class BaseConfig(BaseSettings):
     # Credits charged per minute of source video, rounded up per video with a
     # minimum of one credit.
     CREDITS_PER_VIDEO_MINUTE: float = 2.0
+    # Each output ratio picked beyond the first adds this share of the base
+    # cost. Rendering is a small part of a run next to transcription and AI
+    # analysis, so an extra ratio costs a fraction, not a whole run.
+    EXTRA_ASPECT_RATIO_CREDIT_SHARE: float = 0.5
     XAI_API_KEY: str = ""
     XAI_MODEL: str = "grok-2-mini"
     GROQ_API_KEY: str = ""

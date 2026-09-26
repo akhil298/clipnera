@@ -14,6 +14,28 @@ log = get_logger(__name__)
 
 CAPTION_SAFE_WIDTH = 0.90
 DEFAULT_WIN_SPAN_RATIO = 1.75
+# Mean advance per character, in em, as (all caps, sentence case), measured over
+# English text with its spaces. Captions are drawn unwrapped (\q2), so a line's
+# width must be known before it is laid out: a character count alone let a
+# three-word line in a wide face run hundreds of pixels past the frame.
+FONT_CHAR_EM: dict[str, tuple[float, float]] = {
+    "Anton": (0.417, 0.406),
+    "Archivo Black": (0.678, 0.551),
+    "Bangers": (0.372, 0.372),
+    "Bebas Neue": (0.341, 0.341),
+    "DejaVu Sans": (0.672, 0.575),
+    "DejaVu Sans Mono": (0.602, 0.602),
+    "DejaVu Serif": (0.712, 0.570),
+    "DM Serif Display": (0.534, 0.447),
+    "Impact": (0.443, 0.407),
+    "Luckiest Guy": (0.509, 0.513),
+    "Permanent Marker": (0.611, 0.508),
+}
+# An unlisted face is assumed as wide as the widest listed one, so it errs
+# toward shorter lines rather than off the frame.
+DEFAULT_CHAR_EM = (0.712, 0.602)
+# Room for the active word's pop scale, outlines and wide letters (M, W).
+CAPTION_WIDTH_MARGIN = 1.15
 # Bundled caption faces (SIL OFL / Apache 2.0), so styles render identically on
 # any host instead of depending on what fontconfig happens to have installed.
 FONTS_DIR = Path(__file__).resolve().parent.parent / "static" / "fonts"
@@ -199,10 +221,24 @@ def escape_ass(text: str) -> str:
     )
 
 
-def caption_layout_budget(max_words_per_line: int, width: int, height: int) -> int:
-    safe_width = int(width * CAPTION_SAFE_WIDTH)
-    approx_char_width = max(1, round(width / (max_words_per_line * 6 + 10)))
-    return max(8, min(40, safe_width // approx_char_width))
+def char_width_px(font_family: str, font_size: int, uppercase: bool) -> float:
+    """Typical on-screen width of one character, margin included."""
+    upper, mixed = FONT_CHAR_EM.get(font_family, DEFAULT_CHAR_EM)
+    return font_size * (upper if uppercase else mixed) * CAPTION_WIDTH_MARGIN
+
+
+def caption_layout_budget(char_px: float, width: int) -> int:
+    """Most characters a caption line holds inside the safe width."""
+    return max(4, int(width * CAPTION_SAFE_WIDTH / char_px))
+
+
+def fit_font_size(font_size: int, chars: int, char_px: float, max_width: float) -> int:
+    """``font_size`` shrunk just enough for ``chars`` characters to fit ``max_width``.
+
+    For text that cannot be broken further, such as one long word.
+    """
+    needed = chars * char_px
+    return font_size if needed <= max_width else max(4, int(font_size * max_width / needed))
 
 
 def group_words(
@@ -352,6 +388,12 @@ class AssGenerator:
         hook_font_size = ass_font_size(template["title_font_size"] * width / 1080.0)
         title_margin_v = round(template["title_position_y"] * height)
         title_margin_h = round(width * 0.1)
+        if title and title.strip():
+            # The title wraps between words, but a word longer than the line
+            # would run off both edges, so the size gives way instead.
+            longest = max(len(word) for word in title.split())
+            title_char_px = char_width_px(template["font_family"], hook_font_size, title.isupper())
+            hook_font_size = fit_font_size(hook_font_size, longest, title_char_px, width - 2 * title_margin_h)
         title_box_pad = max(6, round(height * 0.009))
         title_shadow = max(2, round(height * 0.0032))
 
@@ -400,7 +442,8 @@ class AssGenerator:
         if not words_in_clip:
             return "\n".join(header_lines) + "\n"
 
-        max_chars = caption_layout_budget(template["max_words_per_line"], width, height)
+        caption_char_px = char_width_px(template["font_family"], font_size, bool(template.get("uppercase")))
+        max_chars = caption_layout_budget(caption_char_px, width)
         groups = _split_at_breaks(group_words(words_in_clip, max_chars, template["max_words_per_line"]), breaks)
 
         emoji_by_index, emphasis_indices = annotate_caption_words(
@@ -428,6 +471,11 @@ class AssGenerator:
             if cut is not None:
                 group_end = max(last_word_end, min(group_end, cut))
 
+            # A line of one word too long for the frame is shrunk to fit.
+            line_chars = sum(len(w["text"]) for w in group) + len(group) - 1
+            line_size = fit_font_size(font_size, line_chars, caption_char_px, width * CAPTION_SAFE_WIDTH)
+            size_tag = f"\\fs{line_size}" if line_size < font_size else ""
+            size_block = f"{{{size_tag}}}" if size_tag else ""
             still = f"{{\\an5\\q2\\pos({caption_x},{caption_y})}}"
             # Each caption line animates in once, on its first word's event;
             # the events for its later words hold it in place.
@@ -461,11 +509,12 @@ class AssGenerator:
                     animation_speed=animation_speed,
                     animation=animation,
                     pill_color=pill_color,
+                    reset=f"\\r{size_tag}",
                 )
 
                 lines.append(
                     f"Dialogue: 0,{ass_time(w_start_clip)},{ass_time(w_end_clip)}"
-                    f",Caption,,0,0,0,,{anchor}{rendered}"
+                    f",Caption,,0,0,0,,{anchor}{size_block}{rendered}"
                 )
             # cap_idx is the index of each group's first word. Advancing it per
             # word event moved emphasis and emoji one word further along on
@@ -490,7 +539,9 @@ class AssGenerator:
         animation_speed: float = 1.0,
         animation: str = "pop",
         pill_color: str | None = None,
+        reset: str = "\\r",
     ) -> str:
+        """``reset`` ends each word's styling; it carries any line-level size."""
         parts: list[str] = []
         for i, word in enumerate(group):
             is_active = i == active_index
@@ -498,20 +549,20 @@ class AssGenerator:
             raw = escape_ass(word.get("text", ""))
             text = raw.upper() if template.get("uppercase", False) else raw
             if not text:
-                parts.append("{\\r}")
+                parts.append(f"{{{reset}}}")
                 continue
 
             if is_active and animation != "none":
                 parts.append(
                     f"{{{_active_word_tags(template, animation, animation_speed, highlight_color, pill_color, box_color, outline_width, primary_color)}}}"
-                    f"{text}{{\\r}}"
+                    f"{text}{{{reset}}}"
                 )
             elif is_emphasized and emphasis_color and not pill_color:
                 # On a plate the emphasis colour is the active word's pill, so
                 # it is not also used for text.
-                parts.append(f"{{\\c{emphasis_color}}}{text}{{\\r}}")
+                parts.append(f"{{\\c{emphasis_color}}}{text}{{{reset}}}")
             else:
-                parts.append(f"{{\\c{primary_color}}}{text}{{\\r}}")
+                parts.append(f"{{\\c{primary_color}}}{text}{{{reset}}}")
 
         return " ".join(parts)
 
@@ -583,7 +634,7 @@ class _FFmpegHelper:
             "-ss", str(clip_start), "-i", video_path,
             *burn_filter_args([ass_filter(ass_path)], enable_watermark),
             *time_args,
-            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             output_path,

@@ -114,6 +114,7 @@ class PlanCapabilities(BaseModel):
     social_scheduling: bool
     social_max_schedule_days: int
     social_posts_per_day: int
+    custom_aspect_ratios: bool
     # Every boolean capability by name, as checked by require_feature.
     features: Dict[str, bool]
 
@@ -133,6 +134,10 @@ class EntitlementsResponse(PlanCapabilities):
     plan_expires_at: Optional[datetime] = None
     next_credit_reset_at: Optional[datetime] = None
     usage_today: Dict[str, int] = {}
+    # Pricing, so the UI can show a run's cost before it starts; see
+    # SubscriptionService.calculate_video_credit_cost.
+    credits_per_video_minute: float = 0.0
+    extra_aspect_ratio_credit_share: float = 0.0
     has_pending_payment: bool = False
     # One-time notice for accounts that predate Pro gating.
     show_plan_notice: bool = False

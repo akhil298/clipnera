@@ -66,15 +66,20 @@ class TestEntitlementsTable:
 class TestPipelineEnforcement:
     """_apply_entitlements is the server-side gate behind the UI controls."""
 
-    def test_free_request_for_paid_ratios_is_clamped(self):
+    @pytest.mark.parametrize("requested", [["9:16", "1:1", "4:5", "16:9"], ["16:9"], ["9:16"]])
+    def test_free_cannot_pick_ratios(self, requested):
+        """Picking ratios is Pro; a free request falls back to the automatic choice."""
         free = entitlements_for(PlanSlug.FREE.value)
-        ratios, _, _ = _apply_entitlements(free, ["9:16", "1:1", "4:5", "16:9"], True, None)
-        assert ratios == ["9:16"]
+        assert free.allows("custom_aspect_ratios") is False
+        ratios, _, _ = _apply_entitlements(free, requested, True, None)
+        assert ratios == []
 
-    def test_free_request_for_only_paid_ratios_is_rejected(self):
-        free = entitlements_for(PlanSlug.FREE.value)
+    def test_paid_request_for_only_unsupported_plan_ratios_is_rejected(self):
+        from dataclasses import replace
+
+        vertical_only_pro = replace(entitlements_for(PlanSlug.PRO.value), aspect_ratios=("9:16",))
         with pytest.raises(CustomException) as exc:
-            _apply_entitlements(free, ["16:9"], True, None)
+            _apply_entitlements(vertical_only_pro, ["16:9"], True, None)
         assert exc.value.status_code == 403
         assert exc.value.code == "ASPECT_RATIO_NOT_ENTITLED"
 
@@ -143,3 +148,30 @@ class TestPipelineEnforcement:
         _, _, settings = _apply_entitlements(free, ["9:16"], True, original)
         assert original["max_clips"] == 999
         assert settings["other"] == "kept"
+
+
+class TestRatioPricing:
+    """Each ratio past the first adds a share of the per-minute base cost."""
+
+    @pytest.fixture
+    def cost(self, monkeypatch):
+        from core.config import get_settings
+        from subscription.service import SubscriptionService
+
+        settings = get_settings()
+        monkeypatch.setattr(settings, "CREDITS_PER_VIDEO_MINUTE", 2.0)
+        monkeypatch.setattr(settings, "EXTRA_ASPECT_RATIO_CREDIT_SHARE", 0.5)
+        return SubscriptionService.calculate_video_credit_cost.__get__(object())
+
+    @pytest.mark.parametrize("count, expected", [(1, 20), (2, 30), (3, 40), (4, 50)])
+    def test_ten_minute_video(self, cost, count, expected):
+        assert cost(600, count) == expected
+
+    def test_auto_is_priced_as_one_ratio(self, cost):
+        assert cost(600) == cost(600, 1) == 20
+
+    def test_partial_minutes_round_up_after_the_surcharge(self, cost):
+        assert cost(90, 2) == 5  # 3 credits base x 1.5 = 4.5
+
+    def test_minimum_one_credit(self, cost):
+        assert cost(1, 1) == 1

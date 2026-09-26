@@ -41,6 +41,7 @@ function comparisonRows(c: PlanCapabilities, social: boolean): { label: string; 
     { label: `Videos up to ${Math.round(c.max_upload_duration_seconds / 60)} min`, included: true },
     { label: `${c.max_clips_per_video} clips per video`, included: true },
     { label: `Formats: ${c.aspect_ratios.join(', ')}`, included: true },
+    { label: 'Choose output formats per video', included: c.custom_aspect_ratios },
     {
       label: c.caption_styles === null ? 'Every caption style' : `${c.caption_styles.length} caption styles`,
       included: true,

@@ -195,3 +195,34 @@ class TestAnimatedPlateCaptions:
         for event in events:
             text = event.split(",,", 1)[1]
             assert not ("tell" in text and "so" in text.replace("so\\", "")), event
+
+
+class TestCaptionFit:
+    @staticmethod
+    def _captions(ass: str) -> list[str]:
+        return [line for line in ass.splitlines() if line.startswith("Dialogue: 0")]
+
+    def test_wide_face_gets_shorter_lines(self):
+        words = [{"text": w, "start": i * 0.3, "end": i * 0.3 + 0.25}
+                 for i, w in enumerate("begin to stretch spaghettification quickly now".split())]
+        ass = AssGenerator().build_ass(words, 0.0, 3.0, style_id="bubble",
+                                       style_overrides={"font_size": 54})
+        # No caption line may hold more characters than fit inside the frame.
+        from subtitle_styling.ass_generator import caption_layout_budget, char_width_px, ass_font_size
+        budget = caption_layout_budget(char_width_px("Luckiest Guy", ass_font_size(54), True), 1080)
+        for line in self._captions(ass):
+            text = "".join(part.split("}")[-1] for part in line.split(",", 9)[9].split("{"))
+            assert len(text.strip()) <= max(budget, len("SPAGHETTIFICATION"))
+
+    def test_a_word_too_long_for_the_frame_is_shrunk(self):
+        words = [{"text": "spaghettification", "start": 0.0, "end": 1.0}]
+        ass = AssGenerator().build_ass(words, 0.0, 1.0, style_id="bubble", style_overrides={"font_size": 60})
+        line = self._captions(ass)[0]
+        assert "\\fs" in line
+        assert line.count("\\r\\fs") >= 1
+
+    def test_a_long_title_word_shrinks_the_title(self):
+        normal = AssGenerator().build_ass([], 0.0, 1.0, style_id="bubble", title="Black holes")
+        long = AssGenerator().build_ass([], 0.0, 1.0, style_id="bubble", title="Spaghettificationally speaking")
+        size = lambda ass: int(next(l for l in ass.splitlines() if l.startswith("Style: Title,")).split(",")[2])
+        assert size(long) < size(normal)

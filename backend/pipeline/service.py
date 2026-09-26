@@ -1263,6 +1263,11 @@ def _apply_entitlements(
     # An empty request means "decide from the content category later", which is
     # not over-reach and must not 403; the renderer clamps its own choice to the
     # plan. Only a request that named ratios, none of them permitted, is refused.
+    # Picking ratios is a Pro feature: a plan without it gets the category's
+    # choice, clamped rather than refused like every other over-reach here.
+    if output_aspect_ratios and not entitlements.allows("custom_aspect_ratios"):
+        log.info("Ignoring requested aspect ratios on plan %s: %s", entitlements.plan, output_aspect_ratios)
+        output_aspect_ratios = []
     allowed_ratios = permitted_aspect_ratios(entitlements, output_aspect_ratios) if output_aspect_ratios else []
 
     # A forced watermark cannot be switched off by the client.
@@ -1586,12 +1591,16 @@ class PipelineRunService:
                 status_code=403,
             )
 
-        credit_cost = subscription_service.calculate_video_credit_cost(duration_seconds)
+        # Auto (no ratios named) is priced as one ratio, as it always has been.
+        credit_cost = subscription_service.calculate_video_credit_cost(
+            duration_seconds, max(1, len(output_aspect_ratios))
+        )
+        ratios_note = f", ratios {', '.join(output_aspect_ratios)}" if output_aspect_ratios else ""
         try:
             await subscription_service.deduct_credits(
                 user_id=user_id,
                 amount=credit_cost,
-                reason=f"Video processing{' (resume)' if resume else ''}: {duration_seconds}s",
+                reason=f"Video processing{' (resume)' if resume else ''}: {duration_seconds}s{ratios_note}",
                 reference_id=project_id,
                 reference_type="video_project_resume" if resume else "video_project",
             )
