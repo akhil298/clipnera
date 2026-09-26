@@ -6,6 +6,7 @@ from typing import Any
 
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from content_intelligence.director import LANGUAGE_RULE
 from core.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -122,6 +123,8 @@ For every clip return:
 - title: one sentence, at most 60 characters, about the clip's payoff (the answer, reveal or punchline), not its setup. It is burned above the captions, so it must read on its own and must not quote the transcript.
 - description: 1-2 sentences, 100-200 characters.
 - hashtags: 3-5 relevant hashtags.
+
+{LANGUAGE_RULE}
 
 Clips:
 {blocks}

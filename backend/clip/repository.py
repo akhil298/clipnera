@@ -67,6 +67,12 @@ class ClipRepository:
                 project.local_path = local_path
             await self._session.commit()
 
+    async def set_local_path(self, project_id: str, local_path: str) -> None:
+        project = await self._session.get(VideoProject, project_id)
+        if project:
+            project.local_path = local_path
+            await self._session.commit()
+
     async def list_projects(self, user_id: str) -> list[VideoProject]:
         stmt = (
             select(VideoProject)

@@ -38,12 +38,13 @@ from .base import BaseAI
 settings = get_settings()
 log = get_logger(__name__)
 
-DEFAULT_MODEL = "claude-opus-5"
+DEFAULT_MODEL = "claude-opus-5-5"
 
 # Per-model context window and the share of it we are willing to fill with one
 # prompt. The models all accept 1M input tokens; the cap below is what a single
 # request may use, leaving room for the reply and for estimation error.
 MODEL_CONTEXT_TOKENS: dict[str, int] = {
+    "claude-opus-5-5": 1_000_000,
     "claude-opus-5": 1_000_000,
     "claude-opus-4-8": 1_000_000,
     "claude-sonnet-5": 1_000_000,

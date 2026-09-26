@@ -57,6 +57,19 @@ class PipelineRepository:
         result = await self._session.execute(stmt)
         return result.scalars().first()
 
+    async def set_cancel_requested(self, project_id: str, requested: bool) -> bool:
+        """Flag the project's latest run; False when it has no run."""
+        state = await self.get_pipeline(project_id)
+        if not state:
+            return False
+        state.cancel_requested = requested
+        await self._session.commit()
+        return True
+
+    async def is_cancel_requested(self, project_id: str) -> bool:
+        state = await self.get_pipeline(project_id)
+        return bool(state and state.cancel_requested)
+
     async def get_step_logs(self, pipeline_id: str) -> list[PipelineStepLog]:
         stmt = (
             select(PipelineStepLog)

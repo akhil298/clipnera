@@ -50,7 +50,9 @@ ADMIN_TOPUP_REFERENCE = "admin_topup"
 CREDIT_REFILL_REFERENCE = "credit_refill"
 
 USAGE_KEYS: tuple[str, ...] = get_args(UsageKey)
-_USAGE_LABELS = {"exports": "exports", "audio_enhancements": "audio enhancements"}
+_USAGE_LABELS = {
+    "exports": "exports", "audio_enhancements": "audio enhancements", "reel_renders": "reel renders", "ai_shots": "AI shots",
+}
 _CYCLE_SECONDS = CREDIT_CYCLE_DAYS * 24 * 60 * 60
 
 
@@ -306,14 +308,13 @@ class SubscriptionService:
     async def consume_daily_quota(self, user_id: str, key: UsageKey, amount: int = 1) -> int:
         """Count ``amount`` uses of ``key`` today; 429 LIMIT_REACHED if that
         would pass the plan's daily limit. Returns today's new count."""
-        limit = (await self.get_entitlements(user_id)).daily_limit(key)
+        entitlements = await self.get_entitlements(user_id)
+        limit = entitlements.daily_limit(key)
         count = await self._usage_repo.increment(user_id, key, datetime.utcnow().date(), amount, limit)
         if count is None:
+            upgrade = "Try again tomorrow." if entitlements.pro_ai_provider else "Upgrade to Pro for more, or try again tomorrow."
             raise CustomException(
-                message=(
-                    f"You've reached today's limit of {limit} {_USAGE_LABELS[key]} on the Free plan. "
-                    "Upgrade to Pro for unlimited use, or try again tomorrow."
-                ),
+                message=f"You've reached today's limit of {limit} {_USAGE_LABELS[key]} on your plan. {upgrade}",
                 code="LIMIT_REACHED",
                 status_code=429,
                 extra={"feature": key, "limit": limit},

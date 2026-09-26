@@ -15,12 +15,17 @@ import {
   Headphones,
   SlidersHorizontal,
   ExternalLink,
-  ArrowDown
+  ArrowDown,
+  Upload,
+  FileVideo
 } from 'lucide-react';
 import { VideoProject, AudioEnhancementConfig, DownloadProgress, AspectRatio } from '@/lib/types';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { analyzeVideoSource, extractYoutubeVideoId } from '@/lib/utils/urlParser';
-import { clipApi, pipelineApi, YouTubeMetadataResponse } from '@/lib/api';
+import { formatBytes, formatDuration, readVideoDuration, titleFromFileName } from '@/lib/utils/videoFile';
+import { CaptionScript, clipApi, pipelineApi, uploadApi, VIDEO_UPLOAD_TYPES, VideoContentType, YouTubeMetadataResponse } from '@/lib/api';
+
+type SourceMode = 'youtube' | 'upload';
 import { PipelineProgressTracker } from './PipelineProgressTracker';
 import { OutputFormatPicker } from './OutputFormatPicker';
 
@@ -35,7 +40,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   onClose,
   onProjectCreated,
 }) => {
+  const [sourceMode, setSourceMode] = useState<SourceMode>('youtube');
   const [urlInput, setUrlInput] = useState('');
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadDuration, setUploadDuration] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const [customTitle, setCustomTitle] = useState('Alex Hormozi — $100M Leads Masterclass');
   const [customFolderName, setCustomFolderName] = useState('Alex Hormozi — $100M Leads Masterclass');
 
@@ -47,6 +57,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [autoSfx, setAutoSfx] = useState(true);
   const [removeFillers, setRemoveFillers] = useState(true);
   const [autoZoom, setAutoZoom] = useState(true);
+  const [captionScript, setCaptionScript] = useState<CaptionScript>('auto');
 
   const [aiDenoise, setAiDenoise] = useState(true);
   const [noiseSuppressionStrength, setNoiseSuppressionStrength] = useState(90);
@@ -107,12 +118,66 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   useEffect(() => {
     return () => {
       downloadUnsubRef.current?.();
+      uploadAbortRef.current?.abort();
     };
   }, []);
 
   if (!isOpen) return null;
 
   const isYoutubeUrl = extractYoutubeVideoId(urlInput) !== null;
+  const isUpload = sourceMode === 'upload';
+  const canStart = isUpload ? uploadFile !== null : isYoutubeUrl;
+
+  const handleFilePicked = async (file: File | undefined) => {
+    setUploadFile(null);
+    setUploadDuration(null);
+    setUploadError(null);
+    if (!file) return;
+    if (!VIDEO_UPLOAD_TYPES.includes(file.type as VideoContentType)) {
+      setUploadError('Use an MP4, MOV, WebM or MKV video.');
+      return;
+    }
+    const duration = await readVideoDuration(file);
+    const maxSeconds = entitlements?.max_upload_duration_seconds;
+    if (duration && maxSeconds && duration > maxSeconds) {
+      setUploadError(`This video is ${Math.floor(duration / 60)} min. Your plan supports up to ${Math.floor(maxSeconds / 60)} min per video.`);
+      return;
+    }
+    const title = titleFromFileName(file.name);
+    setUploadFile(file);
+    setUploadDuration(duration);
+    setCustomTitle(title);
+    setCustomFolderName(title);
+  };
+
+  /** Sends the picked file to S3; resolves like a YouTube download that is still processing. */
+  const uploadSource = async () => {
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
+    const total = formatBytes(uploadFile!.size);
+    const id = await uploadApi.uploadVideo(uploadFile!, {
+      durationSeconds: uploadDuration ?? undefined,
+      signal: controller.signal,
+      onProgress: (percent) => setDownloadProgress({ status: 'uploading', percent, total, speed: null, eta: null }),
+    });
+    uploadAbortRef.current = null;
+    return { id, status: 'processing' };
+  };
+
+  /** Fields that depend on where the video came from, shared by both project cards. */
+  const sourceFields = () => {
+    const meta = isUpload
+      ? analyzeVideoSource(customTitle)
+      : analyzeVideoSource(urlInput, { title: ytMeta?.title, channelTitle: ytMeta?.channel_title, thumbnailUrl: ytMeta?.thumbnail_url });
+    return {
+      meta,
+      folderCategory: isUpload ? ('Upload' as const) : ('YouTube Ingest' as const),
+      sourceUrl: isUpload ? '' : urlInput,
+      sourceChannel: isUpload ? 'Upload' : meta.sourceChannel || 'YouTube',
+      sourceType: isUpload ? ('upload' as const) : ('youtube_url' as const),
+      sourceTag: isUpload ? 'Upload' : 'YouTube',
+    };
+  };
 
   const handleUrlChange = (newUrl: string) => {
     setUrlInput(newUrl);
@@ -130,30 +195,31 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setIsProcessing(true);
     setProcessingStep(1);
     setDownloadProgress(null);
-    setProcessingLogs(['Ingesting YouTube video stream and initializing project folder...']);
+    setUploadError(null);
+    setProcessingLogs([isUpload ? 'Uploading your video to the cloud...' : 'Ingesting YouTube video stream and initializing project folder...']);
 
     let projectId: string | null = null;
     let projectPublished = false;
 
     try {
-      const downloadResult: any = await clipApi.downloadYoutube(urlInput);
+      const downloadResult: any = isUpload ? await uploadSource() : await clipApi.downloadYoutube(urlInput);
       projectId = downloadResult?.id || null;
 
       if (projectId) {
-        const meta = analyzeVideoSource(urlInput, { title: ytMeta?.title, channelTitle: ytMeta?.channel_title, thumbnailUrl: ytMeta?.thumbnail_url });
+        const { meta, folderCategory, sourceUrl, sourceChannel, sourceType, sourceTag } = sourceFields();
         onProjectCreated({
           id: projectId,
           title: customTitle || meta.cleanTitle,
           folderName: customFolderName || meta.folderName,
-          folderCategory: 'YouTube Ingest',
+          folderCategory,
           folderColor: meta.folderColor || 'amber',
-          sourceUrl: urlInput,
-          sourceChannel: meta.sourceChannel || 'YouTube',
+          sourceUrl,
+          sourceChannel,
           description: `Project folder for ${customFolderName || meta.folderName}. Processing has started.`,
-          tags: meta.tags || ['YouTube', 'AI', 'Shorts'],
+          tags: isUpload ? [sourceTag, 'AI', 'Shorts'] : meta.tags || [sourceTag, 'AI', 'Shorts'],
           genre: meta.genre,
-          duration: meta.duration,
-          sourceType: 'youtube_url',
+          duration: isUpload ? Math.round(uploadDuration ?? 0) : meta.duration,
+          sourceType,
           videoUrl: '',
           posterUrl: meta.posterUrl,
           uploadedAt: new Date().toISOString(),
@@ -169,6 +235,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         // The folder card now tracks progress; reset so reopening shows a fresh form.
         setIsProcessing(false);
         setUrlInput('');
+        setUploadFile(null);
         onClose();
       }
 
@@ -202,6 +269,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       const message = err instanceof Error ? err.message : 'Video download failed.';
       setProcessingLogs((prev) => [...prev, message]);
       setPipelineError(message);
+      if (isUpload && !projectPublished) {
+        uploadAbortRef.current = null;
+        setDownloadProgress(null);
+        setUploadError(err instanceof DOMException && err.name === 'AbortError' ? 'Upload cancelled.' : message);
+      }
       setIsProcessing(false);
       return;
     }
@@ -234,7 +306,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       setPipelineError(null);
       setPipelineStarted(false);
 
-      const startResult = await pipelineApi.start(projectId!, steps, audioConfig, outputRatios);
+      const startResult = await pipelineApi.start(projectId!, steps, audioConfig, outputRatios, { caption_script: captionScript, broll: autoBroll });
       setPipelineSteps(startResult.selected_steps || steps);
       setCreditsDeducted(startResult.credits_deducted || 0);
 
@@ -287,21 +359,21 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
     await new Promise((r) => setTimeout(r, 500));
 
-    const meta = analyzeVideoSource(urlInput, { title: ytMeta?.title, channelTitle: ytMeta?.channel_title, thumbnailUrl: ytMeta?.thumbnail_url });
+    const { meta, folderCategory, sourceUrl, sourceChannel, sourceType } = sourceFields();
 
     const newProject: VideoProject = {
       id: projectId || `proj-${Date.now()}`,
       title: customTitle || meta.cleanTitle,
       folderName: customFolderName || meta.folderName,
-      folderCategory: 'YouTube Ingest',
+      folderCategory,
       folderColor: meta.folderColor || 'amber',
-      sourceUrl: urlInput,
-      sourceChannel: meta.sourceChannel || 'YouTube',
+      sourceUrl,
+      sourceChannel,
       description: `Project folder for ${customFolderName}. AI clips will be generated after processing.`,
       tags: meta.tags || ['Viral', 'Shorts', 'AI', 'Denoised'],
       genre: meta.genre,
-      duration: meta.duration,
-      sourceType: 'youtube_url',
+      duration: isUpload ? Math.round(uploadDuration ?? 0) : meta.duration,
+      sourceType,
       videoUrl: '',
       posterUrl: meta.posterUrl,
       uploadedAt: new Date().toISOString(),
@@ -344,7 +416,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 Create Viral Clips with AI
               </h2>
               <p className="text-xs text-neutral-400">
-                Generate viral 9:16 Shorts from any YouTube link
+                Generate viral 9:16 Shorts from a YouTube link or your own video
               </p>
             </div>
           </div>
@@ -360,8 +432,32 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         <div className="p-6 overflow-y-auto space-y-6">
           {!isProcessing ? (
             <>
-              {/* YouTube URL Section */}
+              {/* Source picker: YouTube link or a video from this device */}
+              <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-neutral-950 border border-neutral-800" role="tablist">
+                {([
+                  ['youtube', 'YouTube link', LinkIcon],
+                  ['upload', 'Upload video', Upload],
+                ] as const).map(([mode, label, Icon]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="tab"
+                    aria-selected={sourceMode === mode}
+                    onClick={() => setSourceMode(mode)}
+                    className={`flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                      sourceMode === mode ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'text-neutral-400 hover:text-white border border-transparent'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5" />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Video source section */}
               <div className="space-y-3">
+                {!isUpload && (
+                <>
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-neutral-300 flex items-center gap-1.5">
                     <LinkIcon className="w-4 h-4 text-red-400" />
@@ -467,6 +563,56 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     </div>
                   )}
                 </div>
+                </>
+                )}
+
+                {isUpload && (
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="upload-video-file"
+                      className="flex flex-col items-center justify-center gap-2 p-6 rounded-xl border-2 border-dashed border-neutral-800 bg-neutral-950/80 cursor-pointer hover:border-amber-500/50 transition-colors text-center"
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleFilePicked(e.dataTransfer.files?.[0]);
+                      }}
+                    >
+                      <Upload className="w-6 h-6 text-amber-400" />
+                      <span className="text-xs font-bold text-white">Drop a video here or click to choose</span>
+                      <span className="text-[10px] text-neutral-500">
+                        MP4, MOV, WebM or MKV · up to {Math.floor((entitlements?.max_upload_duration_seconds ?? 1800) / 60)} min on your plan
+                      </span>
+                      <input
+                        id="upload-video-file"
+                        type="file"
+                        accept={VIDEO_UPLOAD_TYPES.join(',')}
+                        className="sr-only"
+                        onChange={(e) => handleFilePicked(e.target.files?.[0])}
+                      />
+                    </label>
+
+                    {uploadFile && (
+                      <div className="flex items-center gap-3 p-3 rounded-xl border border-amber-500/30 bg-neutral-950/80">
+                        <FileVideo className="w-5 h-5 text-amber-400 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-white truncate">{uploadFile.name}</p>
+                          <p className="text-[10px] text-neutral-400 font-mono">
+                            {formatBytes(uploadFile.size)}
+                            {uploadDuration ? ` · ${formatDuration(uploadDuration)}` : ''}
+                          </p>
+                        </div>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      </div>
+                    )}
+
+                    {uploadError && (
+                      <div className="flex items-center gap-2 text-[11px] text-rose-400">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{uploadError}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Project Folder Destination Preview Card */}
                 <div className="p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 space-y-2">
@@ -595,7 +741,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               <OutputFormatPicker
                 value={outputRatios}
                 onChange={setOutputRatios}
-                durationSeconds={ytMeta?.duration_seconds || null}
+                durationSeconds={(isUpload ? uploadDuration : ytMeta?.duration_seconds) || null}
               />
 
               {/* AI Auto-Editing Options */}
@@ -632,7 +778,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       <Film className="w-4 h-4 text-rose-400" />
                       <div>
                         <span className="text-xs font-bold text-white block">AI B-Roll Cutaways</span>
-                        <span className="text-[10px] text-neutral-400">Auto-match video footage to concepts</span>
+                        <span className="text-[10px] text-neutral-400">Auto-match footage to concepts · 5 credits per clip that gets B-roll</span>
                       </div>
                     </div>
                     <input
@@ -658,6 +804,33 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       className="w-4 h-4 rounded accent-amber-400"
                     />
                   </label>
+
+                  <div className="sm:col-span-2 flex items-center justify-between gap-3 p-3 rounded-xl bg-neutral-950 border border-neutral-800">
+                    <div>
+                      <span className="text-xs font-bold text-white block">Hindi / Telugu caption script</span>
+                      <span className="text-[10px] text-neutral-400">Auto writes Hinglish & Tenglish in Roman letters</span>
+                    </div>
+                    <div className="flex gap-1 p-0.5 rounded-lg bg-neutral-900 border border-neutral-800" role="radiogroup">
+                      {([
+                        ['auto', 'Auto'],
+                        ['roman', 'Roman'],
+                        ['native', 'Native'],
+                      ] as const).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          role="radio"
+                          aria-checked={captionScript === value}
+                          onClick={() => setCaptionScript(value)}
+                          className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                            captionScript === value ? 'bg-amber-500/20 text-amber-300' : 'text-neutral-400 hover:text-white'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
                   <label className="flex items-center justify-between p-3 rounded-xl bg-neutral-950 border border-neutral-800 cursor-pointer hover:border-neutral-700">
                     <div className="flex items-center gap-2.5">
@@ -721,6 +894,15 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         <span>{downloadProgress.speed ? `Speed: ${downloadProgress.speed}` : ''}</span>
                         <span>{downloadProgress.eta ? `ETA: ${downloadProgress.eta}` : ''}</span>
                       </div>
+                      {isUpload && downloadProgress.status === 'uploading' && (
+                        <button
+                          type="button"
+                          onClick={() => uploadAbortRef.current?.abort()}
+                          className="w-full py-1.5 rounded-lg text-[11px] font-semibold text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+                        >
+                          Cancel upload
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -776,7 +958,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               <button
                 id="btn-start-ai-generate"
                 onClick={startAiProcessing}
-                disabled={!isYoutubeUrl}
+                disabled={!canStart}
                 className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-violet-600 hover:from-amber-400 hover:to-violet-500 text-white text-xs font-bold shadow-lg shadow-rose-500/25 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
               >
                 <Sparkles className="w-4 h-4" />

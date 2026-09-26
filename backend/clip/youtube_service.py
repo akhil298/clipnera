@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 import httpx
 import time
 from clients.services.s3 import S3
+from clip.source_video import DOWNLOAD_DIR
 from clip.youtube_url import extract_youtube_video_id
 from core.config import get_settings
 from core.logging_config import get_logger
@@ -24,6 +25,7 @@ class QualityOption:
     format_id: str
     label: str  # e.g. "1080p", "720p", "audio only"
     height: Optional[int]
+    width: Optional[int]
     fps: Optional[float]
     vcodec: Optional[str]
     acodec: Optional[str]
@@ -187,6 +189,7 @@ class YouTubeService:
                     format_id=f"bestvideo[height<={h}]+bestaudio/best[height<={h}]",
                     label=label,
                     height=h,
+                    width=f.get("width"),
                     fps=fps,
                     vcodec=f.get("vcodec"),
                     acodec=f.get("acodec"),
@@ -200,6 +203,7 @@ class YouTubeService:
                 format_id="bestaudio/best",
                 label="Audio only",
                 height=None,
+                width=None,
                 fps=None,
                 vcodec=None,
                 acodec=None,
@@ -328,10 +332,7 @@ class YouTubeService:
         if not prefetch:
             raise ValueError("Failed to fetch video metadata")
 
-        download_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-            "download_videos",
-        )
+        download_dir = str(DOWNLOAD_DIR)
         os.makedirs(download_dir, exist_ok=True)
         output_template = os.path.join(download_dir, "%(id)s.%(ext)s")
 

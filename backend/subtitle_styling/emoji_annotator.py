@@ -19,7 +19,7 @@ EMOJI_KEYWORD_MAP: dict[str, str] = keyword_emoji_map()
 POWER_WORDS: set[str] = {
     "never", "always", "everything", "nothing", "everyone", "nobody",
     "anyone", "best", "worst", "most", "biggest", "huge", "massive",
-    "tiny", "every", "only", "first", "last", "free", "now", "today",
+    "tiny", "every", "only", "first", "last", "free", "now", "today", "easy",
     "instantly", "forever", "guaranteed", "proven", "secret", "truth",
     "fact", "literally", "actually", "exactly", "must", "need", "stop",
     "warning", "danger", "critical", "key", "important", "remember",
@@ -188,7 +188,8 @@ def annotate_caption_words(
             continue
 
         emoji_by_index[idx] = emoji
-        emphasis_indices.add(idx)
+        if enable_emphasis:
+            emphasis_indices.add(idx)
         last_emoji_word = idx
         recent_emoji[emoji] = idx
         emoji_count += 1

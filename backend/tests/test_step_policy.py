@@ -51,7 +51,7 @@ class TestStepPolicy:
     def test_pro_uses_opus_only_where_clips_are_chosen(self, auto_settings):
         # The costly model is reserved for picking and editing the moments.
         for step, (_, pro) in STEP_MODELS.items():
-            if pro.model == "claude-opus-5":
+            if pro.model.startswith("claude-opus"):
                 assert step in ("highlight_detection", "director")
 
     def test_no_pro_step_runs_at_high_effort(self, auto_settings):
@@ -83,7 +83,7 @@ class TestStepPolicy:
         assert isinstance(client, Anthropic)
         assert (client.model, client.effort) == ("claude-sonnet-5", "low")
         director = get_text_client(is_pro=True, step="highlight_detection")
-        assert (director.model, director.effort) == ("claude-opus-5", "medium")
+        assert (director.model, director.effort) == ("claude-opus-5-5", "medium")
         assert isinstance(get_text_client(is_pro=True, step="classification"), Groq)
 
     def test_missing_key_falls_back_to_the_other_provider(self, auto_settings):

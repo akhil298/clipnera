@@ -71,6 +71,22 @@ class UsageRepository:
         )
         return list(result.all())
 
+    async def project_costs_with_length(self, days: int) -> list:
+        """(project cost, source seconds, used Claude) for every project with AI calls in the window."""
+        from clip.model import VideoProject
+
+        result = await self._session.execute(
+            select(
+                func.sum(LlmUsage.cost_usd),
+                func.max(VideoProject.duration_seconds),
+                func.bool_or(LlmUsage.provider == "anthropic"),
+            )
+            .join(VideoProject, VideoProject.id == LlmUsage.project_id)
+            .where(LlmUsage.created_at >= self._since(days))
+            .group_by(LlmUsage.project_id)
+        )
+        return list(result.all())
+
     async def top_projects(self, days: int, limit: int) -> list:
         cost = func.sum(LlmUsage.cost_usd)
         result = await self._session.execute(

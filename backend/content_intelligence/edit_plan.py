@@ -15,6 +15,7 @@ from clip_generation.hook import MAX_HOOK_SECONDS, MIN_HOOK_OFFSET_SECONDS, MIN_
 from content_intelligence.director import BEAT_EFFECTS, DIRECTOR_VERSION, LAYOUTS, RUBRIC
 from content_intelligence.sentences import Sentence
 from core.logging_config import get_logger
+from transcription.language import is_hesitation
 
 log = get_logger(__name__)
 
@@ -22,11 +23,11 @@ log = get_logger(__name__)
 LEAD_PAD = 0.08
 TAIL_PAD = 0.15
 # Silences longer than this inside a clip are cut out; shorter ones are breath.
-JUMP_CUT_MIN_PAUSE = 0.6
+# Short-form pacing: a half-second of dead air already reads as a stall.
+JUMP_CUT_MIN_PAUSE = 0.5
 JUMP_CUT_KEEP = 0.12
 # No piece of a stitched clip may be shorter than this, or the cut reads as a glitch.
 MIN_PIECE_SECONDS = 0.5
-FILLERS = {"um", "uh", "uhm", "umm", "erm", "er", "hmm", "mm"}
 # Rubric weights for the overall 0-1 score: the hook decides whether anyone sees the rest.
 RUBRIC_WEIGHTS = {"hook": 0.3, "payoff": 0.25, "standalone": 0.2, "emotion": 0.15, "pacing": 0.1}
 # Two clips overlapping more than this share of the shorter one are the same clip.
@@ -201,11 +202,13 @@ def _span(first: int, last: int, by_id: dict[int, Sentence], duration: float) ->
 
 
 def _tighten(spans: list[tuple[float, float]], words: list[dict[str, Any]]) -> list[tuple[float, float]]:
-    """Cut long pauses and standalone filler words out of each span."""
-    speech = [
-        (w["start"], w["end"]) for w in words
-        if w["word"].strip(".,!?;:\"'").lower() not in FILLERS
-    ]
+    """Cut long pauses and every hesitation sound ("um", "हम्म") out of each span.
+
+    A hesitation is cut however short the gap around it; the cut stops at its
+    edges so none of it survives in the breath kept either side.
+    """
+    speech = [(w["start"], w["end"]) for w in words if not is_hesitation(w["word"])]
+    hesitations = [(w["start"], w["end"]) for w in words if is_hesitation(w["word"])]
     tightened: list[tuple[float, float]] = []
     for span_start, span_end in spans:
         inside = [(s, e) for s, e in speech if e > span_start and s < span_end]
@@ -213,10 +216,13 @@ def _tighten(spans: list[tuple[float, float]], words: list[dict[str, Any]]) -> l
             tightened.append((span_start, span_end))
             continue
         pieces: list[list[float]] = [[span_start, inside[0][1]]]
-        for (s, e), (prev_s, prev_e) in zip(inside[1:], inside[:-1]):
-            if s - prev_e >= JUMP_CUT_MIN_PAUSE:
-                pieces[-1][1] = prev_e + JUMP_CUT_KEEP
-                pieces.append([s - JUMP_CUT_KEEP, e])
+        for (s, e), (_, prev_e) in zip(inside[1:], inside[:-1]):
+            fillers = [(hs, he) for hs, he in hesitations if hs >= prev_e and he <= s]
+            if fillers or s - prev_e >= JUMP_CUT_MIN_PAUSE:
+                cut_from = min([prev_e + JUMP_CUT_KEEP] + [hs for hs, _ in fillers])
+                cut_to = max([s - JUMP_CUT_KEEP] + [he for _, he in fillers])
+                pieces[-1][1] = cut_from
+                pieces.append([cut_to, e])
             else:
                 pieces[-1][1] = e
         pieces[-1][1] = span_end

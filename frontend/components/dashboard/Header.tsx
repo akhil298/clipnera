@@ -17,7 +17,8 @@ import {
   LayoutDashboard,
   Folder,
   Crown,
-  Clock
+  Clock,
+  Clapperboard,
 } from 'lucide-react';
 import { useEntitlements, planLabel, isPaidPlan } from '@/hooks/useEntitlements';
 import { Skeleton } from '@/components/skeletons';
@@ -47,6 +48,7 @@ const TAB_TITLES: Record<TabType, { title: string; icon: React.FC<{ className?: 
   scheduler: { title: 'Social Scheduler', icon: CalendarDays },
   analytics: { title: 'Virality Analytics', icon: BarChart3 },
   brand_kit: { title: 'Brand Kit', icon: Palette },
+  reels: { title: 'Reels from Images', icon: Clapperboard },
   settings: { title: 'Settings', icon: Settings },
 };
 

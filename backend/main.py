@@ -21,6 +21,9 @@ from feature_flags.route import features as features_router, admin_features as a
 from usage.route import usage as usage_router, admin_usage as admin_usage_router
 from feedback.route import admin_quality as admin_quality_router
 from social.route import social as social_router, social_webhooks as social_webhooks_router, admin_social as admin_social_router
+from uploads.route import uploads as uploads_router
+from broll.route import admin_broll as admin_broll_router, broll as broll_router
+from reels.route import reels_router
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -88,6 +91,10 @@ app.include_router(admin_features_router, prefix="/api/v1")
 app.include_router(social_router, prefix="/api/v1")
 app.include_router(social_webhooks_router, prefix="/api/v1")
 app.include_router(admin_social_router, prefix="/api/v1")
+app.include_router(uploads_router, prefix="/api/v1")
+app.include_router(admin_broll_router, prefix="/api/v1")
+app.include_router(broll_router, prefix="/api/v1")
+app.include_router(reels_router, prefix="/api/v1")
 
 
 @app.exception_handler(CustomException)

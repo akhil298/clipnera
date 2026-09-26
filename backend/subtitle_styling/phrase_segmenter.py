@@ -4,6 +4,7 @@ from typing import Any
 
 from core.logging_config import get_logger
 from subtitle_styling.ass_generator import escape_ass
+from transcription.language import SENTENCE_TERMINALS
 
 log = get_logger(__name__)
 
@@ -11,7 +12,7 @@ DEFAULT_MIN_DURATION = 5.0
 DEFAULT_MAX_DURATION = 15.0
 DEFAULT_MAX_GAP = 1.5
 DEFAULT_PAD = 0.08
-SENTENCE_BOUNDARIES = ".!?"
+SENTENCE_BOUNDARIES = "".join(SENTENCE_TERMINALS)
 MAX_LINE_CHARS = 42
 
 
@@ -26,11 +27,15 @@ def _extract_words(segments: list[dict[str, Any]]) -> list[dict[str, float | str
                 if w_text.strip() and w_end > w_start:
                     words.append({"start": w_start, "end": w_end, "text": w_text})
         else:
+            # No word timings: spread the segment's words evenly over it, so
+            # lines can still break between words rather than per segment.
             start = float(seg.get("start", 0.0))
             end = float(seg.get("end", 0.0))
-            text = str(seg.get("text", ""))
-            if text.strip() and end > start:
-                words.append({"start": start, "end": end, "text": text})
+            tokens = str(seg.get("text", "")).split()
+            if tokens and end > start:
+                step = (end - start) / len(tokens)
+                for index, token in enumerate(tokens):
+                    words.append({"start": start + index * step, "end": start + (index + 1) * step, "text": token})
     words.sort(key=lambda w: float(w["start"]))
     return words
 
@@ -82,6 +87,9 @@ def segment_phrases(
 
         should_break = False
         if gap >= max_gap and at_sentence_end:
+            should_break = True
+        # A finished sentence is a natural caption break once the phrase is long enough to read.
+        if at_sentence_end and current_duration >= min_duration:
             should_break = True
         if not should_break and gap >= max_gap and current_duration >= min_duration:
             should_break = True

@@ -13,6 +13,7 @@ import { VideoEditorStudio } from './VideoEditorStudio';
 import { SocialSchedulerView } from './SocialSchedulerView';
 import { ViralAnalyticsView } from './ViralAnalyticsView';
 import { BrandKitView } from './BrandKitView';
+import { ReelsView } from './ReelsView';
 import { SettingsView } from './SettingsView';
 import { NotificationsDrawer } from './NotificationsDrawer';
 import { SnackbarStack } from './SnackbarStack';
@@ -56,6 +57,7 @@ const getTabFromPathname = (pathname: string): TabType => {
   if (segments[1] === 'scheduler') return 'scheduler';
   if (segments[1] === 'analytics') return 'analytics';
   if (segments[1] === 'brand-kit') return 'brand_kit';
+  if (segments[1] === 'reels') return 'reels';
   if (segments[1] === 'settings') return 'settings';
 
   return 'dashboard';
@@ -83,6 +85,8 @@ const getDashboardPath = (
       return '/dashboard/analytics';
     case 'brand_kit':
       return '/dashboard/brand-kit';
+    case 'reels':
+      return '/dashboard/reels';
     case 'settings':
       return '/dashboard/settings';
     case 'dashboard':
@@ -94,9 +98,10 @@ const getDashboardPath = (
 export default function DashboardApp() {
   const router = useRouter();
   const pathname = usePathname();
-  const params = useParams<{ projectId?: string; clipId?: string }>();
+  const params = useParams<{ projectId?: string; clipId?: string; reelId?: string }>();
   const routeProjectId = typeof params.projectId === 'string' ? params.projectId : undefined;
   const routeClipId = typeof params.clipId === 'string' ? params.clipId : undefined;
+  const routeReelId = typeof params.reelId === 'string' ? params.reelId : undefined;
 
   // Auth gate: only authenticated users may view the dashboard.
   const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
@@ -266,19 +271,20 @@ export default function DashboardApp() {
               ? Math.round((completedSteps / pipelineStatus!.steps.length) * 100)
               : 0;
           const youtubeThumbnail = youtubeThumbnailUrl(project.source_url || '');
+          const uploaded = project.source_type === 'upload';
           return {
             id: project.id,
             title: project.title,
             folderName: project.title,
-            folderCategory: 'YouTube Ingest' as const,
+            folderCategory: uploaded ? ('Upload' as const) : ('YouTube Ingest' as const),
             folderColor: 'amber' as const,
             sourceUrl: project.source_url || '',
-            sourceChannel: 'YouTube',
+            sourceChannel: uploaded ? 'Upload' : 'YouTube',
             description: processing ? 'Processing video and generating clips...' : 'AI analysis completed. Clips generated with kinetic captions.',
-            tags: ['YouTube', 'AI', 'Shorts'],
-            genre: 'YouTube Ingest',
+            tags: [uploaded ? 'Upload' : 'YouTube', 'AI', 'Shorts'],
+            genre: uploaded ? 'Upload' : 'YouTube Ingest',
             duration: project.duration_seconds || 0,
-            sourceType: 'youtube_url' as const,
+            sourceType: uploaded ? ('upload' as const) : ('youtube_url' as const),
             videoUrl: '',
             posterUrl: clips[0]?.posterUrl || youtubeThumbnail || '',
             uploadedAt: project.created_at || new Date().toISOString(),
@@ -818,6 +824,8 @@ export default function DashboardApp() {
 
           {/* TAB 7: BRAND KIT & SUBTITLE STYLES */}
           {activeTab === 'brand_kit' && <BrandKitView />}
+
+          {activeTab === 'reels' && <ReelsView reelId={routeReelId} />}
 
           {/* TAB 8: SETTINGS, WORKSPACE & BILLING */}
           {activeTab === 'settings' && currentUser && (

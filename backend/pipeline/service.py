@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import os
 import shutil
@@ -13,12 +14,16 @@ from typing import Any, Callable, Optional
 from core.logging_config import get_logger
 from core.config import get_settings
 
+from clip.source_video import ensure_local_copy
 from clip.youtube_service import YouTubeService
 from audio.extraction.service import AudioExtractionService
 from audio.enhancement.service import AudioService
 from audio.enhancement.schema import AudioEnhanceRequest
 from transcription.service import WhisperXTranscriptionService
 from transcription.schema import TranscriptionRequest
+from transcription.transliterate import CAPTION_SCRIPTS, romanize_transcript, wants_roman
+from clients.ai import get_text_client
+from broll.cutaways import plan_project_broll
 from clip.repository import ClipRepository
 from clip.model import ProjectStatus
 from clip_generation.model import SOCIAL_PLATFORM_DEFAULTS, SocialPlatform
@@ -42,6 +47,7 @@ from subscription.service import (
 from video_processor.geometry import SUPPORTED_ASPECT_RATIOS
 from hook_transitions.schema import HookTransitionConfig
 from usage.context import RunBudget, llm_scope
+from jobs.queue import Job, get_queue, handler, uses_workers
 
 log = get_logger(__name__)
 
@@ -57,8 +63,11 @@ INTERRUPTED_ERROR = "Processing was interrupted by a server restart. Resume to c
 async def fail_interrupted_pipelines() -> None:
     """Fail runs left open by a previous process, so they do not show as processing forever.
 
-    Runs execute as in-process tasks, so this assumes a single backend process.
+    Only for in-process runs: with workers, an open run is still running on
+    another machine, or its job will be redelivered and resumed.
     """
+    if uses_workers():
+        return
     from pipeline.repository import PipelineRepository
 
     async with AsyncSessionLocal() as session:
@@ -147,6 +156,16 @@ class PipelineOrchestrator:
     def is_cancelled(self) -> bool:
         return self._cancel
 
+    async def _cancel_requested(self) -> bool:
+        """Local cancel, or the run's database flag, which any process can set."""
+        if not self._cancel:
+            try:
+                async with AsyncSessionLocal() as session:
+                    self._cancel = await _pipeline_repository(session).is_cancel_requested(self.project_id)
+            except Exception as exc:
+                log.warning("Could not read the cancel flag: project=%s error=%s", self.project_id, exc)
+        return self._cancel
+
     async def run(self) -> dict:
         results: dict[str, Any] = {}
         pipeline_started = time.monotonic()
@@ -184,7 +203,7 @@ class PipelineOrchestrator:
 
         try:
             for step in step_order:
-                if self._cancel:
+                if await self._cancel_requested():
                     log.warning(
                         "Pipeline cancelled",
                         extra={"project_id": self.project_id, "user_id": self.user_id, "step": step.value},
@@ -557,6 +576,9 @@ class PipelineOrchestrator:
             input_path=audio_input,
             model_size="small",
             language=None,
+            # The title names the people and brands the video is about, so
+            # Whisper spells them the way the creator does.
+            prompt=await self._project_title(),
             chunk_duration=1200,
             chunk_overlap=10,
             word_timestamps=True,
@@ -580,6 +602,7 @@ class PipelineOrchestrator:
 
         result = await self._transcription_service.transcribe(request, progress_callback=_progress)
         segments = getattr(result, "segments", [])
+        await self._romanize_captions(segments)
         log.info(
             "Transcription complete",
             extra={
@@ -590,6 +613,15 @@ class PipelineOrchestrator:
         )
         self._notify("Transcription complete", 100)
         return {"transcription_result": result}
+
+    async def _romanize_captions(self, segments: list) -> None:
+        """Hindi and Telugu speech gets Roman-script captions unless the user chose native script."""
+        if not wants_roman(self.clip_settings.get("caption_script"), segments):
+            return
+        self._notify("Writing captions in Roman script...", 95)
+        client = get_text_client(is_pro=self.is_pro, step="transliteration")
+        changed = await romanize_transcript(segments, client)
+        log.info("Romanised %d caption word(s)", changed, extra={"project_id": self.project_id})
 
     async def _step_topic_research(self, context: dict) -> dict:
         self._notify("Researching topic...", 20)
@@ -769,14 +801,37 @@ class PipelineOrchestrator:
             "Clip generation complete",
             extra={"project_id": self.project_id, "result_type": type(result).__name__},
         )
+        if self.clip_settings.get("broll"):
+            await self._plan_broll()
         self._notify("Clip generation complete", 100)
         return result
+
+    async def _plan_broll(self) -> None:
+        """Cutaways for the new clips. Never fails the run: a clip without B-roll is still a clip."""
+        try:
+            count = await plan_project_broll(
+                self.project_id, self.user_id, self.is_pro,
+                notify=lambda message, percent: self._notify(message, 90 + percent // 10),
+            )
+            self._notify(f"B-roll added to {count} clip(s)", 99)
+        except Exception as exc:
+            log.warning("B-roll planning failed: project=%s error=%s", self.project_id, exc)
 
     async def _project_video_path(self) -> str | None:
         async with AsyncSessionLocal() as session:
             repo = ClipRepository(session)
             project = await repo.get_project(self.project_id, self.user_id)
-            return project.local_path if project else None
+            if not project:
+                return None
+            path = await ensure_local_copy(project)
+            if path and path != project.local_path:
+                await repo.set_local_path(project.id, path)
+            return path
+
+    async def _project_title(self) -> str | None:
+        async with AsyncSessionLocal() as session:
+            project = await ClipRepository(session).get_project(self.project_id, self.user_id)
+        return (project.title or "")[:300] or None if project else None
 
     def _transcript_segments(self, context: dict) -> list[dict]:
         transcription = context.get(PipelineStepType.TRANSCRIPTION.value, {})
@@ -1210,9 +1265,6 @@ _TERMINAL_PROGRESS_STATUSES = ("completed", "error", "cancelled")
 
 _progress_store: dict[str, dict[str, Any]] = {}
 _active_orchestrators: dict[str, PipelineOrchestrator] = {}
-# The event loop only weakly references tasks; an unreferenced run can be
-# garbage-collected mid-flight and vanish without ever recording an outcome.
-_run_tasks: set[asyncio.Task] = set()
 _progress_lock = asyncio.Lock()
 _status_semaphore = asyncio.Semaphore(10)
 
@@ -1287,6 +1339,9 @@ def _clamp_clip_settings(entitlements: Entitlements, clip_settings: dict | None)
         settings["max_clips"] = min(requested_clips, cap)
 
     require_caption_style(entitlements, settings.get("caption_style") or settings.get("style_type"))
+    if settings.get("caption_script") not in CAPTION_SCRIPTS:
+        settings["caption_script"] = "auto"
+    settings["broll"] = settings.get("broll") is True
     return settings
 
 
@@ -1363,6 +1418,31 @@ def _progress_callback_factory(project_id: str) -> ProgressCallback:
     return callback
 
 
+async def _stored_progress(project_id: str) -> dict[str, Any]:
+    """Progress read from the database, for a run executing in another process."""
+    async with AsyncSessionLocal() as session:
+        repo = _pipeline_repository(session)
+        state = await repo.get_pipeline(project_id)
+        if not state:
+            return dict(_IDLE_PROGRESS)
+        if state.is_completed:
+            return {"status": "completed", "percent": 100, "message": "Pipeline completed", "step_status": "completed"}
+        if state.error:
+            if state.cancel_requested:
+                return {"status": "cancelled", "percent": 0, "message": "Pipeline cancelled by user", "step_status": "cancelled"}
+            return {"status": "error", "percent": 0, "message": state.error, "step_status": "failed"}
+        running = next((entry for entry in await repo.get_step_logs(state.id) if entry.status == StepStatus.RUNNING.value), None)
+    if not running:
+        return {"status": "running", "percent": 0, "message": ""}
+    return {
+        "status": "running",
+        "percent": running.progress_percent,
+        "message": running.message or "",
+        "current_step": getattr(running.step, "value", running.step),
+        "step_status": "running",
+    }
+
+
 async def _mark_cancelled(project_id: str) -> None:
     await _update_progress(
         project_id, _BLANK_PROGRESS,
@@ -1384,6 +1464,7 @@ async def _run_pipeline(
     project_id: str,
     user: dict | None = None,
     credit_refund_callback: Callable[[], Awaitable[None]] | None = None,
+    requeue_on_interrupt: bool = False,
 ) -> None:
     try:
         results = await orchestrator.run()
@@ -1407,6 +1488,11 @@ async def _run_pipeline(
                 clip_count=_clip_count(results),
             )
     except asyncio.CancelledError:
+        if requeue_on_interrupt:
+            # A worker shutting down: its job is redelivered and resumes from
+            # the last completed step, so the run is neither failed nor refunded.
+            log.warning(f"Pipeline interrupted, will resume on another worker: project={project_id}")
+            raise
         # Raised when the server shuts down mid-run. It is not an Exception, so
         # the handler below never saw it and the run stayed "running" forever.
         log.warning(f"Pipeline interrupted: project={project_id}")
@@ -1447,15 +1533,48 @@ async def _run_pipeline(
         _active_orchestrators.pop(project_id, None)
 
 
-def _launch_pipeline(
-    orchestrator: PipelineOrchestrator, project_id: str, user: dict, credit_refund_callback: Callable[[], Awaitable[None]]
-) -> None:
-    _active_orchestrators[project_id] = orchestrator
-    task = asyncio.create_task(
-        _run_pipeline(orchestrator, project_id, user=user, credit_refund_callback=credit_refund_callback)
+PIPELINE_JOB = "pipeline.run"
+
+
+@handler(PIPELINE_JOB)
+async def _run_pipeline_job(job: Job) -> None:
+    """Runs one queued pipeline, in the API process or on a worker."""
+    run = job.payload
+    project_id = run["project_id"]
+    user = run["user"]
+    orchestrator = PipelineOrchestrator(
+        project_id=project_id,
+        user_id=user["user_id"],
+        url=run["source_url"],
+        selected_steps=[PipelineStepType(step) for step in run["steps"]],
+        audio_config=run["audio_config"],
+        progress_callback=_progress_callback_factory(project_id),
+        watermark_enabled=run["watermark_enabled"],
+        output_aspect_ratios=run["output_aspect_ratios"],
+        clip_settings=run["clip_settings"],
+        is_pro=run["is_pro"],
+        # A redelivered job died part way through; skip the steps it finished.
+        resume=run["resume"] or job.attempt > 1,
     )
-    _run_tasks.add(task)
-    task.add_done_callback(_run_tasks.discard)
+    refund = functools.partial(_refund_run, user["user_id"], project_id, run["credit_cost"], run["resume"])
+    _active_orchestrators[project_id] = orchestrator
+    await _run_pipeline(
+        orchestrator, project_id, user=user, credit_refund_callback=refund, requeue_on_interrupt=uses_workers(),
+    )
+
+
+async def _refund_run(user_id: str, project_id: str, amount: int, resume: bool) -> None:
+    async with AsyncSessionLocal() as session:
+        try:
+            await SubscriptionService.for_session(session).refund_credits(
+                user_id=user_id,
+                amount=amount,
+                reason=f"Pipeline failed{' (resume)' if resume else ''}, refunding credits for project {project_id}",
+                reference_id=project_id,
+                reference_type="video_project_refund",
+            )
+        except Exception as refund_exc:
+            log.error(f"Credit refund failed: project={project_id} error={refund_exc}")
 
 
 def _serialize_step(log_entry) -> dict[str, Any]:
@@ -1508,20 +1627,21 @@ class _RunPlan:
     credit_cost: int
     refund: Callable[[], Awaitable[None]]
 
-    def orchestrator(self, project, user_id: str, resume: bool = False) -> PipelineOrchestrator:
-        return PipelineOrchestrator(
-            project_id=project.id,
-            user_id=user_id,
-            url=project.source_url or "",
-            selected_steps=self.selected_steps,
-            audio_config=self.audio_config,
-            progress_callback=_progress_callback_factory(project.id),
-            watermark_enabled=self.watermark_enabled,
-            output_aspect_ratios=self.output_aspect_ratios,
-            clip_settings=self.clip_settings,
-            is_pro=self.is_pro,
-            resume=resume,
-        )
+    def job(self, project, user: dict, resume: bool = False) -> Job:
+        """The run as a queue message: plain JSON, so any worker can rebuild it."""
+        return Job(PIPELINE_JOB, {
+            "project_id": project.id,
+            "source_url": project.source_url or "",
+            "user": user,
+            "resume": resume,
+            "steps": [step.value for step in self.selected_steps],
+            "audio_config": self.audio_config,
+            "watermark_enabled": self.watermark_enabled,
+            "output_aspect_ratios": self.output_aspect_ratios,
+            "clip_settings": self.clip_settings,
+            "is_pro": self.is_pro,
+            "credit_cost": self.credit_cost,
+        })
 
     def response(self, project_id: str, status: str) -> dict[str, Any]:
         return {
@@ -1607,23 +1727,6 @@ class PipelineRunService:
         except Exception as exc:
             raise CustomException(message=str(exc), code="INSUFFICIENT_CREDITS", status_code=402)
 
-        async def refund_credits() -> None:
-            async with AsyncSessionLocal() as refund_session:
-                refund_service = SubscriptionService.for_session(refund_session)
-                try:
-                    await refund_service.refund_credits(
-                        user_id=user_id,
-                        amount=credit_cost,
-                        reason=(
-                            f"Pipeline failed{' (resume)' if resume else ''}, "
-                            f"refunding credits for project {project_id}"
-                        ),
-                        reference_id=project_id,
-                        reference_type="video_project_refund",
-                    )
-                except Exception as refund_exc:
-                    log.error(f"Credit refund failed: project={project_id} error={refund_exc}")
-
         return _RunPlan(
             selected_steps=selected_steps,
             output_aspect_ratios=output_aspect_ratios,
@@ -1632,7 +1735,7 @@ class PipelineRunService:
             clip_settings=clip_settings,
             is_pro=is_pro,
             credit_cost=credit_cost,
-            refund=refund_credits,
+            refund=functools.partial(_refund_run, user_id, project_id, credit_cost, resume),
         )
 
     async def start(self, project_id: str, user: dict, body: dict | None) -> dict[str, Any]:
@@ -1655,7 +1758,11 @@ class PipelineRunService:
                 await plan.refund()
                 raise
 
-            _launch_pipeline(plan.orchestrator(project, user["user_id"]), project_id, user, plan.refund)
+            try:
+                await get_queue().enqueue(plan.job(project, user))
+            except Exception:
+                await plan.refund()
+                raise
             return plan.response(project_id, "started")
 
     async def resume(self, project_id: str, user: dict, body: dict | None) -> dict[str, Any]:
@@ -1672,20 +1779,30 @@ class PipelineRunService:
             # Clients read either field as "failed", so a resumed run that kept them
             # showed as failed throughout, and even after it succeeded.
             state.error = None
+            state.cancel_requested = False
             await session.commit()
             await clip_repo.update_project_status(project_id, ProjectStatus.PROCESSING)
 
-            _launch_pipeline(plan.orchestrator(project, user["user_id"], resume=True), project_id, user, plan.refund)
+            try:
+                await get_queue().enqueue(plan.job(project, user, resume=True))
+            except Exception:
+                await plan.refund()
+                raise
             return plan.response(project_id, "resumed")
 
     async def cancel(self, project_id: str, user_id: str) -> dict[str, Any]:
         async with AsyncSessionLocal() as session:
             await self._require_project(ClipRepository(session), project_id, user_id)
+            state = await _pipeline_repository(session).get_pipeline(project_id)
+            if not state or state.is_completed or state.error:
+                raise CustomException(message="No active pipeline found", code="PIPELINE_NOT_RUNNING", status_code=409)
+            # The process running it -- this one or a worker -- stops at the next step.
+            state.cancel_requested = True
+            await session.commit()
 
         orchestrator = _active_orchestrators.get(project_id)
-        if not orchestrator:
-            raise CustomException(message="No active pipeline found", code="PIPELINE_NOT_RUNNING", status_code=409)
-        orchestrator.cancel()
+        if orchestrator:
+            orchestrator.cancel()
         await _mark_cancelled(project_id)
         return {"project_id": project_id, "status": "cancelled"}
 
@@ -1694,7 +1811,8 @@ class PipelineRunService:
         """Server-sent events with the run's progress, once a second until it ends."""
         while True:
             async with _progress_lock:
-                data = dict(_progress_store.get(project_id, _IDLE_PROGRESS))
+                local = _progress_store.get(project_id)
+            data = dict(local) if local else await _stored_progress(project_id)
             yield f"data: {json.dumps(data)}\n\n"
             if data.get("status") in _TERMINAL_PROGRESS_STATUSES:
                 break

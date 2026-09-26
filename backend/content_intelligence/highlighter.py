@@ -12,6 +12,7 @@ from content_intelligence.transcript_windows import (
 )
 from content_intelligence.word_snapper import snap_clip_to_sentences
 from core.logging_config import get_logger
+from transcription.language import SENTENCE_TERMINALS
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 log = get_logger(__name__)
@@ -681,7 +682,7 @@ JSON schema:
             if index == 0:
                 return index
             previous = str(segments[index - 1].get("text", "")).rstrip()
-            if previous.endswith((".", "?", "!")):
+            if previous.endswith(SENTENCE_TERMINALS):
                 return index
         return cursor
 

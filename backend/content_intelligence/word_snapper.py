@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.logging_config import get_logger
+from transcription.language import CONTINUATION_WORDS, SENTENCE_TERMINALS
 
 log = get_logger(__name__)
 
@@ -14,12 +15,10 @@ DEFAULT_MAX_TAIL = 0.45
 # Furthest a boundary may travel to reach the edge of the sentence it cuts.
 DEFAULT_SENTENCE_REACH = 10.0
 
-_SENTENCE_ENDINGS = (".", "?", "!")
+_SENTENCE_ENDINGS = SENTENCE_TERMINALS
 # A clip whose first sentence opens on one of these is picking up a thought
 # that started earlier ("Not for one hour..."), so it needs the sentence before.
-_CONTINUATION_OPENERS = frozenset({
-    "and", "but", "so", "because", "not", "or", "which", "that", "then", "also", "plus",
-})
+_CONTINUATION_OPENERS = CONTINUATION_WORDS | {"not", "that"}
 
 
 def snap_clip_to_sentences(

@@ -94,3 +94,14 @@ class TestRecorder:
         monkeypatch.setattr(recorder, "AsyncSessionLocal", broken)
         with llm_scope(project_id="p1", step="map"):
             await recorder.record_llm_call("groq", "openai/gpt-oss-20b", input_tokens=10, output_tokens=10)
+
+
+class TestCostPerMinute:
+    def test_pro_and_free_are_measured_separately(self):
+        from usage.service import cost_per_minute
+
+        rows = [(0.30, 1200, True), (0.10, 600, True), (0.02, 1200, False), (0.5, None, True)]
+        by_tier = {c.tier: c for c in cost_per_minute(rows)}
+        assert by_tier["pro"].projects == 2 and by_tier["pro"].source_minutes == 30.0
+        assert by_tier["pro"].cost_per_source_minute_usd == pytest.approx(0.40 / 30, abs=1e-5)
+        assert by_tier["free"].cost_per_source_minute_usd == pytest.approx(0.001, abs=1e-5)

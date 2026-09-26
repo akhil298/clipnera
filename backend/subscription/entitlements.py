@@ -32,7 +32,7 @@ Feature = Literal[
 
 # Actions metered per UTC day with ``check_limit``. None in a plan's limits
 # means unlimited.
-UsageKey = Literal["exports", "audio_enhancements"]
+UsageKey = Literal["exports", "audio_enhancements", "reel_renders", "ai_shots"]
 
 # Hook transition modes every plan may use.
 _FREE_HOOK_TRANSITION_MODES = frozenset({"auto", "off"})
@@ -153,7 +153,9 @@ _PRO_FEATURES: dict[str, Any] = {
     "depth_captions": True,
     "batch_processing": True,
     "team_members": True,
-    "daily_limits": {"exports": None, "audio_enhancements": None},
+    # Pro is unlimited where a run costs little; reels and AI shots have fair-use
+    # caps so one account cannot spend a month's compute in a day.
+    "daily_limits": {"exports": None, "audio_enhancements": None, "reel_renders": 20, "ai_shots": 10},
     "social_max_accounts": 4,
     "social_platforms": ("youtube", "tiktok", "instagram", "x"),
     "social_scheduling": True,
@@ -178,7 +180,7 @@ ENTITLEMENTS: dict[str, Entitlements] = {
         depth_captions=False,
         batch_processing=False,
         team_members=False,
-        daily_limits={"exports": 10, "audio_enhancements": 3},
+        daily_limits={"exports": 10, "audio_enhancements": 3, "reel_renders": 2, "ai_shots": 0},
         # X bills every post, so it is paid-only.
         social_max_accounts=1,
         social_platforms=("youtube", "tiktok", "instagram"),

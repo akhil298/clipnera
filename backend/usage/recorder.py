@@ -11,7 +11,7 @@ from core.database import AsyncSessionLocal
 from core.logging_config import get_logger
 from usage.context import current_scope
 from usage.model import LlmUsage
-from usage.pricing import audio_cost, token_cost
+from usage.pricing import audio_cost, token_cost, video_cost
 
 log = get_logger(__name__)
 
@@ -25,11 +25,15 @@ async def record_llm_call(
     cache_read_tokens: int = 0,
     cache_write_tokens: int = 0,
     audio_seconds: float | None = None,
+    video_seconds: float | None = None,
+    resolution: str | None = None,
     effort: str | None = None,
     latency_ms: int = 0,
 ) -> float:
     """Cost the call, charge the run's budget and persist a row. Returns the cost in USD."""
-    if audio_seconds is not None:
+    if video_seconds is not None:
+        cost = video_cost(provider, model, resolution or "720p", video_seconds)
+    elif audio_seconds is not None:
         cost = audio_cost(provider, model, audio_seconds)
     else:
         cost = token_cost(provider, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)

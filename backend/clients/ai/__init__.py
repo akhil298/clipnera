@@ -47,7 +47,7 @@ class ModelChoice:
 GROQ_SMALL = ModelChoice("groq", "openai/gpt-oss-20b")
 GROQ_LARGE = ModelChoice("groq", "openai/gpt-oss-120b")
 SONNET_LOW = ModelChoice("anthropic", "claude-sonnet-5", "low")
-OPUS_MEDIUM = ModelChoice("anthropic", "claude-opus-5", "medium")
+OPUS_MEDIUM = ModelChoice("anthropic", "claude-opus-5-5", "medium")
 
 # (free, pro) per step. Pro pays for judgement only where it decides what the
 # viewer sees -- picking and editing the moments. Reading the video, naming it
@@ -61,6 +61,10 @@ STEP_MODELS: dict[str, tuple[ModelChoice, ModelChoice]] = {
     "highlight_detection": (GROQ_LARGE, OPUS_MEDIUM),
     "director": (GROQ_LARGE, OPUS_MEDIUM),
     "titles": (GROQ_SMALL, SONNET_LOW),
+    # Spelling words in Roman script needs no judgement; the large open model is plenty.
+    "transliteration": (GROQ_SMALL, GROQ_LARGE),
+    # Where to cut away and what to search for: editorial, but low stakes per call.
+    "broll_planning": (GROQ_LARGE, SONNET_LOW),
 }
 
 
@@ -70,7 +74,7 @@ def _default_choice(is_pro: bool) -> ModelChoice:
     if is_pro:
         return ModelChoice(
             "anthropic",
-            (getattr(settings, "ANTHROPIC_MODEL", "") or "claude-opus-5").strip(),
+            (getattr(settings, "ANTHROPIC_MODEL", "") or "claude-opus-5-5").strip(),
             (getattr(settings, "ANTHROPIC_EFFORT", "") or "medium").strip(),
         )
     return ModelChoice("groq", (getattr(settings, "GROQ_MODEL", "") or "openai/gpt-oss-20b").strip())

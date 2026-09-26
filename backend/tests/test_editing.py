@@ -193,6 +193,34 @@ class TestRenders:
         assert self._size(joined) == "360x640"
 
     @pytest.mark.asyncio
+    async def test_punch_in_eases_in_and_keeps_every_frame(self, source, tmp_path):
+        import cv2
+        import numpy as np
+
+        from video_processor.ffmpeg_service import FFmpegService
+
+        ffmpeg = FFmpegService()
+        plain, zoomed = tmp_path / "plain.mp4", tmp_path / "zoomed.mp4"
+        common = dict(input_path=str(source), start_time=1.0, duration=1.5, crop_tracking=[],
+                      target_width=360, target_height=640, source_width=640, source_height=360)
+        await ffmpeg.crop_with_tracking(output_path=str(plain), **common)
+        await ffmpeg.crop_with_tracking(output_path=str(zoomed), zoom=1.2, **common)
+
+        def frames(path):
+            capture, out = cv2.VideoCapture(str(path)), []
+            while True:
+                ok, frame = capture.read()
+                if not ok:
+                    return out
+                out.append(frame.astype(np.int16))
+
+        a, b = frames(plain), frames(zoomed)
+        assert len(a) == len(b)
+        diff = [float(np.abs(x - y).mean()) for x, y in zip(a, b)]
+        # Starts at 1x, so the first frame matches; half a second in it is fully zoomed.
+        assert diff[0] < 3.0 < diff[12]
+
+    @pytest.mark.asyncio
     async def test_zoomed_and_plain_parts_join_by_copy(self, source, tmp_path):
         from video_processor.ffmpeg_service import FFmpegService
 

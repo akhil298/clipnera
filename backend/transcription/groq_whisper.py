@@ -18,6 +18,7 @@ from groq import AsyncGroq
 
 from core.config import get_settings
 from core.logging_config import get_logger
+from transcription.language import SENTENCE_TERMINALS, normalize_language, spoken_hindi_misread_as_urdu
 from usage.recorder import record_llm_call
 
 log = get_logger(__name__)
@@ -43,7 +44,7 @@ class GroqWhisperTranscriber:
         return bool((getattr(get_settings(), "GROQ_API_KEY", "") or "").strip())
 
     async def transcribe(
-        self, audio_path: str, duration: float, language: str | None = None,
+        self, audio_path: str, duration: float, language: str | None = None, prompt: str | None = None,
     ) -> tuple[list[dict[str, Any]], str]:
         """Segments (with word timings) for the whole file, and the detected language."""
         starts = chunk_starts(duration)
@@ -53,7 +54,11 @@ class GroqWhisperTranscriber:
                 length = min(CHUNK_SECONDS + OVERLAP_SECONDS, duration - start)
                 async with semaphore:
                     path = await _encode_chunk(audio_path, start, length, Path(workdir) / f"chunk{index}.mp3")
-                    return await self._transcribe_chunk(path, start, length, language)
+                    words, detected = await self._transcribe_chunk(path, start, length, language, prompt)
+                    if language is None and spoken_hindi_misread_as_urdu(detected):
+                        log.info("Chunk %d detected as Urdu; re-transcribing as Hindi", index)
+                        words, detected = await self._transcribe_chunk(path, start, length, "hi", prompt)
+                    return words, detected
 
             results = await asyncio.gather(*(run(i, start) for i, start in enumerate(starts)))
 
@@ -61,11 +66,10 @@ class GroqWhisperTranscriber:
         for chunk_words, _ in results:
             covered = words[-1]["end"] if words else -1.0
             words.extend(w for w in chunk_words if w["start"] >= covered - 0.05)
-        detected = next((lang for _, lang in results if lang), language or "en")
-        return group_words(words), detected
+        return group_words(words), dominant_language(results, language)
 
     async def _transcribe_chunk(
-        self, path: Path, offset: float, length: float, language: str | None,
+        self, path: Path, offset: float, length: float, language: str | None, prompt: str | None = None,
     ) -> tuple[list[dict[str, Any]], str]:
         started = time.monotonic()
         response = await self._client.audio.transcriptions.create(
@@ -74,6 +78,8 @@ class GroqWhisperTranscriber:
             response_format="verbose_json",
             timestamp_granularities=["word", "segment"],
             language=language,
+            # Names and brands in the prompt are spelled the same way in the transcript.
+            prompt=prompt or None,
             temperature=0.0,
         )
         await record_llm_call(
@@ -101,7 +107,16 @@ class GroqWhisperTranscriber:
                 for s in data.get("segments") or []
                 if str(s.get("text", "")).strip()
             ]
-        return words, str(data.get("language") or "")
+        return words, normalize_language(str(data.get("language") or ""))
+
+
+def dominant_language(results: list[tuple[list[dict[str, Any]], str]], requested: str | None) -> str:
+    """The language most of the words were spoken in; chunks can differ in a mixed video."""
+    counts: dict[str, int] = {}
+    for words, code in results:
+        if code:
+            counts[code] = counts.get(code, 0) + len(words)
+    return max(counts, key=counts.get) if counts else normalize_language(requested) or "en"
 
 
 def chunk_starts(duration: float) -> list[float]:
@@ -134,7 +149,7 @@ def group_words(words: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for word in words:
         if current:
             pause = word["start"] - current[-1]["end"]
-            sentence_end = current[-1]["word"].endswith((".", "?", "!"))
+            sentence_end = current[-1]["word"].endswith(SENTENCE_TERMINALS)
             if pause >= SEGMENT_PAUSE_SECONDS or len(current) >= MAX_SEGMENT_WORDS or (sentence_end and len(current) >= 8):
                 flush()
         current.append(word)

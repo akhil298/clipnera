@@ -280,7 +280,7 @@ export interface VideoProject {
   tags?: string[];
   genre: string;
   duration: number; // in seconds
-  sourceType: 'youtube_url';
+  sourceType: 'youtube_url' | 'upload';
   videoUrl: string;
   posterUrl: string;
   uploadedAt: string;
@@ -317,6 +317,7 @@ export type TabType =
   | 'scheduler'
   | 'analytics'
   | 'brand_kit'
+  | 'reels'
   | 'settings';
 
 export interface UserProfile {

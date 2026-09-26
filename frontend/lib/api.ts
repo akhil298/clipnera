@@ -786,12 +786,23 @@ function subscribeEvents<T>(
   return () => ctrl.abort();
 }
 
+/** Script Hindi and Telugu captions are written in; mirrors backend transcription/transliterate.py. */
+export type CaptionScript = 'auto' | 'roman' | 'native';
+
+/** The subset of the backend's run `clip_settings` the upload flow sets. */
+export interface PipelineClipSettings {
+  caption_script?: CaptionScript;
+  /** Add B-roll cutaways to each clip (charged per clip that gets them). */
+  broll?: boolean;
+}
+
 export const pipelineApi = {
   start: (
     projectId: string,
     steps: string[] = DEFAULT_PIPELINE_STEPS,
     audioConfig: Record<string, any> = {},
     outputAspectRatios?: string[],
+    clipSettings?: PipelineClipSettings,
   ) =>
     authedRequest<{ project_id: string; status: string; selected_steps: string[]; credits_deducted: number }>(`/pipeline/start/${projectId}`, {
       method: 'POST',
@@ -799,6 +810,7 @@ export const pipelineApi = {
         steps,
         audio_config: audioConfig,
         ...(outputAspectRatios?.length ? { output_aspect_ratios: outputAspectRatios } : {}),
+        ...(clipSettings ? { clip_settings: clipSettings } : {}),
       }),
     }),
   subscribeProgress: (
@@ -992,7 +1004,7 @@ export type PlanFeature =
   | 'social_scheduling'
   | 'custom_aspect_ratios';
 
-export type UsageKey = 'exports' | 'audio_enhancements';
+export type UsageKey = 'exports' | 'audio_enhancements' | 'reel_renders' | 'ai_shots';
 
 export type BillingPeriod = 'monthly' | 'yearly';
 
@@ -1302,10 +1314,18 @@ export interface TopProjectUsage {
   cost_usd: number;
 }
 
+export interface CostPerMinute {
+  tier: 'pro' | 'free' | string;
+  projects: number;
+  source_minutes: number;
+  cost_per_source_minute_usd: number;
+}
+
 export interface AdminUsageSummary {
   days: number;
   calls: number;
   cost_usd: number;
+  cost_per_minute: CostPerMinute[];
   by_day: DailyUsage[];
   by_model: ModelUsage[];
   top_projects: TopProjectUsage[];
@@ -1590,4 +1610,382 @@ export const adminSocialApi = {
     envelopeRequest<AdminSocialAccountListResponse>(`/admin/social/accounts${queryString(params)}`),
   forceDisconnect: (accountId: string) =>
     envelopeRequest<DisconnectPreviewResponse>(`/admin/social/accounts/${accountId}/disconnect`, { method: 'POST' }),
+};
+
+// -- Direct video upload (backend uploads/) ------------------------------------
+// Mirrors backend/uploads/schema.py. The browser sends the file straight to S3
+// in parts; the API only signs the parts and stitches them.
+
+export type VideoContentType = 'video/mp4' | 'video/quicktime' | 'video/webm' | 'video/x-matroska';
+
+export interface VideoUploadInitRequest {
+  filename: string;
+  content_type: VideoContentType;
+  size_bytes: number;
+  duration_seconds?: number | null;
+}
+
+export interface VideoUploadInitResponse {
+  project_id: string;
+  upload_id: string;
+  part_size: number;
+  part_urls: string[];
+}
+
+export interface UploadedPart {
+  part_number: number;
+  etag: string;
+}
+
+export interface VideoUploadCompleteRequest {
+  upload_id: string;
+  parts: UploadedPart[];
+}
+
+export interface VideoUploadAbortRequest {
+  upload_id: string;
+}
+
+export interface VideoUploadCompleteResponse {
+  project_id: string;
+  status: string;
+}
+
+export const VIDEO_UPLOAD_TYPES: readonly VideoContentType[] = [
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+  'video/x-matroska',
+];
+
+const UPLOAD_CONCURRENCY = 4;
+const UPLOAD_PART_ATTEMPTS = 3;
+
+export interface VideoUploadOptions {
+  /** Read from the file's metadata so an over-long video is refused before upload. */
+  durationSeconds?: number;
+  onProgress?: (percent: number) => void;
+  signal?: AbortSignal;
+}
+
+/** PUTs one part and resolves its ETag; `onBytes` reports bytes sent so far for this part. */
+function putPart(url: string, body: Blob, onBytes: (sent: number) => void, signal?: AbortSignal): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    xhr.upload.onprogress = (event) => onBytes(event.loaded);
+    xhr.onload = () => {
+      // S3's bucket CORS must expose the ETag header for this to be readable.
+      const etag = xhr.getResponseHeader('ETag');
+      if (xhr.status >= 200 && xhr.status < 300 && etag) resolve(etag);
+      else reject(new Error(`Part upload failed (${xhr.status})`));
+    };
+    xhr.onerror = () => reject(new Error('Network error during upload'));
+    xhr.onabort = () => reject(new DOMException('Upload cancelled', 'AbortError'));
+    signal?.addEventListener('abort', () => xhr.abort(), { once: true });
+    xhr.send(body);
+  });
+}
+
+async function putPartWithRetry(url: string, body: Blob, onBytes: (sent: number) => void, signal?: AbortSignal) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await putPart(url, body, onBytes, signal);
+    } catch (err) {
+      onBytes(0);
+      if (signal?.aborted || attempt >= UPLOAD_PART_ATTEMPTS) throw err;
+      await new Promise((r) => setTimeout(r, 1000 * 2 ** (attempt - 1)));
+    }
+  }
+}
+
+export const uploadApi = {
+  initVideo: (payload: VideoUploadInitRequest) =>
+    envelopeRequest<VideoUploadInitResponse>('/uploads/video/init', { method: 'POST', body: JSON.stringify(payload) }),
+  completeVideo: (projectId: string, payload: VideoUploadCompleteRequest) =>
+    envelopeRequest<VideoUploadCompleteResponse>(`/uploads/video/${projectId}/complete`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  abortVideo: (projectId: string, payload: VideoUploadAbortRequest) =>
+    envelopeRequest<null>(`/uploads/video/${projectId}/abort`, { method: 'POST', body: JSON.stringify(payload) }),
+
+  /**
+   * Uploads a video file end to end and returns its project id. The project is
+   * ready for the pipeline once `clipApi` progress for it reports `done`.
+   */
+  async uploadVideo(file: File, options: VideoUploadOptions = {}): Promise<string> {
+    const { durationSeconds, onProgress, signal } = options;
+    const init = await uploadApi.initVideo({
+      filename: file.name,
+      content_type: file.type as VideoContentType,
+      size_bytes: file.size,
+      duration_seconds: durationSeconds ?? null,
+    });
+    const sent = new Array<number>(init.part_urls.length).fill(0);
+    const report = () => onProgress?.(Math.min(99, (sent.reduce((a, b) => a + b, 0) / file.size) * 100));
+    const parts: UploadedPart[] = [];
+    let next = 0;
+
+    const worker = async () => {
+      while (next < init.part_urls.length) {
+        const index = next++;
+        const start = index * init.part_size;
+        const blob = file.slice(start, Math.min(start + init.part_size, file.size));
+        const etag = await putPartWithRetry(
+          init.part_urls[index],
+          blob,
+          (bytes) => {
+            sent[index] = bytes;
+            report();
+          },
+          signal,
+        );
+        parts.push({ part_number: index + 1, etag });
+      }
+    };
+
+    try {
+      await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, init.part_urls.length) }, worker));
+      await uploadApi.completeVideo(init.project_id, { upload_id: init.upload_id, parts });
+    } catch (err) {
+      await uploadApi.abortVideo(init.project_id, { upload_id: init.upload_id }).catch(() => undefined);
+      throw err;
+    }
+    onProgress?.(100);
+    return init.project_id;
+  },
+};
+
+// -- B-roll library admin (backend broll/) --------------------------------------
+// Mirrors backend/broll/schema.py.
+
+export type BrollAssetStatus = 'ingesting' | 'live' | 'blocked' | 'taken_down' | 'failed';
+
+export interface BrollAssetResponse {
+  id: string;
+  kind: string;
+  source: string;
+  source_id: string;
+  source_url: string | null;
+  title: string;
+  tags: string[];
+  duration_s: number;
+  width: number;
+  height: number;
+  orientation: string;
+  quality_score: number;
+  status: BrollAssetStatus;
+  status_reason: string | null;
+  license_code: string | null;
+  attribution_text: string | null;
+  thumb_url: string | null;
+  proxy_url: string | null;
+  created_at: string;
+}
+
+export interface BrollAssetListResponse {
+  items: BrollAssetResponse[];
+  total: number;
+}
+
+export interface BrollIngestRequest {
+  query: string;
+  per_source?: number;
+  sources?: string[] | null;
+}
+
+export interface BrollIngestResponse {
+  query: string;
+  queued: boolean;
+}
+
+export interface BrollStatusRequest {
+  status: 'live' | 'blocked' | 'taken_down';
+  reason?: string | null;
+}
+
+export const adminBrollApi = {
+  listAssets: (params: { q?: string; status?: BrollAssetStatus; limit?: number; offset?: number } = {}) =>
+    envelopeRequest<BrollAssetListResponse>(`/admin/broll/assets${queryString(params)}`),
+  setStatus: (assetId: string, payload: BrollStatusRequest) =>
+    envelopeRequest<BrollAssetResponse>(`/admin/broll/assets/${assetId}/status`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  ingest: (payload: BrollIngestRequest) =>
+    envelopeRequest<BrollIngestResponse>('/admin/broll/ingest', { method: 'POST', body: JSON.stringify(payload) }),
+};
+
+// -- Clip B-roll cutaways (backend broll/route.py) --------------------------------
+// Mirrors BrollPreview, BrollPlacementResponse, ClipBrollResponse, BrollPlacementUpdate.
+
+export interface BrollPreview {
+  id: string;
+  title: string;
+  duration_s: number;
+  thumb_url: string | null;
+  proxy_url: string | null;
+  attribution_text: string | null;
+}
+
+export interface BrollPlacement {
+  index: number;
+  start: number;
+  end: number;
+  query: string;
+  score: number;
+  generating: boolean;
+  asset: BrollPreview | null;
+  alternates: BrollPreview[];
+}
+
+export interface ClipBrollResponse {
+  clip_id: string;
+  placements: BrollPlacement[];
+}
+
+export interface BrollPlacementUpdate {
+  asset_id?: string | null;
+  remove?: boolean;
+}
+
+export const brollApi = {
+  getClip: (clipId: string) => envelopeRequest<ClipBrollResponse>(`/broll/clips/${clipId}`),
+  updatePlacement: (clipId: string, index: number, payload: BrollPlacementUpdate) =>
+    envelopeRequest<ClipBrollResponse>(`/broll/clips/${clipId}/placements/${index}`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  search: (q: string, minDuration = 0) =>
+    envelopeRequest<BrollPreview[]>(`/broll/search${queryString({ q, min_duration: minDuration })}`),
+  /** Pro: an AI-generated shot for this cutaway (charged now, refunded if it fails). */
+  generatePlacement: (clipId: string, index: number, shot?: string) =>
+    envelopeRequest<ClipBrollResponse>(`/broll/clips/${clipId}/placements/${index}/generate`, {
+      method: 'POST',
+      body: JSON.stringify({ shot: shot || null }),
+    }),
+};
+
+/** Mirrors backend GenerateShotRequest. */
+export interface GenerateShotRequest {
+  shot?: string | null;
+}
+
+/** Credits one AI-generated shot costs; mirrors backend VEO_SCENE_CREDITS. */
+export const AI_SHOT_CREDITS = 120;
+
+// -- Reels from images (backend reels/) -------------------------------------------
+// Mirrors backend/reels/schema.py.
+
+export type ReelStyle = 'clean' | 'bold' | 'neon' | 'warm';
+export type ReelStatus = 'draft' | 'planning' | 'ready' | 'rendering' | 'done' | 'failed';
+export type ReelSceneKind = 'image' | 'broll' | 'text';
+export type ReelAssetType =
+  | 'image/jpeg' | 'image/png' | 'image/webp'
+  | 'audio/mpeg' | 'audio/wav' | 'audio/x-wav' | 'audio/mp4' | 'audio/x-m4a' | 'audio/webm';
+
+export interface ReelCreateRequest {
+  title: string;
+  topic?: string | null;
+  script?: string | null;
+  language?: string;
+  style?: ReelStyle;
+}
+
+export interface ReelAssetFile {
+  filename: string;
+  content_type: ReelAssetType;
+  size_bytes: number;
+}
+
+export interface ReelAssetUpload {
+  key: string;
+  url: string;
+  content_type: string;
+}
+
+export interface ReelScene {
+  index: number;
+  start: number;
+  end: number;
+  text: string;
+  kind: ReelSceneKind;
+  image_index: number | null;
+  headline: string;
+  query: string;
+  generating: boolean;
+  image_url: string | null;
+  footage: BrollPreview | null;
+  alternates: BrollPreview[];
+}
+
+export interface ReelResponse {
+  id: string;
+  title: string;
+  status: ReelStatus;
+  topic: string | null;
+  script: string | null;
+  language: string;
+  style: string;
+  image_urls: string[];
+  has_voiceover: boolean;
+  duration_s: number;
+  scenes: ReelScene[];
+  credits_estimate: number;
+  credits_charged: number;
+  output_url: string | null;
+  error: string | null;
+  created_at: string;
+}
+
+export interface ReelSummary {
+  id: string;
+  title: string;
+  status: ReelStatus;
+  duration_s: number;
+  created_at: string;
+}
+
+export interface ReelSceneUpdate {
+  kind: ReelSceneKind;
+  image_index?: number | null;
+  asset_id?: string | null;
+  headline?: string | null;
+}
+
+export const REEL_IMAGE_TYPES: readonly ReelAssetType[] = ['image/jpeg', 'image/png', 'image/webp'];
+export const REEL_AUDIO_TYPES: readonly ReelAssetType[] = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/x-m4a', 'audio/webm'];
+
+const post = (body: unknown): RequestInit => ({ method: 'POST', body: JSON.stringify(body) });
+
+export const reelsApi = {
+  create: (payload: ReelCreateRequest) => envelopeRequest<ReelResponse>('/reels', post(payload)),
+  list: () => envelopeRequest<ReelSummary[]>('/reels'),
+  get: (reelId: string) => envelopeRequest<ReelResponse>(`/reels/${reelId}`),
+  initAssets: (reelId: string, files: ReelAssetFile[]) =>
+    envelopeRequest<{ uploads: ReelAssetUpload[] }>(`/reels/${reelId}/assets/init`, post({ files })),
+  completeAssets: (reelId: string, keys: string[]) =>
+    envelopeRequest<ReelResponse>(`/reels/${reelId}/assets/complete`, post({ keys })),
+  plan: (reelId: string) => envelopeRequest<ReelResponse>(`/reels/${reelId}/plan`, post({})),
+  updateScene: (reelId: string, index: number, payload: ReelSceneUpdate) =>
+    envelopeRequest<ReelResponse>(`/reels/${reelId}/scenes/${index}`, post(payload)),
+  render: (reelId: string) => envelopeRequest<ReelResponse>(`/reels/${reelId}/render`, post({})),
+  generateScene: (reelId: string, index: number, shot?: string) =>
+    envelopeRequest<ReelResponse>(`/reels/${reelId}/scenes/${index}/generate`, post({ shot: shot || null })),
+
+  /** Uploads images and an optional voiceover straight to S3, then attaches them to the reel. */
+  async uploadAssets(reelId: string, files: File[]): Promise<ReelResponse> {
+    const { uploads } = await reelsApi.initAssets(
+      reelId,
+      files.map((f) => ({ filename: f.name, content_type: f.type as ReelAssetType, size_bytes: f.size })),
+    );
+    await Promise.all(
+      uploads.map(async (upload, i) => {
+        const res = await fetch(upload.url, { method: 'PUT', body: files[i], headers: { 'Content-Type': upload.content_type } });
+        if (!res.ok) throw new Error(`Upload of ${files[i].name} failed (${res.status})`);
+      }),
+    );
+    return reelsApi.completeAssets(reelId, uploads.map((u) => u.key));
+  },
 };

@@ -25,7 +25,7 @@ log = get_logger(__name__)
 
 # Bump when a prompt, model choice or edit rule changes, so clips made by each
 # version can be compared on how users treat them (see feedback/).
-DIRECTOR_VERSION = "2026-09-26.1"
+DIRECTOR_VERSION = "2026-09-27.1"
 
 LAYOUTS = ("auto", "single_speaker", "two_speaker_stack", "split_gameplay", "screen_with_speaker", "wide")
 BEAT_EFFECTS = ("punch_in", "react_cut", "emphasis")
@@ -134,9 +134,14 @@ DIRECTOR_EXAMPLE = (
 TABLE_LEGEND = """Transcript lines read: id start_second speaker flags text.
 Flags: !E louder than the surrounding minute (energy peak), !Q question, !P follows a long pause, !R loud reaction right after (laughter, applause, gasp)."""
 
+# Shared by every prompt that reads a transcript or writes viewer-facing copy.
+LANGUAGE_RULE = """The transcript may be in any language or a mix, including Hindi, Telugu, Hinglish and Tenglish, in native or Roman script. Judge meaning, hooks and humour in the language actually spoken, never through a literal English reading. Write every title, description and hashtag in the language mix the speaker uses, in the transcript's script: Roman script for a Roman-script transcript."""
+
 MAP_SYSTEM = f"""You scout long videos for a short-form video editor. You read a transcript and point at the moments worth turning into standalone vertical shorts. You answer with sentence ids, never timestamps, and return valid JSON only.
 
 {TABLE_LEGEND}
+
+{LANGUAGE_RULE}
 
 A strong candidate is one complete thought a stranger scrolling past would stop for and understand without the rest of the video: a story with a turn, a surprising claim with its explanation, a sharp disagreement, a joke with its punchline, a concrete how-to with its result, an emotional admission. Setup and payoff must both be inside it. Weak candidates: greetings, housekeeping, sponsor reads, "as I said earlier", lists with no point, anything that needs earlier context.
 
@@ -145,6 +150,8 @@ A strong candidate is one complete thought a stranger scrolling past would stop 
 DIRECTOR_SYSTEM = f"""You are the lead editor of a short-form video team. From candidate moments of one long video you choose the clips worth posting and write a complete edit plan for each. Your clips are judged on: hook (the first two seconds stop the scroll), payoff (it lands the answer, reveal or punchline), standalone (a stranger understands it), emotion, and pacing (no dead air, no tangents). You return valid JSON only.
 
 {TABLE_LEGEND}
+
+{LANGUAGE_RULE}
 
 How to edit:
 - segments: the sentence id ranges the clip is stitched from, in ascending order, inclusive. Use one range unless cutting a tangent, a repetition, a false start or a slow stretch out of the middle clearly improves it; then use up to four. Never reorder sentences and never splice together separate topics.

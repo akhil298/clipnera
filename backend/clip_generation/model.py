@@ -199,6 +199,8 @@ class GeneratedClip(Base):
     # clip's body is stitched from, in play order, with pauses and tangents
     # left out. Null means the single span [start_time, end_time).
     edit_spans: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # B-roll cutaways as JSON, in source seconds: [{start, end, asset_id, query, alternates, score}].
+    broll_plan: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Which director prompt and pipeline made this clip; null for clips made
     # before versioning. Lets a prompt change be judged on how users treat it.
     director_version: Mapped[str | None] = mapped_column(String(40), nullable=True)

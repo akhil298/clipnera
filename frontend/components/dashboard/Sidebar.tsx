@@ -25,6 +25,7 @@ import {
   Coins,
   Share2,
   Cpu,
+  Clapperboard,
 } from 'lucide-react';
 import Link from 'next/link';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
@@ -87,6 +88,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Folder,
       badge: projects.length ? `${projects.length}` : undefined,
       description: 'Organized video folders & YouTube ingests',
+    },
+    {
+      id: 'reels' as TabType,
+      label: 'Reels from Images',
+      icon: Clapperboard,
+      description: 'Your photos + script into a full reel',
     },
     {
       id: 'generator' as TabType,

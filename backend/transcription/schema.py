@@ -7,6 +7,7 @@ class TranscriptionRequest(BaseModel):
     input_path: str = Field(..., description="Absolute path to audio/video file")
     model_size: Literal["tiny", "base", "small", "medium", "large-v2", "large-v3"] = Field("small", description="Whisper model size")
     language: Optional[str] = Field(None, description="Language code (e.g., 'en', 'hi'). Auto-detect if omitted.")
+    prompt: Optional[str] = Field(None, max_length=600, description="Context for spelling names and brands, e.g. the video title")
     chunk_duration: int = Field(1200, ge=300, le=1800, description="Chunk duration in seconds (5-30 min)")
     chunk_overlap: int = Field(10, ge=0, le=60, description="Overlap between chunks in seconds")
     word_timestamps: bool = Field(True, description="Enable word-level timestamps")

@@ -68,6 +68,9 @@ class PipelineState(Base):
         nullable=False,
     )
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Set by the API, read by whichever process runs the pipeline, so a run on
+    # a worker machine can be cancelled too.
+    cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     step_artifacts: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

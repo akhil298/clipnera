@@ -7,6 +7,7 @@ import os
 import time
 from typing import Any, Callable, Optional
 
+from transcription.word_timing import clean_word_timings
 from transcription.chunker import TranscriptionChunker
 from transcription.checkpoint import CheckpointManager
 from transcription.formatter import TranscriptionFormatter
@@ -135,6 +136,7 @@ class WhisperXTranscriptionService(TranscriptionService):
                     model,
                     chunk_audio,
                     language=language,
+                    initial_prompt=request.prompt or None,
                     beam_size=5,
                     vad_filter=True,
                     vad_parameters=dict(min_silence_duration_ms=1000, speech_pad_ms=400),
@@ -148,6 +150,7 @@ class WhisperXTranscriptionService(TranscriptionService):
                         model,
                         chunk_audio,
                         language=language,
+                        initial_prompt=request.prompt or None,
                         beam_size=3,
                         vad_filter=False,
                         word_timestamps=True,
@@ -203,6 +206,7 @@ class WhisperXTranscriptionService(TranscriptionService):
                     model,
                     audio_path,
                     language=language,
+                    initial_prompt=request.prompt or None,
                     beam_size=3,
                     vad_filter=False,
                     word_timestamps=True,
@@ -242,7 +246,9 @@ class WhisperXTranscriptionService(TranscriptionService):
         if progress_callback:
             progress_callback(5.0, "Transcribing with hosted Whisper...")
         try:
-            segments, language = await GroqWhisperTranscriber().transcribe(audio_path, duration, request.language)
+            segments, language = await GroqWhisperTranscriber().transcribe(
+                audio_path, duration, request.language, prompt=request.prompt,
+            )
         except Exception as exc:
             log.warning("Hosted transcription failed, falling back to local Whisper: %s", exc)
             return None
@@ -283,7 +289,7 @@ class WhisperXTranscriptionService(TranscriptionService):
                 "text": seg.get("text", "").strip(),
                 "confidence": seg.get("confidence", 1.0),
                 "speaker": seg.get("speaker"),
-                "words": seg.get("words"),
+                "words": clean_word_timings(seg["words"]) if seg.get("words") else seg.get("words"),
             }
             for seg in all_segments
         ]

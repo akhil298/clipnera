@@ -9,6 +9,7 @@ from typing import Any
 from core.logging_config import get_logger
 from subtitle_styling.emoji_annotator import annotate_caption_words
 from subtitle_styling.templates import get_template
+from transcription.language import script_of
 
 log = get_logger(__name__)
 
@@ -40,6 +41,9 @@ CAPTION_WIDTH_MARGIN = 1.15
 # any host instead of depending on what fontconfig happens to have installed.
 FONTS_DIR = Path(__file__).resolve().parent.parent / "static" / "fonts"
 WATERMARK_PATH = Path(__file__).resolve().parent.parent / "static" / "watermark.png"
+# Display faces carry Latin glyphs only; captions in these scripts switch to a
+# bundled Noto face instead of rendering as empty boxes.
+SCRIPT_FONTS = {"telugu": "Noto Sans Telugu", "devanagari": "Noto Sans Devanagari"}
 # Watermark width and corner inset as fractions of the frame's shorter side, so
 # it reads the same on every export size. A fixed 300px mark was easy to miss
 # on a 1080px-wide reel.
@@ -303,6 +307,10 @@ class AssGenerator:
         line spans one, or it would carry the hook's words over into the clip."""
         template = {**get_template(style_id), **(style_overrides or {})}
         breaks = sorted(segment_breaks or [])
+        spoken = " ".join(str(w.get("text") or w.get("word") or "") for w in transcript_words)
+        script = script_of(f"{spoken} {title or ''}")
+        if script in SCRIPT_FONTS:
+            template["font_family"] = SCRIPT_FONTS[script]
 
         # Templates are authored against a 1080-wide vertical frame. Scaling by
         # height made the same template 1.78x larger on 9:16 (h=1920) than on

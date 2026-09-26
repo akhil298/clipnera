@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from clients.ai import TEXT_PROVIDERS, get_text_client
-from clients.ai.anthropic import THINKING_TOKEN_ALLOWANCE, Anthropic
+from clients.ai.anthropic import THINKING_ALLOWANCE_BY_EFFORT, THINKING_TOKEN_ALLOWANCE, Anthropic
 from clients.ai.groq import DEFAULT_MODEL as GROQ_DEFAULT_MODEL
 from clients.ai.groq import MODEL_PROFILES, Groq
 from content_intelligence.classifier import CLASSIFICATION_JSON_SCHEMA, CONTENT_TAXONOMY
@@ -131,7 +131,8 @@ class TestAnthropicRequestShape:
         # thinking and return no text, dropping the run to the heuristic.
         client, captured = _capturing_anthropic()
         await client.chat([{"role": "user", "content": "hi"}], max_tokens=500)
-        assert captured["max_tokens"] == 500 + THINKING_TOKEN_ALLOWANCE
+        # The room scales with the client's effort, which comes from settings.
+        assert captured["max_tokens"] == 500 + THINKING_ALLOWANCE_BY_EFFORT.get(client.effort, THINKING_TOKEN_ALLOWANCE)
 
     @pytest.mark.asyncio
     async def test_json_schema_becomes_an_enforced_output_format(self):

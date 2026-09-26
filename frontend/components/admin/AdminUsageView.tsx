@@ -108,6 +108,22 @@ export function AdminUsageView() {
           </div>
 
           <section className="space-y-2">
+            <h2 className="text-sm font-bold text-white">AI cost per source minute</h2>
+            <p className="text-[11px] text-neutral-400">
+              What a minute of uploaded video really costs in AI. Credits should earn at least 3x this per minute.
+            </p>
+            <Table
+              head={['Tier', 'Videos', 'Source minutes', 'Per minute']}
+              rows={summary.cost_per_minute.map((c) => [
+                c.tier === 'pro' ? 'Pro (Claude)' : 'Free (Groq)',
+                c.projects.toLocaleString(),
+                c.source_minutes.toFixed(1),
+                usd(c.cost_per_source_minute_usd),
+              ])}
+            />
+          </section>
+
+          <section className="space-y-2">
             <h2 className="text-sm font-bold text-white">By model</h2>
             <Table
               head={['Model', 'Calls', 'Input tokens', 'Output tokens', 'Spend']}

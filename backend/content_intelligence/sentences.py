@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from content_intelligence.signals import PEAK_Z, AudioSignals
+from transcription.language import CONTINUATION_WORDS, SENTENCE_TERMINALS
 
 # A sentence ends at terminal punctuation, at a pause this long, or at this many words.
 SENTENCE_PAUSE_SECONDS = 0.7
@@ -33,8 +34,8 @@ LONG_PAUSE_SECONDS = 1.5
 REACTION_WINDOW_SECONDS = 1.5
 REACTION_Z = 1.8
 
-_TERMINAL = (".", "?", "!")
-_CONTINUATION = {"and", "but", "so", "because", "or", "which", "then", "also", "plus"}
+_TERMINAL = SENTENCE_TERMINALS
+_CONTINUATION = CONTINUATION_WORDS
 
 
 @dataclass

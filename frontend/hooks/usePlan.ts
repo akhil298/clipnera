@@ -23,6 +23,8 @@ export const FEATURE_LABELS: Record<PlanFeature, string> = {
 const USAGE_LABELS: Record<UsageKey, string> = {
   exports: 'export',
   audio_enhancements: 'audio enhancement',
+  reel_renders: 'reel render',
+  ai_shots: 'AI shot',
 };
 
 /** The upgrade-prompt reason for a plan error returned by the API. */

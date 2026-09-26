@@ -32,8 +32,9 @@ def test_new_gates_are_pro_only():
 
 
 def test_free_limits_and_pro_unlimited():
-    assert entitlements_for("free").daily_limits == {"exports": 10, "audio_enhancements": 3}
-    assert entitlements_for("pro").daily_limits == {"exports": None, "audio_enhancements": None}
+    assert entitlements_for("free").daily_limits == {"exports": 10, "audio_enhancements": 3, "reel_renders": 2, "ai_shots": 0}
+    # Pro: unlimited exports and enhancements, fair-use caps on reels and AI shots.
+    assert entitlements_for("pro").daily_limits == {"exports": None, "audio_enhancements": None, "reel_renders": 20, "ai_shots": 10}
     assert entitlements_for("free").credit_minutes == 60
     assert entitlements_for("pro").credit_minutes == 600
 

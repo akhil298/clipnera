@@ -31,6 +31,8 @@ from social import model as social_model
 from notifications import model as notifications_model
 from usage import model as usage_model
 from feedback import model as feedback_model
+from broll import model as broll_model
+from reels import model as reels_model
 
 target_metadata = Base.metadata
 

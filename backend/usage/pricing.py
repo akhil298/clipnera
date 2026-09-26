@@ -43,6 +43,16 @@ AUDIO_PRICES_PER_HOUR: dict[tuple[str, str], float] = {
     ("groq", "whisper-large-v3"): 0.111,
 }
 
+# Generated video, per second of output, by resolution (Gemini API list prices).
+VIDEO_PRICES_PER_SECOND: dict[tuple[str, str, str], float] = {
+    ("gemini", "veo-3.1-lite-generate-preview", "720p"): 0.05,
+    ("gemini", "veo-3.1-lite-generate-preview", "1080p"): 0.08,
+    ("gemini", "veo-3.1-fast-generate-preview", "720p"): 0.10,
+    ("gemini", "veo-3.1-fast-generate-preview", "1080p"): 0.12,
+    ("gemini", "veo-3.1-generate-preview", "720p"): 0.40,
+    ("gemini", "veo-3.1-generate-preview", "1080p"): 0.40,
+}
+
 _warned: set[tuple[str, str]] = set()
 
 
@@ -71,6 +81,14 @@ def token_cost(
         + cache_write_tokens * CACHE_WRITE_MULTIPLIER
     )
     return (billed_input * price.input_per_mtok + output_tokens * price.output_per_mtok) / 1_000_000
+
+
+def video_cost(provider: str, model: str, resolution: str, seconds: float) -> float:
+    per_second = VIDEO_PRICES_PER_SECOND.get((provider, model, resolution))
+    if per_second is None:
+        _warn_unpriced(provider, f"{model}@{resolution}")
+        return 0.0
+    return per_second * seconds
 
 
 def audio_cost(provider: str, model: str, audio_seconds: float) -> float:

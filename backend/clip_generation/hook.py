@@ -130,6 +130,21 @@ def cut_to_source(
     return last_end
 
 
+def source_to_cut(
+    t: float, clip_start: float, clip_end: float, hook: Hook | None, spans: list[Span] | None,
+) -> float | None:
+    """Second of the cut file where source time ``t`` of the body plays; ``None`` if cut out.
+
+    The inverse of :func:`cut_to_source` for the body (the teaser is ignored).
+    """
+    offset = hook.duration if hook else 0.0
+    for start, end in spans or [(clip_start, clip_end)]:
+        if start <= t <= end:
+            return offset + (t - start)
+        offset += end - start
+    return None
+
+
 def on_output_timeline(
     items: list[dict[str, Any]],
     clip_start: float,

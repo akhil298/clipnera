@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Callable
 
 from clients.services.s3 import S3
+from broll.cutaways import with_broll
 from clip_generation.hook import (
     Hook,
     Span,
@@ -346,7 +347,7 @@ class ClipService:
         if transcript_segments is None:
             transcript_segments = self._loads(clip.transcript, [])
 
-        async with clip_source(clip) as video_path:
+        async with clip_source(clip) as cut_path, with_broll(cut_path, clip, Hook.from_values(clip.hook_start, clip.hook_end)) as video_path:
             # No words on record burned an empty caption track; transcribe the cut.
             if not transcript_segments and not burn_request.get("subtitles"):
                 transcript_segments = await self._transcribe_clip_cut(clip, video_path, user_id)
@@ -657,6 +658,18 @@ class ClipService:
             clip_end = min(clip_end, clip.start_time + max_duration)
             spans = trim_spans(spans, max_duration)
 
+        async with with_broll(cut_path, clip, hook) as source_path:
+            return await self._render_export_from(
+                clip, source_path, styling, hook, spans, clip_end, style_type, caption_config,
+                burn_subtitles, watermark_enabled, enable_emoji, transcript, transition,
+            )
+
+    async def _render_export_from(
+        self, clip: GeneratedClip, cut_path: str, styling: Any, hook: Hook | None, spans: list | None,
+        clip_end: float, style_type: str, caption_config: dict[str, Any], burn_subtitles: bool,
+        watermark_enabled: bool, enable_emoji: bool, transcript: list[dict[str, Any]],
+        transition: TransitionSpec | None,
+    ) -> str:
         if not burn_subtitles:
             return await styling.render_uncaptioned(
                 cut_path, clip.start_time, clip_end, watermark_enabled, hook=hook, transition=transition,

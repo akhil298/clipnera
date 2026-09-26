@@ -50,10 +50,20 @@ class TopProjectUsage(BaseModel):
     cost_usd: float
 
 
+class CostPerMinute(BaseModel):
+    """Measured AI spend per minute of source video, to price credits against."""
+
+    tier: str
+    projects: int
+    source_minutes: float
+    cost_per_source_minute_usd: float
+
+
 class AdminUsageSummary(BaseModel):
     days: int
     calls: int
     cost_usd: float
+    cost_per_minute: list[CostPerMinute]
     by_day: list[DailyUsage]
     by_model: list[ModelUsage]
     top_projects: list[TopProjectUsage]

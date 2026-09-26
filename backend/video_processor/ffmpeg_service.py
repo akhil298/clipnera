@@ -25,6 +25,25 @@ UPSCALE_SHARPEN = "unsharp=5:5:0.6:5:5:0.0"
 BACKDROP_SCALE = 4
 
 
+# A punch-in eases to full zoom over this long (ease-out cubic), then holds.
+# A hard jump read as a glitch; a slow drift reads as a camera move.
+PUNCH_IN_RAMP_SECONDS = 0.25
+
+
+def punch_in_filter(zoom: float, width: int, height: int, fps: float) -> str:
+    """Centred zoom from 1x to ``zoom`` at a fixed ``width``x``height``.
+
+    zoompan keeps the frame size constant (a per-frame ``scale`` resized the
+    stream and reset crop's centring); ``d=1`` with the source ``fps`` maps
+    frames one to one, so audio stays in sync.
+    """
+    eased = f"1+{zoom - 1:.4f}*(1-pow(1-min(1,it/{PUNCH_IN_RAMP_SECONDS}),3))"
+    return (
+        f"zoompan=z='{eased}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+        f":d=1:s={width}x{height}:fps={fps:.3f}"
+    )
+
+
 def upscale_filter(width: int, height: int, factor: float, fit: str = "") -> str:
     """Lanczos scale to ``width``x``height``, sharpened when ``factor`` enlarges noticeably.
 
@@ -112,6 +131,18 @@ class FFmpegService:
             return float(stdout.decode().strip() or 0)
         except Exception as exc:
             raise CustomException(message=f"FFprobe failed: {exc}", code="FFPROBE_ERROR", status_code=500)
+
+    async def probe_fps(self, input_path: str) -> float:
+        """Frame rate of the first video stream; 30 when it cannot be read."""
+        info = await self.get_video_info(input_path)
+        stream = next((s for s in info.get("streams") or [] if s.get("codec_type") == "video"), {})
+        rate = str(stream.get("avg_frame_rate") or stream.get("r_frame_rate") or "")
+        try:
+            num, _, den = rate.partition("/")
+            fps = float(num) / float(den or 1)
+        except (ValueError, ZeroDivisionError):
+            fps = 0.0
+        return fps if fps > 0 else 30.0
 
     async def get_video_info(self, input_path: str) -> dict:
         cmd = [
@@ -228,8 +259,9 @@ class FFmpegService:
     ) -> None:
         """Cut [start_time, start_time+duration] and pan-crop to the target size.
 
-        ``zoom`` above 1 tightens the crop window around the same path, for a
-        punch-in; the output size is unchanged.
+        ``zoom`` above 1 is a punch-in: the tracked crop is rendered as usual
+        and then eased in to ``zoom`` over the first quarter second, centred on
+        the tracked subject; the output size is unchanged.
 
         Emits one INFO line per render; the filter graph and full command are
         DEBUG, since a tracked crop expression runs to several thousand
@@ -254,9 +286,6 @@ class FFmpegService:
             raise CustomException(message="Source video dimensions are unavailable", code="VIDEO_DIMENSIONS_UNAVAILABLE", status_code=400)
 
         crop_width, crop_height = target_crop_size(source_width, source_height, f"{target_width}:{target_height}")
-        if zoom > 1.0:
-            crop_width = max(2, int(crop_width / zoom) // 2 * 2)
-            crop_height = max(2, int(crop_height / zoom) // 2 * 2)
 
         # Tracking timestamps are absolute; the filter graph runs on the cut clip.
         relative_tracking = [
@@ -280,6 +309,9 @@ class FFmpegService:
             f"crop={crop_width}:{crop_height}:{start_x}:{start_y},"
             f"{scale},setsar=1"
         )
+        if zoom > 1.0:
+            fps = await self.probe_fps(input_path)
+            video_filter += "," + punch_in_filter(zoom, target_width, target_height, fps)
         log.debug("Crop filter graph", extra={"video_filter": video_filter})
 
         # A crop that covers the whole frame at the source's own size changes

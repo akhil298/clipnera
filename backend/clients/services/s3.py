@@ -130,6 +130,61 @@ class S3:
                 code="AWS_S3_ERROR",
             ) from e
 
+    def presign_put(self, bucket: str, key: str, content_type: str, expires_in: int = 3600) -> str:
+        """A signed PUT URL for one small file; the browser must send the same Content-Type."""
+        try:
+            return self._client.generate_presigned_url(
+                "put_object", Params={"Bucket": bucket, "Key": key, "ContentType": content_type}, ExpiresIn=expires_in,
+            )
+        except ClientError as e:
+            raise CustomException(message=e.response["Error"]["Message"], code="AWS_S3_ERROR") from e
+
+    def create_multipart_upload(self, bucket: str, key: str, content_type: str) -> str:
+        """Start a browser-driven multipart upload; returns S3's upload id."""
+        try:
+            response = self._client.create_multipart_upload(Bucket=bucket, Key=key, ContentType=content_type)
+            return response["UploadId"]
+        except ClientError as e:
+            raise CustomException(message=e.response["Error"]["Message"], code="AWS_S3_ERROR") from e
+
+    def presign_upload_part(
+        self, bucket: str, key: str, upload_id: str, part_number: int, expires_in: int = 3600,
+    ) -> str:
+        """A signed PUT URL for one part; the browser sends the bytes straight to S3."""
+        try:
+            return self._client.generate_presigned_url(
+                "upload_part",
+                Params={"Bucket": bucket, "Key": key, "UploadId": upload_id, "PartNumber": part_number},
+                ExpiresIn=expires_in,
+            )
+        except ClientError as e:
+            raise CustomException(message=e.response["Error"]["Message"], code="AWS_S3_ERROR") from e
+
+    def complete_multipart_upload(
+        self, bucket: str, key: str, upload_id: str, parts: list[dict],
+    ) -> dict:
+        """``parts`` are ``{"PartNumber", "ETag"}`` in ascending part order."""
+        try:
+            return self._client.complete_multipart_upload(
+                Bucket=bucket, Key=key, UploadId=upload_id, MultipartUpload={"Parts": parts},
+            )
+        except ClientError as e:
+            raise CustomException(
+                message=e.response["Error"]["Message"], code="UPLOAD_INCOMPLETE", status_code=400,
+            ) from e
+
+    def abort_multipart_upload(self, bucket: str, key: str, upload_id: str) -> None:
+        try:
+            self._client.abort_multipart_upload(Bucket=bucket, Key=key, UploadId=upload_id)
+        except ClientError as e:
+            raise CustomException(message=e.response["Error"]["Message"], code="AWS_S3_ERROR") from e
+
+    def object_size(self, bucket: str, key: str) -> int:
+        try:
+            return int(self._client.head_object(Bucket=bucket, Key=key)["ContentLength"])
+        except ClientError as e:
+            raise CustomException(message=e.response["Error"]["Message"], code="AWS_S3_ERROR") from e
+
     def download_file(self, bucket: str, key: str, file_path: str) -> None:
         try:
             self._client.download_file(bucket, key, file_path, Config=self.FAST_UPLOAD_CONFIG)

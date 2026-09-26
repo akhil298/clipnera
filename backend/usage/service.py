@@ -6,6 +6,7 @@ from clip.repository import ClipRepository
 from core.exceptions import CustomException
 from usage.repository import UsageRepository
 from usage.schema import (
+    CostPerMinute,
     AdminUsageSummary,
     DailyUsage,
     ModelUsage,
@@ -50,6 +51,7 @@ class UsageService:
             days=days,
             calls=totals.calls,
             cost_usd=round(float(totals.cost_usd), 4),
+            cost_per_minute=cost_per_minute(await self._repo.project_costs_with_length(days)),
             by_day=[
                 DailyUsage(day=day.isoformat(), calls=calls, cost_usd=round(float(cost or 0), 4))
                 for day, calls, cost in await self._repo.by_day(days)
@@ -67,3 +69,20 @@ class UsageService:
                 for project_id, user_id, calls, cost in await self._repo.top_projects(days, top)
             ],
         )
+
+
+def cost_per_minute(rows: list) -> list[CostPerMinute]:
+    """AI dollars per source minute, for Pro runs (any Claude call) and Free runs separately."""
+    tiers: dict[str, list[float]] = {"pro": [0, 0.0, 0.0], "free": [0, 0.0, 0.0]}
+    for cost, seconds, used_claude in rows:
+        if not seconds:
+            continue
+        tier = tiers["pro" if used_claude else "free"]
+        tier[0] += 1
+        tier[1] += seconds / 60
+        tier[2] += float(cost or 0)
+    return [
+        CostPerMinute(tier=name, projects=int(count), source_minutes=round(minutes, 1),
+                      cost_per_source_minute_usd=round(spend / minutes, 5) if minutes else 0.0)
+        for name, (count, minutes, spend) in tiers.items()
+    ]

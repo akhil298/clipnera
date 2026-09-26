@@ -29,11 +29,11 @@ class TestNormalizeToken:
 class TestSingularize:
     def test_plural_ies(self):
         assert _singularize("ideas") == "idea"
-        assert _singularize("babies") == "babe"
+        assert _singularize("babies") == "baby"
 
     def test_plural_s(self):
         assert _singularize("goals") == "goal"
-        assert _singularize("stories") == "storie"
+        assert _singularize("stories") == "story"
 
     def test_no_plural(self):
         assert _singularize("test") == "test"

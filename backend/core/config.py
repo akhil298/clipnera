@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from enum import Enum
@@ -40,7 +42,7 @@ class BaseConfig(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
     ANTHROPIC_API_KEY: str = ""
-    ANTHROPIC_MODEL: str = "claude-opus-5"
+    ANTHROPIC_MODEL: str = "claude-opus-5-5"
     # Thinking depth for steps without their own setting: low | medium | high | xhigh | max.
     ANTHROPIC_EFFORT: str = "medium"
     # Most a pipeline run may spend on AI, per minute of source video. At 80%
@@ -87,6 +89,49 @@ class BaseConfig(BaseSettings):
     AWS_SECRET_ACCESS_KEY: str = ""
     LOCALSTACK_ENDPOINT: str = ""
     S3_BUCKET_NAME: str = "clipnera-videos"
+    # Direct browser-to-S3 video uploads. S3 allows 5 MB-5 GB parts and at
+    # most 10,000 of them; parts grow past the minimum only for huge files.
+    UPLOAD_MIN_PART_BYTES: int = 16 * 1024 * 1024
+    UPLOAD_MAX_BYTES: int = 10 * 1024 * 1024 * 1024
+    UPLOAD_URL_TTL_SECONDS: int = 6 * 3600
+
+    # Background jobs. "inprocess" runs them in the API process; "sqs" sends
+    # them to SQS_JOBS_QUEUE_URL for `python -m jobs.worker` processes.
+    JOB_QUEUE_BACKEND: Literal["inprocess", "sqs"] = "inprocess"
+    SQS_JOBS_QUEUE_URL: str = ""
+    JOB_WORKER_CONCURRENCY: int = 2
+    # A running job's message is hidden this long and re-hidden every third of
+    # it, so a crashed worker's job reappears within this window.
+    JOB_VISIBILITY_TIMEOUT_SECONDS: int = 300
+
+    # B-roll library. Pixabay stays off until its API caching terms are confirmed.
+    BROLL_SOURCES: str = "pexels,nasa,wikimedia"
+    PEXELS_API_KEY: str = ""
+    PIXABAY_API_KEY: str = ""
+    BROLL_S3_PREFIX: str = "broll"
+    BROLL_MAX_DOWNLOAD_BYTES: int = 300 * 1024 * 1024
+    BROLL_MIN_SHORT_SIDE: int = 720
+    BROLL_MIN_SHOT_SECONDS: float = 2.0
+    # "none" ranks by text only; "gemini" adds semantic similarity.
+    EMBEDDINGS_PROVIDER: Literal["none", "gemini"] = "none"
+    GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
+    # Charged per clip that gets cutaways; covers the planner call and render.
+    BROLL_CREDITS_PER_CLIP: int = 5
+
+    # Reels from images. TTS: "none" (use an uploaded voiceover or captions only),
+    # "groq" (English; accept Orpheus's terms in the Groq console) or "openai".
+    TTS_PROVIDER: Literal["none", "groq", "openai"] = "none"
+    OPENAI_TTS_MODEL: str = "gpt-4o-mini-tts"
+    REEL_BASE_CREDITS: int = 10
+    REEL_MAX_IMAGES_FREE: int = 5
+    REEL_MAX_IMAGES_PRO: int = 30
+
+    # AI-generated B-roll (Pro): Veo on the Gemini API, reusing GEMINI_API_KEY.
+    VEO_MODEL: str = "veo-3.1-lite-generate-preview"
+    VEO_RESOLUTION: Literal["720p", "1080p"] = "720p"
+    VEO_SECONDS: Literal[4, 6, 8] = 8
+    # 8 s of Lite 720p costs $0.40; 120 credits keeps ~60% margin at $0.0079 a credit.
+    VEO_SCENE_CREDITS: int = 120
 
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""

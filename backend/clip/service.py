@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 
 from clip.repository import ClipRepository
 from usage.repository import UsageRepository
@@ -24,13 +25,15 @@ log = get_logger(__name__)
 IDLE_DOWNLOAD_PROGRESS = {"status": "idle", "percent": 0.0, "total": None, "speed": None, "eta": None}
 
 
-def _resolution(prefetch, default: str) -> str:
-    """Resolution label from the first quality option that has a height."""
-    if prefetch.qualities and prefetch.qualities[0].height:
-        first_video_quality = next((q for q in prefetch.qualities if q.height), None)
-        if first_video_quality:
-            return f"?x{first_video_quality.height}"
-    return default
+def _video_shape(prefetch, default_resolution: str) -> tuple[str, str]:
+    """(resolution, aspect ratio) of the best video quality, e.g. ("1080x1920", "9:16")."""
+    best = next((q for q in prefetch.qualities if q.height), None)
+    if not best:
+        return default_resolution, "16:9"
+    if not best.width:
+        return f"{best.height}p", "16:9"
+    divisor = math.gcd(best.width, best.height)
+    return f"{best.width}x{best.height}", f"{best.width // divisor}:{best.height // divisor}"
 
 
 class ClipService:
@@ -61,14 +64,15 @@ class ClipService:
     async def youtube_metadata(self, url: str) -> YouTubeMetadataResponse:
         """Metadata for a YouTube URL without creating a project."""
         prefetch = await self._prefetch(url)
+        resolution, aspect_ratio = _video_shape(prefetch, "1920x1080")
         return YouTubeMetadataResponse(
             title=prefetch.title,
             thumbnail_url=prefetch.thumbnail or "",
             channel_title=prefetch.uploader or "Unknown",
             duration_seconds=int(prefetch.duration or 0),
             duration_formatted=YouTubeService._format_duration(prefetch.duration or 0),
-            resolution=_resolution(prefetch, "1920x1080"),
-            aspect_ratio="16:9",
+            resolution=resolution,
+            aspect_ratio=aspect_ratio,
             original_url=url,
         )
 
@@ -125,14 +129,15 @@ class ClipService:
             source_url=data.url,
         )
 
+        resolution, aspect_ratio = _video_shape(prefetch, "1920x1080")
         return VideoMetadataResponse(
             id=project.id,
             title=prefetch.title,
             thumbnail_url=prefetch.thumbnail or "",
             channel_title=prefetch.uploader or "Unknown",
             duration_formatted=self._youtube._format_duration(prefetch.duration or 0),
-            resolution=_resolution(prefetch, "1920x1080"),
-            aspect_ratio="16:9",
+            resolution=resolution,
+            aspect_ratio=aspect_ratio,
             file_size=0,
             presigned_url="",
             original_url=data.url,
@@ -153,7 +158,7 @@ class ClipService:
 
         asyncio.create_task(self._background_download(data.url, user_id, project.id, data.format_id))
 
-        resolution = _resolution(prefetch, "Unknown")
+        resolution, aspect_ratio = _video_shape(prefetch, "Unknown")
 
         return {
             "id": project.id,
@@ -162,7 +167,7 @@ class ClipService:
             "channel_title": prefetch.uploader or "Unknown",
             "duration_formatted": self._youtube._format_duration(prefetch.duration or 0),
             "resolution": resolution,
-            "aspect_ratio": "16:9",
+            "aspect_ratio": aspect_ratio,
             "file_size": 0,
             "presigned_url": "",
             "original_url": data.url,

@@ -1,6 +1,7 @@
 ﻿"use client";
 import React, { useState, useEffect, useRef } from 'react';
 import { CaptionStylePreview } from './CaptionStylePreview';
+import { ClipBrollPanel } from './ClipBrollPanel';
 import {
   Play,
   Pause,
@@ -1683,6 +1684,8 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                   </p>
                 </div>
               </div>
+
+              <ClipBrollPanel clipId={clip.id} />
 
               {/* Preset Stock B-roll catalog */}
               <div className="grid grid-cols-2 gap-2.5">
