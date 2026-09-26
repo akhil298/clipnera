@@ -195,6 +195,13 @@ class GeneratedClip(Base):
     # clip has none. duration_seconds includes it.
     hook_start: Mapped[float | None] = mapped_column(Float, nullable=True)
     hook_end: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # JSON [[start, end], ...] in source seconds: the parts of the source the
+    # clip's body is stitched from, in play order, with pauses and tangents
+    # left out. Null means the single span [start_time, end_time).
+    edit_spans: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Which director prompt and pipeline made this clip; null for clips made
+    # before versioning. Lets a prompt change be judged on how users treat it.
+    director_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
     score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     scores: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_category: Mapped[str | None] = mapped_column(String(100), nullable=True)

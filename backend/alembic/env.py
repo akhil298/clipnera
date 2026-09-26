@@ -29,6 +29,8 @@ from subscription import model as subscription_model
 from feature_flags import model as feature_flags_model
 from social import model as social_model
 from notifications import model as notifications_model
+from usage import model as usage_model
+from feedback import model as feedback_model
 
 target_metadata = Base.metadata
 

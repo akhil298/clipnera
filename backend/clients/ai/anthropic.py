@@ -16,6 +16,7 @@ The two providers differ in ways the callers must not have to care about:
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, AsyncIterator
 
 from anthropic import AsyncAnthropic
@@ -29,6 +30,8 @@ from anthropic import (
 
 from core.config import get_settings
 from core.logging_config import get_logger
+from usage.context import check_budget
+from usage.recorder import record_llm_call
 
 from .base import BaseAI
 
@@ -59,15 +62,23 @@ MAX_PROMPT_TOKENS = 120_000
 
 # Callers size ``max_tokens`` for the visible reply, as Groq counts it. Claude
 # thinks by default and its thinking is billed against the same cap, so a
-# 2600-token cap at high effort can be spent entirely on thinking and return no
-# text at all. The allowance is added on top of what the caller asked for; only
-# tokens actually generated are billed, so the headroom costs nothing unused.
+# 2600-token cap can be spent entirely on thinking and return no text at all.
+# The allowance is added on top of what the caller asked for and scales with
+# effort: it bounds what a runaway call can cost, while only tokens actually
+# generated are billed.
 THINKING_TOKEN_ALLOWANCE = 16_000
+THINKING_ALLOWANCE_BY_EFFORT: dict[str, int] = {
+    "low": 4_000,
+    "medium": 8_000,
+    "high": THINKING_TOKEN_ALLOWANCE,
+    "xhigh": 32_000,
+    "max": 64_000,
+}
 
 
-def output_token_cap(requested: int) -> int:
+def output_token_cap(requested: int, effort: str = "high") -> int:
     """``max_tokens`` to send: the caller's reply budget plus thinking room."""
-    return requested + THINKING_TOKEN_ALLOWANCE
+    return requested + THINKING_ALLOWANCE_BY_EFFORT.get(effort, THINKING_TOKEN_ALLOWANCE)
 
 
 def estimate_tokens(text: str) -> int:
@@ -127,10 +138,16 @@ def sanitize_schema(node: Any) -> Any:
 class Anthropic(BaseAI):
     """Claude chat client used interchangeably with ``clients.ai.groq.Groq``."""
 
-    def __init__(self, api_key: str | None = None, model: str | None = None, timeout: float = 600.0) -> None:
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str | None = None,
+        timeout: float = 600.0,
+        effort: str | None = None,
+    ) -> None:
         self.api_key = (api_key or getattr(settings, "ANTHROPIC_API_KEY", "") or "").strip()
         self.model = (model or getattr(settings, "ANTHROPIC_MODEL", DEFAULT_MODEL) or DEFAULT_MODEL).strip()
-        self.effort = (getattr(settings, "ANTHROPIC_EFFORT", "high") or "high").strip()
+        self.effort = (effort or getattr(settings, "ANTHROPIC_EFFORT", "medium") or "medium").strip()
         self.context_tokens = get_context_tokens(self.model)
         if not self.api_key:
             log.warning("Anthropic API key is missing; Claude-backed steps will fail.")
@@ -172,9 +189,13 @@ class Anthropic(BaseAI):
 
         system, conversation = self._split_system(messages)
 
+        budget = check_budget()
+        # Near the run's cap, finish on the cheapest thinking rather than stop.
+        effort = "low" if budget is not None and budget.tight else self.effort
+
         request: dict[str, Any] = {
             "model": self.model,
-            "max_tokens": output_token_cap(requested_max_tokens),
+            "max_tokens": output_token_cap(requested_max_tokens, effort),
             "messages": conversation,
         }
         if system:
@@ -184,7 +205,7 @@ class Anthropic(BaseAI):
                 {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
             ]
 
-        output_config: dict[str, Any] = {"effort": self.effort}
+        output_config: dict[str, Any] = {"effort": effort}
         if json_schema:
             # The API enforces this: the reply cannot come back malformed or
             # missing a required field, which is the whole reason to prefer
@@ -198,6 +219,7 @@ class Anthropic(BaseAI):
             self.model, len(conversation), request["max_tokens"], bool(json_schema),
         )
 
+        started = time.monotonic()
         try:
             # Streamed so a long reply cannot hit the HTTP timeout; the helper
             # returns the assembled message.
@@ -231,6 +253,19 @@ class Anthropic(BaseAI):
             log.exception("Anthropic API call failed: model=%s", self.model)
             raise
 
+        usage = response.usage
+        # Recorded before any check below can raise: a refused or truncated
+        # reply is still billed.
+        await record_llm_call(
+            "anthropic", self.model,
+            input_tokens=int(getattr(usage, "input_tokens", 0) or 0),
+            output_tokens=int(getattr(usage, "output_tokens", 0) or 0),
+            cache_read_tokens=int(getattr(usage, "cache_read_input_tokens", 0) or 0),
+            cache_write_tokens=int(getattr(usage, "cache_creation_input_tokens", 0) or 0),
+            effort=effort,
+            latency_ms=int((time.monotonic() - started) * 1000),
+        )
+
         if response.stop_reason == "refusal":
             details = getattr(response, "stop_details", None)
             raise RuntimeError(
@@ -238,7 +273,6 @@ class Anthropic(BaseAI):
             )
 
         text = "".join(block.text for block in response.content if block.type == "text")
-        usage = response.usage
         log.info(
             "Anthropic API call succeeded: model=%s, chars=%d, stop_reason=%s, "
             "input_tokens=%s, output_tokens=%s, cache_read=%s",
@@ -280,7 +314,7 @@ class Anthropic(BaseAI):
         system, conversation = self._split_system(messages)
         request: dict[str, Any] = {
             "model": self.model,
-            "max_tokens": output_token_cap(requested_max_tokens),
+            "max_tokens": output_token_cap(requested_max_tokens, self.effort),
             "messages": conversation,
             "output_config": {"effort": self.effort},
         }

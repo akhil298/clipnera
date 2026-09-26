@@ -27,6 +27,7 @@ from core.database import AsyncSessionLocal
 from core.logging_config import get_logger
 from feature_flags.registry import SOCIAL_PUBLISHING, social_platform_flag
 from feature_flags.service import FeatureFlagService
+from feedback.model import ClipEvent, ClipEventKind
 from social import audit, notify, quota
 from social.clip_media import downloaded_clip
 from social.credentials import fresh_tokens, mark_needs_reconnect
@@ -189,6 +190,14 @@ class Publisher:
             detail={"platform_post_id": result.platform_post_id},
         )
         await self._session.commit()
+        # Its own commit, after the publish is saved: a failed label must never
+        # roll back the record that the post went out.
+        try:
+            self._session.add(ClipEvent(clip_id=post.clip_id, user_id=post.user_id, kind=ClipEventKind.PUBLISHED.value))
+            await self._session.commit()
+        except Exception as exc:
+            await self._session.rollback()
+            log.warning(f"Could not record publish event for post={post.id}: {exc}")
         log.info(f"Published post={post.id} to {post.platform.value}")
 
     async def _handle_error(self, post: ScheduledPost, account: ConnectedAccount, exc: PlatformError) -> None:

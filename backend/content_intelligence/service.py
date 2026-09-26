@@ -10,10 +10,20 @@ from core.database import AsyncSessionLocal
 from core.logging_config import get_logger
 from content_intelligence.analyzer import FrameAnalyzer
 from content_intelligence.classifier import ContentClassifier
-from content_intelligence.highlighter import HighlightDetector
+from content_intelligence.director import VideoDirector
+from content_intelligence.edit_plan import build_clips
+from content_intelligence.highlighter import (
+    MAX_CLIP_DURATION,
+    MAX_CLIPS_PER_HOUR,
+    MIN_CLIP_DURATION,
+    HighlightDetector,
+)
 from content_intelligence.metadata_gen import MetadataGenerator
 from content_intelligence.research import TopicResearcher
 from content_intelligence.scorer import ClipScorer
+from content_intelligence.sentences import build_sentences, speaker_legend
+from content_intelligence.signals import AudioSignals, extract_audio_signals
+from video_processor.ffmpeg_service import FFmpegService
 
 log = get_logger(__name__)
 
@@ -55,11 +65,13 @@ class ContentIntelligenceService:
         self._researcher = TopicResearcher(get_text_client(is_pro=is_pro, step="topic_research"))
         self._classifier = ContentClassifier(get_text_client(is_pro=is_pro, step="classification"))
         self._analyzer = FrameAnalyzer()
+        self._ffmpeg = FFmpegService()
         self._highlighter = HighlightDetector(get_text_client(is_pro=is_pro, step="highlight_detection"))
         self._scorer = ClipScorer()
-        self._metadata_gen = MetadataGenerator(
-            get_text_client(is_pro=is_pro, step="titles"),
-            cue_client=get_text_client(is_pro=is_pro, step="emoji_cues"),
+        self._metadata_gen = MetadataGenerator(get_text_client(is_pro=is_pro, step="titles"))
+        self._director = VideoDirector(
+            get_text_client(is_pro=is_pro, step="map"),
+            get_text_client(is_pro=is_pro, step="director"),
         )
 
     async def analyze_project(
@@ -68,30 +80,82 @@ class ContentIntelligenceService:
         video_path: str,
         transcript_segments: list[dict],
         progress_callback: Callable[[str, int, str | None], None] | None = None,
+        clip_settings: dict[str, Any] | None = None,
     ) -> dict:
+        """Understand the video: what it is, its category, and where the moments are.
+
+        One Map pass over a compact sentence table replaces the separate
+        research, classification and frame-analysis calls. If it fails the old
+        path runs, so a provider outage degrades the result instead of the run.
+        """
         if progress_callback:
-            await self._notify(progress_callback, "Researching topic...", 10)
-
-        topic_research = await self._research_topic(video_path, transcript_segments)
-
-        if progress_callback:
-            await self._notify(progress_callback, "Classifying content category...", 20)
-
-        classification = await self._classifier.classify(topic_research, transcript_segments)
+            await self._notify(progress_callback, "Listening for peaks and reactions...", 10)
+        duration = await self._ffmpeg.probe_duration(video_path)
+        audio = await extract_audio_signals(video_path)
+        sentences = build_sentences(transcript_segments, audio)
 
         if progress_callback:
-            await self._notify(progress_callback, "Analyzing video frames...", 30)
+            await self._notify(progress_callback, "Mapping the video...", 30)
+        analysis: dict[str, Any] | None = None
+        if sentences:
+            try:
+                target = 2 * HighlightDetector._max_clips(
+                    duration,
+                    float((clip_settings or {}).get("max_clips_per_hour") or MAX_CLIPS_PER_HOUR),
+                    (clip_settings or {}).get("max_clips"),
+                )
+                video_map = await self._director.map(sentences, duration, speaker_legend(transcript_segments), target)
+                analysis = self._analysis_from_map(video_map, audio, len(sentences))
+            except Exception as exc:
+                log.warning("Map pass failed, falling back to research + classification: %s", exc)
 
-        frame_analysis = await self._analyzer.analyze(video_path, classification.get("category", "unknown"))
-
-        analysis = {
-            "topic_research": topic_research,
-            "classification": classification,
-            "frame_analysis": frame_analysis,
-        }
+        if analysis is None:
+            topic_research = await self._research_topic(video_path, transcript_segments)
+            classification = await self._classifier.classify(topic_research, transcript_segments)
+            analysis = {
+                "topic_research": topic_research,
+                "classification": classification,
+                "frame_analysis": self._signal_summary(audio),
+            }
 
         await self._persist_analysis(project_id, analysis)
         return analysis
+
+    @staticmethod
+    def _signal_summary(audio: AudioSignals | None) -> dict[str, Any]:
+        return {"audio_peaks": audio.peaks() if audio else [], "scene_changes": [], "descriptions": {}}
+
+    def _analysis_from_map(self, video_map: dict[str, Any], audio: AudioSignals | None, sentence_count: int) -> dict:
+        topic_research = {
+            "title": video_map.get("title", ""),
+            "summary": video_map.get("summary", ""),
+            "topics": video_map.get("topics", []),
+            "entities": video_map.get("entities", []),
+            "important_statements": [],
+            "events": [],
+            "key_moments": [c.get("why", "") for c in video_map.get("candidates", [])][:20],
+            "context_required": [],
+            "current_relevance": "",
+            "research_queries": [],
+            "sources": [],
+            "research_method": "map_pass",
+        }
+        classification = {
+            "category": video_map.get("category", "unknown"),
+            "confidence": video_map.get("confidence", 0.5),
+            "keywords": video_map.get("topics", []),
+            "reasoning": "map pass",
+        }
+        log.info(
+            "Map: category=%s, %d candidate(s) from %d sentence(s)",
+            classification["category"], len(video_map.get("candidates", [])), sentence_count,
+        )
+        return {
+            "topic_research": topic_research,
+            "classification": classification,
+            "frame_analysis": self._signal_summary(audio),
+            "map": video_map,
+        }
 
     @property
     def is_pro(self) -> bool:
@@ -107,19 +171,51 @@ class ContentIntelligenceService:
         clip_settings: dict[str, Any] | None = None,
     ) -> list[dict]:
         if progress_callback:
-            await self._notify(progress_callback, "Detecting highlight segments...", 50)
+            await self._notify(progress_callback, "Directing the edit...", 50)
 
-        highlights = await self._highlighter.detect(
-            video_path=video_path,
-            transcript_segments=transcript_segments,
-            analysis=analysis,
-            clip_settings=clip_settings,
-        )
+        highlights = await self._direct(video_path, transcript_segments, analysis, clip_settings or {})
+        if not highlights:
+            if progress_callback:
+                await self._notify(progress_callback, "Detecting highlight segments...", 55)
+            highlights = await self._highlighter.detect(
+                video_path=video_path,
+                transcript_segments=transcript_segments,
+                analysis=analysis,
+                clip_settings=clip_settings,
+            )
 
         if progress_callback:
-            await self._notify(progress_callback, f"Found {len(highlights)} candidate segments", 65)
+            await self._notify(progress_callback, f"Found {len(highlights)} clip(s)", 65)
 
         return highlights
+
+    async def _direct(
+        self, video_path: str, transcript_segments: list[dict], analysis: dict, settings: dict[str, Any],
+    ) -> list[dict]:
+        """Edit plans from the director, or [] when there is no map or it fails."""
+        video_map = analysis.get("map") if isinstance(analysis, dict) else None
+        if not video_map or not video_map.get("candidates"):
+            return []
+        duration = await self._ffmpeg.probe_duration(video_path)
+        min_seconds = float(settings.get("min_clip_duration") or MIN_CLIP_DURATION)
+        max_seconds = float(settings.get("max_clip_duration") or MAX_CLIP_DURATION)
+        max_clips = HighlightDetector._max_clips(
+            duration, float(settings.get("max_clips_per_hour") or MAX_CLIPS_PER_HOUR), settings.get("max_clips"),
+        )
+        # Rebuilt rather than stored: the table with word timings is large, and
+        # rebuilding it from the transcript is instant. Loudness flags only
+        # matter to the models, which already read them in the Map pass.
+        sentences = build_sentences(transcript_segments, None)
+        try:
+            plans = await self._director.direct(sentences, video_map, max_clips, min_seconds, max_seconds)
+        except Exception as exc:
+            log.warning("Director pass failed, falling back to highlight detection: %s", exc)
+            return []
+        return build_clips(
+            plans, sentences, duration, min_seconds, max_seconds, max_clips,
+            category=str(video_map.get("category") or "unknown"),
+            jump_cuts=bool(settings.get("jump_cuts", True)),
+        )
 
     async def score_highlights(self, highlights: list[dict], analysis: dict, clip_settings: dict[str, Any] | None = None) -> list[dict]:
         return await self._scorer.score(highlights, analysis, clip_settings=clip_settings)

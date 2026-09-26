@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 from core.config import get_settings
 from core.logging_config import get_logger
 
@@ -29,36 +31,78 @@ TEXT_PROVIDERS: Registry = {
 
 DEFAULT_TEXT_PROVIDER = "groq"
 
-# Which provider each tier runs on. Pro buys the 1M-context, schema-enforced
-# path; free runs on Groq's free tier. Both produce clips -- the difference is
-# how much of the video the model sees at once and how strictly its output is
-# constrained.
 PRO_TEXT_PROVIDER = "anthropic"
 FREE_TEXT_PROVIDER = "groq"
 
-# Which provider each pipeline step runs on. The tiers differ enormously in what
-# they cost, and the steps differ enormously in how much judgement they need --
-# and the most expensive step needs the least. Pinning the mechanical steps to
-# the free provider keeps spend on the calls where being right matters.
-#
-#   "groq" -- always the free provider, whatever the user pays
-#   "tier" -- follows is_pro
-#
-# A step missing from this map follows the tier, so a new step is never silently
-# downgraded; it just costs what the tier costs until it is classified here.
-STEP_POLICY: dict[str, str] = {
-    # Picks one of 13 enum values from the research summary; 163 tokens a video.
-    "classification": "groq",
-    # Mechanical word-to-emoji-id lookup, re-validated against the catalog
-    # afterwards regardless, and by far the highest call volume in the pipeline.
-    "emoji_cues": "groq",
-    # A 1M window reads the whole transcript instead of its first quarter.
-    "topic_research": "tier",
-    # The product: which moments become clips.
-    "highlight_detection": "tier",
-    # Burned into the exported video as the headline, so it drives click-through.
-    "titles": "tier",
+
+@dataclass(frozen=True)
+class ModelChoice:
+    """Provider, model and (Anthropic only) effort for one step of one tier."""
+
+    provider: str
+    model: str
+    effort: str | None = None
+
+
+GROQ_SMALL = ModelChoice("groq", "openai/gpt-oss-20b")
+GROQ_LARGE = ModelChoice("groq", "openai/gpt-oss-120b")
+SONNET_LOW = ModelChoice("anthropic", "claude-sonnet-5", "low")
+OPUS_MEDIUM = ModelChoice("anthropic", "claude-opus-5", "medium")
+
+# (free, pro) per step. Pro pays for judgement only where it decides what the
+# viewer sees -- picking and editing the moments. Reading the video, naming it
+# and writing copy run on a cheaper model at low effort, and the free tier runs
+# entirely on Groq. Most of the old bill was hidden thinking at high effort on
+# every call, so effort matters as much as the model here.
+STEP_MODELS: dict[str, tuple[ModelChoice, ModelChoice]] = {
+    "classification": (GROQ_SMALL, GROQ_SMALL),
+    "topic_research": (GROQ_SMALL, SONNET_LOW),
+    "map": (GROQ_SMALL, SONNET_LOW),
+    "highlight_detection": (GROQ_LARGE, OPUS_MEDIUM),
+    "director": (GROQ_LARGE, OPUS_MEDIUM),
+    "titles": (GROQ_SMALL, SONNET_LOW),
 }
+
+
+def _default_choice(is_pro: bool) -> ModelChoice:
+    """Unlisted steps follow the tier at the deployment's configured model."""
+    settings = get_settings()
+    if is_pro:
+        return ModelChoice(
+            "anthropic",
+            (getattr(settings, "ANTHROPIC_MODEL", "") or "claude-opus-5").strip(),
+            (getattr(settings, "ANTHROPIC_EFFORT", "") or "medium").strip(),
+        )
+    return ModelChoice("groq", (getattr(settings, "GROQ_MODEL", "") or "openai/gpt-oss-20b").strip())
+
+
+def _pinned_provider() -> str | None:
+    override = (getattr(get_settings(), "AI_PROVIDER", "") or "").strip().lower()
+    return override if override in TEXT_PROVIDERS else None
+
+
+def model_for_step(is_pro: bool, step: str | None = None) -> ModelChoice:
+    """What a step runs on for a tier, honouring the deployment's pin.
+
+    ``AI_PROVIDER`` set to a real provider pins every step to it -- for local
+    work and A/B runs, so a pinned run really is single-provider. Left at
+    ``auto`` it means "decide per user and per step", which production wants.
+    """
+    free, pro = STEP_MODELS.get(step or "", (_default_choice(False), _default_choice(True)))
+    choice = pro if is_pro else free
+    pinned = _pinned_provider()
+    if pinned is None or pinned == choice.provider:
+        return choice
+    # Pinned to the other provider: keep the step's intent (cheap or strong).
+    other = free if pinned == free.provider else pro
+    if other.provider == pinned:
+        return other
+    fallback = _default_choice(pinned == "anthropic")
+    return ModelChoice(fallback.provider, fallback.model, "low" if pinned == "anthropic" else None)
+
+
+def provider_for_tier(is_pro: bool, step: str | None = None) -> str:
+    return model_for_step(is_pro, step).provider
 
 
 def get_ai(provider: str) -> BaseAI:
@@ -69,21 +113,15 @@ def get_ai(provider: str) -> BaseAI:
         raise ValueError(f"Unknown provider '{provider}'. Available: {list(_REGISTRY)}")
 
 
-def provider_for_tier(is_pro: bool, step: str | None = None) -> str:
-    """Provider name for a tier and step, honouring the deployment's override.
+def _has_key(provider: str) -> bool:
+    key_setting = "ANTHROPIC_API_KEY" if provider == "anthropic" else "GROQ_API_KEY"
+    return bool((getattr(get_settings(), key_setting, "") or "").strip())
 
-    ``AI_PROVIDER`` pins every run to one provider when set to a real provider
-    name -- useful for local work and for A/B runs, and it outranks the step
-    policy so a pinned run really is single-provider. Left at its default it
-    means "decide per user and per step", which is what production wants.
-    """
-    settings = get_settings()
-    override = (getattr(settings, "AI_PROVIDER", "") or "").strip().lower()
-    if override in TEXT_PROVIDERS:
-        return override
-    if step is not None and STEP_POLICY.get(step, "tier") == "groq":
-        return FREE_TEXT_PROVIDER
-    return PRO_TEXT_PROVIDER if is_pro else FREE_TEXT_PROVIDER
+
+def _build(choice: ModelChoice) -> BaseAI:
+    if choice.provider == "anthropic":
+        return Anthropic(model=choice.model, effort=choice.effort)
+    return Groq(model=choice.model)
 
 
 def get_text_client(
@@ -93,48 +131,45 @@ def get_text_client(
 ) -> BaseAI:
     """The client a text step of the pipeline runs on.
 
-    Pass ``is_pro`` to pick per user and ``step`` to apply the step policy on
-    top; pass ``provider`` to force one. An unknown or unconfigured provider
-    falls back to the free-tier default rather than failing the run, and says so
-    in the log -- a paid user briefly getting the free model is far better than
-    their job dying.
+    Pass ``is_pro`` and ``step`` to use the plan's model for that step; pass
+    ``provider`` to force one at its configured default model. An unknown or
+    unconfigured provider falls back to the other rather than failing the run,
+    and says so in the log -- a paid user briefly getting the free model is far
+    better than their job dying.
     """
-    settings = get_settings()
-    if provider is None and is_pro is not None:
-        provider = provider_for_tier(is_pro, step)
-    name = (provider or getattr(settings, "AI_PROVIDER", DEFAULT_TEXT_PROVIDER) or DEFAULT_TEXT_PROVIDER)
-    name = name.strip().lower()
-
-    client_cls = TEXT_PROVIDERS.get(name)
-    if client_cls is None:
-        log.error(
-            "AI_PROVIDER=%r is not a text provider (choose from %s); falling back to %s",
-            name, list(TEXT_PROVIDERS), DEFAULT_TEXT_PROVIDER,
-        )
-        client_cls = TEXT_PROVIDERS[DEFAULT_TEXT_PROVIDER]
-        name = DEFAULT_TEXT_PROVIDER
+    if provider is not None:
+        name = provider.strip().lower()
+        if name not in TEXT_PROVIDERS:
+            log.error(
+                "Provider %r is not a text provider (choose from %s); falling back to %s",
+                name, list(TEXT_PROVIDERS), DEFAULT_TEXT_PROVIDER,
+            )
+            name = DEFAULT_TEXT_PROVIDER
+        choice = _default_choice(name == "anthropic")
+    else:
+        choice = model_for_step(bool(is_pro), step)
 
     # A provider selected without a key would fail on every call with an opaque
     # auth error part-way through a run; catching it here names the cause.
-    key_setting = "ANTHROPIC_API_KEY" if name == "anthropic" else "GROQ_API_KEY"
-    if not (getattr(settings, key_setting, "") or "").strip():
-        other = "groq" if name == "anthropic" else "anthropic"
-        other_key = "GROQ_API_KEY" if other == "groq" else "ANTHROPIC_API_KEY"
-        if (getattr(settings, other_key, "") or "").strip():
-            log.error(
-                "AI_PROVIDER=%s but %s is not set; falling back to %s, which is configured",
-                name, key_setting, other,
-            )
-            return TEXT_PROVIDERS[other]()
-        log.error("AI_PROVIDER=%s but %s is not set; calls will fail", name, key_setting)
+    if not _has_key(choice.provider):
+        other = "groq" if choice.provider == "anthropic" else "anthropic"
+        if _has_key(other):
+            log.error("%s API key is not set; step %s falls back to %s", choice.provider, step, other)
+            choice = model_for_step(other == "anthropic", step)
+            if choice.provider != other:
+                choice = _default_choice(other == "anthropic")
+        else:
+            log.error("No API key is set for %s; calls will fail", choice.provider)
 
-    return client_cls()
+    return _build(choice)
 
 
 __all__ = [
     "BaseAI",
     "provider_for_tier",
-    "STEP_POLICY",
+    "model_for_step",
+    "ModelChoice",
+    "STEP_MODELS",
     "PRO_TEXT_PROVIDER",
     "FREE_TEXT_PROVIDER",
     "OpenAI",

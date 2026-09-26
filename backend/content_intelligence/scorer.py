@@ -105,6 +105,9 @@ class ClipScorer:
 
         scored = []
         for h in highlights:
+            if h.get("rubric"):
+                scored.append(self._score_from_rubric(h))
+                continue
             base_score = h.get("score", 0.3)
             duration = max(0.0, h.get("end_time", 0) - h.get("start_time", 0))
             duration_factor = self._duration_factor(duration, min_clip_duration, optimal_clip_duration, max_clip_duration)
@@ -134,6 +137,37 @@ class ClipScorer:
 
         scored.sort(key=lambda x: x.get("score", 0), reverse=True)
         return scored
+
+    @staticmethod
+    def _score_from_rubric(highlight: dict) -> dict:
+        """The director judged the clip on its words and delivery; keyword counts
+        would only add noise, so its rubric is the score, mapped onto the keys
+        the clip view reads (components out of 25, total out of 100)."""
+        rubric = highlight["rubric"]
+        overall = float(highlight.get("score", 0.5))
+        h_copy = dict(highlight)
+        h_copy["score"] = round(min(99.0, max(10.0, overall * 100)), 2)
+        h_copy["scores"] = {
+            "relevance": overall,
+            "importance": overall,
+            "emotional_impact": rubric["emotion"] / 10,
+            "information_value": rubric["payoff"] / 10,
+            "standalone_context": rubric["standalone"] / 10,
+            "social_media_value": rubric["hook"] / 10,
+            "current_relevance": overall,
+        }
+        h_copy["scoring_factors"] = {
+            "base": round(overall, 3),
+            "rubric": rubric,
+            "virality_scores": {
+                "hook_score": rubric["hook"] * 2.5,
+                "engagement_score": rubric["emotion"] * 2.5,
+                "value_score": rubric["payoff"] * 2.5,
+                "shareability_score": (rubric["standalone"] + rubric["pacing"]) * 1.25,
+                "virality_score": round(overall * 100, 1),
+            },
+        }
+        return h_copy
 
     @classmethod
     def _duration_factor(cls, duration: float, min_duration: float = MIN_CLIP_DURATION, optimal_duration: float = OPTIMAL_CLIP_DURATION, max_duration: float = MAX_CLIP_DURATION) -> float:

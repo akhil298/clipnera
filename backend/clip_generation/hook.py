@@ -10,6 +10,7 @@ word lands.
 
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -73,12 +74,69 @@ def locate_hook(
     return None
 
 
+Span = tuple[float, float]
+
+
+def parse_spans(value: Any) -> list[Span] | None:
+    """Stored ``edit_spans`` (JSON text or a list) as ordered pairs; ``None`` when unset."""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value) if value.strip() else None
+        except json.JSONDecodeError:
+            return None
+    if not value:
+        return None
+    spans = [(float(s), float(e)) for s, e in value if float(e) > float(s)]
+    return spans or None
+
+
+def body_duration(clip_start: float, clip_end: float, spans: list[Span] | None) -> float:
+    """Seconds of the clip's own body in the rendered file, teaser excluded."""
+    if spans:
+        return sum(end - start for start, end in spans)
+    return max(0.0, clip_end - clip_start)
+
+
+def trim_spans(spans: list[Span] | None, max_duration: float) -> list[Span] | None:
+    """The leading ``max_duration`` seconds of a stitched body."""
+    if not spans:
+        return spans
+    kept: list[Span] = []
+    remaining = max_duration
+    for start, end in spans:
+        if remaining <= 0:
+            break
+        kept.append((start, min(end, start + remaining)))
+        remaining -= end - start
+    return kept
+
+
+def cut_to_source(
+    t: float, clip_start: float, clip_end: float, hook: Hook | None, spans: list[Span] | None,
+) -> float | None:
+    """Source-video time of second ``t`` of a cut file, or ``None`` inside the teaser.
+
+    The cut is ``[hook][body]`` with no bridge (bridges are added when
+    burning), and the body plays ``spans`` back to back.
+    """
+    t -= hook.duration if hook else 0.0
+    if t < 0:
+        return None
+    for start, end in spans or [(clip_start, clip_end)]:
+        if t < end - start:
+            return start + t
+        t -= end - start
+    last_start, last_end = (spans or [(clip_start, clip_end)])[-1]
+    return last_end
+
+
 def on_output_timeline(
     items: list[dict[str, Any]],
     clip_start: float,
     clip_end: float,
     hook: Hook | None,
     gap: float = 0.0,
+    spans: list[Span] | None = None,
 ) -> tuple[float, list[dict[str, Any]]]:
     """Lay absolute-time items (words, subtitle lines) out on the rendered file.
 
@@ -88,14 +146,33 @@ def on_output_timeline(
     shifted to sit in the first ``hook.duration`` seconds, and the clip's own
     items are left in place with the origin moved back by that much plus the
     ``gap`` of any bridge rendered between the two.
+
+    With ``spans`` the body is stitched from several source ranges: its items
+    are packed onto the virtual range ``[clip_start, clip_start + body)`` in
+    span order, and anything cut out between spans is dropped. The file ends
+    at ``origin + hook + gap + body``; see :func:`body_duration`.
     """
-    if hook is None:
+    if spans:
+        body = _stitch(items, spans, clip_start)
+    elif hook is None:
         return clip_start, items
+    else:
+        body = _within(items, clip_start, clip_end, shift=0.0)
+    if hook is None:
+        return clip_start, body
 
     origin = clip_start - hook.duration - gap
     teaser = _within(items, hook.start, hook.end, shift=origin - hook.start)
-    body = _within(items, clip_start, clip_end, shift=0.0)
     return origin, teaser + body
+
+
+def _stitch(items: list[dict[str, Any]], spans: list[Span], clip_start: float) -> list[dict[str, Any]]:
+    placed: list[dict[str, Any]] = []
+    cursor = clip_start
+    for start, end in spans:
+        placed.extend(_within(items, start, end, shift=cursor - start))
+        cursor += end - start
+    return placed
 
 
 def _within(items: list[dict[str, Any]], start: float, end: float, shift: float) -> list[dict[str, Any]]:

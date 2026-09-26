@@ -200,8 +200,12 @@ class FFmpegService:
         target_height: int = 1920,
         source_width: int | None = None,
         source_height: int | None = None,
+        zoom: float = 1.0,
     ) -> None:
         """Cut [start_time, start_time+duration] and pan-crop to the target size.
+
+        ``zoom`` above 1 tightens the crop window around the same path, for a
+        punch-in; the output size is unchanged.
 
         Emits one INFO line per render; the filter graph and full command are
         DEBUG, since a tracked crop expression runs to several thousand
@@ -226,6 +230,9 @@ class FFmpegService:
             raise CustomException(message="Source video dimensions are unavailable", code="VIDEO_DIMENSIONS_UNAVAILABLE", status_code=400)
 
         crop_width, crop_height = target_crop_size(source_width, source_height, f"{target_width}:{target_height}")
+        if zoom > 1.0:
+            crop_width = max(2, int(crop_width / zoom) // 2 * 2)
+            crop_height = max(2, int(crop_height / zoom) // 2 * 2)
 
         # Tracking timestamps are absolute; the filter graph runs on the cut clip.
         relative_tracking = [
@@ -246,7 +253,7 @@ class FFmpegService:
         video_filter = (
             f"sendcmd=f={CROP_COMMANDS_FILE},"
             f"crop={crop_width}:{crop_height}:{start_x}:{start_y},"
-            f"scale={target_width}:{target_height}:flags=lanczos"
+            f"scale={target_width}:{target_height}:flags=lanczos,setsar=1"
         )
         log.debug("Crop filter graph", extra={"video_filter": video_filter})
 
@@ -256,7 +263,8 @@ class FFmpegService:
         # needs the output size to match the source too, since a copy cannot
         # scale.
         if (
-            crop_width >= source_width
+            zoom <= 1.0
+            and crop_width >= source_width
             and crop_height >= source_height
             and target_width == source_width
             and target_height == source_height
@@ -310,7 +318,7 @@ class FFmpegService:
             output_file.unlink(missing_ok=True)
             fallback_filter = (
                 f"crop={crop_width}:{crop_height}:(iw-{crop_width})/2:(ih-{crop_height})/2,"
-                f"scale={target_width}:{target_height}:flags=lanczos"
+                f"scale={target_width}:{target_height}:flags=lanczos,setsar=1"
             )
             returncode, fallback_stderr = await self._run_ffmpeg(
                 input_path, output_path, start_time, duration, fallback_filter, encoder_args
@@ -335,6 +343,64 @@ class FFmpegService:
                 "crop_positions": len(path),
             },
         )
+
+    async def render_stack(
+        self,
+        input_path: str,
+        output_path: str,
+        start_time: float,
+        duration: float,
+        cells: list[tuple[dict, int]],
+        target_width: int,
+        source_width: int,
+        source_height: int,
+    ) -> None:
+        """Render regions of the source stacked top to bottom into one frame.
+
+        ``cells`` are ``(normalised box, output height)`` pairs; each region is
+        scaled to cover its cell and centre-cropped, so nothing is letterboxed.
+        Uses the same encoder settings as tracked crops, so the two join by
+        stream copy.
+        """
+        chains = []
+        labels = []
+        for index, (box, height) in enumerate(cells):
+            w = max(2, int(box["width"] * source_width) // 2 * 2)
+            h = max(2, int(box["height"] * source_height) // 2 * 2)
+            x = min(max(0, int(box["x"] * source_width)), source_width - w)
+            y = min(max(0, int(box["y"] * source_height)), source_height - h)
+            chains.append(
+                f"[s{index}]crop={w}:{h}:{x}:{y},"
+                f"scale={target_width}:{height}:force_original_aspect_ratio=increase:flags=lanczos,"
+                f"crop={target_width}:{height},setsar=1[c{index}]"
+            )
+            labels.append(f"[c{index}]")
+        graph = (
+            f"[0:v]split={len(cells)}" + "".join(f"[s{i}]" for i in range(len(cells))) + ";"
+            + ";".join(chains) + ";"
+            + "".join(labels) + f"vstack=inputs={len(cells)}[v]"
+        )
+        encoder_args = await self._get_encoder_args()
+        source = input_path if "://" in input_path else str(Path(input_path).resolve())
+        cmd = [
+            "ffmpeg", "-y", "-nostdin",
+            "-ss", str(start_time), "-i", source,
+            "-t", str(duration),
+            "-filter_complex", graph,
+            "-map", "[v]", "-map", "0:a?",
+            *encoder_args,
+            "-c:a", "aac", "-b:a", "128k",
+            "-movflags", "+faststart",
+            output_path,
+        ]
+        proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0 or not Path(output_path).exists():
+            raise CustomException(
+                message=f"Stacked render failed: {stderr.decode('utf-8', errors='ignore')[-300:]}",
+                code="STACK_RENDER_FAILED",
+                status_code=500,
+            )
 
     async def _run_ffmpeg_copy(
         self,

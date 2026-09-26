@@ -41,6 +41,7 @@ from subscription.service import (
 )
 from video_processor.geometry import SUPPORTED_ASPECT_RATIOS
 from hook_transitions.schema import HookTransitionConfig
+from usage.context import RunBudget, llm_scope
 
 log = get_logger(__name__)
 
@@ -132,6 +133,8 @@ class PipelineOrchestrator:
         # asyncio keeps only a weak reference to a running task, so a
         # fire-and-forget progress write can be collected before it commits.
         self._background_tasks: set[asyncio.Task] = set()
+        # Cap set once the source's length is known, at the start of run().
+        self._budget = RunBudget(cap_usd=0.0)
 
     def cancel(self) -> None:
         self._cancel = True
@@ -166,6 +169,7 @@ class PipelineOrchestrator:
 
         if self._resume:
             await self._load_step_statuses()
+        await self._size_budget()
 
         log.info(
             "Pipeline started",
@@ -246,10 +250,11 @@ class PipelineOrchestrator:
                 await asyncio.sleep(0)
 
             log.info(
-                "PIPELINE %s — %d/%d step(s) in %.1fs",
+                "PIPELINE %s — %d/%d step(s) in %.1fs, AI spend $%.4f",
                 "CANCELLED" if self._cancel else "COMPLETE",
                 len(results), len(self.selected_steps),
                 time.monotonic() - pipeline_started,
+                self._budget.spent_usd,
                 extra={
                     "project_id": self.project_id,
                     "user_id": self.user_id,
@@ -381,7 +386,36 @@ class PipelineOrchestrator:
         handler = handlers.get(step)
         if handler is None:
             raise ValueError(f"Unknown pipeline step: {step.value}")
-        return await handler(context)
+        # Every AI call the step makes is attributed to this project and step,
+        # and counts against the run's budget.
+        with llm_scope(
+            project_id=self.project_id, user_id=self.user_id, step=step.value, budget=self._budget,
+        ):
+            return await handler(context)
+
+    async def _size_budget(self) -> None:
+        """Cap this run's AI spend in proportion to the source's length."""
+        settings = get_settings()
+        per_minute = float(
+            settings.AI_BUDGET_PER_SOURCE_MINUTE_PRO if self.is_pro else settings.AI_BUDGET_PER_SOURCE_MINUTE_FREE
+        )
+        video_path = await self._project_video_path()
+        if per_minute <= 0 or not video_path or not Path(video_path).exists():
+            return
+        from video_processor.ffmpeg_service import FFmpegService
+
+        try:
+            duration = await FFmpegService().probe_duration(video_path)
+        except Exception as exc:
+            log.warning("Could not size the AI budget, running uncapped: %s", exc)
+            return
+        # A floor so a very short video can still afford its handful of calls.
+        self._budget.cap_usd = max(per_minute * 5, per_minute * duration / 60.0)
+        log.info(
+            "AI budget for this run: $%.3f (%.1f min at $%.4f/min, %s)",
+            self._budget.cap_usd, duration / 60.0, per_minute, "pro" if self.is_pro else "free",
+            extra={"project_id": self.project_id},
+        )
 
     async def _step_audio_extraction(self, context: dict) -> dict:
         # Get video path from project (download already completed before pipeline start)
@@ -433,6 +467,17 @@ class PipelineOrchestrator:
         log.info("Resolving audio path for noise cancellation", extra={"project_id": self.project_id, "audio_path": audio_path})
         if not audio_path:
             raise ValueError("Missing extracted audio path for noise cancellation")
+
+        from audio.enhancement.service import estimate_snr_db
+
+        snr_db = await asyncio.to_thread(estimate_snr_db, audio_path)
+        if snr_db >= get_settings().NOISE_CANCEL_SKIP_SNR_DB:
+            log.info(
+                "Audio is already clean (SNR ~%.0f dB), skipping noise cancellation",
+                snr_db, extra={"project_id": self.project_id},
+            )
+            self._notify("Audio is already clean, noise cancellation skipped", 100)
+            return {"before_audio_path": audio_path, "after_audio_path": None, "skipped": True, "snr_db": round(snr_db, 1)}
 
         self._notify("Running AI noise cancellation...", 20)
 
@@ -566,6 +611,7 @@ class PipelineOrchestrator:
             video_path=video_path,
             transcript_segments=segments,
             progress_callback=lambda msg, pct, _: self._notify(msg, pct),
+            clip_settings=self.clip_settings,
         )
         log.info(
             "Topic research complete",
@@ -813,37 +859,44 @@ class PipelineOrchestrator:
             "BURN-IN START | project=%s | %d clip(s) fetched from S3",
             self.project_id, len(clips),
         )
+        from clip_generation.service import MAX_CONCURRENT_CUTS
+
         burned = []
-        for index, clip in enumerate(clips, start=1):
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_CUTS)
+
+        async def burn_one(index: int, clip: Any) -> None:
             tag = f"[BURN {index}/{len(clips)}]"
-            started = time.monotonic()
-            try:
-                # Fetches the cut from S3, burns it, stores the result in S3.
-                result = await self._clip_service.process_clip_subtitles(
-                    clip.id,
-                    self.user_id,
-                    {
-                        "style_type": styles[clip.id],
-                        "enable_watermark": self.watermark_enabled,
-                        # Absent means Auto: every clip with a hook gets a bridge.
-                        "hook_transition": self.hook_transition,
-                    },
-                    transcript_segments=transcript_segments,
-                )
-            except Exception as exc:
-                log.error(
-                    "%s FAILED  %s after %.1fs | %s: %s",
-                    tag, clip.id, time.monotonic() - started, type(exc).__name__, exc,
-                    extra={"project_id": self.project_id, "clip_id": clip.id},
-                )
-                continue
+            async with semaphore:
+                started = time.monotonic()
+                try:
+                    # Fetches the cut from S3, burns it, stores the result in S3.
+                    result = await self._clip_service.process_clip_subtitles(
+                        clip.id,
+                        self.user_id,
+                        {
+                            "style_type": styles[clip.id],
+                            "enable_watermark": self.watermark_enabled,
+                            # Absent means Auto: every clip with a hook gets a bridge.
+                            "hook_transition": self.hook_transition,
+                        },
+                        transcript_segments=transcript_segments,
+                    )
+                except Exception as exc:
+                    log.error(
+                        "%s FAILED  %s after %.1fs | %s: %s",
+                        tag, clip.id, time.monotonic() - started, type(exc).__name__, exc,
+                        extra={"project_id": self.project_id, "clip_id": clip.id},
+                    )
+                    return
             log.info(
                 "%s DONE    %s in %.1fs | style=%s",
                 tag, clip.id, time.monotonic() - started, styles[clip.id],
                 extra={"project_id": self.project_id, "clip_id": clip.id},
             )
             burned.append({"clip_id": clip.id, "title": clip.title, "s3_key": result["s3_key"]})
-            self._notify(f"Burned {len(burned)}/{len(clips)} clips", 50 + int(index * 50 / len(clips)))
+            self._notify(f"Burned {len(burned)}/{len(clips)} clips", 50 + int(len(burned) * 50 / len(clips)))
+
+        await asyncio.gather(*(burn_one(index, clip) for index, clip in enumerate(clips, start=1)))
 
         log.info(
             "BURN-IN DONE  | project=%s | %d/%d clip(s) burned",

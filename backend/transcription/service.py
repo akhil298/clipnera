@@ -16,8 +16,10 @@ from transcription.schema import (
     TranscriptionRequest,
     TranscriptionResult,
 )
+from core.config import get_settings
 from core.exceptions import CustomException
 from core.logging_config import get_logger
+from transcription.groq_whisper import GroqWhisperTranscriber
 
 log = get_logger(__name__)
 
@@ -46,6 +48,18 @@ class WhisperXTranscriptionService(TranscriptionService):
             if progress_callback:
                 progress_callback(0.0, "Extracting audio from video...")
             audio_path = await TranscriptionChunker.ensure_wav_audio(input_path)
+
+        duration = await asyncio.to_thread(TranscriptionChunker.estimate_duration, audio_path)
+        diarize_fn = await asyncio.to_thread(self._try_load_diarizer) if request.diarization else None
+        # Speaker turns are computed over the whole file once, alongside the
+        # transcription, so labels agree from the first minute to the last.
+        turns_task = asyncio.create_task(asyncio.to_thread(diarize_fn, audio_path)) if diarize_fn else None
+
+        hosted = await self._transcribe_hosted(request, audio_path, duration, progress_callback)
+        if hosted is not None:
+            segments, language = hosted
+            await self._label_speakers(segments, turns_task)
+            return self._finish(request, input_path, segments, language, duration, start, progress_callback, model_used=GroqWhisperTranscriber().model)
 
         try:
             import faster_whisper
@@ -90,14 +104,9 @@ class WhisperXTranscriptionService(TranscriptionService):
             language = checkpoint.get("language", language)
             log.info(f"Resuming from checkpoint: {len(processed_chunks)} chunks already processed")
 
-        duration = await asyncio.to_thread(TranscriptionChunker.estimate_duration, audio_path)
         chunks = TranscriptionChunker.estimate_chunks(duration, request.chunk_duration, request.chunk_overlap)
 
         log.info(f"Transcription input: audio_path={audio_path}, duration={duration:.2f}s, chunks={len(chunks)}, model={request.model_size}")
-
-        diarize_fn = None
-        if request.diarization:
-            diarize_fn = await asyncio.to_thread(self._try_load_diarizer)
 
         for idx, chunk in enumerate(chunks):
             chunk_id = f"{chunk['start']:.3f}_{chunk['end']:.3f}"
@@ -172,12 +181,6 @@ class WhisperXTranscriptionService(TranscriptionService):
                 if not language and info.language:
                     language = info.language
 
-                if diarize_fn and chunk_segments:
-                    try:
-                        await asyncio.to_thread(diarize_fn, chunk_audio, chunk_segments)
-                    except Exception as exc:
-                        log.warning(f"Diarization failed for chunk {idx}: {exc}")
-
                 all_segments.extend(chunk_segments)
                 processed_chunks.append({"id": chunk_id, "start": chunk["start"], "end": chunk["end"]})
                 CheckpointManager.save(checkpoint_path, input_path, processed_chunks, all_segments, language or "en", request.model_size)
@@ -226,6 +229,50 @@ class WhisperXTranscriptionService(TranscriptionService):
             except Exception as exc:
                 log.error(f"Full-file fallback transcription failed: {exc}")
 
+        await self._label_speakers(all_segments, turns_task)
+        return self._finish(request, input_path, all_segments, language, duration, start, progress_callback, model_used=request.model_size, checkpoint_path=checkpoint_path)
+
+    async def _transcribe_hosted(
+        self, request: Any, audio_path: str, duration: float, progress_callback: Callable[[float, str], None] | None,
+    ) -> tuple[list[dict[str, Any]], str] | None:
+        """Transcribe on Groq's hosted Whisper when configured; ``None`` to run locally."""
+        provider = (getattr(get_settings(), "TRANSCRIPTION_PROVIDER", "auto") or "auto").strip().lower()
+        if provider == "local" or not GroqWhisperTranscriber.available():
+            return None
+        if progress_callback:
+            progress_callback(5.0, "Transcribing with hosted Whisper...")
+        try:
+            segments, language = await GroqWhisperTranscriber().transcribe(audio_path, duration, request.language)
+        except Exception as exc:
+            log.warning("Hosted transcription failed, falling back to local Whisper: %s", exc)
+            return None
+        if not segments:
+            log.warning("Hosted transcription returned no speech, falling back to local Whisper")
+            return None
+        return segments, language
+
+    async def _label_speakers(self, segments: list[dict], turns_task: asyncio.Task | None) -> None:
+        if turns_task is None:
+            return
+        try:
+            turns = await turns_task
+        except Exception as exc:
+            log.warning(f"Diarization failed: {exc}")
+            return
+        assign_speakers(segments, turns or [])
+
+    def _finish(
+        self,
+        request: Any,
+        input_path: str,
+        all_segments: list[dict],
+        language: str | None,
+        duration: float,
+        start: float,
+        progress_callback: Callable[[float, str], None] | None,
+        model_used: str,
+        checkpoint_path: str | None = None,
+    ) -> dict[str, Any]:
         if progress_callback:
             progress_callback(90.0, "Writing outputs...")
 
@@ -246,12 +293,13 @@ class WhisperXTranscriptionService(TranscriptionService):
         metadata = {
             "input_path": input_path,
             "language": language or "en",
-            "model_size": request.model_size,
+            "model_size": model_used,
             "duration_seconds": round(duration, 3),
         }
         outputs = TranscriptionFormatter.write_outputs(segments_out, output_dir, base_name, request.output_format, metadata)
 
-        CheckpointManager.cleanup(checkpoint_path)
+        if checkpoint_path:
+            CheckpointManager.cleanup(checkpoint_path)
 
         processing_time = time.time() - start
         if progress_callback:
@@ -264,7 +312,7 @@ class WhisperXTranscriptionService(TranscriptionService):
             "duration_seconds": round(duration, 3),
             "segments": segments_out,
             "processing_time_seconds": round(processing_time, 3),
-            "model_used": request.model_size,
+            "model_used": model_used,
             "outputs": outputs,
             "warnings": [],
             "checkpoint_path": checkpoint_path,
@@ -331,39 +379,52 @@ class WhisperXTranscriptionService(TranscriptionService):
         segments_iter, info = model.transcribe(audio_path, **kwargs)
         return list(segments_iter), info
 
-    def _try_load_diarizer(self) -> Callable | None:
+    def _try_load_diarizer(self) -> Callable[[str], list[dict]] | None:
+        """A function returning speaker turns for an audio file, or None if unavailable."""
         try:
-            import whisperx
             from whisperx.diarize import DiarizationPipeline
             hf_token = os.getenv("HF_TOKEN", "")
             if not hf_token:
                 log.warning("HF_TOKEN not set; diarization disabled")
                 return None
             diarize_model = DiarizationPipeline(use_auth_token=hf_token, device="cpu")
-            return lambda audio_path, segments: self._apply_diarization(diarize_model, audio_path, segments)
+            return lambda audio_path: self._diarization_turns(diarize_model, audio_path)
         except Exception as exc:
             log.warning(f"Could not load diarization model: {exc}")
             return None
 
     @staticmethod
-    def _apply_diarization(diarize_model: Any, audio_path: str, segments: list[dict]) -> None:
-        import numpy as np
+    def _diarization_turns(diarize_model: Any, audio_path: str) -> list[dict]:
         import librosa
         audio, _ = librosa.load(audio_path, sr=16000)
-        diarize_segments = diarize_model(audio, min_speakers=2, max_speakers=5)
-        if not diarize_segments:
-            return
-        speaker_map = {}
-        speaker_counter = 1
-        for seg in segments:
-            seg_start = seg.get("start", 0)
-            seg_end = seg.get("end", 0)
-            assigned = f"Speaker {speaker_counter}"
-            for ds in diarize_segments:
-                if ds.get("start", 0) <= seg_start < ds.get("end", 0):
-                    assigned = ds.get("speaker", assigned)
-                    break
-            if assigned not in speaker_map:
-                speaker_map[assigned] = f"Speaker {speaker_counter}"
-                speaker_counter += 1
-            seg["speaker"] = speaker_map[assigned]
+        # No min_speakers: forcing two split every solo talker into two people.
+        turns = diarize_model(audio, max_speakers=6)
+        if hasattr(turns, "to_dict"):
+            turns = turns.to_dict("records")
+        return [
+            {"start": float(t.get("start", 0.0)), "end": float(t.get("end", 0.0)), "speaker": str(t.get("speaker"))}
+            for t in (turns or [])
+        ]
+
+
+def assign_speakers(segments: list[dict], turns: list[dict]) -> None:
+    """Label each segment with the speaker whose turns overlap it most.
+
+    Labels are numbered in order of first appearance, so "Speaker 1" is
+    whoever talks first and keeps that name for the whole video.
+    """
+    if not turns:
+        return
+    names: dict[str, str] = {}
+    for seg in segments:
+        seg_start, seg_end = float(seg.get("start", 0.0)), float(seg.get("end", 0.0))
+        overlap: dict[str, float] = {}
+        for turn in turns:
+            shared = min(seg_end, turn["end"]) - max(seg_start, turn["start"])
+            if shared > 0:
+                overlap[turn["speaker"]] = overlap.get(turn["speaker"], 0.0) + shared
+        if not overlap:
+            continue
+        raw = max(overlap, key=overlap.get)
+        names.setdefault(raw, f"Speaker {len(names) + 1}")
+        seg["speaker"] = names[raw]

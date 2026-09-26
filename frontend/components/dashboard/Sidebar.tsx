@@ -24,6 +24,7 @@ import {
   CreditCard,
   Coins,
   Share2,
+  Cpu,
 } from 'lucide-react';
 import Link from 'next/link';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
@@ -145,6 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { href: '/admin/payments', label: 'Payments', icon: CreditCard },
     { href: '/admin/credits', label: 'Credits', icon: Coins },
     { href: '/admin/social', label: 'Social Accounts', icon: Share2 },
+    { href: '/admin/usage', label: 'AI Usage', icon: Cpu },
   ];
 
   const handleNavClick = (tab: TabType) => {

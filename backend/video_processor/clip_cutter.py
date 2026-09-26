@@ -32,6 +32,7 @@ import numpy as np
 from core.exceptions import CustomException
 from clip_generation.hook import Hook
 from core.logging_config import get_logger
+from video_processor.editing import Layout, Part, choose_layout, plan_parts, shot_cuts
 from video_processor.face_detection import Face, FaceDetector
 from video_processor.geometry import (
     Box,
@@ -97,10 +98,24 @@ class CutRequest:
     transcript_segments: list[dict[str, Any]] = field(default_factory=list)
     # Teaser played before the clip, inside [start, end) in source seconds.
     hook: Hook | None = None
+    # Source ranges the body is stitched from, in play order; None plays
+    # [start, end) straight through.
+    spans: list[tuple[float, float]] | None = None
+    # The director's framing choice and beats (source seconds); see video_processor.editing.
+    layout_hint: str = "auto"
+    beats: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def duration(self) -> float:
         return max(0.0, self.end - self.start)
+
+    @property
+    def body_spans(self) -> list[tuple[float, float]]:
+        return list(self.spans) if self.spans else [(self.start, self.end)]
+
+    @property
+    def body_duration(self) -> float:
+        return sum(end - start for start, end in self.body_spans)
 
 
 @dataclass
@@ -143,6 +158,7 @@ class ClipCutter:
 
         frames = await self._sample_frames(request)
         faces_per_frame = await asyncio.to_thread(self._detect_faces, request.clip_id, frames)
+        cuts = await asyncio.to_thread(shot_cuts, _decode_frames(frames))
         tracks = build_tracks(_decode_frames(frames), faces_per_frame)
         for track in tracks:
             log.info(
@@ -179,6 +195,8 @@ class ClipCutter:
             layout, len(tracks), len(frames), self._faces.backend,
         )
 
+        if cuts:
+            log.info("[SHOTS] clip=%s cuts=%s", request.clip_id, ",".join(f"{c:.1f}" for c in cuts))
         for aspect_ratio in request.aspect_ratios:
             tracking = self._build_tracking(
                 request=request,
@@ -189,9 +207,18 @@ class ClipCutter:
                 aspect_ratio=aspect_ratio,
                 source_width=source_width,
                 source_height=source_height,
+                cuts=cuts,
             )
             result.crop_tracking[aspect_ratio] = [point.copy() for point in tracking]
             output_path = self._output_path(request, aspect_ratio)
+            frame = choose_layout(
+                request.layout_hint, layout, tracks, aspect_ratio,
+                source_width, source_height, *output_dimensions(aspect_ratio),
+            )
+            if frame.composite:
+                result.layout = frame.kind
+            log.info("[LAYOUT] clip=%s ratio=%s hint=%s detected=%s used=%s beats=%d",
+                     request.clip_id, aspect_ratio, request.layout_hint, layout, frame.kind, len(request.beats))
             try:
                 await self._render(
                     request=request,
@@ -200,6 +227,8 @@ class ClipCutter:
                     aspect_ratio=aspect_ratio,
                     source_width=source_width,
                     source_height=source_height,
+                    frame=frame,
+                    listener_at=_listener_finder(tracks, timestamps, speakers),
                 )
                 result.output_files[aspect_ratio] = str(output_path)
             except CustomException as exc:
@@ -376,8 +405,9 @@ class ClipCutter:
         aspect_ratio: str,
         source_width: int,
         source_height: int,
+        cuts: list[float] | None = None,
     ) -> list[dict[str, Any]]:
-        """Per-frame crop windows, smoothed, in source-video timestamps."""
+        """Per-frame crop windows, smoothed within each shot, in source-video timestamps."""
         crop_w, crop_h = target_crop_size(source_width, source_height, aspect_ratio)
         # A crop that already covers the frame cannot pan, so emit one static point.
         if crop_w >= source_width and crop_h >= source_height:
@@ -403,8 +433,12 @@ class ClipCutter:
             request.clip_id, aspect_ratio, strategy, crop_w, crop_h, count, count - centred, centred,
         )
 
-        xs = _smooth_series([point[0] for point in raw], step)
-        ys = _smooth_series([point[1] for point in raw], step)
+        # Smoothed shot by shot: a camera cut is a cut in the crop too, never a
+        # slow glide from where the last shot's subject was.
+        xs, ys = [], []
+        for low, high in _shot_ranges(timestamps, cuts or []):
+            xs.extend(_smooth_series([point[0] for point in raw[low:high]], step))
+            ys.extend(_smooth_series([point[1] for point in raw[low:high]], step))
 
         return [
             {
@@ -462,40 +496,64 @@ class ClipCutter:
         aspect_ratio: str,
         source_width: int,
         source_height: int,
+        frame: Layout | None = None,
+        listener_at: Any = None,
     ) -> None:
         from video_processor.ffmpeg_service import FFmpegService
 
         ffmpeg = FFmpegService()
         target_width, target_height = output_dimensions(aspect_ratio)
+        crop_w, crop_h = target_crop_size(source_width, source_height, aspect_ratio)
+        # Beats reframe inside the crop, so they need a crop smaller than the frame.
+        can_reframe = crop_w < source_width or crop_h < source_height
 
-        async def render_span(start: float, end: float, path: Path) -> None:
+        async def render_part(part: Part, path: Path) -> None:
+            if frame is not None and frame.composite:
+                await ffmpeg.render_stack(
+                    request.source_path, str(path), part.start, part.end - part.start,
+                    [(cell.box.as_dict(), cell.height) for cell in frame.cells],
+                    target_width, source_width, source_height,
+                )
+                return
+            part_tracking = _tracking_from(tracking, part.start)
+            if part.hold is not None:
+                part_tracking = [{
+                    "timestamp": part.start,
+                    "bbox": crop_around(part.hold[0], part.hold[1], source_width, source_height, aspect_ratio).as_dict(),
+                }]
             await ffmpeg.crop_with_tracking(
                 input_path=request.source_path,
                 output_path=str(path),
-                start_time=start,
-                duration=end - start,
-                crop_tracking=_tracking_from(tracking, start),
+                start_time=part.start,
+                duration=part.end - part.start,
+                crop_tracking=part_tracking,
                 target_width=target_width,
                 target_height=target_height,
                 source_width=source_width,
                 source_height=source_height,
+                zoom=part.zoom,
             )
 
-        hook = request.hook
-        if hook is None:
-            await render_span(request.start, request.end, output_path)
+        parts: list[Part] = [Part(request.hook.start, request.hook.end)] if request.hook else []
+        for start, end in request.body_spans:
+            if can_reframe and not (frame and frame.composite) and request.beats:
+                parts.extend(plan_parts(start, end, request.beats, listener_at or (lambda _t: None)))
+            else:
+                parts.append(Part(start, end))
+
+        if len(parts) == 1:
+            await render_part(parts[0], output_path)
         else:
-            # Both parts go through the same encoder settings, so they join by
+            # Every part goes through the same encoder settings, so they join by
             # stream copy and the clip is never encoded a second time.
-            teaser_path = output_path.with_suffix(".hook.mp4")
-            body_path = output_path.with_suffix(".body.mp4")
+            part_paths = [output_path.with_suffix(f".part{index}.mp4") for index in range(len(parts))]
             try:
-                await render_span(hook.start, hook.end, teaser_path)
-                await render_span(request.start, request.end, body_path)
-                await ffmpeg.concat_segments([str(teaser_path), str(body_path)], str(output_path))
+                for part, path in zip(parts, part_paths):
+                    await render_part(part, path)
+                await ffmpeg.concat_segments([str(path) for path in part_paths], str(output_path))
             finally:
-                teaser_path.unlink(missing_ok=True)
-                body_path.unlink(missing_ok=True)
+                for path in part_paths:
+                    path.unlink(missing_ok=True)
 
         if not output_path.exists() or output_path.stat().st_size == 0:
             raise CustomException(
@@ -503,6 +561,40 @@ class ClipCutter:
                 code="CLIP_RENDER_EMPTY",
                 status_code=500,
             )
+
+
+def _shot_ranges(timestamps: list[float], cuts: list[float]) -> list[tuple[int, int]]:
+    """Index ranges of ``timestamps`` falling within each shot."""
+    ranges: list[tuple[int, int]] = []
+    low = 0
+    for cut in sorted(cuts):
+        high = next((i for i in range(low, len(timestamps)) if timestamps[i] >= cut), len(timestamps))
+        if high > low:
+            ranges.append((low, high))
+            low = high
+    if low < len(timestamps):
+        ranges.append((low, len(timestamps)))
+    return ranges
+
+
+def _listener_finder(
+    tracks: list[SpeakerTrack], timestamps: list[float], speakers: list[SpeakerTrack | None],
+):
+    """``t -> centre`` of the most visible person who is not speaking at ``t``."""
+    def listener_at(t: float) -> tuple[float, float] | None:
+        if len(tracks) < 2 or not timestamps:
+            return None
+        index = min(range(len(timestamps)), key=lambda i: abs(timestamps[i] - t))
+        speaker = speakers[index] if index < len(speakers) else None
+        others = [track for track in visible_tracks(t, tracks) if track is not speaker]
+        if not others:
+            return None
+        box = max(others, key=lambda track: track.mean_area).box_at(t)
+        if box is None:
+            return None
+        return box.center[0], max(0.0, box.center[1] - VERTICAL_BIAS)
+
+    return listener_at
 
 
 def _tracking_timestamps(request: CutRequest) -> list[float]:

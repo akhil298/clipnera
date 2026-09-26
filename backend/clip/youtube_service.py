@@ -405,7 +405,9 @@ class YouTubeService:
         loop = asyncio.get_event_loop()
         ydl_opts = {
             **self._yt_dlp_base_options(),
-            'format': format_id or 'bv*+ba/b',
+            # Clips render at 1080 wide at most, and a 4K source decodes about
+            # four times slower for no visible gain; the user's explicit pick wins.
+            'format': format_id or 'bv*[height<=1080]+ba/b[height<=1080]/bv*+ba/b',
             'merge_output_format': 'mp4',
             'outtmpl': output_template,
             'noprogress': True,

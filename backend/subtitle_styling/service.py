@@ -8,7 +8,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from clip_generation.hook import Hook, on_output_timeline
+from clip_generation.hook import Hook, Span, body_duration, on_output_timeline
 from hook_transitions.graph import BridgePlan, MediaInfo, timeline_graph
 from hook_transitions.resolver import TransitionSpec
 from hook_transitions.text import write_bridge_ass
@@ -164,11 +164,13 @@ class SubtitleStylingService:
         ai_cues: Optional[list[dict[str, Any]]] = None,
         hook: Optional[Hook] = None,
         transition: Optional[TransitionSpec] = None,
+        spans: Optional[list[Span]] = None,
     ) -> str:
         """Burn captions (and the watermark) into a cut clip.
 
         ``transition`` re-lays the clip as ``[hook][bridge][clip]`` in the same
         pass; it only applies when the clip has a ``hook`` to bridge from.
+        ``spans`` are the source ranges a stitched body was cut from.
         """
         # FFmpeg runs with cwd set to a scratch dir (for the bare caption
         # filename), so a relative clip path like generated_clips/... would not
@@ -189,11 +191,11 @@ class SubtitleStylingService:
             return await self._burn_with_ass(
                 video_path, clip_start, clip_end, style_type, title_text,
                 enable_watermark, transcript_segments, ai_cues,
-                animation_speed, emoji_collection, _style_overrides(custom_config), hook, transition,
+                animation_speed, emoji_collection, _style_overrides(custom_config), hook, transition, spans,
             )
         return await self._burn_with_srt(
             video_path, clip_start, clip_end, style_type, custom_config,
-            subtitles, title_text, enable_watermark, hook, transition,
+            subtitles, title_text, enable_watermark, hook, transition, spans,
         )
 
     async def render_uncaptioned(
@@ -204,12 +206,14 @@ class SubtitleStylingService:
         enable_watermark: bool,
         hook: Optional[Hook] = None,
         transition: Optional[TransitionSpec] = None,
+        spans: Optional[list[Span]] = None,
     ) -> str:
         """Re-encode a cut clip without captions: watermark and transition only.
 
         Returns a new file the caller owns; ``video_path`` is left untouched.
         """
         video_path = str(Path(video_path).resolve())
+        clip_end = clip_start + body_duration(clip_start, clip_end, spans)
         with tempfile.TemporaryDirectory() as tmpdir:
             media = await self._media(video_path)
             timeline, gap = self._bridge(media, hook, transition, tmpdir)
@@ -312,6 +316,7 @@ class SubtitleStylingService:
         style_overrides: Optional[dict[str, Any]] = None,
         hook: Optional[Hook] = None,
         transition: Optional[TransitionSpec] = None,
+        spans: Optional[list[Span]] = None,
     ) -> str:
         template_name = style_type
         if not get_template_names().__contains__(style_type):
@@ -329,9 +334,11 @@ class SubtitleStylingService:
             # A teaser (and any bridge) ahead of the clip moves where the output
             # starts in source time; rebasing against that origin keeps every
             # word in sync.
+            body_start = clip_start
             clip_start, words = on_output_timeline(
-                self._extract_words_for_ass(transcript_segments), clip_start, clip_end, hook, gap,
+                self._extract_words_for_ass(transcript_segments), clip_start, clip_end, hook, gap, spans,
             )
+            clip_end = body_start + body_duration(body_start, clip_end, spans)
             duration = max(0.0, clip_end - clip_start)
             if duration <= 0:
                 raise CustomException(
@@ -355,7 +362,7 @@ class SubtitleStylingService:
                 emoji_collection=emoji_collection,
                 style_overrides=style_overrides,
                 # Where the hook teaser ends: no caption line may run across it.
-                segment_breaks=[clip_start + hook.duration] if hook else None,
+                segment_breaks=_segment_breaks(clip_start, body_start, hook, spans),
                 output_path=os.path.join(tmpdir, "captions.ass"),
             )
             return await self._encode(
@@ -399,6 +406,7 @@ class SubtitleStylingService:
         enable_watermark: bool,
         hook: Optional[Hook] = None,
         transition: Optional[TransitionSpec] = None,
+        spans: Optional[list[Span]] = None,
     ) -> str:
         """Burn SRT subtitles using a force_style preset.
 
@@ -413,7 +421,9 @@ class SubtitleStylingService:
         media = await self._media(video_path)
         with tempfile.TemporaryDirectory() as tmpdir:
             timeline, gap = self._bridge(media, hook, transition, tmpdir)
-            clip_start, subtitles = on_output_timeline(subtitles or [], clip_start, clip_end, hook, gap)
+            body_start = clip_start
+            clip_start, subtitles = on_output_timeline(subtitles or [], clip_start, clip_end, hook, gap, spans)
+            clip_end = body_start + body_duration(body_start, clip_end, spans)
             duration = clip_end - clip_start
             if duration <= 0:
                 raise ValueError("Invalid clip duration")
@@ -567,3 +577,22 @@ class SubtitleStylingService:
             max_chars=max_chars,
             max_words_per_line=max_words_per_line,
         )
+
+
+def _segment_breaks(
+    origin: float, body_start: float, hook: Optional[Hook], spans: Optional[list[Span]],
+) -> Optional[list[float]]:
+    """Times on the words' timeline no caption line may run across.
+
+    The teaser's end and every join between stitched spans are picture cuts;
+    a caption spanning one would show words from both sides of the cut.
+    """
+    breaks: list[float] = []
+    if hook:
+        breaks.append(origin + hook.duration)
+    if spans:
+        cursor = body_start
+        for start, end in spans[:-1]:
+            cursor += end - start
+            breaks.append(cursor)
+    return breaks or None

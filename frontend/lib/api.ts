@@ -192,6 +192,8 @@ export interface BackendClip {
   /** Source-video span of the teaser played before the clip; null when none. */
   hook_start: number | null;
   hook_end: number | null;
+  /** Source ranges the clip's body is stitched from, in play order; null plays start_time..end_time. */
+  edit_spans: Array<[number, number]> | null;
   timestamps: { start: number; end: number; duration: number };
   reason: string;
   score: number;
@@ -236,6 +238,8 @@ export interface BackendProject {
   status: string;
   duration_seconds: number;
   created_at: string | null;
+  /** AI spend on this video so far, in USD. */
+  ai_cost_usd: number;
   clips: BackendClip[];
 }
 
@@ -1240,6 +1244,88 @@ interface ApiEnvelope<T> {
 
 function envelopeRequest<T>(path: string, options?: RequestInit): Promise<T> {
   return authedRequest<ApiEnvelope<T>>(path, options).then((body) => body.data as T);
+}
+
+// -- AI usage and cost (backend usage/) ---------------------------------------
+// Mirrors backend/usage/schema.py.
+
+export interface StepUsage {
+  step: string;
+  provider: string;
+  model: string;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  audio_seconds: number;
+  cost_usd: number;
+}
+
+export interface ProjectUsage {
+  project_id: string;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  audio_seconds: number;
+  cost_usd: number;
+  by_step: StepUsage[];
+}
+
+export interface DailyUsage {
+  day: string;
+  calls: number;
+  cost_usd: number;
+}
+
+export interface ModelUsage {
+  provider: string;
+  model: string;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+}
+
+export interface TopProjectUsage {
+  project_id: string;
+  user_id: string | null;
+  calls: number;
+  cost_usd: number;
+}
+
+export interface AdminUsageSummary {
+  days: number;
+  calls: number;
+  cost_usd: number;
+  by_day: DailyUsage[];
+  by_model: ModelUsage[];
+  top_projects: TopProjectUsage[];
+}
+
+export const usageApi = {
+  getProjectUsage: (projectId: string) => envelopeRequest<ProjectUsage>(`/usage/projects/${projectId}`),
+};
+
+export const adminUsageApi = {
+  getSummary: (days = 30) => envelopeRequest<AdminUsageSummary>(`/admin/usage${queryString({ days })}`),
+  getClipQuality: (days = 30) => envelopeRequest<ClipQualityReport>(`/admin/clip-quality${queryString({ days })}`),
+};
+
+// Mirrors backend/feedback/schema.py.
+export interface VersionQuality {
+  director_version: string;
+  clips: number;
+  exported_share: number;
+  edited_share: number;
+  published_share: number;
+}
+
+export interface ClipQualityReport {
+  days: number;
+  versions: VersionQuality[];
 }
 
 export type SocialPlatform = 'youtube' | 'tiktok' | 'instagram' | 'x';

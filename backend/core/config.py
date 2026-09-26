@@ -31,24 +31,38 @@ class BaseConfig(BaseSettings):
     SECRET_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
-    # Text provider for the pipeline: "auto" | "groq" | "".
-    # "auto" decides per user -- pro plans get Anthropic (1M context,
-    # schema-enforced JSON), free plans get Groq's free tier. Naming a provider
-    # pins every run to it, which is what local work and A/B runs want.
-    AI_PROVIDER: str = "anthropic"
+    # Text provider for the pipeline: "auto" | "groq" | "anthropic".
+    # "auto" picks per plan and per step (see clients.ai.STEP_MODELS). Naming a
+    # provider pins every step to it, which is what local work and A/B runs
+    # want -- and costs Opus prices on every call if left at "anthropic".
+    AI_PROVIDER: str = "auto"
 
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-opus-5"
-    # Thinking depth and token spend: low | medium | high | xhigh | max.
-    ANTHROPIC_EFFORT: str = "high"
+    # Thinking depth for steps without their own setting: low | medium | high | xhigh | max.
+    ANTHROPIC_EFFORT: str = "medium"
+    # Most a pipeline run may spend on AI, per minute of source video. At 80%
+    # the remaining calls drop to low effort; at 100% they stop and the
+    # heuristic fallbacks take over, so a video never ends up without clips.
+    # 0 disables the cap.
+    AI_BUDGET_PER_SOURCE_MINUTE_PRO: float = 0.015
+    AI_BUDGET_PER_SOURCE_MINUTE_FREE: float = 0.002
     XAI_API_KEY: str = ""
     XAI_MODEL: str = "grok-2-mini"
     GROQ_API_KEY: str = ""
     # llama-3.1-8b-instant and llama-3.3-70b-versatile were decommissioned on
     # 2026-08-16 and are Enterprise-only, so they are no longer usable defaults.
     GROQ_MODEL: str = "openai/gpt-oss-20b"
+    # Speech-to-text: "auto" uses Groq's hosted Whisper when GROQ_API_KEY is
+    # set (no GPU needed) and falls back to local faster-whisper; "local"
+    # always transcribes on this machine.
+    TRANSCRIPTION_PROVIDER: str = "auto"
+    GROQ_WHISPER_MODEL: str = "whisper-large-v3-turbo"
+    # Noise cancellation is skipped when the extracted audio's estimated
+    # signal-to-noise ratio is at least this many dB (studio-clean speech).
+    NOISE_CANCEL_SKIP_SNR_DB: float = 30.0
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.0-flash"
 

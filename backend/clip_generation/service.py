@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import json
 import math
 import re
@@ -12,7 +13,16 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Callable
 
 from clients.services.s3 import S3
-from clip_generation.hook import Hook, locate_hook, on_output_timeline
+from clip_generation.hook import (
+    Hook,
+    Span,
+    body_duration,
+    cut_to_source,
+    locate_hook,
+    on_output_timeline,
+    parse_spans,
+    trim_spans,
+)
 from hook_transitions.resolver import ClipContext, TransitionSpec, hook_text_from, resolve_transition
 from clip_generation.model import ContentCategory, GeneratedClip, SocialPlatform, SOCIAL_PLATFORM_DEFAULTS
 from clip_generation.repository import ClipRepository
@@ -26,6 +36,8 @@ from core.config import get_settings
 from core.database import AsyncSessionLocal
 from core.exceptions import CustomException
 from core.logging_config import get_logger
+from feedback.model import ClipEventKind
+from feedback.service import record_clip_event
 from video_processor.clip_cutter import ClipCutter, CutRequest
 from video_processor.ffmpeg_service import FFmpegService
 from content_intelligence.service import FALLBACK_ASPECT_RATIOS
@@ -34,10 +46,10 @@ from video_processor.geometry import SUPPORTED_ASPECT_RATIOS, output_dimensions
 settings = get_settings()
 log = get_logger(__name__)
 
-# How many clips may be cut at once. Each cut runs its own FFmpeg encode, which
-# is already multi-threaded, so a small number keeps the cores busy without the
-# encodes starving each other.
-MAX_CONCURRENT_CUTS = 7
+# How many clips may be cut or burned at once. Each runs its own FFmpeg encode,
+# which is already multi-threaded, so one worker per two cores keeps a large
+# host busy without a small one (2 vCPU) thrashing seven encodes at a time.
+MAX_CONCURRENT_CUTS = max(1, min(4, (os.cpu_count() or 2) // 2))
 # URLs are re-signed on every read, so this only needs to outlive one page view.
 PRESIGN_EXPIRES_SECONDS = 6 * 3600
 LOG_RULE = "=" * 78
@@ -141,10 +153,26 @@ async def s3_scratch_copy(bucket: str, key: str, filename: str) -> AsyncIterator
 
 @asynccontextmanager
 async def clip_source(clip: GeneratedClip) -> AsyncIterator[str]:
-    """Yield a local copy of a cut clip, fetched from S3, for one render.
+    """Yield a local copy of a cut clip for one render, deleted on exit.
 
-    S3 is where cut clips live; the local copy is scratch, deleted on exit.
+    While the pipeline that cut it is still running, the cut is still on disk
+    and is used directly, which saves a download per clip; after that, S3 is
+    where cut clips live.
     """
+    if clip.s3_key and clip.local_path and Path(clip.local_path).exists():
+        # Linked under a per-clip name: the burner names its output after its
+        # input, and every cut on disk is called after its ratio (9x16.mp4).
+        scratch = Path(tempfile.mkdtemp(prefix="clipnera-render-"))
+        path = scratch / f"{clip.id}.mp4"
+        try:
+            try:
+                os.link(clip.local_path, path)
+            except OSError:
+                await asyncio.to_thread(shutil.copy2, clip.local_path, path)
+            yield str(path)
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+        return
     if not clip.s3_key:
         # Clips cut before storage moved to S3 may still have a local file.
         if clip.local_path and Path(clip.local_path).exists():
@@ -212,6 +240,37 @@ def _sanitize_value(value: Any) -> Any:
     if isinstance(value, dict):
         return {_sanitize_str(str(key)): _sanitize_value(item) for key, item in value.items()}
     return value
+
+
+def _edit_choices(analysis: Any) -> dict[str, Any]:
+    """The director's layout hint and beats saved with a clip, for a re-cut or re-burn."""
+    clip = analysis.get("clip") if isinstance(analysis, dict) else None
+    if not isinstance(clip, dict):
+        return {}
+    return {"layout_hint": clip.get("layout_hint") or "auto", "beats": list(clip.get("beats") or [])}
+
+
+def with_emphasis(transcript: list[dict[str, Any]] | None, beats: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
+    """Mark the words the director singled out, so the burner highlights them.
+
+    Copies rather than mutates, and never un-highlights what the user set in
+    the Transcript tab.
+    """
+    marked = {round(float(b["t"]), 2) for b in beats if b.get("fx") in ("emphasis", "punch_in") and "t" in b}
+    if not transcript or not marked:
+        return transcript
+    result = []
+    for segment in transcript:
+        words = segment.get("words")
+        if words:
+            words = [
+                {**w, "highlighted": True}
+                if round(float(w.get("start", -1)), 2) in marked and "highlighted" not in w else w
+                for w in words
+            ]
+            segment = {**segment, "words": words}
+        result.append(segment)
+    return result
 
 
 def _json_dumps(value: Any) -> str:
@@ -291,6 +350,9 @@ class ClipService:
             # No words on record burned an empty caption track; transcribe the cut.
             if not transcript_segments and not burn_request.get("subtitles"):
                 transcript_segments = await self._transcribe_clip_cut(clip, video_path, user_id)
+            transcript_segments = with_emphasis(
+                transcript_segments, _edit_choices(self._loads(clip.analysis_json, {})).get("beats", []),
+            )
             burned_path = await styling.burn_subtitles(
                 video_path=video_path,
                 clip_start=clip.start_time,
@@ -303,6 +365,7 @@ class ClipService:
                 transcript_segments=transcript_segments,
                 hook=Hook.from_values(clip.hook_start, clip.hook_end),
                 transition=self.hook_transition_for(clip, burn_request.get("hook_transition")),
+                spans=parse_spans(clip.edit_spans),
             )
 
         s3_key = f"clips/{user_id}/{clip.project_id}/{clip_id}_burned.mp4"
@@ -468,6 +531,9 @@ class ClipService:
                 Path(path).unlink(missing_ok=True)
 
         await self._notify(progress_callback, "Social export completed", 100)
+        await record_clip_event(
+            list(dict.fromkeys(item["clip_id"] for item in exported_clips)), user_id, ClipEventKind.EXPORTED,
+        )
 
         return {
             "project_id": project_id,
@@ -531,7 +597,9 @@ class ClipService:
                             "end_time": clip.end_time,
                             "hook_start": clip.hook_start,
                             "hook_end": clip.hook_end,
+                            "edit_spans": parse_spans(clip.edit_spans),
                             "content_category": clip.content_category,
+                            **_edit_choices(self._loads(clip.analysis_json, {})),
                         }
                         for clip in pending
                     ],
@@ -583,17 +651,21 @@ class ClipService:
 
         styling = SubtitleStylingService()
         hook = Hook.from_values(clip.hook_start, clip.hook_end)
+        spans = parse_spans(clip.edit_spans)
         clip_end = clip.end_time
         if max_duration:
             clip_end = min(clip_end, clip.start_time + max_duration)
+            spans = trim_spans(spans, max_duration)
 
         if not burn_subtitles:
             return await styling.render_uncaptioned(
                 cut_path, clip.start_time, clip_end, watermark_enabled, hook=hook, transition=transition,
+                spans=spans,
             )
 
         analysis = self._loads(clip.analysis_json, {})
         ai_cues = (analysis.get("clip") or {}).get("ai_emoji_cues", []) if isinstance(analysis, dict) else []
+        transcript = with_emphasis(transcript, _edit_choices(analysis).get("beats", []))
         return await styling.burn_subtitles(
             video_path=cut_path,
             clip_start=clip.start_time,
@@ -606,6 +678,7 @@ class ClipService:
             ai_cues=ai_cues if enable_emoji else None,
             hook=hook,
             transition=transition,
+            spans=spans,
         )
 
     def hook_transition_for(
@@ -699,6 +772,7 @@ class ClipService:
                 video_path=video_path,
                 transcript_segments=transcript_segments,
                 progress_callback=progress_callback,
+                clip_settings=clip_settings,
             )
 
         if highlights is None:
@@ -836,8 +910,6 @@ class ClipService:
             if progress_callback:
                 await self._notify(progress_callback, message, percent)
 
-        # Two clips at a time: each FFmpeg encode already uses several cores, so
-        # more workers than this just makes them contend for the same CPU.
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_CUTS)
         tracker = _CutProgress(total=len(clips), notify=notify_status)
 
@@ -863,6 +935,9 @@ class ClipService:
                 content_category=str(clip_copy.get("content_category", "unknown")),
                 transcript_segments=transcript_segments,
                 hook=hook,
+                spans=parse_spans(clip_copy.get("edit_spans")),
+                layout_hint=str(clip_copy.get("layout_hint") or "auto"),
+                beats=list(clip_copy.get("beats") or []),
             )
 
             tag = f"[CUT {index + 1}/{total}]"
@@ -928,7 +1003,8 @@ class ClipService:
             clip_copy["hook_start"] = hook.start if hook else None
             clip_copy["hook_end"] = hook.end if hook else None
             # The rendered file's length, teaser included.
-            clip_copy["duration"] = result.duration + (hook.duration if hook else 0.0)
+            clip_copy["duration"] = request.body_duration + (hook.duration if hook else 0.0)
+            clip_copy["edit_spans"] = request.spans
             clip_copy["layout"] = result.layout
             clip_copy["reason"] = str(clip_copy.get("reason") or clip_copy.get("description") or "")
             return clip_copy
@@ -1020,12 +1096,14 @@ class ClipService:
                     duration_seconds=float(clip.get("duration", end - start)),
                     hook_start=clip.get("hook_start"),
                     hook_end=clip.get("hook_end"),
+                    edit_spans=_json_dumps(clip["edit_spans"]) if clip.get("edit_spans") else None,
+                    director_version=clip.get("director_version"),
                     score=float(clip.get("score", 0.0)),
                     scores=_json_dumps(clip.get("scores", {})),
                     content_category=clip.get("content_category", ContentCategory.UNKNOWN.value),
                     # Only a clip that reached S3 counts: renders read from there.
                     status="completed" if s3_key else "failed",
-                    local_path=None,
+                    local_path=local_path if s3_key else None,
                     s3_key=s3_key,
                     s3_bucket=self._bucket if s3_key else None,
                     presigned_url=presigned_url,
@@ -1128,9 +1206,10 @@ class ClipService:
             finally:
                 Path(thumbnail_path).unlink(missing_ok=True)
 
-        # Everything uploaded now lives in S3; renders fetch it from there.
+        # Everything uploaded now lives in S3. The primary cut stays on disk
+        # until the pipeline's end-of-run sweep so its burn skips a download.
         for ratio, path in uploads.items():
-            if ratio in s3_keys and path:
+            if ratio in s3_keys and path and path != local_path:
                 Path(path).unlink(missing_ok=True)
 
         return presigned_url, primary_key, poster_url, s3_keys
@@ -1220,6 +1299,7 @@ class ClipService:
         end: float,
         ai_cues: list[dict[str, Any]] | None = None,
         hook: Hook | None = None,
+        spans: list[Span] | None = None,
     ) -> list[dict[str, Any]]:
         """Word-level captions on the *clip's own* timeline, for the editor.
 
@@ -1256,8 +1336,8 @@ class ClipService:
                     "source_start": round(w_start, 3),
                 })
 
-        origin, words = on_output_timeline(words, start, end, hook)
-        duration = max(0.0, end - origin)
+        origin, words = on_output_timeline(words, start, end, hook, spans=spans)
+        duration = max(0.0, start + body_duration(start, end, spans) - origin)
         for word in words:
             word["start"] = round(min(max(0.0, word["start"] - origin), duration), 3)
             word["end"] = round(min(max(0.0, word["end"] - origin), duration), 3)
@@ -1365,22 +1445,28 @@ class ClipService:
         """Transcribe one clip's cut and store it on the clip.
 
         The cut starts at zero; stored transcripts use source time (see
-        _clip_transcript), so every timing is shifted by the clip's start.
+        _clip_transcript), so every timing is mapped back through the teaser
+        and the stitched spans. Words heard in the teaser are dropped: the
+        same words are heard again in the body.
         """
         segments = await self._transcribe_if_missing(clip.project_id, cut_path, progress_callback)
-        offset = float(clip.start_time)
+        hook = Hook.from_values(clip.hook_start, clip.hook_end)
+        spans = parse_spans(clip.edit_spans)
 
-        def shifted(item: dict[str, Any]) -> dict[str, Any]:
-            return {
-                **item,
-                "start": float(item.get("start", 0.0)) + offset,
-                "end": float(item.get("end", 0.0)) + offset,
-            }
+        def to_source(item: dict[str, Any]) -> dict[str, Any] | None:
+            start = cut_to_source(float(item.get("start", 0.0)), clip.start_time, clip.end_time, hook, spans)
+            if start is None:
+                return None
+            end = cut_to_source(float(item.get("end", 0.0)), clip.start_time, clip.end_time, hook, spans)
+            return {**item, "start": start, "end": max(start, end if end is not None else start)}
 
-        transcript = [
-            {**shifted(seg), "words": [shifted(w) for w in seg.get("words") or []]}
-            for seg in segments
-        ]
+        transcript = []
+        for seg in segments:
+            mapped = to_source(seg)
+            if mapped is None:
+                continue
+            mapped["words"] = [w for w in (to_source(w) for w in seg.get("words") or []) if w is not None]
+            transcript.append(mapped)
         if transcript:
             async with AsyncSessionLocal() as session:
                 await ClipRepository(session).update_clip(
@@ -1532,6 +1618,7 @@ class ClipService:
             "duration_seconds": clip.duration_seconds,
             "hook_start": clip.hook_start,
             "hook_end": clip.hook_end,
+            "edit_spans": parse_spans(clip.edit_spans),
             "timestamps": {
                 "start": clip.start_time,
                 "end": clip.end_time,
@@ -1555,6 +1642,7 @@ class ClipService:
             "captions": self._clip_captions(
                 transcript, clip.start_time, clip.end_time, ai_cues,
                 hook=Hook.from_values(clip.hook_start, clip.hook_end),
+                spans=parse_spans(clip.edit_spans),
             ),
             "visual_analysis": self._loads(clip.visual_analysis, []),
             "bounding_boxes": self._loads(clip.bounding_boxes, []),
@@ -1577,6 +1665,7 @@ class ClipService:
             )
         if not clip:
             raise CustomException(message="Clip not found", code="NOT_FOUND", status_code=404)
+        await record_clip_event([clip_id], user_id, ClipEventKind.EDITED)
         return settings
 
     def _edited_transcript(self, clip: GeneratedClip) -> list[dict[str, Any]]:

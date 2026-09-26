@@ -17,7 +17,7 @@ WORDS = [{"start": 10.0, "end": 12.0, "text": "hello there", "words": [{"word": 
 def _clip(clip_id: str, transcript: str, start: float = 10.0) -> SimpleNamespace:
     return SimpleNamespace(
         id=clip_id, project_id="p1", title=f"Clip {clip_id}", transcript=transcript,
-        start_time=start, end_time=start + 20.0, hook_start=None, hook_end=None,
+        start_time=start, end_time=start + 20.0, hook_start=None, hook_end=None, edit_spans=None,
         content_category="podcast", s3_bucket="b", analysis_json=None, editor_settings=None,
     )
 
@@ -42,6 +42,11 @@ def service(monkeypatch):
     _Repo.updates = []
     monkeypatch.setattr(clip_service, "ClipRepository", _Repo)
     monkeypatch.setattr(clip_service, "AsyncSessionLocal", _session)
+
+    async def _no_event(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(clip_service, "record_clip_event", _no_event)
     return ClipService.__new__(ClipService)
 
 

@@ -290,6 +290,7 @@ export default function DashboardApp() {
             processingStatus: failed
               ? 'failed' as const
               : processing ? 'processing' as const : 'completed' as const,
+            aiCostUsd: project.ai_cost_usd,
           } satisfies VideoProject;
         };
 

@@ -10,6 +10,8 @@ from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait
 
 from core.config import get_settings
 from core.logging_config import get_logger
+from usage.context import check_budget
+from usage.recorder import record_llm_call
 
 from .base import BaseAI
 
@@ -249,6 +251,7 @@ class Groq(BaseAI):
         spends its whole output budget thinking is retried with more room
         instead of handing the caller "" to parse.
         """
+        check_budget()
         json_mode = bool(kwargs.pop("json_mode", False))
         # Groq has no schema-enforced output; the schema is Anthropic-only and
         # would be rejected as an unknown parameter here.
@@ -307,11 +310,20 @@ class Groq(BaseAI):
                 await self._limiter_for(self.model).acquire(estimated_input + max_output_tokens)
                 log.info("Groq API request hit: mode=chat, model=%s, attempt=%d", self.model, attempt_number)
                 try:
+                    started = time.monotonic()
                     response = await self._client.chat.completions.create(
                         model=self.model,
                         messages=fitted,
                         stream=False,
                         **kwargs,
+                    )
+                    usage = getattr(response, "usage", None)
+                    await record_llm_call(
+                        "groq", self.model,
+                        input_tokens=int(getattr(usage, "prompt_tokens", 0) or 0),
+                        output_tokens=int(getattr(usage, "completion_tokens", 0) or 0),
+                        effort=kwargs.get("reasoning_effort"),
+                        latency_ms=int((time.monotonic() - started) * 1000),
                     )
                     content = response.choices[0].message.content or ""
                     finish_reason = getattr(response.choices[0], "finish_reason", None)

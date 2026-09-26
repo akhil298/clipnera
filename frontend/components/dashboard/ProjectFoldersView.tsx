@@ -586,6 +586,14 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                         ? `Processing ${progress}%`
                         : `Avg ${Math.round(project.clips.reduce((acc, c) => acc + c.viralityScore, 0) / (project.clips.length || 1))}/100`}
                     </span>
+                    {project.aiCostUsd != null && project.aiCostUsd > 0 && (
+                      <span
+                        className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-neutral-800/80 text-neutral-300 border border-neutral-700"
+                        title="AI spend on this video"
+                      >
+                        AI ${project.aiCostUsd < 0.01 ? project.aiCostUsd.toFixed(4) : project.aiCostUsd.toFixed(2)}
+                      </span>
+                    )}
                     {project.processingStatus === 'processing' && onCancelPipeline && (
                       <button
                         onClick={() => onCancelPipeline(project.id)}

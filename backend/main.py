@@ -18,6 +18,8 @@ from admin.route import admin as admin_router
 from depth_captions.route import depth_captions as depth_captions_router
 from hook_transitions.route import hook_transitions as hook_transitions_router
 from feature_flags.route import features as features_router, admin_features as admin_features_router
+from usage.route import usage as usage_router, admin_usage as admin_usage_router
+from feedback.route import admin_quality as admin_quality_router
 from social.route import social as social_router, social_webhooks as social_webhooks_router, admin_social as admin_social_router
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -76,6 +78,9 @@ app.include_router(subscription_router, prefix="/api/v1")
 app.include_router(payments_router, prefix="/api/v1")
 app.include_router(admin_payments_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
+app.include_router(usage_router, prefix="/api/v1")
+app.include_router(admin_usage_router, prefix="/api/v1")
+app.include_router(admin_quality_router, prefix="/api/v1")
 app.include_router(depth_captions_router, prefix="/api/v1")
 app.include_router(hook_transitions_router, prefix="/api/v1")
 app.include_router(features_router, prefix="/api/v1")

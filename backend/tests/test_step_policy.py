@@ -2,172 +2,176 @@ from __future__ import annotations
 
 import pytest
 
-from clients.ai import STEP_POLICY, get_text_client, provider_for_tier
+from clients.ai import STEP_MODELS, get_text_client, model_for_step, provider_for_tier
 from clients.ai.anthropic import Anthropic
 from clients.ai.groq import Groq
 from content_intelligence.highlighter import MAX_CLIPS_PER_HOUR, MIN_CLIPS, HighlightDetector
 from content_intelligence.metadata_gen import (
-    CUES_JSON_SCHEMA,
+    METADATA_JSON_SCHEMA,
     TITLE_JSON_SCHEMA,
     MetadataGenerator,
 )
 from content_intelligence.service import ContentIntelligenceService
 
-# Steps pinned to the free provider whatever the user pays.
-ALWAYS_FREE = ("classification", "emoji_cues")
-# Steps that follow the user's tier.
-FOLLOWS_TIER = ("topic_research", "highlight_detection", "titles")
+# Steps that stay on Groq whatever the user pays.
+ALWAYS_FREE = ("classification",)
+# Steps where Pro buys a stronger model.
+FOLLOWS_TIER = ("topic_research", "highlight_detection", "titles", "map", "director")
+
+
+class _Settings:
+    AI_PROVIDER = "auto"
+    GROQ_API_KEY = "x"
+    ANTHROPIC_API_KEY = "x"
+    ANTHROPIC_MODEL = "claude-opus-5"
+    ANTHROPIC_EFFORT = "medium"
+    GROQ_MODEL = "openai/gpt-oss-20b"
+
+
+@pytest.fixture
+def auto_settings(monkeypatch):
+    import clients.ai as ai
+
+    settings = _Settings()
+    monkeypatch.setattr(ai, "get_settings", lambda: settings)
+    return settings
 
 
 class TestStepPolicy:
     @pytest.mark.parametrize("step", ALWAYS_FREE)
-    def test_cheap_steps_stay_on_groq_even_for_pro(self, step):
-        assert STEP_POLICY[step] == "groq"
+    def test_cheap_steps_stay_on_groq_even_for_pro(self, auto_settings, step):
         assert provider_for_tier(True, step) == "groq"
         assert provider_for_tier(False, step) == "groq"
 
     @pytest.mark.parametrize("step", FOLLOWS_TIER)
-    def test_judgement_steps_follow_the_tier(self, step):
-        assert STEP_POLICY[step] == "tier"
+    def test_judgement_steps_follow_the_tier(self, auto_settings, step):
         assert provider_for_tier(True, step) == "anthropic"
         assert provider_for_tier(False, step) == "groq"
 
-    def test_unlisted_step_follows_the_tier(self):
-        # A new step must never be silently downgraded; it costs what the tier
-        # costs until someone classifies it.
+    def test_pro_uses_opus_only_where_clips_are_chosen(self, auto_settings):
+        # The costly model is reserved for picking and editing the moments.
+        for step, (_, pro) in STEP_MODELS.items():
+            if pro.model == "claude-opus-5":
+                assert step in ("highlight_detection", "director")
+
+    def test_no_pro_step_runs_at_high_effort(self, auto_settings):
+        # Hidden thinking at high effort on every call was most of the old bill.
+        for _, pro in STEP_MODELS.values():
+            assert pro.effort in (None, "low", "medium")
+
+    def test_free_director_uses_the_larger_groq_model(self, auto_settings):
+        assert model_for_step(False, "director").model == "openai/gpt-oss-120b"
+
+    def test_unlisted_step_follows_the_tier(self, auto_settings):
+        # A new step must never be silently downgraded.
         assert provider_for_tier(True, "some_future_step") == "anthropic"
+        assert provider_for_tier(False, "some_future_step") == "groq"
 
-    def test_no_step_still_follows_the_tier(self):
-        assert provider_for_tier(True) == "anthropic"
-        assert provider_for_tier(False) == "groq"
-
-    def test_pinned_provider_outranks_the_policy(self, monkeypatch):
+    def test_pinned_provider_outranks_the_policy(self, auto_settings):
         # A pinned run must be genuinely single-provider, or an A/B comparison
         # is measuring two providers at once.
-        import clients.ai as ai
-
-        class _Pinned:
-            AI_PROVIDER = "anthropic"
-            GROQ_API_KEY = "x"
-            ANTHROPIC_API_KEY = "x"
-
-        monkeypatch.setattr(ai, "get_settings", lambda: _Pinned())
+        auto_settings.AI_PROVIDER = "anthropic"
         for step in ALWAYS_FREE + FOLLOWS_TIER:
-            assert ai.provider_for_tier(True, step) == "anthropic"
-            assert ai.provider_for_tier(False, step) == "anthropic"
+            assert provider_for_tier(True, step) == "anthropic"
+            assert provider_for_tier(False, step) == "anthropic"
+        auto_settings.AI_PROVIDER = "groq"
+        for step in ALWAYS_FREE + FOLLOWS_TIER:
+            assert provider_for_tier(True, step) == "groq"
 
-    def test_client_factory_honours_the_step(self):
-        assert isinstance(get_text_client(is_pro=True, step="emoji_cues"), Groq)
-        assert isinstance(get_text_client(is_pro=True, step="titles"), Anthropic)
+    def test_client_factory_builds_the_steps_model(self, auto_settings):
+        client = get_text_client(is_pro=True, step="titles")
+        assert isinstance(client, Anthropic)
+        assert (client.model, client.effort) == ("claude-sonnet-5", "low")
+        director = get_text_client(is_pro=True, step="highlight_detection")
+        assert (director.model, director.effort) == ("claude-opus-5", "medium")
+        assert isinstance(get_text_client(is_pro=True, step="classification"), Groq)
+
+    def test_missing_key_falls_back_to_the_other_provider(self, auto_settings):
+        auto_settings.ANTHROPIC_API_KEY = ""
+        assert isinstance(get_text_client(is_pro=True, step="titles"), Groq)
 
 
 class TestServiceWiring:
-    def test_pro_run_splits_across_both_providers(self):
+    def test_pro_run_splits_across_both_providers(self, auto_settings):
         service = ContentIntelligenceService(is_pro=True)
         assert isinstance(service._researcher._text_client, Anthropic)
         assert isinstance(service._highlighter._text_client, Anthropic)
         assert isinstance(service._metadata_gen._text_client, Anthropic)
-        # The two that must stay cheap.
         assert isinstance(service._classifier._text_client, Groq)
-        assert isinstance(service._metadata_gen._cue_client, Groq)
 
-    def test_free_run_is_entirely_on_groq(self):
+    def test_free_run_is_entirely_on_groq(self, auto_settings):
         service = ContentIntelligenceService(is_pro=False)
         for client in (
             service._researcher._text_client,
             service._classifier._text_client,
             service._highlighter._text_client,
             service._metadata_gen._text_client,
-            service._metadata_gen._cue_client,
         ):
             assert isinstance(client, Groq)
 
 
-class TestMetadataSplit:
-    def test_cue_client_defaults_to_the_text_client(self):
-        # A caller written before the split must keep working.
-        sentinel = object()
-        assert MetadataGenerator(sentinel)._cue_client is sentinel
+class _Recorder:
+    def __init__(self, reply: str = '{"items": []}') -> None:
+        self.calls: list[dict] = []
+        self._reply = reply
 
+    async def chat(self, messages, **kwargs):
+        self.calls.append({"prompt": messages[-1]["content"], **kwargs})
+        return self._reply
+
+
+class TestMetadataBatch:
     def test_title_schema_carries_no_emoji_cues(self):
-        # The 306-token catalogue is only needed to produce cues; keeping cues
-        # out of the title call is what removes it from the paid request.
         assert "emoji_cues" not in TITLE_JSON_SCHEMA["properties"]
-        assert set(TITLE_JSON_SCHEMA["required"]) == {"title", "description", "hashtags"}
-
-    def test_cue_schema_carries_only_cues(self):
-        assert set(CUES_JSON_SCHEMA["properties"]) == {"emoji_cues"}
+        assert set(TITLE_JSON_SCHEMA["required"]) == {"index", "title", "description", "hashtags"}
 
     @pytest.mark.asyncio
-    async def test_title_prompt_excludes_the_emoji_catalogue(self):
-        captured: dict = {}
-
-        class _Client:
-            async def chat(self, messages, **kwargs):
-                captured["prompt"] = messages[-1]["content"]
-                captured["schema"] = kwargs.get("json_schema")
-                return '{"title":"T","description":"D","hashtags":["#a"]}'
-
-        generator = MetadataGenerator(_Client(), cue_client=_Client())
-        await generator._generate_title({"transcript_excerpt": "money and growth"}, "vlog")
-
-        assert "Allowed emoji ids" not in captured["prompt"]
-        assert captured["schema"] is TITLE_JSON_SCHEMA
-
-    @pytest.mark.asyncio
-    async def test_cues_go_to_the_cue_client_not_the_title_client(self):
-        calls: list[str] = []
-
-        class _Client:
-            def __init__(self, name):
-                self._name = name
-
-            async def chat(self, messages, **kwargs):
-                calls.append(self._name)
-                if self._name == "title":
-                    return '{"title":"T","description":"D","hashtags":["#a"]}'
-                return '{"emoji_cues":[]}'
-
-        generator = MetadataGenerator(_Client("title"), cue_client=_Client("cue"))
-        await generator._generate_for_clip({"transcript_excerpt": "money", "content_category": "vlog"})
-
-        assert calls == ["title", "cue"]
+    async def test_all_clips_share_one_call(self):
+        client = _Recorder(
+            '{"items": [{"index": 0, "title": "A", "description": "d", "hashtags": ["#a"]},'
+            ' {"index": 1, "title": "B", "description": "d", "hashtags": ["#b"]}]}'
+        )
+        clips = await MetadataGenerator(client).generate_batch([
+            {"transcript_excerpt": "first", "content_category": "vlog"},
+            {"transcript_excerpt": "second", "content_category": "vlog"},
+        ])
+        assert len(client.calls) == 1
+        assert [c["title"] for c in clips] == ["A", "B"]
+        assert client.calls[0]["json_schema"] is METADATA_JSON_SCHEMA
+        assert "Allowed emoji ids" not in client.calls[0]["prompt"]
 
     @pytest.mark.asyncio
-    async def test_cue_failure_does_not_cost_the_clip_its_title(self):
-        class _Title:
-            async def chat(self, messages, **kwargs):
-                return '{"title":"Real Title","description":"D","hashtags":["#a"]}'
+    async def test_clips_the_director_titled_are_not_sent(self):
+        client = _Recorder()
+        clips = await MetadataGenerator(client).generate_batch([
+            {"transcript_excerpt": "x", "title": "Director title", "content_category": "vlog"},
+        ])
+        assert client.calls == []
+        assert clips[0]["title"] == "Director title"
+        assert clips[0]["hashtags"]
 
+    @pytest.mark.asyncio
+    async def test_failure_falls_back_without_raising(self):
         class _Broken:
             async def chat(self, messages, **kwargs):
-                raise RuntimeError("cue provider down")
+                raise RuntimeError("provider down")
 
-        generator = MetadataGenerator(_Title(), cue_client=_Broken())
-        clip = await generator._generate_for_clip(
-            {"transcript_excerpt": "money", "content_category": "vlog"}
+        clips = await MetadataGenerator(_Broken()).generate_batch(
+            [{"transcript_excerpt": "I almost lost everything.", "content_category": "vlog"}]
         )
-
-        assert clip["title"] == "Real Title"
-        assert clip["ai_emoji_cues"] == []
+        assert clips[0]["title"]
+        assert clips[0]["hashtags"]
+        assert clips[0]["ai_emoji_cues"] == []
 
     @pytest.mark.asyncio
-    async def test_title_failure_falls_back_without_raising(self):
-        class _Broken:
-            async def chat(self, messages, **kwargs):
-                raise RuntimeError("title provider down")
-
-        class _Cues:
-            async def chat(self, messages, **kwargs):
-                return '{"emoji_cues":[]}'
-
-        generator = MetadataGenerator(_Broken(), cue_client=_Cues())
-        clip = await generator._generate_for_clip(
-            {"transcript_excerpt": "I almost lost everything.", "content_category": "vlog"}
-        )
-
-        assert clip["title"]
-        assert clip["hashtags"]
+    async def test_an_index_the_model_skipped_gets_a_default(self):
+        client = _Recorder('{"items": [{"index": 1, "title": "B", "description": "d", "hashtags": ["#b"]}]}')
+        clips = await MetadataGenerator(client).generate_batch([
+            {"transcript_excerpt": "Money talks.", "content_category": "vlog"},
+            {"transcript_excerpt": "second", "content_category": "vlog"},
+        ])
+        assert clips[0]["title"] and clips[0]["title"] != "B"
+        assert clips[1]["title"] == "B"
 
 
 class TestClipDensity:

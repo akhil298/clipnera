@@ -11,6 +11,7 @@ const NAV: { href: string; label: string }[] = [
   { href: '/admin/payments', label: 'Payments' },
   { href: '/admin/credits', label: 'Credits' },
   { href: '/admin/social', label: 'Social' },
+  { href: '/admin/usage', label: 'AI usage' },
 ];
 
 interface AdminLayoutProps {

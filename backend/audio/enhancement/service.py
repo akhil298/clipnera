@@ -46,6 +46,26 @@ ZONE_PRESETS = {
 }
 
 
+def estimate_snr_db(path: str, frame_seconds: float = 0.05) -> float:
+    """Rough signal-to-noise ratio of a WAV file, in dB.
+
+    Speech frames sit near the loud end of the frame-energy distribution and
+    the noise floor near the quiet end, so the gap between the 95th and 10th
+    percentile frame energies approximates SNR without a speech detector.
+    """
+    rate, audio = wavfile.read(path)
+    if audio.ndim > 1:
+        audio = audio.mean(axis=1)
+    audio = audio.astype(np.float64)
+    frame = max(1, int(rate * frame_seconds))
+    count = len(audio) // frame
+    if count < 20:
+        return 0.0
+    energy = (audio[: count * frame].reshape(count, frame) ** 2).mean(axis=1) + 1e-9
+    db = 10.0 * np.log10(energy)
+    return float(np.percentile(db, 95) - np.percentile(db, 10))
+
+
 def _map_strength_to_preset(strength: int) -> dict:
     if strength <= 30:
         return ZONE_PRESETS["mild"]
