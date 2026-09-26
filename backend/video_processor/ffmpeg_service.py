@@ -57,6 +57,31 @@ def upscale_filter(width: int, height: int, factor: float, fit: str = "") -> str
 
 class FFmpegService:
     _encoder_args: list[str] | None = None
+    _has_libass: bool | None = None
+
+    @classmethod
+    async def require_caption_support(cls) -> None:
+        """Raise unless FFmpeg can burn captions and titles.
+
+        Builds without libass (Homebrew's plain ``ffmpeg`` since 2025) lack the
+        ``ass`` filter, and every burn then fails deep inside the render.
+        """
+        if cls._has_libass is None:
+            proc = await asyncio.create_subprocess_exec(
+                "ffmpeg", "-hide_banner", "-filters",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            stdout, _ = await proc.communicate()
+            cls._has_libass = any(
+                line.split()[1:2] == ["ass"] for line in stdout.decode("utf-8", errors="ignore").splitlines()
+            )
+        if not cls._has_libass:
+            raise CustomException(
+                message="FFmpeg on this server was built without libass, so captions and titles cannot be burned in.",
+                code="CAPTIONS_UNAVAILABLE",
+                status_code=500,
+            )
 
     @classmethod
     async def _get_encoder_args(cls) -> list[str]:

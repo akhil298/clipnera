@@ -50,7 +50,7 @@ import {
   CaptionConfig,
   ClipEditorSettings,
 } from '@/lib/types';
-import { getCaptionConfig, getAllCaptionStyles } from '@/lib/utils/captionStyles';
+import { getCaptionConfig, getAllCaptionStyles, pillTextColor } from '@/lib/utils/captionStyles';
 import { useEntitlements, canUseAspectRatio, canUseCaptionStyle } from '@/hooks/useEntitlements';
 import { ProLockBadge, UpgradeHint } from './ProLockBadge';
 import { EMOJI_COLLECTIONS, getEmojiCollection } from '@/lib/data/emojiCollections';
@@ -136,7 +136,7 @@ const activeWordStyle = (config: CaptionConfig, isActive: boolean, highlighted: 
   if (onPlate) {
     const pill = config.secondaryHighlightColor;
     return {
-      color: pill === config.highlightColor ? config.textColor : config.highlightColor,
+      color: pillTextColor(config),
       backgroundColor: pill,
       borderRadius: '0.3em',
       padding: '0 0.2em',

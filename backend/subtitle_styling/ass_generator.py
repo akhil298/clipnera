@@ -133,6 +133,13 @@ def _entrance(animation: str, speed: float, x: int, y: int, height: int) -> str 
     return None
 
 
+def _contrast_on(ass_colour: str) -> str:
+    """Black or white, whichever reads on an ASS '&HAABBGGRR' colour."""
+    bgr = ass_colour.lstrip("&H").rstrip("&")[-6:]
+    b, g, r = (int(bgr[i:i + 2], 16) for i in (0, 2, 4))
+    return "&H00000000" if 0.299 * r + 0.587 * g + 0.114 * b > 150 else "&H00FFFFFF"
+
+
 def _active_word_tags(
     template: dict[str, Any],
     animation: str,
@@ -147,8 +154,9 @@ def _active_word_tags(
     speed = max(0.25, speed)
     if pill:
         # On a plate: light the word with a pill. Text that would vanish into
-        # a same-coloured pill keeps the base colour instead.
-        colour = primary if pill == highlight else highlight
+        # a same-coloured pill keeps the base colour, and if that matches too
+        # (Minimal is white on white) falls back to black or white.
+        colour = next((c for c in (highlight, primary) if c != pill), None) or _contrast_on(pill)
         tags = f"\\c{colour}\\3c{pill}\\3a&H00&"
     elif word_box:
         tags = f"\\c{highlight}\\bord{outline_width}\\3c{word_box}"

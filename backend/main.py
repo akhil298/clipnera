@@ -24,6 +24,7 @@ from social.route import social as social_router, social_webhooks as social_webh
 from uploads.route import uploads as uploads_router
 from broll.route import admin_broll as admin_broll_router, broll as broll_router
 from reels.route import reels_router
+from video_processor.ffmpeg_service import FFmpegService
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -48,6 +49,10 @@ async def lifespan(app: FastAPI):
         await fail_interrupted_pipelines()
     except Exception as exc:
         log.error(f"Could not recover interrupted pipelines: {exc}", exc_info=True)
+    try:
+        await FFmpegService.require_caption_support()
+    except CustomException as exc:
+        log.error(f"{exc.message} Exports will fail until FFmpeg with libass is installed.")
     yield
     log.info("Shutting down")
 

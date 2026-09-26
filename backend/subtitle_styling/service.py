@@ -176,6 +176,7 @@ class SubtitleStylingService:
         # filename), so a relative clip path like generated_clips/... would not
         # resolve there.
         video_path = str(Path(video_path).resolve())
+        await self._ffmpeg.require_caption_support()
         # Extract animation_speed and emoji_collection from custom_config if provided
         animation_speed = 1.0
         emoji_collection = None

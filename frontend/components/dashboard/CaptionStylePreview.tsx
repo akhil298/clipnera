@@ -1,6 +1,7 @@
 "use client";
 import React from 'react';
 import { CaptionConfig } from '@/lib/types';
+import { pillTextColor } from '@/lib/utils/captionStyles';
 
 interface CaptionStylePreviewProps {
   config: CaptionConfig;
@@ -84,7 +85,7 @@ export const CaptionStylePreview: React.FC<CaptionStylePreviewProps> = ({
             style={
               {
                 '--cap-text': config.textColor,
-                '--cap-hl': config.highlightColor,
+                '--cap-hl': config.hasBgBox ? pillTextColor(config) : config.highlightColor,
                 // Hormozi-style templates paint a pill behind the active word;
                 // the rest highlight by colour alone.
                 '--cap-hl-bg': config.hasBgBox ? config.secondaryHighlightColor : 'transparent',

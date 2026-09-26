@@ -21,6 +21,19 @@ export const getCaptionPresetIds = (): CaptionPreset[] => {
   return Object.keys(captionStyles) as CaptionPreset[];
 };
 
+/**
+ * Text colour for the spoken word on its pill; mirrors _active_word_tags() in
+ * ass_generator.py. Falls back to black or white when both the highlight and
+ * the text colour match the pill (Minimal is white on white).
+ */
+export const pillTextColor = (config: CaptionConfig): string => {
+  const pill = config.secondaryHighlightColor.toLowerCase();
+  const readable = [config.highlightColor, config.textColor].find((colour) => colour.toLowerCase() !== pill);
+  if (readable) return readable;
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(pill.slice(i, i + 2), 16) || 0);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#000000' : '#FFFFFF';
+};
+
 export interface StyledWord extends WordTimestamp {
   style: CaptionConfig;
   color: string;
