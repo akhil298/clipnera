@@ -20,7 +20,8 @@ export function CreditPacksCard({ onSelect }: { onSelect: (pack: CreditPackRespo
     subscriptionApi
       .getPlans()
       .then((data) => {
-        if (!cancelled) setPacks(data.credit_packs);
+        // An API from before credit packs sends no list; treat that as none on sale.
+        if (!cancelled) setPacks(data.credit_packs ?? []);
       })
       .catch((err: Error) => {
         if (!cancelled) setError(err.message || 'Could not load credit packs');
@@ -52,7 +53,11 @@ export function CreditPacksCard({ onSelect }: { onSelect: (pack: CreditPackRespo
         </div>
       )}
 
-      {packs && (
+      {packs?.length === 0 && (
+        <p className="text-xs text-neutral-500">Credit packs aren&apos;t available right now. Please check back soon.</p>
+      )}
+
+      {packs && packs.length > 0 && (
         <div className="grid sm:grid-cols-3 gap-3">
           {packs.map((pack) => (
             <div key={pack.slug} className="p-4 rounded-xl bg-neutral-950 border border-neutral-800 flex flex-col gap-3">
