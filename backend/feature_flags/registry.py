@@ -20,6 +20,11 @@ class FlagDefinition:
 
 
 SOCIAL_PUBLISHING = "social_publishing"
+VIDEO_UPLOAD = "video_upload"
+BROLL_STUDIO = "broll_studio"
+BROLL_CUTAWAYS = f"{BROLL_STUDIO}.cutaways"
+BROLL_REELS = f"{BROLL_STUDIO}.reels"
+BROLL_AI_SHOTS = f"{BROLL_STUDIO}.ai_shots"
 
 
 def social_platform_flag(platform: str) -> str:
@@ -44,6 +49,36 @@ _DEFINITIONS = (
     ),
     FlagDefinition(
         social_platform_flag("x"), "X", "Connect and publish to X. Every post is billed by X.", SOCIAL_PUBLISHING
+    ),
+    FlagDefinition(
+        VIDEO_UPLOAD,
+        "Video upload",
+        "Users can upload a video file from their device instead of pasting a YouTube link.",
+    ),
+    FlagDefinition(
+        BROLL_STUDIO,
+        "B-Roll Studio",
+        "Main switch for B-roll features. The admin B-roll library stays available so it can be filled "
+        "before launch.",
+    ),
+    FlagDefinition(
+        BROLL_CUTAWAYS,
+        "B-roll cutaways on clips",
+        "The AI adds stock cutaways to generated clips (5 credits per clip that gets them); users can swap "
+        "or remove them in the editor. Clips already planned keep their B-roll when this is turned off.",
+        BROLL_STUDIO,
+    ),
+    FlagDefinition(
+        BROLL_REELS,
+        "Reels from images",
+        "Users build a reel from their photos and a script or topic.",
+        BROLL_STUDIO,
+    ),
+    FlagDefinition(
+        BROLL_AI_SHOTS,
+        "AI-generated shots (Pro)",
+        "Pro users can generate a scene or cutaway with Veo (120 credits). Needs Veo quota on the Gemini key.",
+        BROLL_STUDIO,
     ),
 )
 

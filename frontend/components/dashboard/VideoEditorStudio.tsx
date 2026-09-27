@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CaptionStylePreview } from './CaptionStylePreview';
 import { ClipBrollPanel } from './ClipBrollPanel';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import {
   Play,
   Pause,
@@ -208,6 +209,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
   const [volume, setVolume] = useState(0.8);
 
   // Active studio tabs
+  const { flags } = useFeatureFlags();
   const [activeStudioTab, setActiveStudioTab] = useState<'captions' | 'hook' | 'broll' | 'sfx' | 'audio' | 'reframe' | 'transcript'>('captions');
   const [socialOverlay, setSocialOverlay] = useState<'none' | 'tiktok' | 'reels' | 'shorts'>('none');
 
@@ -1685,7 +1687,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                 </div>
               </div>
 
-              <ClipBrollPanel clipId={clip.id} />
+              {flags['broll_studio.cutaways'] && <ClipBrollPanel clipId={clip.id} />}
 
               {/* Preset Stock B-roll catalog */}
               <div className="grid grid-cols-2 gap-2.5">

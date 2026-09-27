@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react';
 import { AI_SHOT_CREDITS, brollApi, BrollPlacement, BrollPreview } from '@/lib/api';
 import { useEntitlements } from '@/hooks/useEntitlements';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 function Thumb({ preview, active, onPick }: { preview: BrollPreview; active?: boolean; onPick?: () => void }) {
   return (
@@ -22,11 +23,12 @@ function Thumb({ preview, active, onPick }: { preview: BrollPreview; active?: bo
 }
 
 function PlacementRow({
-  placement, busy, isPro, onSwap, onRemove, onGenerate,
+  placement, busy, isPro, aiShots, onSwap, onRemove, onGenerate,
 }: {
   placement: BrollPlacement;
   busy: boolean;
   isPro: boolean;
+  aiShots: boolean;
   onSwap: (assetId: string) => void;
   onRemove: () => void;
   onGenerate: () => void;
@@ -64,12 +66,12 @@ function PlacementRow({
           <Search className="w-3.5 h-3.5" />
         </button>
       </div>
-      <button type="button" onClick={onGenerate} disabled={busy || !isPro || placement.generating}
+      {aiShots && <button type="button" onClick={onGenerate} disabled={busy || !isPro || placement.generating}
         title={isPro ? 'Generate a new shot for this cutaway with AI' : 'AI shots are a Pro feature'}
         className="w-full py-1 rounded-lg border border-violet-500/30 text-[10px] font-semibold text-violet-300 hover:bg-violet-500/10 disabled:opacity-40 flex items-center justify-center gap-1">
         {placement.generating ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
         {placement.generating ? 'Generating AI shot…' : `AI shot · ${AI_SHOT_CREDITS} credits${isPro ? '' : ' (Pro)'}`}
-      </button>
+      </button>}
       {results && (
         <div className="flex gap-1.5 overflow-x-auto">
           {results.length === 0 && <span className="text-[10px] text-neutral-500">No shots match.</span>}
@@ -85,6 +87,7 @@ function PlacementRow({
 /** The clip's real cutaways from the server; changes apply on the next export. */
 export function ClipBrollPanel({ clipId }: { clipId: string }) {
   const { entitlements } = useEntitlements();
+  const { flags } = useFeatureFlags();
   const [placements, setPlacements] = useState<BrollPlacement[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -141,6 +144,7 @@ export function ClipBrollPanel({ clipId }: { clipId: string }) {
           placement={p}
           busy={busy}
           isPro={Boolean(entitlements?.pro_ai_provider)}
+          aiShots={flags['broll_studio.ai_shots']}
           onSwap={(assetId) => update(p.index, { asset_id: assetId })}
           onRemove={() => update(p.index, { remove: true })}
           onGenerate={() => generate(p.index)}

@@ -83,6 +83,11 @@ def patch_generation(monkeypatch, subs, key="k"):
         async def enqueue(self, job):
             queued.append(job)
 
+    class Flags:
+        async def require(self, *keys):
+            return None
+
+    monkeypatch.setattr(generation, "FeatureFlagService", lambda session: Flags())
     monkeypatch.setattr(generation.SubscriptionService, "for_session", lambda session: subs)
     monkeypatch.setattr(generation, "get_queue", lambda: Queue())
     monkeypatch.setattr(generation, "get_settings", lambda: SimpleNamespace(GEMINI_API_KEY=key, VEO_SCENE_CREDITS=120))

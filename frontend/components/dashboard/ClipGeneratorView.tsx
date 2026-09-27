@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { VideoProject, ViralClip, TabType, PipelineStep } from '@/lib/types';
 import { clipApi } from '@/lib/api';
+import { downloadFile, exportAllProjectClips } from '@/lib/utils/clipExport';
 import { ClipCard } from './ClipCard';
 import { PipelineStepIndicator } from './PipelineStepIndicator';
 import { AudioBeforeAfter } from './AudioBeforeAfter';
@@ -96,17 +97,6 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
   const [isRenaming, setIsRenaming] = useState(false);
   const [newFolderName, setNewFolderName] = useState(safeProject.folderName || safeProject.title || '');
 
-  const downloadExport = (url: string, filename: string) => {
-    const link = document.createElement('a');
-    link.href = url;
-    // Export URLs are signed to download as attachments; a same-tab click saves
-    // the file. `target="_blank"` only opened a tab showing the video.
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  };
-
   // Renders the clip with its own caption style, size and hook transition, then
   // downloads that. It used to download `presignedUrl`, the raw cut, which has
   // no title, captions, hook bridge or watermark.
@@ -129,7 +119,7 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
       if (!url) {
         throw new Error('The export completed without producing a downloadable file.');
       }
-      downloadExport(url, `${safeProject.title || 'clip'}-${clip.id}.mp4`);
+      downloadFile(url, `${safeProject.title || 'clip'}-${clip.id}.mp4`);
       confetti({ particleCount: 75, spread: 60, origin: { y: 0.7 } });
     } catch (error) {
       setExportError(error instanceof Error ? error.message : 'Export failed. Please try again.');
@@ -139,35 +129,10 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
   };
 
   const handleBatchExport = async () => {
-    if (!safeProject.id || safeProject.clips.length === 0) {
-      setExportError('There are no clips available to export.');
-      return;
-    }
-
     setExportError(null);
     setIsBatchExporting(true);
     try {
-      // Batch export uses the first clip's caption style, size and hook
-      // transition for every clip (Auto still picks per clip).
-      const firstClip = safeProject.clips[0];
-      const result = await clipApi.exportProject(safeProject.id, {
-        clipIds: safeProject.clips.map((clip) => clip.id),
-        aspectRatio: firstClip?.aspectRatio,
-        captionConfig: firstClip?.captionConfig,
-        hookTransition: firstClip?.hookTransition,
-      });
-      const downloadableClips = result.exported_clips.filter((clip) => clip.burned_presigned_url);
-
-      downloadableClips.forEach((clip, index) => {
-        downloadExport(
-          clip.burned_presigned_url as string,
-          `${safeProject.title || 'clip'}-${clip.clip_id}-${clip.platform}-${index + 1}.mp4`,
-        );
-      });
-
-      if (downloadableClips.length === 0) {
-        throw new Error('The export completed without producing downloadable files.');
-      }
+      await exportAllProjectClips(safeProject);
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
     } catch (error) {
       setExportError(error instanceof Error ? error.message : 'Export failed. Please try again.');

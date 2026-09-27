@@ -24,6 +24,8 @@ from transcription.schema import TranscriptionRequest
 from transcription.transliterate import CAPTION_SCRIPTS, romanize_transcript, wants_roman
 from clients.ai import get_text_client
 from broll.cutaways import plan_project_broll
+from feature_flags.registry import BROLL_CUTAWAYS
+from feature_flags.service import FeatureFlagService
 from clip.repository import ClipRepository
 from clip.model import ProjectStatus
 from clip_generation.model import SOCIAL_PLATFORM_DEFAULTS, SocialPlatform
@@ -808,6 +810,10 @@ class PipelineOrchestrator:
 
     async def _plan_broll(self) -> None:
         """Cutaways for the new clips. Never fails the run: a clip without B-roll is still a clip."""
+        async with AsyncSessionLocal() as session:
+            if not await FeatureFlagService(session).is_enabled(BROLL_CUTAWAYS):
+                log.info("B-roll cutaways are switched off; skipping: project=%s", self.project_id)
+                return
         try:
             count = await plan_project_broll(
                 self.project_id, self.user_id, self.is_pro,

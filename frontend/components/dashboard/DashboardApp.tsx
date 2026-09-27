@@ -825,7 +825,7 @@ export default function DashboardApp() {
           {/* TAB 7: BRAND KIT & SUBTITLE STYLES */}
           {activeTab === 'brand_kit' && <BrandKitView />}
 
-          {activeTab === 'reels' && <ReelsView reelId={routeReelId} />}
+          {activeTab === 'reels' && flags['broll_studio.reels'] && <ReelsView reelId={routeReelId} />}
 
           {/* TAB 8: SETTINGS, WORKSPACE & BILLING */}
           {activeTab === 'settings' && currentUser && (

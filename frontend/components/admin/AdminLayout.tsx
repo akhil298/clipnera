@@ -13,6 +13,7 @@ const NAV: { href: string; label: string }[] = [
   { href: '/admin/social', label: 'Social' },
   { href: '/admin/usage', label: 'AI usage' },
   { href: '/admin/broll', label: 'B-roll library' },
+  { href: '/admin/features', label: 'Features' },
 ];
 
 interface AdminLayoutProps {

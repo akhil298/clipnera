@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { VideoProject, AudioEnhancementConfig, DownloadProgress, AspectRatio } from '@/lib/types';
 import { useEntitlements } from '@/hooks/useEntitlements';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { analyzeVideoSource, extractYoutubeVideoId } from '@/lib/utils/urlParser';
 import { formatBytes, formatDuration, readVideoDuration, titleFromFileName } from '@/lib/utils/videoFile';
 import { CaptionScript, clipApi, pipelineApi, uploadApi, VIDEO_UPLOAD_TYPES, VideoContentType, YouTubeMetadataResponse } from '@/lib/api';
@@ -50,6 +51,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [customFolderName, setCustomFolderName] = useState('Alex Hormozi — $100M Leads Masterclass');
 
   const { entitlements } = useEntitlements();
+  const { flags } = useFeatureFlags();
+  const uploadEnabled = flags.video_upload;
+  const cutawaysEnabled = flags['broll_studio.cutaways'];
   // Empty means Auto: the pipeline picks formats from the content category.
   const [outputRatios, setOutputRatios] = useState<AspectRatio[]>([]);
 
@@ -125,7 +129,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   if (!isOpen) return null;
 
   const isYoutubeUrl = extractYoutubeVideoId(urlInput) !== null;
-  const isUpload = sourceMode === 'upload';
+  const isUpload = uploadEnabled && sourceMode === 'upload';
   const canStart = isUpload ? uploadFile !== null : isYoutubeUrl;
 
   const handleFilePicked = async (file: File | undefined) => {
@@ -306,7 +310,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       setPipelineError(null);
       setPipelineStarted(false);
 
-      const startResult = await pipelineApi.start(projectId!, steps, audioConfig, outputRatios, { caption_script: captionScript, broll: autoBroll });
+      const startResult = await pipelineApi.start(projectId!, steps, audioConfig, outputRatios, { caption_script: captionScript, broll: cutawaysEnabled && autoBroll });
       setPipelineSteps(startResult.selected_steps || steps);
       setCreditsDeducted(startResult.credits_deducted || 0);
 
@@ -432,7 +436,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         <div className="p-6 overflow-y-auto space-y-6">
           {!isProcessing ? (
             <>
-              {/* Source picker: YouTube link or a video from this device */}
+              {/* Source picker: YouTube link or a video from this device (while uploads are switched on) */}
+              {uploadEnabled && (
               <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-neutral-950 border border-neutral-800" role="tablist">
                 {([
                   ['youtube', 'YouTube link', LinkIcon],
@@ -453,6 +458,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                   </button>
                 ))}
               </div>
+              )}
 
               {/* Video source section */}
               <div className="space-y-3">
@@ -773,6 +779,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     />
                   </label>
 
+                  {cutawaysEnabled && (
                   <label className="flex items-center justify-between p-3 rounded-xl bg-neutral-950 border border-neutral-800 cursor-pointer hover:border-neutral-700">
                     <div className="flex items-center gap-2.5">
                       <Film className="w-4 h-4 text-rose-400" />
@@ -788,6 +795,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       className="w-4 h-4 rounded accent-amber-400"
                     />
                   </label>
+                  )}
 
                   <label className="flex items-center justify-between p-3 rounded-xl bg-neutral-950 border border-neutral-800 cursor-pointer hover:border-neutral-700">
                     <div className="flex items-center gap-2.5">

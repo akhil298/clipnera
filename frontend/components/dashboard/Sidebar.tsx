@@ -89,12 +89,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badge: projects.length ? `${projects.length}` : undefined,
       description: 'Organized video folders & YouTube ingests',
     },
-    {
-      id: 'reels' as TabType,
-      label: 'Reels from Images',
-      icon: Clapperboard,
-      description: 'Your photos + script into a full reel',
-    },
+    // Shown while an admin has Reels from Images switched on.
+    ...(flags['broll_studio.reels']
+      ? [
+          {
+            id: 'reels' as TabType,
+            label: 'Reels from Images',
+            icon: Clapperboard,
+            description: 'Your photos + script into a full reel',
+          },
+        ]
+      : []),
     {
       id: 'generator' as TabType,
       label: 'AI Viral Clips',

@@ -22,8 +22,11 @@ from broll.schema import (
 from broll.service import BrollService, ClipBrollService
 from core.database import get_db
 from core.responses import ApiResponse, ok
+from feature_flags.dependencies import require_flag
+from feature_flags.registry import BROLL_CUTAWAYS
 
-broll = APIRouter(prefix="/broll", tags=["broll"])
+# The admin library stays open while the feature is off, so it can be filled first.
+broll = APIRouter(prefix="/broll", tags=["broll"], dependencies=[Depends(require_flag(BROLL_CUTAWAYS))])
 admin_broll = APIRouter(prefix="/admin/broll", tags=["admin"], dependencies=[Depends(get_current_admin)])
 
 

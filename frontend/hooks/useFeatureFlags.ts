@@ -11,6 +11,11 @@ const ALL_OFF: Record<FeatureFlagKey, boolean> = {
   'social_publishing.tiktok': false,
   'social_publishing.instagram': false,
   'social_publishing.x': false,
+  video_upload: false,
+  broll_studio: false,
+  'broll_studio.cutaways': false,
+  'broll_studio.reels': false,
+  'broll_studio.ai_shots': false,
 };
 
 // One request per page load, shared by every component that asks.

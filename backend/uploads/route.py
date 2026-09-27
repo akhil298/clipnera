@@ -10,6 +10,8 @@ from auth.dependencies import CurrentUserDep
 from clip.repository import ClipRepository
 from core.database import get_db
 from core.responses import ApiResponse, ok
+from feature_flags.dependencies import require_flag
+from feature_flags.registry import VIDEO_UPLOAD
 from subscription.service import SubscriptionService
 from uploads.schema import (
     VideoUploadAbortRequest,
@@ -20,7 +22,7 @@ from uploads.schema import (
 )
 from uploads.service import VideoUploadService, prepare_uploaded_video
 
-uploads = APIRouter(prefix="/uploads", tags=["uploads"])
+uploads = APIRouter(prefix="/uploads", tags=["uploads"], dependencies=[Depends(require_flag(VIDEO_UPLOAD))])
 
 
 async def get_upload_service(session: Annotated[AsyncSession, Depends(get_db)]) -> VideoUploadService:

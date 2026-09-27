@@ -26,6 +26,8 @@ from core.config import get_settings
 from core.database import AsyncSessionLocal
 from core.exceptions import CustomException
 from core.logging_config import get_logger
+from feature_flags.registry import BROLL_AI_SHOTS
+from feature_flags.service import FeatureFlagService
 from jobs.queue import Job, get_queue
 from subscription.service import SubscriptionService
 from usage.recorder import record_llm_call
@@ -117,6 +119,7 @@ async def create_generated_asset(user_id: str, prompt: str, title: str) -> str:
 async def start_generation(session, user_id: str, shot: str, context: str, target: dict[str, Any]) -> None:
     """Check the plan, take the credits and queue a generation for ``target``."""
     settings = get_settings()
+    await FeatureFlagService(session).require(BROLL_AI_SHOTS)
     subscriptions = SubscriptionService.for_session(session)
     if not (await subscriptions.get_entitlements(user_id)).pro_ai_provider:
         raise CustomException(message="AI-generated scenes are a Pro feature.", code="PRO_REQUIRED", status_code=403)

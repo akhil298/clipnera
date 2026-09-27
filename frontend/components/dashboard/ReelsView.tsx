@@ -16,6 +16,7 @@ import {
   reelsApi,
 } from '@/lib/api';
 import { useEntitlements } from '@/hooks/useEntitlements';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 const LANGUAGES = [
   ['en', 'English'], ['hi', 'Hindi'], ['te', 'Telugu'], ['hinglish', 'Hinglish'], ['tenglish', 'Tenglish'],
@@ -103,8 +104,8 @@ function NewReelForm({ onCreated }: { onCreated: (id: string) => void }) {
   );
 }
 
-function SceneCard({ reel, scene, isPro, onChange, onGenerate }: {
-  reel: ReelResponse; scene: ReelScene; isPro: boolean; onChange: (u: ReelSceneUpdate) => void; onGenerate: () => void;
+function SceneCard({ reel, scene, isPro, aiShots, onChange, onGenerate }: {
+  reel: ReelResponse; scene: ReelScene; isPro: boolean; aiShots: boolean; onChange: (u: ReelSceneUpdate) => void; onGenerate: () => void;
 }) {
   const [headline, setHeadline] = useState(scene.headline || scene.text.split(' ').slice(0, 5).join(' '));
   const preview = scene.kind === 'image' ? scene.image_url : scene.kind === 'broll' ? scene.footage?.thumb_url : null;
@@ -154,11 +155,11 @@ function SceneCard({ reel, scene, isPro, onChange, onGenerate }: {
           <input value={headline} onChange={(e) => setHeadline(e.target.value)} maxLength={60} className={`${field} py-1 text-[11px]`} />
           <button type="button" onClick={() => onChange({ kind: 'text', headline })} className="px-2 rounded-lg border border-neutral-800 text-[10px] text-neutral-300 hover:text-white">Text</button>
         </div>
-        <button type="button" onClick={onGenerate} disabled={!isPro || scene.generating}
+        {aiShots && <button type="button" onClick={onGenerate} disabled={!isPro || scene.generating}
           title={isPro ? 'Generate a new shot for this scene with AI' : 'AI shots are a Pro feature'}
           className="w-full py-1 rounded-lg border border-violet-500/30 text-[10px] font-semibold text-violet-300 hover:bg-violet-500/10 disabled:opacity-40 flex items-center justify-center gap-1">
           <Sparkles className="w-3 h-3" /> AI shot · {AI_SHOT_CREDITS} credits{isPro ? '' : ' (Pro)'}
-        </button>
+        </button>}
       </div>
     </div>
   );
@@ -166,6 +167,7 @@ function SceneCard({ reel, scene, isPro, onChange, onGenerate }: {
 
 function ReelBoard({ reelId }: { reelId: string }) {
   const { entitlements } = useEntitlements();
+  const { flags } = useFeatureFlags();
   const [reel, setReel] = useState<ReelResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -229,6 +231,7 @@ function ReelBoard({ reelId }: { reelId: string }) {
           {reel.scenes.map((scene) => (
             <SceneCard key={`${scene.index}:${scene.kind}:${scene.image_index}:${scene.footage?.id}:${scene.headline}`} reel={reel} scene={scene}
               isPro={Boolean(entitlements?.pro_ai_provider)}
+              aiShots={flags['broll_studio.ai_shots']}
               onChange={(update) => act(() => reelsApi.updateScene(reel.id, scene.index, update))}
               onGenerate={() => act(() => reelsApi.generateScene(reel.id, scene.index))} />
           ))}

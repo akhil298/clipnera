@@ -1502,7 +1502,12 @@ export type FeatureFlagKey =
   | 'social_publishing.youtube'
   | 'social_publishing.tiktok'
   | 'social_publishing.instagram'
-  | 'social_publishing.x';
+  | 'social_publishing.x'
+  | 'video_upload'
+  | 'broll_studio'
+  | 'broll_studio.cutaways'
+  | 'broll_studio.reels'
+  | 'broll_studio.ai_shots';
 
 export interface FeatureFlagsResponse {
   flags: Record<FeatureFlagKey, boolean>;

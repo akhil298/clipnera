@@ -9,6 +9,8 @@ import reels.jobs  # noqa: F401 -- registers the plan and render job handlers
 from auth.dependencies import CurrentUserDep
 from core.database import get_db
 from core.responses import ApiResponse, ok
+from feature_flags.dependencies import require_flag
+from feature_flags.registry import BROLL_REELS
 from broll.schema import GenerateShotRequest
 from reels.schema import (
     ReelAssetsCompleteRequest,
@@ -21,7 +23,7 @@ from reels.schema import (
 )
 from reels.service import ReelService
 
-reels_router = APIRouter(prefix="/reels", tags=["reels"])
+reels_router = APIRouter(prefix="/reels", tags=["reels"], dependencies=[Depends(require_flag(BROLL_REELS))])
 
 
 async def get_reel_service(session: Annotated[AsyncSession, Depends(get_db)]) -> ReelService:

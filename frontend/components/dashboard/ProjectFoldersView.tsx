@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { VideoProject, ViralClip } from '@/lib/types';
 import { analyzeVideoSource } from '@/lib/utils/urlParser';
+import { exportAllProjectClips } from '@/lib/utils/clipExport';
 import { StatsSkeleton } from '@/components/skeletons';
 import confetti from 'canvas-confetti';
 import { Select, SelectOption } from '@/components/ui/Select';
@@ -76,6 +77,8 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
   const [isNewFolderModalOpen, setIsNewFolderModalOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [newFolderCategory, setNewFolderCategory] = useState<FolderCategory>('YouTube Ingest');
+  const [exportingProjectId, setExportingProjectId] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<{ projectId: string; message: string } | null>(null);
   const [newFolderColor, setNewFolderColor] = useState<'amber' | 'sky' | 'emerald' | 'rose' | 'purple' | 'indigo'>('amber');
 
   const handleCreateCustomFolder = (e: React.FormEvent) => {
@@ -112,6 +115,22 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
     setNewFolderName('');
     confetti({ particleCount: 70, spread: 50 });
     onOpenFolder(newProj);
+  };
+
+  const handleDownloadAll = async (project: VideoProject) => {
+    setExportError(null);
+    setExportingProjectId(project.id);
+    try {
+      await exportAllProjectClips(project);
+      confetti({ particleCount: 60, spread: 50 });
+    } catch (error) {
+      setExportError({
+        projectId: project.id,
+        message: error instanceof Error ? error.message : 'Export failed. Please try again.',
+      });
+    } finally {
+      setExportingProjectId(null);
+    }
   };
 
   const handleSaveRename = (projectId: string) => {
@@ -616,14 +635,17 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
 
                   <div className="ml-auto flex items-center gap-1.5 shrink-0">
                     <button
-                      onClick={() => {
-                        if (project.processingStatus === 'processing') return;
-                        confetti({ particleCount: 60, spread: 50 });
-                      }}
-                      className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors"
-                      title="Batch Export Videos in this Folder"
+                      onClick={() => handleDownloadAll(project)}
+                      disabled={project.processingStatus === 'processing' || exportingProjectId === project.id || project.clips.length === 0}
+                      className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-neutral-800 disabled:hover:text-neutral-300"
+                      title={exportingProjectId === project.id ? 'Preparing downloads…' : 'Download all videos in this folder'}
+                      aria-label="Download all videos in this folder"
                     >
-                      <Download className="w-3.5 h-3.5" />
+                      {exportingProjectId === project.id ? (
+                        <Sparkles className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" />
+                      )}
                     </button>
 
                     <button
@@ -662,6 +684,11 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
+                  {exportError?.projectId === project.id && (
+                    <p role="alert" className="basis-full text-[11px] text-rose-300">
+                      {exportError.message}
+                    </p>
+                  )}
                 </div>
               </div>
             );

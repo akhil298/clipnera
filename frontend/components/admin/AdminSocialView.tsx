@@ -2,22 +2,20 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  adminFeaturesApi,
   adminSocialApi,
-  type AdminFeatureFlagResponse,
   type AdminSocialAccountResponse,
   type AdminSocialOverviewResponse,
 } from '@/lib/api';
 import { formatDate } from '@/lib/utils/dates';
 import { PLATFORM_STYLE, formatAudience } from '@/components/social/platforms';
 import { AdminLayout } from './AdminLayout';
+import { FeatureSwitches } from './FeatureSwitches';
 
 const card = 'p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800';
 
 /** Feature switches, connection and publishing health, and force-disconnect.
  * Nothing here ever shows or returns platform tokens. */
 export function AdminSocialView() {
-  const [flags, setFlags] = useState<AdminFeatureFlagResponse[] | null>(null);
   const [overview, setOverview] = useState<AdminSocialOverviewResponse | null>(null);
   const [accounts, setAccounts] = useState<AdminSocialAccountResponse[]>([]);
   const [query, setQuery] = useState('');
@@ -32,21 +30,9 @@ export function AdminSocialView() {
   );
 
   useEffect(() => {
-    adminFeaturesApi.list().then((res) => setFlags(res.flags)).catch(fail);
     adminSocialApi.getOverview().then(setOverview).catch(fail);
     void loadAccounts('');
   }, [loadAccounts]);
-
-  const toggle = async (flag: AdminFeatureFlagResponse) => {
-    setBusy(flag.key);
-    try {
-      setFlags((await adminFeaturesApi.set(flag.key, !flag.enabled)).flags);
-    } catch (err) {
-      fail(err);
-    } finally {
-      setBusy(null);
-    }
-  };
 
   const forceDisconnect = async (account: AdminSocialAccountResponse) => {
     const name = account.handle || account.display_name || account.id;
@@ -74,33 +60,7 @@ export function AdminSocialView() {
 
       <section className={`${card} space-y-3`}>
         <h2 className="text-sm font-bold text-white">Feature switches</h2>
-        {!flags && <p className="text-xs text-neutral-400">Loading…</p>}
-        {flags?.map((flag) => (
-          <div key={flag.key} className={`flex items-center justify-between gap-4 ${flag.parent ? 'pl-6' : ''}`}>
-            <div>
-              <p className="text-xs font-bold text-white">{flag.label}</p>
-              <p className="text-[11px] text-neutral-400">{flag.description}</p>
-              {flag.enabled && !flag.effective && (
-                <p className="text-[11px] text-amber-300">On, but inactive while the main switch is off.</p>
-              )}
-            </div>
-            <button
-              role="switch"
-              aria-checked={flag.enabled}
-              onClick={() => toggle(flag)}
-              disabled={busy !== null}
-              className={`relative w-11 h-6 rounded-full transition-colors shrink-0 disabled:opacity-50 ${
-                flag.enabled ? 'bg-amber-500' : 'bg-neutral-700'
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${
-                  flag.enabled ? 'translate-x-5' : ''
-                }`}
-              />
-            </button>
-          </div>
-        ))}
+        <FeatureSwitches show={(key) => key.startsWith('social_publishing')} onError={setError} />
       </section>
 
       {overview && (
