@@ -27,7 +27,7 @@ async def seed_plans() -> None:
             Plan(
                 name="Free",
                 slug=PlanSlug.FREE,
-                credit_minutes=60,
+                credit_minutes=20,
                 price_monthly=0,
                 currency="USD",
                 is_active=True,
