@@ -6,27 +6,27 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from core.logging_config import get_logger
 
-log = get_logger(__name__)
-access_log = get_logger("uvicorn.access")
+log = get_logger("api")
 
 
 class APILogMiddleware(BaseHTTPMiddleware):
-    """Logs every API request with method, path, status, duration."""
+    """Logs one line per API request: method, path, status, duration, client IP.
+
+    CORS preflights (OPTIONS) are skipped — they double the volume and carry no signal.
+    """
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        log.info(f"[MIDDLEWARE] Request started: {request.method} {request.url.path}")
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
         start = time.monotonic()
-
         response = await call_next(request)
+        duration_ms = (time.monotonic() - start) * 1000
 
-        duration_ms = round((time.monotonic() - start) * 1000, 2)
-
-        client_ip = request.client.host if request.client else "unknown"
-        method = request.method
         path = request.url.path
-        status = response.status_code
+        if request.url.query:
+            path = f"{path}?{request.url.query}"
+        client_ip = request.client.host if request.client else "unknown"
 
-        log.info(f"[MIDDLEWARE] {client_ip} | {method} {path} -> {status} ({duration_ms}ms)")
-        access_log.info(f'{client_ip} - "{method} {path} HTTP/1.1" {status}')
-
+        log.info(f"{request.method} {path} {response.status_code} {duration_ms:.0f}ms {client_ip}")
         return response

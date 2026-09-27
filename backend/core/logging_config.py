@@ -80,6 +80,9 @@ def setup_logging() -> None:
         for handler in list(uvicorn_logger.handlers):
             uvicorn_logger.removeHandler(handler)
 
+    # APILogMiddleware already writes one line per request; uvicorn's access log would duplicate it.
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+
 
 def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
