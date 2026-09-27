@@ -62,6 +62,27 @@ WATERMARK_WIDTH_RATIO = 0.26
 WATERMARK_MARGIN_RATIO = 0.035
 
 
+# The server's static FFmpeg has no fontconfig, so libass sees only FONTS_DIR. A
+# family missing from it fell through to an arbitrary bundled face, often a
+# Noto Indic one without Latin letters, and English captions burned as boxes.
+BUNDLED_FAMILIES = frozenset({
+    "Anton", "Archivo Black", "Bangers", "Bebas Neue", "DM Serif Display", "Luckiest Guy",
+    "Permanent Marker", "DejaVu Sans", "DejaVu Sans Mono", "DejaVu Serif",
+})
+# Closest bundled face for common families that cannot ship (Impact is proprietary).
+FONT_SUBSTITUTES = {"Impact": "Anton", "Arial": "DejaVu Sans", "Helvetica": "DejaVu Sans", "Inter": "DejaVu Sans",
+                    "Georgia": "DejaVu Serif", "Times New Roman": "DejaVu Serif", "Courier New": "DejaVu Sans Mono"}
+DEFAULT_FAMILY = "DejaVu Sans"
+DEFAULT_FONT_FILE = "DejaVuSans-Bold.ttf"
+
+
+def bundled_family(family: str) -> str:
+    """``family`` if FONTS_DIR ships it, else its closest bundled substitute."""
+    if family in BUNDLED_FAMILIES:
+        return family
+    return FONT_SUBSTITUTES.get(family, DEFAULT_FAMILY)
+
+
 def script_font(text: str) -> tuple[str, str] | None:
     """(family, bundled file) for text in a non-Latin script; None keeps the style's face."""
     return SCRIPT_FONT_FILES.get(script_of(text))
@@ -333,8 +354,7 @@ class AssGenerator:
         breaks = sorted(segment_breaks or [])
         spoken = " ".join(str(w.get("text") or w.get("word") or "") for w in transcript_words)
         fallback = script_font(f"{spoken} {title or ''}")
-        if fallback:
-            template["font_family"] = fallback[0]
+        template["font_family"] = fallback[0] if fallback else bundled_family(template["font_family"])
 
         # Templates are authored against a 1080-wide vertical frame. Scaling by
         # height made the same template 1.78x larger on 9:16 (h=1920) than on

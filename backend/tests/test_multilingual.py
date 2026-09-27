@@ -190,6 +190,29 @@ class TestCaptionFonts:
             letter = chr(_SCRIPT_RANGES[script][0] + 0x15)
             assert bytes(font.getmask(letter)) != bytes(font.getmask("\U0010FFFD")), (script, filename)
 
+    def test_every_template_font_is_bundled(self):
+        from PIL import ImageFont
+
+        from subtitle_styling.ass_generator import BUNDLED_FAMILIES, FONTS_DIR, bundled_family
+        from subtitle_styling.templates import get_template, get_template_names
+
+        shipped = {ImageFont.truetype(str(path), 20).getname()[0] for path in FONTS_DIR.glob("*.ttf")}
+        assert BUNDLED_FAMILIES <= shipped
+        for name in get_template_names():
+            assert bundled_family(get_template(name)["font_family"]) in shipped, name
+
+    @pytest.mark.parametrize(("style", "family"), [("impact", "Anton"), ("mrbeast", "Anton"), ("default", "DejaVu Sans")])
+    def test_english_captions_use_a_bundled_latin_face(self, style, family):
+        from subtitle_styling.ass_generator import AssGenerator
+
+        ass = AssGenerator().build_ass([{"start": 0.0, "end": 1.0, "text": "hello"}], 0.0, 3.0, style_id=style, title="Watch this")
+        assert f"Style: Caption,{family}," in ass and f"Style: Title,{family}," in ass
+
+    def test_unknown_editor_font_falls_back_to_bundled(self):
+        from subtitle_styling.ass_generator import DEFAULT_FAMILY, bundled_family
+
+        assert bundled_family("Montserrat") == DEFAULT_FAMILY
+
     def test_every_detected_script_has_a_font(self):
         from subtitle_styling.ass_generator import SCRIPT_FONT_FILES
         from transcription.language import _SCRIPT_RANGES

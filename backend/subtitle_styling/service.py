@@ -17,7 +17,7 @@ from core.logging_config import get_logger
 from core.exceptions import CustomException
 from video_processor.ffmpeg_service import FFmpegService
 from subtitle_styling.ass_generator import (
-    CAPTION_ANIMATIONS, FONTS_DIR, AssGenerator, ass_filter, build_ass_file, burn_filter_args,
+    CAPTION_ANIMATIONS, DEFAULT_FONT_FILE, FONTS_DIR, AssGenerator, ass_filter, build_ass_file, bundled_family, burn_filter_args,
     escape_filter_value, script_font,
 )
 from subtitle_styling.templates import get_template, get_template_info, get_template_names
@@ -424,8 +424,7 @@ class SubtitleStylingService:
             config.update(custom_config)
         spoken = " ".join(str(sub.get("text") or "") for sub in subtitles or [])
         caption_font = script_font(f"{spoken} {title_text or ''}")
-        if caption_font:
-            config["font"] = caption_font[0]
+        config["font"] = caption_font[0] if caption_font else bundled_family(str(config.get("font") or ""))
 
         media = await self._media(video_path)
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -446,9 +445,9 @@ class SubtitleStylingService:
             if title_text:
                 safe_title = title_text.replace("'", r"\'").replace(":", r"\:")
                 title_font = script_font(title_text)
-                font_arg = f"fontfile={fonts_dir}/{title_font[1]}:" if title_font else ""
+                title_file = title_font[1] if title_font else DEFAULT_FONT_FILE
                 filters.append(
-                    f"drawtext={font_arg}text='{safe_title}':fontcolor=white:fontsize=36:"
+                    f"drawtext=fontfile={fonts_dir}/{title_file}:text='{safe_title}':fontcolor=white:fontsize=36:"
                     "box=1:boxcolor=black@0.5:boxborderw=8:x=(w-text_w)/2:y=20"
                 )
             return await self._encode(
