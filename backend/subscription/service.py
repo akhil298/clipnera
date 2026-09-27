@@ -11,6 +11,7 @@ from subscription.model import Plan, UserSubscription, PaymentTransaction, Credi
 from auth.repository import UserRepository
 from subscription.entitlements import (
     CREDIT_CYCLE_DAYS,
+    DEFAULT_OUTPUT_ASPECT_RATIO,
     PLAN_PRICES,
     PURCHASABLE_PLAN,
     Entitlements,
@@ -161,6 +162,18 @@ def permitted_aspect_ratios(entitlements: Entitlements, requested: list[str]) ->
             sorted(set(requested) - set(allowed_ratios)),
         )
     return allowed_ratios
+
+
+def resolve_output_aspect_ratios(entitlements: Entitlements, requested: list[str]) -> list[str]:
+    """The ratios a run renders and is charged for: 9:16 unless the plan lets
+    the caller choose, clamped to the plan.
+
+    Never empty, so the renderer never falls back to the content category and
+    renders shapes the plan does not cover.
+    """
+    if not requested or not entitlements.allows("custom_aspect_ratios"):
+        requested = [DEFAULT_OUTPUT_ASPECT_RATIO]
+    return permitted_aspect_ratios(entitlements, requested)
 
 
 @dataclass(frozen=True)

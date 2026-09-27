@@ -5,21 +5,8 @@ from clip_generation.schema import ClipEditorSettings
 from clip_generation.service import ClipService
 from core.responses import ApiResponse, ok
 from subtitle_styling.schema import SubtitleBurnRequest
-from subscription.dependencies import SubscriptionServiceDep
 
 clip_generation = APIRouter(prefix="/clips", tags=["clip-generation"])
-
-
-@clip_generation.post("/{project_id}/generate")
-async def generate_clips(
-    project_id: str, user: CurrentUserDep, subscription_service: SubscriptionServiceDep, data: dict | None = None
-):
-    return await ClipService().generate_clips_for_user(
-        project_id=project_id,
-        user_id=user["user_id"],
-        subscription_service=subscription_service,
-        output_aspect_ratios=(data or {}).get("output_aspect_ratios"),
-    )
 
 
 @clip_generation.get("/{project_id}")

@@ -76,8 +76,8 @@ class ClipService:
             original_url=url,
         )
 
-    @staticmethod
-    async def download_progress(project_id: str) -> dict:
+    async def download_progress(self, project_id: str, user_id: str) -> dict:
+        await self._owned_project(project_id, user_id)
         return await YouTubeService.get_progress(project_id) or dict(IDLE_DOWNLOAD_PROGRESS)
 
     async def list_projects_with_clips(self, user_id: str) -> dict:
@@ -176,7 +176,7 @@ class ClipService:
         }
 
 
-    async def delete_project(self, user_id: str, project_id: str) -> None:
+    async def _owned_project(self, project_id: str, user_id: str):
         project = await self._repo.get_project(project_id, user_id)
         if not project:
             raise CustomException(
@@ -184,6 +184,10 @@ class ClipService:
                 code="NOT_FOUND",
                 status_code=404,
             )
+        return project
+
+    async def delete_project(self, user_id: str, project_id: str) -> None:
+        project = await self._owned_project(project_id, user_id)
 
         if project.s3_bucket and project.s3_key:
             try:

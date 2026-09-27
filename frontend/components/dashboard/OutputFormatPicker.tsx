@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Coins, Crop, Sparkles } from 'lucide-react';
+import { Coins, Crop } from 'lucide-react';
 import type { AspectRatio } from '@/lib/types';
 import {
   canUseAspectRatio,
@@ -28,7 +28,7 @@ const OUTPUT_FORMATS: OutputFormat[] = [
 ];
 
 interface OutputFormatPickerProps {
-  /** Picked ratios; empty means the pipeline picks from the content category. */
+  /** Picked ratios, never empty; 9:16 is the default on every plan. */
   value: AspectRatio[];
   onChange: (ratios: AspectRatio[]) => void;
   /** Source length, for the cost estimate; null until the video's metadata loads. */
@@ -36,25 +36,26 @@ interface OutputFormatPickerProps {
 }
 
 /**
- * Which shapes each clip is rendered in. Choosing is a Pro feature; every plan
- * gets Auto. The server enforces the same rules and charges the cost shown.
+ * Which shapes each clip is rendered in. Every plan gets 9:16; choosing more is
+ * a Pro feature. The server enforces the same rules and charges the cost shown.
  */
 export function OutputFormatPicker({ value, onChange, durationSeconds }: OutputFormatPickerProps) {
   const { entitlements, promptUpgrade } = useEntitlements();
   const canChoose = canUseFeature(entitlements, 'custom_aspect_ratios');
-  const isAuto = value.length === 0;
 
   const toggle = (ratio: AspectRatio) => {
-    if (!canChoose || !canUseAspectRatio(entitlements, ratio)) {
+    if (!canUseAspectRatio(entitlements, ratio)) {
       promptUpgrade(`The ${ratio} format`);
       return;
     }
     const next = value.includes(ratio) ? value.filter((r) => r !== ratio) : [...value, ratio];
+    // At least one format is always rendered.
+    if (next.length === 0) return;
     // Keep the canonical order so the request and the cost line read the same way every time.
     onChange(OUTPUT_FORMATS.map((f) => f.ratio).filter((r) => next.includes(r)));
   };
 
-  const ratioCount = Math.max(1, value.length);
+  const ratioCount = value.length;
   const extraShare = Math.round(entitlements.extra_aspect_ratio_credit_share * 100);
 
   return (
@@ -67,30 +68,9 @@ export function OutputFormatPicker({ value, onChange, durationSeconds }: OutputF
         {!canChoose && <ProLockBadge feature="Choosing output formats" />}
       </div>
 
-      <button
-        type="button"
-        onClick={() => onChange([])}
-        aria-pressed={isAuto}
-        className={`w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all ${
-          isAuto
-            ? 'bg-neutral-800 border-amber-400 ring-1 ring-amber-400/30'
-            : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700'
-        }`}
-      >
-        <span className="flex items-center gap-2.5">
-          <Sparkles className="w-4 h-4 text-amber-400" />
-          <span>
-            <span className="text-xs font-bold text-white block">Auto</span>
-            <span className="text-[10px] text-neutral-400">
-              Formats that suit the video&apos;s content, at the base price
-            </span>
-          </span>
-        </span>
-      </button>
-
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" role="group" aria-label="Output formats">
         {OUTPUT_FORMATS.map((format) => {
-          const unlocked = canChoose && canUseAspectRatio(entitlements, format.ratio);
+          const unlocked = canUseAspectRatio(entitlements, format.ratio);
           const selected = value.includes(format.ratio);
           return (
             <button

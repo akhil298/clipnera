@@ -38,7 +38,7 @@ async def seed_plans() -> None:
                 slug=PlanSlug.PRO,
                 credit_minutes=600,
                 price_monthly=29,
-                price_inr=499,
+                price_inr=699,
                 currency="USD",
                 is_active=True,
                 features="300 AI Processing Minutes / mo, Prompt-to-Shorts Story AI Generator, Full Custom Brand Kits & Watermarks, Multi-Platform Auto Scheduler, 4K 60fps Ultra HD Export",

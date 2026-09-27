@@ -723,12 +723,8 @@ export const DEFAULT_PIPELINE_STEPS = [
   'clip_generation',
 ];
 /**
- * Shapes to render, when the user has picked some.
- *
- * Left undefined the backend decides from the video's content category -- a
- * gaming clip is cut 9:16 only, a tutorial 9:16 and 16:9. Sending all four
- * regardless, as this used to, quadrupled render time to produce files nothing
- * read. Only pass a list when the user actually chose one.
+ * Shapes to render. Left undefined the backend renders 9:16; a plan without
+ * custom_aspect_ratios always gets 9:16 whatever is sent.
  */
 /**
  * Opens a server-sent event stream (fetch rather than EventSource, which cannot
@@ -1033,7 +1029,7 @@ export interface PlanCapabilities {
   social_scheduling: boolean;
   social_max_schedule_days: number;
   social_posts_per_day: number;
-  /** Picking output ratios at upload; without it the content category decides. */
+  /** Picking output ratios at upload; without it every run renders 9:16. */
   custom_aspect_ratios: boolean;
   features: Record<PlanFeature, boolean>;
 }

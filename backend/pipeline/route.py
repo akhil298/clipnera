@@ -25,6 +25,7 @@ async def cancel_pipeline(project_id: str, user: CurrentUserDep):
 
 @pipeline.get("/progress/{project_id}")
 async def pipeline_progress(project_id: str, user: CurrentUserDep):
+    await _service.require_owned_project(project_id, user["user_id"])
     return StreamingResponse(_service.progress_events(project_id), media_type="text/event-stream")
 
 

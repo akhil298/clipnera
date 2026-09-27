@@ -42,9 +42,9 @@ async def download_youtube(data: YouTubeDownloadRequest, user: CurrentUserDep, s
 
 
 @clip.get("/progress/{project_id}")
-async def get_download_progress(project_id: str, user: CurrentUserDep):
+async def get_download_progress(project_id: str, user: CurrentUserDep, service: ClipServiceDep):
     """Get download progress for a specific project."""
-    return await ClipService.download_progress(project_id)
+    return await service.download_progress(project_id, user["user_id"])
 
 
 @clip.get("/projects")

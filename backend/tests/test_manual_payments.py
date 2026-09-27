@@ -186,7 +186,7 @@ def test_upi_uri_prefills_amount_in_inr():
 
 
 @pytest.mark.parametrize(
-    "period,amount", [(BillingPeriod.MONTHLY, 499.0), (BillingPeriod.YEARLY, 4990.0)]
+    "period,amount", [(BillingPeriod.MONTHLY, 699.0), (BillingPeriod.YEARLY, 6990.0)]
 )
 @pytest.mark.asyncio
 async def test_checkout_uses_the_server_price_for_the_period(period, amount):
@@ -231,7 +231,7 @@ async def test_submit_stores_private_screenshot_and_pending_record(storage):
     assert key.startswith("payment-screenshots/user-1/") and key.endswith(".png")
     assert "ACL" not in kwargs  # never public-read
     # Amount and currency come from the server's price list, not the client.
-    assert repo.created["amount"] == 4990.0
+    assert repo.created["amount"] == 6990.0
     assert repo.created["currency"] == "INR"
     assert repo.created["plan_type"] == BillingPeriod.YEARLY
     assert repo.created["utr_number"] == "123456789012"

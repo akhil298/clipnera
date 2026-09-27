@@ -53,8 +53,8 @@ class PlanPrice:
 # amounts are always taken from here on the server, never from the client.
 PURCHASABLE_PLAN = PlanSlug.PRO.value
 PLAN_PRICES: dict[BillingPeriod, PlanPrice] = {
-    BillingPeriod.MONTHLY: PlanPrice(amount_inr=499, days=30),
-    BillingPeriod.YEARLY: PlanPrice(amount_inr=4990, days=365),
+    BillingPeriod.MONTHLY: PlanPrice(amount_inr=699, days=30),
+    BillingPeriod.YEARLY: PlanPrice(amount_inr=6990, days=365),
 }
 
 # Caption templates available without a paid plan. The rest of the catalogue
@@ -141,6 +141,8 @@ class Entitlements:
 
 
 _ALL_ASPECT_RATIOS = ("9:16", "1:1", "4:5", "16:9")
+# What every run renders unless a plan with custom_aspect_ratios picks otherwise.
+DEFAULT_OUTPUT_ASPECT_RATIO = "9:16"
 
 # Two hours. Long enough for a full podcast, short enough that one upload cannot
 # monopolise the render queue.

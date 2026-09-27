@@ -54,8 +54,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const { flags } = useFeatureFlags();
   const uploadEnabled = flags.video_upload;
   const cutawaysEnabled = flags['broll_studio.cutaways'];
-  // Empty means Auto: the pipeline picks formats from the content category.
-  const [outputRatios, setOutputRatios] = useState<AspectRatio[]>([]);
+  // 9:16 on every plan; Pro can add more.
+  const [outputRatios, setOutputRatios] = useState<AspectRatio[]>(['9:16']);
 
   const [autoBroll, setAutoBroll] = useState(true);
   const [autoSfx, setAutoSfx] = useState(true);
@@ -758,7 +758,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     <span>Viral Style & Captions Setup</span>
                   </h3>
                   <span className="text-[11px] text-amber-400 font-medium">
-                    {outputRatios.length ? `Reframed ${outputRatios.join(' · ')}` : 'Auto-Reframed'}
+                    {`Reframed ${outputRatios.join(' · ')}`}
                   </span>
                 </div>
 

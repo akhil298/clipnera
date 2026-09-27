@@ -31,7 +31,6 @@ from clip_generation.schema import ClipEditorSettings
 from hook_transitions.schema import HookTransitionConfig
 from subtitle_styling.model import SubtitleStyle
 from subtitle_styling.schema import SubtitleBurnRequest
-from subscription.service import SubscriptionService, permitted_aspect_ratios
 from content_intelligence.service import ContentIntelligenceService
 from core.config import get_settings
 from core.database import AsyncSessionLocal
@@ -303,25 +302,6 @@ class ClipService:
             if not clip:
                 raise CustomException(message="Clip not found", code="NOT_FOUND", status_code=404)
             return self._serialize_clip(clip)
-
-    async def generate_clips_for_user(
-        self,
-        project_id: str,
-        user_id: str,
-        subscription_service: SubscriptionService,
-        output_aspect_ratios: str | list[str] | None = None,
-    ) -> dict:
-        """Generate clips in the requested ratios the caller's plan covers."""
-        if isinstance(output_aspect_ratios, str):
-            output_aspect_ratios = [item.strip() for item in output_aspect_ratios.split(",") if item.strip()]
-        if output_aspect_ratios:
-            entitlements = await subscription_service.get_entitlements(user_id)
-            output_aspect_ratios = permitted_aspect_ratios(entitlements, output_aspect_ratios)
-        return await self.generate_clips_for_project(
-            project_id=project_id,
-            user_id=user_id,
-            output_aspect_ratios=output_aspect_ratios,
-        )
 
     async def burn_clip_subtitles(self, clip_id: str, user_id: str, data: SubtitleBurnRequest) -> dict:
         """Burn captions onto a clip after clamping the request to the caller's plan."""

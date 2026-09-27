@@ -42,8 +42,8 @@ from subscription.entitlements import Entitlements
 from subscription.service import (
     SubscriptionService,
     aspect_ratio_not_entitled,
-    permitted_aspect_ratios,
     require_caption_style,
+    resolve_output_aspect_ratios,
     require_hook_transition,
 )
 from video_processor.geometry import SUPPORTED_ASPECT_RATIOS
@@ -1318,15 +1318,9 @@ def _apply_entitlements(
     downgraded user's existing presets keep working at their new tier instead of
     erroring; an outright unusable request (no permitted ratio) still raises.
     """
-    # An empty request means "decide from the content category later", which is
-    # not over-reach and must not 403; the renderer clamps its own choice to the
-    # plan. Only a request that named ratios, none of them permitted, is refused.
-    # Picking ratios is a Pro feature: a plan without it gets the category's
-    # choice, clamped rather than refused like every other over-reach here.
-    if output_aspect_ratios and not entitlements.allows("custom_aspect_ratios"):
-        log.info("Ignoring requested aspect ratios on plan %s: %s", entitlements.plan, output_aspect_ratios)
-        output_aspect_ratios = []
-    allowed_ratios = permitted_aspect_ratios(entitlements, output_aspect_ratios) if output_aspect_ratios else []
+    # Always a concrete list: an empty one would let the renderer pick shapes
+    # from the content category, outside both the plan and the credit charge.
+    allowed_ratios = resolve_output_aspect_ratios(entitlements, output_aspect_ratios)
 
     # A forced watermark cannot be switched off by the client.
     effective_watermark = True if entitlements.watermark_forced else watermark_enabled
@@ -1717,11 +1711,8 @@ class PipelineRunService:
                 status_code=403,
             )
 
-        # Auto (no ratios named) is priced as one ratio, as it always has been.
-        credit_cost = subscription_service.calculate_video_credit_cost(
-            duration_seconds, max(1, len(output_aspect_ratios))
-        )
-        ratios_note = f", ratios {', '.join(output_aspect_ratios)}" if output_aspect_ratios else ""
+        credit_cost = subscription_service.calculate_video_credit_cost(duration_seconds, len(output_aspect_ratios))
+        ratios_note = f", ratios {', '.join(output_aspect_ratios)}"
         try:
             await subscription_service.deduct_credits(
                 user_id=user_id,
@@ -1811,6 +1802,11 @@ class PipelineRunService:
             orchestrator.cancel()
         await _mark_cancelled(project_id)
         return {"project_id": project_id, "status": "cancelled"}
+
+    async def require_owned_project(self, project_id: str, user_id: str) -> None:
+        """404 unless the caller owns the project; checked before a stream opens."""
+        async with AsyncSessionLocal() as session:
+            await self._require_project(ClipRepository(session), project_id, user_id)
 
     @staticmethod
     async def progress_events(project_id: str) -> AsyncIterator[str]:

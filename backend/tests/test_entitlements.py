@@ -66,13 +66,19 @@ class TestEntitlementsTable:
 class TestPipelineEnforcement:
     """_apply_entitlements is the server-side gate behind the UI controls."""
 
-    @pytest.mark.parametrize("requested", [["9:16", "1:1", "4:5", "16:9"], ["16:9"], ["9:16"]])
-    def test_free_cannot_pick_ratios(self, requested):
-        """Picking ratios is Pro; a free request falls back to the automatic choice."""
+    @pytest.mark.parametrize("requested", [["9:16", "1:1", "4:5", "16:9"], ["16:9"], ["9:16"], []])
+    def test_free_always_renders_vertical(self, requested):
+        """Picking ratios is Pro; whatever a free request names, it renders 9:16 only."""
         free = entitlements_for(PlanSlug.FREE.value)
         assert free.allows("custom_aspect_ratios") is False
         ratios, _, _ = _apply_entitlements(free, requested, True, None)
-        assert ratios == []
+        assert ratios == ["9:16"]
+
+    def test_paid_request_without_ratios_renders_vertical(self):
+        """No ratios named never leaves the choice to the content category."""
+        pro = entitlements_for(PlanSlug.PRO.value)
+        ratios, _, _ = _apply_entitlements(pro, [], True, None)
+        assert ratios == ["9:16"]
 
     def test_paid_request_for_only_unsupported_plan_ratios_is_rejected(self):
         from dataclasses import replace
