@@ -3,10 +3,13 @@ set -Eeuo pipefail
 
 BACKEND_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd -- "${BACKEND_DIR}/.." && pwd)"
+GIT_BRANCH="${GIT_BRANCH:-clipnera}"
 
 cd "${REPO_DIR}"
-echo "Pulling latest backend code..."
-git pull --ff-only
+echo "Pulling latest backend code from ${GIT_BRANCH}..."
+git fetch origin "${GIT_BRANCH}"
+git checkout "${GIT_BRANCH}"
+git pull --ff-only origin "${GIT_BRANCH}"
 
 cd "${BACKEND_DIR}"
 

@@ -9,7 +9,7 @@
 # Env overrides: EC2_KEY, COOKIE_BROWSER, COOKIE_FILE (push this cookies.txt
 # as-is instead of exporting from the browser), FORCE_COOKIES=1 (replace the
 # cookies on EC2 even if they still work), COOKIE_MIN_DAYS (default 2),
-# YOUTUBE_URL.
+# YOUTUBE_URL, GIT_BRANCH (branch to deploy, default clipnera).
 set -Eeuo pipefail
 
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,6 +24,7 @@ COOKIE_MIN_DAYS="${COOKIE_MIN_DAYS:-2}"
 # has stayed up since 2005, so a failed check means cookies, not the video.
 YOUTUBE_URL="${YOUTUBE_URL:-https://www.youtube.com/watch?v=jNQXAC9IVRw}"
 EC2_KEY="${EC2_KEY:-${HOME}/Desktop/clipneras.pem}"
+GIT_BRANCH="${GIT_BRANCH:-clipnera}"
 LAST_TARGET_FILE="${HOME}/.config/clipnera/ec2_target"
 
 cleanup() {
@@ -202,12 +203,13 @@ fi
 # --- Server update ---------------------------------------------------------
 echo "[3/4] Updating code, validating YouTube access and restarting backend..."
 ssh -T "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" bash -s -- \
-    "${REMOTE_ROOT}" "${REMOTE_COOKIE}" "${YOUTUBE_URL}" <<'REMOTE_SCRIPT'
+    "${REMOTE_ROOT}" "${REMOTE_COOKIE}" "${YOUTUBE_URL}" "${GIT_BRANCH}" <<'REMOTE_SCRIPT'
 set -Eeuo pipefail
 
 REMOTE_ROOT="$1"
 REMOTE_COOKIE="$2"
 YOUTUBE_URL="$3"
+GIT_BRANCH="$4"
 BACKEND_DIR="${REMOTE_ROOT}/backend"
 VENV_DIR="${BACKEND_DIR}/venv"
 SERVICE=clipnera-backend
@@ -222,7 +224,9 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
     git stash push -m "update_ec2: server edits $(date -u +%FT%TZ)"
     echo "WARNING: server had local code edits; stashed them (see: git stash list)." >&2
 fi
-git pull --ff-only
+git fetch origin "${GIT_BRANCH}"
+git checkout "${GIT_BRANCH}"
+git pull --ff-only origin "${GIT_BRANCH}"
 cd "${BACKEND_DIR}"
 
 if [[ ! -x "${VENV_DIR}/bin/python" ]] || ! "${VENV_DIR}/bin/python" -c 'import yt_dlp' >/dev/null 2>&1; then
