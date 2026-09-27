@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -17,11 +18,13 @@ from core.security import decode_access_token
 
 async def get_auth_service(
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> AuthService:
-    """Dependency-injected AuthService factory."""
-    repository = UserRepository(session)
+) -> AsyncIterator[AuthService]:
+    """Dependency-injected AuthService factory; closes the OAuth HTTP client after the request."""
     oauth_service = OAuthService()
-    return AuthService(repository, oauth_service)
+    try:
+        yield AuthService(UserRepository(session), oauth_service)
+    finally:
+        await oauth_service.close()
 
 
 async def get_current_user(request: Request) -> dict:

@@ -13,6 +13,10 @@ const nextConfig = {
         source: '/dashboard/connect/:platform',
         headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
       },
+      {
+        source: '/login/google',
+        headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
+      },
     ];
   },
 };

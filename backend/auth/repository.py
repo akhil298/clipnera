@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select, desc
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.model import LoginEvent, User, UserAccount, AuthProvider
@@ -22,7 +22,13 @@ class UserRepository:
         self._session = session
 
     async def get_user_by_email(self, email: str) -> User | None:
-        stmt = select(User).where(User.email == email)
+        # Case-insensitive, so a Google sign-in finds an account registered as "Name@Gmail.com".
+        stmt = (
+            select(User)
+            .where(func.lower(User.email) == email.lower())
+            .order_by((User.email == email).desc())
+            .limit(1)
+        )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
 

@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
-import { AuthForm } from '@/components/auth/AuthForm';
+import { GoogleSignIn } from '@/components/auth/GoogleSignIn';
+import { isAuthenticated } from '@/lib/auth';
 import { Navbar } from './Navbar';
 import { HeroSection } from './HeroSection';
 import { BeforeAfterShowcase } from './BeforeAfterShowcase';
@@ -20,7 +21,7 @@ import { Footer } from './Footer';
 export default function LandingPageView() {
   const router = useRouter();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [heroUrl, setHeroUrl] = useState('https://www.youtube.com/watch?v=100m-leads-masterclass');
+  const [heroUrl, setHeroUrl] = useState('');
   const [previewCaptionPreset, setPreviewCaptionPreset] = useState<'hormozi' | 'mrbeast' | 'cyberpunk' | 'neon'>('hormozi');
 
   const faqs = [
@@ -42,13 +43,11 @@ export default function LandingPageView() {
     },
   ];
 
-  const handleAuthenticated = () => {
-    setIsAuthModalOpen(false);
-    router.replace('/dashboard');
+  // Signed-out visitors sign in first; the dashboard would only bounce them back here.
+  const handleLaunchStudio = () => {
+    if (isAuthenticated()) router.push('/dashboard');
+    else setIsAuthModalOpen(true);
   };
-
-  const handleLaunchStudio = () => router.push('/dashboard');
-  const handleLaunchApp = () => router.push('/dashboard');
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-['Plus_Jakarta_Sans',sans-serif]">
@@ -61,7 +60,7 @@ export default function LandingPageView() {
             >
               <X className="w-4 h-4" />
             </button>
-            <AuthForm onAuthenticated={handleAuthenticated} />
+            <GoogleSignIn />
           </div>
         </div>
       )}
@@ -104,7 +103,7 @@ export default function LandingPageView() {
 
       <BottomCta onLaunchStudio={handleLaunchStudio} />
 
-      <Footer onLaunchApp={handleLaunchApp} onOpenAuthModal={() => setIsAuthModalOpen(true)} />
+      <Footer onLaunchApp={handleLaunchStudio} onOpenAuthModal={() => setIsAuthModalOpen(true)} />
     </div>
   );
 }

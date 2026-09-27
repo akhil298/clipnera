@@ -118,14 +118,22 @@ class AuthService:
         email = oauth_user.get("email") or oauth_user.get("mail") or oauth_user.get("userPrincipalName")
         log.info(f"OAuth login: provider={provider} email={email}")
 
-        # Case 1: OAuth account exists → login
         account = await self._repo.get_account(provider_enum, provider_user_id)
+        user = account.user if account else await self._repo.get_user_by_email(email)
+        if user and not user.is_active:
+            log.warning(f"OAuth login failed: inactive account user_id={user.id}")
+            raise CustomException(
+                message="This account has been disabled",
+                code="ACCOUNT_DISABLED",
+                status_code=403,
+            )
+
+        # Case 1: OAuth account exists → login
         if account:
             log.info(f"OAuth login: existing account user_id={account.user_id}")
             return await self._start_session(account.user_id, provider_enum, client)
 
         # Case 2: User with same email exists → link OAuth
-        user = await self._repo.get_user_by_email(email)
         if user:
             await self._repo.link_oauth_account(
                 user_id=user.id,

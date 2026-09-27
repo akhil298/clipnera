@@ -44,6 +44,14 @@ export interface ResetPayload {
   new_password: string;
 }
 
+/** Matches the backend's OAuthProvider enum (auth/schema.py). */
+export type OAuthProvider = 'google' | 'microsoft';
+
+export interface OAuthLoginPayload {
+  code: string;
+  redirect_uri: string;
+}
+
 export interface TokenResponse {
   access_token: string;
   token_type: string;
@@ -524,6 +532,11 @@ async function authedRequest<T>(path: string, options?: RequestInit): Promise<T>
 export const authApi = {
   login: (payload: LoginPayload) =>
     request<TokenResponse>('/auth/login', payload).then((data) => {
+      setAuth(data.access_token, data.expires_in);
+      return data;
+    }),
+  oauthLogin: (provider: OAuthProvider, payload: OAuthLoginPayload) =>
+    request<TokenResponse>(`/auth/oauth/${provider}`, payload).then((data) => {
       setAuth(data.access_token, data.expires_in);
       return data;
     }),
