@@ -43,13 +43,19 @@ def spoken_hindi_misread_as_urdu(code: str) -> bool:
 
 _SCRIPT_RANGES = {
     "devanagari": (0x0900, 0x097F),
+    "bengali": (0x0980, 0x09FF),
+    "gurmukhi": (0x0A00, 0x0A7F),
+    "gujarati": (0x0A80, 0x0AFF),
+    "tamil": (0x0B80, 0x0BFF),
     "telugu": (0x0C00, 0x0C7F),
+    "kannada": (0x0C80, 0x0CFF),
+    "malayalam": (0x0D00, 0x0D7F),
     "arabic": (0x0600, 0x06FF),
 }
 
 
 def script_of(text: str) -> str:
-    """The dominant writing system of ``text``: latin, devanagari, telugu, arabic or other."""
+    """The dominant writing system of ``text``: latin, a ``_SCRIPT_RANGES`` name, or other."""
     counts: dict[str, int] = {}
     for char in text:
         if not char.isalpha() and not unicodedata.category(char).startswith("M"):

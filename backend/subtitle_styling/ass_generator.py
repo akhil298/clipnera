@@ -42,8 +42,19 @@ CAPTION_WIDTH_MARGIN = 1.15
 FONTS_DIR = Path(__file__).resolve().parent.parent / "static" / "fonts"
 WATERMARK_PATH = Path(__file__).resolve().parent.parent / "static" / "watermark.png"
 # Display faces carry Latin glyphs only; captions in these scripts switch to a
-# bundled Noto face instead of rendering as empty boxes.
-SCRIPT_FONTS = {"telugu": "Noto Sans Telugu", "devanagari": "Noto Sans Devanagari"}
+# bundled Noto face instead of rendering as empty boxes. Covers every script the
+# transcriber can emit (see transcription.language._LANGUAGE_CODES).
+SCRIPT_FONT_FILES = {
+    "devanagari": ("Noto Sans Devanagari", "NotoSansDevanagari-Bold.ttf"),
+    "telugu": ("Noto Sans Telugu", "NotoSansTelugu-Bold.ttf"),
+    "tamil": ("Noto Sans Tamil", "NotoSansTamil-Bold.ttf"),
+    "kannada": ("Noto Sans Kannada", "NotoSansKannada-Bold.ttf"),
+    "malayalam": ("Noto Sans Malayalam", "NotoSansMalayalam-Bold.ttf"),
+    "bengali": ("Noto Sans Bengali", "NotoSansBengali-Bold.ttf"),
+    "gujarati": ("Noto Sans Gujarati", "NotoSansGujarati-Bold.ttf"),
+    "gurmukhi": ("Noto Sans Gurmukhi", "NotoSansGurmukhi-Bold.ttf"),
+    "arabic": ("Noto Naskh Arabic", "NotoNaskhArabic-Bold.ttf"),
+}
 # Watermark width and corner inset as fractions of the frame's shorter side, so
 # it reads the same on every export size. A fixed 300px mark was easy to miss
 # on a 1080px-wide reel.
@@ -51,14 +62,19 @@ WATERMARK_WIDTH_RATIO = 0.26
 WATERMARK_MARGIN_RATIO = 0.035
 
 
-def _escape_filter_value(value: str) -> str:
+def script_font(text: str) -> tuple[str, str] | None:
+    """(family, bundled file) for text in a non-Latin script; None keeps the style's face."""
+    return SCRIPT_FONT_FILES.get(script_of(text))
+
+
+def escape_filter_value(value: str) -> str:
     return value.replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
 
 
 def ass_filter(ass_path: str) -> str:
     """FFmpeg ``ass`` filter for a file in the working directory, with the
     bundled fonts available to libass."""
-    return f"ass={_escape_filter_value(Path(ass_path).name)}:fontsdir={_escape_filter_value(str(FONTS_DIR))}"
+    return f"ass={escape_filter_value(Path(ass_path).name)}:fontsdir={escape_filter_value(str(FONTS_DIR))}"
 
 
 def burn_filter_args(
@@ -316,9 +332,9 @@ class AssGenerator:
         template = {**get_template(style_id), **(style_overrides or {})}
         breaks = sorted(segment_breaks or [])
         spoken = " ".join(str(w.get("text") or w.get("word") or "") for w in transcript_words)
-        script = script_of(f"{spoken} {title or ''}")
-        if script in SCRIPT_FONTS:
-            template["font_family"] = SCRIPT_FONTS[script]
+        fallback = script_font(f"{spoken} {title or ''}")
+        if fallback:
+            template["font_family"] = fallback[0]
 
         # Templates are authored against a 1080-wide vertical frame. Scaling by
         # height made the same template 1.78x larger on 9:16 (h=1920) than on

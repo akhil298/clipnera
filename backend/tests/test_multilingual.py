@@ -28,7 +28,8 @@ class TestLanguage:
 
     @pytest.mark.parametrize(("text", "script"), [
         ("hello world", "latin"), ("क्या हाल है", "devanagari"), ("ఎలా ఉన్నావు", "telugu"),
-        ("meeting లో ఉన్నాను", "telugu"), ("", "latin"),
+        ("meeting లో ఉన్నాను", "telugu"), ("", "latin"), ("வணக்கம்", "tamil"), ("ನಮಸ್ಕಾರ", "kannada"),
+        ("നമസ്കാരം", "malayalam"), ("নমস্কার", "bengali"), ("નમસ્તે", "gujarati"), ("ਸਤ ਸ੍ਰੀ", "gurmukhi"),
     ])
     def test_script(self, text, script):
         assert script_of(text) == script
@@ -160,19 +161,40 @@ class TestCaptionFonts:
         ass = AssGenerator().build_ass(words, 0.0, 3.0, width=1080, height=1920, title=title)
         return next(line for line in ass.splitlines() if line.startswith("Style: Caption,")).split(",")[1]
 
-    def test_telugu_and_hindi_captions_use_noto(self):
-        assert self._style_font([{"start": 0.0, "end": 1.0, "text": "నేను"}]) == "Noto Sans Telugu"
-        assert self._style_font([{"start": 0.0, "end": 1.0, "text": "नमस्ते"}]) == "Noto Sans Devanagari"
+    @pytest.mark.parametrize(("text", "font"), [
+        ("నేను", "Noto Sans Telugu"), ("नमस्ते", "Noto Sans Devanagari"), ("வணக்கம்", "Noto Sans Tamil"),
+        ("ನಮಸ್ಕಾರ", "Noto Sans Kannada"), ("നമസ്കാരം", "Noto Sans Malayalam"), ("নমস্কার", "Noto Sans Bengali"),
+        ("નમસ્તે", "Noto Sans Gujarati"), ("ਸਤ ਸ੍ਰੀ ਅਕਾਲ", "Noto Sans Gurmukhi"), ("السلام", "Noto Naskh Arabic"),
+    ])
+    def test_non_latin_captions_use_noto(self, text, font):
+        assert self._style_font([{"start": 0.0, "end": 1.0, "text": text}]) == font
+
+    def test_title_script_picks_the_font(self):
+        assert self._style_font([{"start": 0.0, "end": 1.0, "text": "வணக்கம்"}], title="வணக்கம் நண்பர்களே") == "Noto Sans Tamil"
 
     def test_roman_captions_keep_the_style_font(self):
         from subtitle_styling.templates import get_template
 
         assert self._style_font([{"start": 0.0, "end": 1.0, "text": "nenu"}]) == get_template("default")["font_family"]
 
-    def test_bundled_fonts_exist(self):
-        from subtitle_styling.ass_generator import FONTS_DIR
+    def test_bundled_fonts_exist_and_cover_their_script(self):
+        from PIL import ImageFont
 
-        assert (FONTS_DIR / "NotoSansTelugu-Bold.ttf").is_file() and (FONTS_DIR / "NotoSansDevanagari-Bold.ttf").is_file()
+        from subtitle_styling.ass_generator import FONTS_DIR, SCRIPT_FONT_FILES
+        from transcription.language import _SCRIPT_RANGES
+
+        for script, (_, filename) in SCRIPT_FONT_FILES.items():
+            font = ImageFont.truetype(str(FONTS_DIR / filename), 40)
+            # A letter from the block would draw the same box as an unmapped
+            # private-use codepoint if the font lacked it.
+            letter = chr(_SCRIPT_RANGES[script][0] + 0x15)
+            assert bytes(font.getmask(letter)) != bytes(font.getmask("\U0010FFFD")), (script, filename)
+
+    def test_every_detected_script_has_a_font(self):
+        from subtitle_styling.ass_generator import SCRIPT_FONT_FILES
+        from transcription.language import _SCRIPT_RANGES
+
+        assert set(_SCRIPT_RANGES) == set(SCRIPT_FONT_FILES)
 
 
 class TestCaptionScriptSetting:

@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from broll.renditions import run
 from core.logging_config import get_logger
-from subtitle_styling.ass_generator import FONTS_DIR, ass_filter, burn_filter_args
+from subtitle_styling.ass_generator import FONTS_DIR, ass_filter, burn_filter_args, script_font
 from transcription.language import script_of
 
 log = get_logger(__name__)
@@ -48,7 +48,6 @@ STYLES: dict[str, Style] = {
     "neon": Style("#0A0F2C", "#39F3FF", "#FF3CAC", "BebasNeue-Regular.ttf"),
     "warm": Style("#2B1B12", "#FFE9D2", "#FF9F43", "ArchivoBlack-Regular.ttf"),
 }
-_SCRIPT_FONT_FILES = {"telugu": "NotoSansTelugu-Bold.ttf", "devanagari": "NotoSansDevanagari-Bold.ttf"}
 
 
 def style_for(name: str) -> Style:
@@ -56,8 +55,8 @@ def style_for(name: str) -> Style:
 
 
 def _font(text: str, style: Style, size: int) -> ImageFont.FreeTypeFont:
-    script = script_of(text)
-    return ImageFont.truetype(str(FONTS_DIR / _SCRIPT_FONT_FILES.get(script, style.font_file)), size)
+    fallback = script_font(text)
+    return ImageFont.truetype(str(FONTS_DIR / (fallback[1] if fallback else style.font_file)), size)
 
 
 def text_card(headline: str, style: Style, out: Path) -> Path:

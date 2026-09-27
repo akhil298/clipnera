@@ -16,7 +16,10 @@ from core.database import AsyncSessionLocal
 from core.logging_config import get_logger
 from core.exceptions import CustomException
 from video_processor.ffmpeg_service import FFmpegService
-from subtitle_styling.ass_generator import CAPTION_ANIMATIONS, AssGenerator, ass_filter, build_ass_file, burn_filter_args
+from subtitle_styling.ass_generator import (
+    CAPTION_ANIMATIONS, FONTS_DIR, AssGenerator, ass_filter, build_ass_file, burn_filter_args,
+    escape_filter_value, script_font,
+)
 from subtitle_styling.templates import get_template, get_template_info, get_template_names
 from subtitle_styling.phrase_segmenter import segment_phrases, segment_for_captions
 from subtitle_styling.schema import SubtitleBurnRequest
@@ -419,6 +422,10 @@ class SubtitleStylingService:
         config = self._srt_config_from_template(style_type)
         if custom_config:
             config.update(custom_config)
+        spoken = " ".join(str(sub.get("text") or "") for sub in subtitles or [])
+        caption_font = script_font(f"{spoken} {title_text or ''}")
+        if caption_font:
+            config["font"] = caption_font[0]
 
         media = await self._media(video_path)
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -434,11 +441,14 @@ class SubtitleStylingService:
             srt_path = self._generate_srt(subtitles, clip_start, output_dir=tmpdir)
             escaped_srt = os.path.basename(srt_path).replace(":", r"\:").replace("'", r"\'")
 
-            filters = [f"subtitles={escaped_srt}:force_style='{filter_str}'"]
+            fonts_dir = escape_filter_value(str(FONTS_DIR))
+            filters = [f"subtitles={escaped_srt}:fontsdir={fonts_dir}:force_style='{filter_str}'"]
             if title_text:
                 safe_title = title_text.replace("'", r"\'").replace(":", r"\:")
+                title_font = script_font(title_text)
+                font_arg = f"fontfile={fonts_dir}/{title_font[1]}:" if title_font else ""
                 filters.append(
-                    f"drawtext=text='{safe_title}':fontcolor=white:fontsize=36:"
+                    f"drawtext={font_arg}text='{safe_title}':fontcolor=white:fontsize=36:"
                     "box=1:boxcolor=black@0.5:boxborderw=8:x=(w-text_w)/2:y=20"
                 )
             return await self._encode(
