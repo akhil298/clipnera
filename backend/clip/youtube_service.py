@@ -13,6 +13,7 @@ from clients.services.s3 import S3
 from clip.source_video import DOWNLOAD_DIR
 from clip.youtube_url import extract_youtube_video_id
 from core.config import get_settings
+from core.exceptions import CustomException
 from core.logging_config import get_logger
 
 settings = get_settings()
@@ -222,7 +223,7 @@ class YouTubeService:
         return options
 
     async def fetch_metadata(self, url: str) -> PrefetchResult | None:
-        """Extract metadata and quality options from a URL without downloading. Raises ValueError on failure."""
+        """Extract metadata and quality options from a URL without downloading. None when the video can't be read; raises YOUTUBE_BLOCKED when YouTube rejects the server as a bot."""
         try:
             import yt_dlp
         except ImportError:
@@ -239,6 +240,12 @@ class YouTubeService:
             info = await loop.run_in_executor(None, _extract)
         except Exception as e:
             log.error(f"Failed to fetch metadata: {type(e).__name__}: {e}")
+            if "confirm you" in str(e) and "not a bot" in str(e):
+                raise CustomException(
+                    message="YouTube is temporarily blocking our server. Please try again later.",
+                    code="YOUTUBE_BLOCKED",
+                    status_code=503,
+                ) from e
             return None
 
         if not info:

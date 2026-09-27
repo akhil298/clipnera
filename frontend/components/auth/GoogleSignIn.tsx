@@ -22,12 +22,13 @@ function GoogleLogo() {
 export function GoogleSignIn({ mode = 'login' }: GoogleSignInProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [acceptTerms, setAcceptTerms] = useState(false);
 
   const handleClick = () => {
     setError(null);
     setLoading(true);
     try {
-      startGoogleSignIn();
+      startGoogleSignIn(acceptTerms);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not start Google sign-in.');
       setLoading(false);
@@ -45,10 +46,24 @@ export function GoogleSignIn({ mode = 'login' }: GoogleSignInProps) {
         </p>
       </div>
 
+      <label className="mb-4 flex items-start gap-2.5 text-[11px] text-neutral-300 leading-relaxed cursor-pointer">
+        <input
+          type="checkbox"
+          checked={acceptTerms}
+          onChange={(e) => setAcceptTerms(e.target.checked)}
+          className="mt-0.5 w-4 h-4 shrink-0 accent-amber-500"
+        />
+        <span>
+          I am 18 or older and I agree to the{' '}
+          <a href="/terms" target="_blank" className="text-amber-300 underline underline-offset-2">Terms of Service</a> and{' '}
+          <a href="/privacy" target="_blank" className="text-amber-300 underline underline-offset-2">Privacy Policy</a>.
+        </span>
+      </label>
+
       <button
         type="button"
         onClick={handleClick}
-        disabled={loading}
+        disabled={loading || !acceptTerms}
         className="w-full py-2.5 rounded-xl bg-white hover:bg-neutral-100 text-neutral-900 font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2.5 text-xs shadow-md"
       >
         {loading ? (
@@ -62,17 +77,11 @@ export function GoogleSignIn({ mode = 'login' }: GoogleSignInProps) {
       </button>
 
       {error && (
-        <div className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
-          <AlertCircle size={14} />
+        <div role="alert" className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+          <AlertCircle size={14} aria-hidden="true" />
           {error}
         </div>
       )}
-
-      <p className="mt-5 text-center text-[11px] text-neutral-500">
-        By continuing you agree to our{' '}
-        <a href="/terms" className="text-neutral-400 hover:text-neutral-200 underline">Terms</a> and{' '}
-        <a href="/privacy" className="text-neutral-400 hover:text-neutral-200 underline">Privacy Policy</a>.
-      </p>
     </div>
   );
 }

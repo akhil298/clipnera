@@ -13,10 +13,10 @@ export function CaptionTypographyShowcase() {
             Caption Typography & Animation
           </span>
           <h2 className="text-2xl sm:text-4xl font-extrabold text-white font-['Syne',sans-serif]">
-            7 viral caption presets. One click.
+            {styles.length} caption presets. One click.
           </h2>
-          <p className="text-xs sm:text-sm text-neutral-400">
-            Choose from proven viral typography styles. Each preset is tuned for maximum watchtime, retention, and scroll-stopping power.
+          <p className="text-xs sm:text-sm text-neutral-300">
+            Choose from bold, animated caption styles designed to be easy to read on a phone.
           </p>
         </div>
 
@@ -30,12 +30,12 @@ export function CaptionTypographyShowcase() {
                 <h3 className="text-sm font-black text-white font-['Syne',sans-serif] tracking-tight group-hover:text-amber-300 transition-colors">
                   {style.brandName}
                 </h3>
-                <p className="text-[11px] text-neutral-500 font-medium">
+                <p className="text-[11px] text-neutral-400 font-medium">
                   {style.name}
                 </p>
               </div>
 
-              <p className="text-[11px] text-neutral-400 leading-relaxed">
+              <p className="text-[11px] text-neutral-300 leading-relaxed">
                 {style.description}
               </p>
 
@@ -43,7 +43,7 @@ export function CaptionTypographyShowcase() {
                 <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 font-bold">
                   {style.badge}
                 </span>
-                <span className="text-[10px] text-neutral-500 font-mono capitalize">
+                <span className="text-[10px] text-neutral-400 font-mono capitalize">
                   {style.config.animation}
                 </span>
               </div>

@@ -145,9 +145,6 @@ class BaseConfig(BaseSettings):
     PAYMENT_SUBMISSIONS_PER_HOUR: int = 5
 
     EMAIL_SENDER: str = "no-reply@clipnera.com"
-    TWILIO_ACCOUNT_SID: str = ""
-    TWILIO_AUTH_TOKEN: str = ""
-    TWILIO_PHONE_NUMBER: str = ""
 
     TRANSCRIPTION_OUTPUT_DIR: str = "./transcription_outputs"
     HF_TOKEN: str = ""

@@ -4,7 +4,7 @@ import enum
 from datetime import date, datetime
 from uuid import uuid4
 
-from sqlalchemy import String, Boolean, Date, ForeignKey, Enum, DateTime, Index, Text, false as sa_false
+from sqlalchemy import String, Boolean, Date, ForeignKey, Enum, DateTime, Index, Text, false as sa_false, true as sa_true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.database import Base
@@ -41,6 +41,13 @@ class User(Base):
     # which features moved to Pro. Cleared when the notice is dismissed.
     plan_notice_pending: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=sa_false(), nullable=False
+    )
+    # When the user confirmed they are 18+ and accepted the Terms and Privacy
+    # Policy. Null for accounts created before sign-up asked.
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Account emails (failed posts, reconnect reminders). Off after unsubscribing.
+    email_notifications: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=sa_true(), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

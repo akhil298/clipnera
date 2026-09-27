@@ -11,6 +11,11 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Lighter than Tailwind's #737373 so secondary text meets WCAG AA
+        // (4.5:1) on the app's neutral-800/900/950 backgrounds.
+        neutral: {
+          500: "#8c8c8c",
+        },
         border: "hsl(var(--border))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",

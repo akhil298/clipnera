@@ -49,7 +49,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Default",
     brandName: "DEFAULT",
     description: "Punchy word-by-word captions with a pop highlight and emojis",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "default",
       fontSize: 32,
@@ -75,7 +75,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Hormozi",
     brandName: "HORMOZI",
     description: "Bold green highlight with a pill behind the active word",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "hormozi",
       fontSize: 38,
@@ -101,7 +101,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "MrBeast",
     brandName: "MRBEAST",
     description: "Large yellow text with red pop highlights and emojis",
-    badge: "High CTR",
+    badge: "Large",
     config: {
       preset: "mrbeast",
       fontSize: 42,
@@ -127,7 +127,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "TikTok",
     brandName: "TIKTOK",
     description: "TikTok-style with pink pop highlights",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "tiktok",
       fontSize: 34,
@@ -153,7 +153,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Impact",
     brandName: "IMPACT",
     description: "Oversized all-caps words for maximum stopping power",
-    badge: "High CTR",
+    badge: "Large",
     config: {
       preset: "impact",
       fontSize: 48,
@@ -179,7 +179,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Comic Pop",
     brandName: "COMIC POP",
     description: "Playful punchy words with a bright outline",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "comic",
       fontSize: 36,
@@ -257,7 +257,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Sunset",
     brandName: "SUNSET",
     description: "Warm orange and pink tones with a soft shadow",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "sunset",
       fontSize: 34,
@@ -283,7 +283,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Pastel",
     brandName: "PASTEL",
     description: "Soft, low-contrast palette for calm content",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "pastel",
       fontSize: 30,
@@ -309,7 +309,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Luxury",
     brandName: "LUXURY",
     description: "Gold serif lettering for premium brand content",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "luxury",
       fontSize: 32,
@@ -335,7 +335,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Clean Dark",
     brandName: "CLEAN DARK",
     description: "Animated white captions on a soft dark plate; the spoken word lights up",
-    badge: "High CTR",
+    badge: "Large",
     config: {
       preset: "clean_dark",
       fontSize: 42,
@@ -439,7 +439,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Documentary",
     brandName: "DOCUMENTARY",
     description: "Understated serif subtitles that stay out of the way",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "documentary",
       fontSize: 26,
@@ -465,7 +465,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Bold Captions",
     brandName: "BOLD CAPTIONS",
     description: "Heavy white text with a thick outline, readable anywhere",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "bold_captions",
       fontSize: 34,
@@ -491,7 +491,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Karaoke Yellow",
     brandName: "KARAOKE YELLOW",
     description: "Classic yellow fill that follows the vocal line",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "karaoke_yellow",
       fontSize: 32,
@@ -517,7 +517,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Typewriter",
     brandName: "TYPEWRITER",
     description: "Monospaced text for tech and tutorial content",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "typewriter",
       fontSize: 24,
@@ -595,7 +595,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Bold Pop",
     brandName: "BOLD POP",
     description: "Condensed Anton caps with a red box snapping to each word",
-    badge: "High CTR",
+    badge: "Large",
     config: {
       preset: "bold_pop",
       fontSize: 40,
@@ -621,7 +621,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Headline",
     brandName: "HEADLINE",
     description: "Tall Bebas Neue lettering with a cyan karaoke sweep",
-    badge: "High CTR",
+    badge: "Large",
     config: {
       preset: "headline",
       fontSize: 46,
@@ -647,7 +647,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Comic Book",
     brandName: "COMIC BOOK",
     description: "Bangers comic lettering in yellow with red pops",
-    badge: "High CTR",
+    badge: "Large",
     config: {
       preset: "comic_book",
       fontSize: 42,
@@ -673,7 +673,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Marker",
     brandName: "MARKER",
     description: "Hand-drawn Permanent Marker for casual, vlog-style clips",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "marker",
       fontSize: 34,
@@ -699,7 +699,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Bubble",
     brandName: "BUBBLE",
     description: "Chunky rounded Luckiest Guy letters with a purple outline",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "bubble",
       fontSize: 38,
@@ -725,7 +725,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Clean Creator",
     brandName: "CLEAN CREATOR",
     description: "Heavy Archivo Black in sentence case with a green highlight",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "clean_creator",
       fontSize: 30,
@@ -751,7 +751,7 @@ export const captionStyles: Record<CaptionPreset, CaptionStyle> = {
     name: "Elegant",
     brandName: "ELEGANT",
     description: "High-contrast DM Serif Display with a soft gold fade",
-    badge: "Popular",
+    badge: "Bold",
     config: {
       preset: "elegant",
       fontSize: 36,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class UserProfileResponse(BaseModel):
@@ -27,3 +27,18 @@ class UserProfileResponse(BaseModel):
     providers: list[str] = []
     # Display only: admin pages are guarded server-side by the role in the database.
     role: Literal["user", "admin"] = "user"
+    # Account emails (failed posts, reconnect reminders); off after unsubscribing.
+    email_notifications: bool = True
+
+
+class EmailPreferencesRequest(BaseModel):
+    email_notifications: bool
+
+
+class UnsubscribeRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=512)
+
+
+class DeleteAccountRequest(BaseModel):
+    # The account's email, typed by the user to confirm a deletion that cannot be undone.
+    confirm_email: str = Field(min_length=3, max_length=255)

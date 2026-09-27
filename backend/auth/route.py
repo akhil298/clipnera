@@ -48,7 +48,9 @@ async def oauth_login(
     data: OAuthLoginRequest = ...,
     auth_service: AuthServiceDep = ...,
 ):
-    return await auth_service.oauth_login(provider.value, data.code, data.redirect_uri, _login_client(request))
+    return await auth_service.oauth_login(
+        provider.value, data.code, data.redirect_uri, _login_client(request), accept_terms=data.accept_terms
+    )
 
 
 @auth.post("/forgot-password", response_model=MessageResponse)

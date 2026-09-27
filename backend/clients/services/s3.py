@@ -94,6 +94,24 @@ class S3:
                 code="AWS_S3_ERROR",
             ) from e
 
+    def delete_prefix(self, bucket: str, prefix: str) -> int:
+        """Delete every object under ``prefix``; returns how many were deleted."""
+        if not prefix:
+            raise ValueError("Refusing to delete a whole bucket")
+        deleted = 0
+        try:
+            for page in self._client.get_paginator("list_objects_v2").paginate(Bucket=bucket, Prefix=prefix):
+                keys = [{"Key": obj["Key"]} for obj in page.get("Contents", [])]
+                if keys:
+                    self._client.delete_objects(Bucket=bucket, Delete={"Objects": keys, "Quiet": True})
+                    deleted += len(keys)
+        except ClientError as e:
+            raise CustomException(
+                message=e.response["Error"]["Message"],
+                code="AWS_S3_ERROR",
+            ) from e
+        return deleted
+
     def list_objects(self, bucket: str, prefix: str = "") -> list[dict]:
         try:
             kwargs = {"Bucket": bucket}

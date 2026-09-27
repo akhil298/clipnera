@@ -30,17 +30,20 @@ export function FaqSection({ faqs }: FaqSectionProps) {
             >
               <button
                 onClick={() => setOpenFaqIndex(openFaqIndex === index ? null : index)}
+                aria-expanded={openFaqIndex === index}
+                aria-controls={`faq-answer-${index}`}
                 className="w-full p-4 text-left flex items-center justify-between text-xs sm:text-sm font-bold text-white hover:text-amber-300 transition-colors"
               >
                 <span>{faq.q}</span>
                 <ChevronDown
+                  aria-hidden="true"
                   className={`w-4 h-4 text-neutral-400 transition-transform ${
                     openFaqIndex === index ? 'rotate-180 text-amber-400' : ''
                   }`}
                 />
               </button>
               {openFaqIndex === index && (
-                <div className="px-4 pb-4 text-xs text-neutral-300 leading-relaxed border-t border-neutral-800/50 pt-3">
+                <div id={`faq-answer-${index}`} className="px-4 pb-4 text-xs text-neutral-300 leading-relaxed border-t border-neutral-800/50 pt-3">
                   {faq.a}
                 </div>
               )}

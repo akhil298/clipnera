@@ -1,13 +1,11 @@
 from .s3 import S3
 from .email import EmailClient
-from .sms import SMSClient
 
 Registry = dict[str, type]
 
 _REGISTRY: Registry = {
     "s3": S3,
     "email": EmailClient,
-    "sms": SMSClient,
 }
 
 
@@ -22,6 +20,5 @@ def get_service(name: str):
 __all__ = [
     "S3",
     "EmailClient",
-    "SMSClient",
     "get_service",
 ]

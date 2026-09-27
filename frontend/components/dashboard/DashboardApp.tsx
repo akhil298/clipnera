@@ -43,6 +43,7 @@ const toUserProfile = (profile: UserProfileResponse, fallbackWorkspaceId: string
   activeWorkspaceId: profile.active_workspace_id || fallbackWorkspaceId,
   providers: profile.providers,
   role: profile.role,
+  emailNotifications: profile.email_notifications,
 });
 
 const getTabFromPathname = (pathname: string): TabType => {

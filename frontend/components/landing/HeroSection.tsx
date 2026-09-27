@@ -19,24 +19,24 @@ export function HeroSection({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="text-center max-w-3xl mx-auto space-y-5">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-semibold">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Gemini 3.7 Flash Video Intelligence • Studio Denoise & Prompt-to-Shorts</span>
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
+            <span>AI Clip Finder • Noise Reduction • Prompt-to-Shorts</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight font-['Syne',sans-serif] leading-[1.12]">
             Turn 1 Long Video or Prompt into{' '}
-            <span className="text-amber-400">10 Viral Shorts</span> in 60s
+            <span className="text-amber-400">Ready-to-Post Shorts</span>
           </h1>
 
           <p className="text-sm sm:text-base text-neutral-300 leading-relaxed font-normal max-w-2xl mx-auto">
-            Extract high-retention 9:16 clips automatically. Auto-reframes faces, eliminates background room noise, adds kinetic karaoke subtitles, and inserts smart B-roll cutaways.
+            Find the strongest moments and cut them into 9:16 clips automatically. Reframes around faces, reduces background noise, adds animated word-by-word subtitles, and inserts B-roll cutaways.
           </p>
 
           <div className="pt-3 max-w-2xl mx-auto">
             <div className="p-2 rounded-2xl bg-neutral-900/90 border border-neutral-800 shadow-xl space-y-3">
               <div className="p-1">
                 <div className="flex items-center gap-2 py-1.5 px-3 rounded-lg bg-neutral-800 text-amber-400 shadow text-xs font-bold">
-                  <Youtube className="w-3.5 h-3.5 text-red-400" />
+                  <Youtube className="w-3.5 h-3.5 text-red-400" aria-hidden="true" />
                   <span>YouTube Link</span>
                 </div>
               </div>
@@ -46,30 +46,31 @@ export function HeroSection({
                   type="url"
                   value={heroUrl}
                   onChange={(e) => setHeroUrl(e.target.value)}
-                  placeholder="Paste any YouTube video link..."
+                  aria-label="Link to your YouTube video"
+                  placeholder="Paste a link to your YouTube video..."
                   className="flex-1 px-4 py-2.5 rounded-xl bg-neutral-950 border border-neutral-700/80 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 transition-colors shadow-inner"
                 />
                 <button
                   onClick={onLaunchStudio}
                   className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/15 active:scale-95 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
                 >
-                  <Sparkles className="w-4 h-4" />
-                  <span>Extract Viral Clips</span>
+                  <Sparkles className="w-4 h-4" aria-hidden="true" />
+                  <span>Extract Clips</span>
                 </button>
               </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-1 text-[11px] text-neutral-400">
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-1 text-[11px] text-neutral-300">
                 <span className="flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>No Watermarks</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+                  <span>Free plan, no card needed</span>
                 </span>
                 <span className="flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>60 Free AI Minutes</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+                  <span>Free credits every 30 days</span>
                 </span>
                 <span className="flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Studio Noise Cancellation</span>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+                  <span>Background noise reduction</span>
                 </span>
               </div>
             </div>

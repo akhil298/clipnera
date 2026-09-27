@@ -577,7 +577,7 @@ export const ProjectFoldersView: React.FC<ProjectFoldersViewProps> = ({
                           />
                         ) : (
                           <div className="w-full h-full bg-neutral-800 flex items-center justify-center">
-                            <span className="text-neutral-600 text-xs">No preview</span>
+                            <span className="text-neutral-500 text-xs">No preview</span>
                           </div>
                         )}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />

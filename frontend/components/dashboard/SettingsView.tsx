@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { UserProfile, Workspace } from '@/lib/types';
 import { Avatar } from './Avatar';
+import { AccountPrivacyPanel } from './AccountPrivacyPanel';
 import { workspaceApi, type AssignableWorkspaceRole, type CreditPackResponse } from '@/lib/api';
 import { TableSkeleton } from '@/components/skeletons';
 import { PlanSelectionModal, type SelectedPlan } from './PlanSelectionModal';
@@ -251,6 +252,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
       )}
+      {activeSettingsTab === 'account' && <AccountPrivacyPanel user={user} onUpdateUser={onUpdateUser} />}
 
       {/* SETTINGS TAB 2: BILLING & AI CREDITS */}
       {activeSettingsTab === 'billing' && (

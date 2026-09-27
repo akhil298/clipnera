@@ -1,6 +1,25 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Script from "next/script";
+import { CookieNotice } from "@/components/legal/CookieNotice";
+// Fonts are self-hosted (SIL OFL 1.1 / Apache 2.0) so pages make no request to Google Fonts.
+import "@fontsource/plus-jakarta-sans/400.css";
+import "@fontsource/plus-jakarta-sans/500.css";
+import "@fontsource/plus-jakarta-sans/600.css";
+import "@fontsource/plus-jakarta-sans/700.css";
+import "@fontsource/plus-jakarta-sans/800.css";
+import "@fontsource/syne/700.css";
+import "@fontsource/syne/800.css";
+import "@fontsource/jetbrains-mono/500.css";
+import "@fontsource/jetbrains-mono/700.css";
+// Caption faces, mirroring the files bundled in backend/static/fonts for burn-in.
+import "@fontsource/anton/400.css";
+import "@fontsource/archivo-black/400.css";
+import "@fontsource/bangers/400.css";
+import "@fontsource/bebas-neue/400.css";
+import "@fontsource/dm-serif-display/400.css";
+import "@fontsource/luckiest-guy/400.css";
+import "@fontsource/permanent-marker/400.css";
 
 export const metadata: Metadata = {
   title: "Clipnera — AI Video Editing & Shorts Creator",
@@ -11,17 +30,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark" suppressHydrationWarning={true}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Syne:wght@700;800;900&family=JetBrains+Mono:wght@500;700&display=swap"
-          rel="stylesheet"
-        />
-        {/* Caption faces, mirroring the files bundled in backend/static/fonts for burn-in. */}
-        <link
-          href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=Bangers&family=Bebas+Neue&family=DM+Serif+Display&family=Luckiest+Guy&family=Permanent+Marker&display=swap"
-          rel="stylesheet"
-        />
         {/* React Grab (dev only): hover a component and press ⌘C to copy its source location and context. */}
         {process.env.NODE_ENV === "development" && (
           <Script
@@ -61,6 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="bg-neutral-950 text-neutral-100 font-['Plus_Jakarta_Sans',sans-serif] selection:bg-amber-400 selection:text-neutral-950 overflow-x-hidden antialiased" suppressHydrationWarning={true}>
         {children}
+        <CookieNotice />
       </body>
     </html>
   );

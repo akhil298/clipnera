@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { X } from 'lucide-react';
 import { GoogleSignIn } from '@/components/auth/GoogleSignIn';
@@ -27,21 +27,30 @@ export default function LandingPageView() {
   const faqs = [
     {
       q: 'How does the AI choose the most viral moments from long videos?',
-      a: 'Our Gemini 3.7 Flash engine analyzes transcript density, vocal inflection pitch, narrative curiosity loops, and visual movement to detect emotional climax beats. It calculates an algorithmic Virality Score (0-100) and extracts 30-60 second clips optimized for high watch retention.',
+      a: 'Clipnera transcribes your video, then AI reviews the transcript for strong hooks, emotional moments, useful takeaways and shareable lines. Each clip gets an estimated virality score out of 100. Scores help you choose; they do not predict views.',
     },
     {
-      q: 'What is the AI Background Noise Removal (Studio Denoise) feature?',
-      a: 'Studio Denoise uses neural speech isolation to strip away air conditioning hum, room reverb, microphone hiss, and background noise from recorded audio, outputting broadcast-grade podcast clarity without needing expensive studio microphones.',
+      q: 'What does background noise reduction do?',
+      a: 'It reduces steady background noise such as fan or air-conditioner hum, electrical hum and room echo, and evens out voice tone. It works best on constant noise; it cannot fully remove loud or overlapping sounds.',
     },
     {
       q: 'Can I customize font styles, colors, and auto-emojis for captions?',
-      a: 'Absolutely. Choose from proven presets like Hormozi, MrBeast, Cyberpunk, and Neon, or customize your own Brand Kit with custom colors, custom logo watermarks, uppercase text, line counts, and animated auto-emojis.',
+      a: 'Yes. Pick a caption preset, then adjust colors, uppercase text and line count, and turn automatic emojis on or off. Creating and editing brand kits with your own colors and logo is part of Pro.',
     },
     {
-      q: 'Which social platforms are supported for 1-click scheduling?',
-      a: 'You can directly export or schedule auto-posts to TikTok, YouTube Shorts, Instagram Reels, and X (Twitter), complete with AI-generated hashtags and hook optimization tags.',
+      q: 'Which social platforms can I publish to?',
+      a: 'You can download clips for any platform, or publish directly to TikTok, YouTube Shorts and Instagram Reels. Scheduling posts and publishing to X are part of Pro. Captions and hashtags are suggested by AI, and you can edit them before posting.',
     },
   ];
+
+  useEffect(() => {
+    if (!isAuthModalOpen) return;
+    const closeOnEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsAuthModalOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [isAuthModalOpen]);
 
   // Signed-out visitors sign in first; the dashboard would only bounce them back here.
   const handleLaunchStudio = () => {
@@ -51,14 +60,27 @@ export default function LandingPageView() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 font-['Plus_Jakarta_Sans',sans-serif]">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[70] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-amber-500 focus:text-neutral-950 focus:text-xs focus:font-bold"
+      >
+        Skip to content
+      </a>
       {isAuthModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Sign in to Clipnera"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+        >
           <div className="relative w-full max-w-md rounded-2xl bg-neutral-900/90 border border-neutral-800 p-6 shadow-xl">
             <button
               onClick={() => setIsAuthModalOpen(false)}
+              aria-label="Close"
+              autoFocus
               className="absolute top-5 right-5 p-1.5 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4" aria-hidden="true" />
             </button>
             <GoogleSignIn />
           </div>
@@ -67,6 +89,7 @@ export default function LandingPageView() {
 
       <Navbar onOpenAuthModal={() => setIsAuthModalOpen(true)} onLaunchStudio={handleLaunchStudio} />
 
+      <main id="main">
       <HeroSection
         heroUrl={heroUrl}
         setHeroUrl={setHeroUrl}
@@ -85,8 +108,8 @@ export default function LandingPageView() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
           <div className="text-center max-w-3xl mx-auto space-y-3">
             <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400 font-['Syne',sans-serif]">Complete Viral Production Suite</span>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-white font-['Syne',sans-serif]">Everything needed to 10x your short-form video reach</h2>
-            <p className="text-xs sm:text-sm text-neutral-400">No manual timeline scrubbing. No complex video editing software. Clipnera automates the entire end-to-end viral clipping workflow.</p>
+            <h2 className="text-2xl sm:text-4xl font-extrabold text-white font-['Syne',sans-serif]">Everything you need to turn long videos into shorts</h2>
+            <p className="text-xs sm:text-sm text-neutral-300">No manual timeline scrubbing. No complex video editing software. Clipnera handles clipping, captions and reframing, and you review the result.</p>
           </div>
           <FeaturesGrid />
           <CaptionTypographyShowcase />
@@ -102,6 +125,7 @@ export default function LandingPageView() {
       <FaqSection faqs={faqs} />
 
       <BottomCta onLaunchStudio={handleLaunchStudio} />
+      </main>
 
       <Footer onLaunchApp={handleLaunchStudio} onOpenAuthModal={() => setIsAuthModalOpen(true)} />
     </div>

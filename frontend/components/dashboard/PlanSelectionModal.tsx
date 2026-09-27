@@ -5,12 +5,11 @@ import { Check, Clock, Crown, Lock, X, Zap } from 'lucide-react';
 import {
   subscriptionApi,
   type BillingPeriod,
-  type PlanCapabilities,
   type PlanOfferResponse,
 } from '@/lib/api';
 import { isPaidPlan, useEntitlements } from '@/hooks/useEntitlements';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
-import { BILLING_PERIOD_LABELS, formatAmount } from '@/lib/utils/payments';
+import { BILLING_PERIOD_LABELS, comparisonRows, formatAmount } from '@/lib/utils/payments';
 import { ModalSkeleton } from '@/components/skeletons';
 
 /** The plan and billing period a user chose to pay for. */
@@ -30,41 +29,6 @@ interface PlanSelectionModalProps {
 }
 
 const PERIOD_SUFFIX: Record<BillingPeriod, string> = { monthly: '/month', yearly: '/year' };
-
-const limitLabel = (limit: number | null, noun: string) =>
-  limit === null ? `Unlimited ${noun}` : `${limit} ${noun} a day`;
-
-/** The comparison rows for a plan, all derived from the server's plan rules. */
-function comparisonRows(c: PlanCapabilities, social: boolean): { label: string; included: boolean }[] {
-  return [
-    { label: `${c.credit_minutes} credits every 30 days`, included: true },
-    { label: `Videos up to ${Math.round(c.max_upload_duration_seconds / 60)} min`, included: true },
-    { label: `${c.max_clips_per_video} clips per video`, included: true },
-    { label: `Formats: ${c.aspect_ratios.join(', ')}`, included: true },
-    { label: 'Choose output formats per video', included: c.custom_aspect_ratios },
-    {
-      label: c.caption_styles === null ? 'Every caption style' : `${c.caption_styles.length} caption styles`,
-      included: true,
-    },
-    { label: limitLabel(c.daily_limits.exports, 'exports'), included: true },
-    { label: limitLabel(c.daily_limits.audio_enhancements, 'audio enhancements'), included: true },
-    { label: 'No watermark', included: !c.watermark_forced },
-    { label: 'Pro AI models', included: c.pro_ai_provider },
-    { label: 'All hook transitions', included: c.all_hook_transitions },
-    { label: 'Create and edit brand kits', included: c.brand_kit_edit },
-    { label: 'Add team members', included: c.team_members },
-    { label: 'Depth captions', included: c.depth_captions },
-    { label: 'Batch processing', included: c.batch_processing },
-    ...(social
-      ? [
-          { label: `${c.social_max_accounts} connected social account${c.social_max_accounts === 1 ? '' : 's'}`, included: true },
-          { label: `${c.social_posts_per_day} social posts a day`, included: true },
-          { label: 'Schedule social posts', included: c.social_scheduling },
-          { label: 'Publish to X', included: c.social_platforms.includes('x') },
-        ]
-      : []),
-  ];
-}
 
 export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, upgradeReason }: PlanSelectionModalProps) {
   const { entitlements } = useEntitlements();
@@ -193,7 +157,7 @@ export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, upgradeRea
                           {comparisonRows(plan.capabilities, flags.social_publishing).map((row) => (
                             <li
                               key={row.label}
-                              className={`flex items-center gap-2 ${row.included ? 'text-neutral-300' : 'text-neutral-600'}`}
+                              className={`flex items-center gap-2 ${row.included ? 'text-neutral-300' : 'text-neutral-500'}`}
                             >
                               {row.included ? (
                                 <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />

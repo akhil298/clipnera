@@ -18,6 +18,8 @@ class RegisterRequest(BaseModel):
     username: Optional[str] = Field(None, min_length=3, max_length=100)
     password: str = Field(min_length=8, max_length=128)
     full_name: Optional[str] = Field(None, max_length=255)
+    # The user confirmed they are 18 or older and accept the Terms and Privacy Policy.
+    accept_terms: bool = False
 
     @field_validator("email")
     @classmethod
@@ -58,6 +60,9 @@ class ForgotPasswordRequest(BaseModel):
 class OAuthLoginRequest(BaseModel):
     code: str
     redirect_uri: str
+    # Required only when this sign-in creates the account: the user confirmed
+    # they are 18 or older and accept the Terms and Privacy Policy.
+    accept_terms: bool = False
 
 
 # ── Response Schemas ──

@@ -1894,7 +1894,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                             ? 'bg-neutral-800 border-violet-400 text-violet-300 ring-1 ring-violet-400/30'
                             : unlocked
                             ? 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-neutral-300'
-                            : 'bg-neutral-950/60 border-neutral-800/60 text-neutral-600 hover:border-amber-400/40'
+                            : 'bg-neutral-950/60 border-neutral-800/60 text-neutral-500 hover:border-amber-400/40'
                         }`}
                       >
                         <span className="flex items-center justify-center gap-1.5">

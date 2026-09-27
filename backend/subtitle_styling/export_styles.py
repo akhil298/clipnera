@@ -27,15 +27,16 @@ ANIMATIONS = {"karaoke", "pop", "fade", "none"}
 
 
 def _badge(template: dict) -> str:
+    """A label describing how the style looks; never a performance or popularity claim."""
     if template["glow"]:
         return "Neon"
     if template["font_size"] >= 40:
-        return "High CTR"
+        return "Large"
     if template["font_size"] <= 20:
         return "Compact"
     if template["background"]:
         return "Clean"
-    return "Popular"
+    return "Bold"
 
 
 def _ts(value: object) -> str:

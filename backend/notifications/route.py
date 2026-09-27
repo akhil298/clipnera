@@ -4,28 +4,11 @@ from fastapi.responses import StreamingResponse
 from auth.dependencies import CurrentUserDep
 from core.rate_limit import no_rate_limit
 from core.responses import ApiResponse, ok
-from notifications.dependencies import InboxServiceDep, NotificationServiceDep
-from notifications.schema import (
-    InAppNotificationListResponse,
-    NotificationResponse,
-    SendEmailRequest,
-    SendSMSRequest,
-)
+from notifications.dependencies import InboxServiceDep
+from notifications.schema import InAppNotificationListResponse
 from notifications.service import notification_event_stream
 
 notification = APIRouter(prefix="/notifications", tags=["notifications"])
-
-
-@notification.post("/email", response_model=NotificationResponse)
-async def send_email(data: SendEmailRequest, service: NotificationServiceDep):
-    message_id = service.send_email(to=data.to, subject=data.subject, body=data.body, sender=data.sender)
-    return NotificationResponse(id=message_id, channel="email")
-
-
-@notification.post("/sms", response_model=NotificationResponse)
-async def send_sms(data: SendSMSRequest, service: NotificationServiceDep):
-    message_id = service.send_sms(to=data.to, message=data.message)
-    return NotificationResponse(id=message_id, channel="sms")
 
 
 @notification.get("", response_model=ApiResponse[InAppNotificationListResponse])

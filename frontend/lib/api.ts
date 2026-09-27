@@ -33,6 +33,8 @@ export interface RegisterPayload {
   password: string;
   username?: string;
   full_name?: string;
+  /** The user confirmed they are 18+ and accept the Terms; the backend rejects sign-ups without it. */
+  accept_terms: boolean;
 }
 
 export interface ForgotPayload {
@@ -50,6 +52,8 @@ export type OAuthProvider = 'google' | 'microsoft';
 export interface OAuthLoginPayload {
   code: string;
   redirect_uri: string;
+  /** The user confirmed they are 18+ and accept the Terms; required when the sign-in creates the account. */
+  accept_terms: boolean;
 }
 
 export interface TokenResponse {
@@ -76,6 +80,22 @@ export interface UserProfileResponse {
   active_workspace_id: string | null;
   providers: string[];
   role: 'user' | 'admin';
+  /** Account emails (failed posts, reconnect reminders); false after unsubscribing. */
+  email_notifications: boolean;
+}
+
+// Mirrors backend/user/schema.py.
+export interface EmailPreferencesRequest {
+  email_notifications: boolean;
+}
+
+export interface UnsubscribeRequest {
+  token: string;
+}
+
+export interface DeleteAccountRequest {
+  /** The account's email, typed to confirm a deletion that cannot be undone. */
+  confirm_email: string;
 }
 
 export interface WorkspaceResponse {
@@ -549,6 +569,12 @@ export const authApi = {
 export const userApi = {
   getMe: () => authedRequest<UserProfileResponse>('/me'),
   dismissPlanNotice: () => authedRequest<void>('/me/plan-notice/dismiss', { method: 'POST' }),
+  setEmailPreferences: (payload: EmailPreferencesRequest) =>
+    envelopeRequest<UserProfileResponse>('/me/email-preferences', { method: 'PUT', body: JSON.stringify(payload) }),
+  /** Public: the token from an email's unsubscribe link identifies the user. */
+  unsubscribe: (payload: UnsubscribeRequest) => request<ApiEnvelope<null>>('/email/unsubscribe', payload),
+  deleteAccount: (payload: DeleteAccountRequest) =>
+    envelopeRequest<null>('/me/delete', { method: 'POST', body: JSON.stringify(payload) }),
 };
 
 export const workspaceApi = {
@@ -1101,6 +1127,12 @@ export interface PlansResponse {
 
 export const subscriptionApi = {
   getPlans: () => authedRequest<PlansResponse>('/subscription/plans'),
+  /** Public: the same plans and prices, for signed-out visitors (landing page). */
+  getPublicPlans: async (): Promise<PlansResponse> => {
+    const res = await fetch(`${API_BASE}/api/v1/subscription/plans`);
+    if (!res.ok) throw new Error('Could not load plans');
+    return res.json();
+  },
   /** Capabilities of the caller's current plan. The UI gates on this rather
    * than reimplementing the tier rules. */
   getEntitlements: () => authedRequest<EntitlementsResponse>('/subscription/entitlements'),

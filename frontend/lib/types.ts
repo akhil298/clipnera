@@ -332,6 +332,7 @@ export interface UserProfile {
   activeWorkspaceId: string;
   providers: string[];
   role: 'user' | 'admin';
+  emailNotifications: boolean;
 }
 
 export interface Workspace {

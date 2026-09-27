@@ -18,7 +18,6 @@ boto3==1.35.36
 segno==1.6.6
 botocore==1.35.36
 authlib==1.3.2
-twilio==9.3.7
 itsdangerous
 tenacity
 email-validator

@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.model import LoginEvent, User, UserAccount, AuthProvider
@@ -55,6 +55,7 @@ class UserRepository:
             email=data.email,
             username=data.username,
             full_name=data.full_name,
+            terms_accepted_at=datetime.utcnow(),
         )
         self._session.add(user)
         await self._session.flush()
@@ -78,6 +79,7 @@ class UserRepository:
             full_name=full_name,
             avatar_url=avatar_url,
             is_verified=True,
+            terms_accepted_at=datetime.utcnow(),
         )
         self._session.add(user)
         await self._session.flush()
@@ -124,3 +126,13 @@ class UserRepository:
             LoginEvent(user_id=user_id, method=method, ip=ip, user_agent=(user_agent or None) and user_agent[:255])
         )
         await self._session.commit()
+
+    async def forget_login_clients_before(self, cutoff: datetime) -> int:
+        """Drop the IP and browser of sign-ins older than ``cutoff``, keeping when they happened."""
+        result = await self._session.execute(
+            update(LoginEvent)
+            .where(LoginEvent.created_at < cutoff, (LoginEvent.ip.is_not(None)) | (LoginEvent.user_agent.is_not(None)))
+            .values(ip=None, user_agent=None)
+        )
+        await self._session.commit()
+        return result.rowcount or 0

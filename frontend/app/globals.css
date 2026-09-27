@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+/* A visible ring for keyboard focus only; mouse clicks do not show it. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid #fbbf24;
+    outline-offset: 2px;
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 4%;

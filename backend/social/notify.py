@@ -14,14 +14,20 @@ from core.config import get_settings
 from core.logging_config import get_logger
 from social.model import ConnectedAccount, ScheduledPost
 from social.providers import get_provider
+from user.unsubscribe import unsubscribe_url
 
 log = get_logger(__name__)
 
 
 async def _send(session: AsyncSession, user_id: str, subject: str, body: str) -> None:
     user = await session.get(User, user_id)
-    if not user or not user.email:
+    if not user or not user.email or not user.email_notifications:
         return
+    body += (
+        '<p style="color:#737373;font-size:12px">You get this email because it is about your Clipnera account. '
+        f'<a href="{unsubscribe_url(user_id)}">Unsubscribe</a> or change this in '
+        f'<a href="{_settings_link()}">Settings</a>.</p>'
+    )
     try:
         await asyncio.to_thread(EmailClient().send, user.email, subject, body)
     except Exception as exc:

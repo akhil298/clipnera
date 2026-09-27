@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { authApi } from '@/lib/api';
-import { consumeGoogleState, googleRedirectUri } from '@/lib/googleAuth';
+import { consumeGoogleAcceptTerms, consumeGoogleState, googleRedirectUri } from '@/lib/googleAuth';
 
 /**
  * Google sign-in redirect target: https://<app>/login/google?code&state.
@@ -37,7 +37,7 @@ export default function GoogleCallbackPage() {
       return;
     }
     authApi
-      .oauthLogin('google', { code, redirect_uri: googleRedirectUri() })
+      .oauthLogin('google', { code, redirect_uri: googleRedirectUri(), accept_terms: consumeGoogleAcceptTerms() })
       .then(() => router.replace('/dashboard'))
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not sign in with Google.'));
   }, [router]);

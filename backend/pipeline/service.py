@@ -37,7 +37,7 @@ from core.database import AsyncSessionLocal
 
 from pipeline.model import PipelineStepType, StepStatus
 from core.exceptions import CustomException
-from notifications.service import NotificationService, notify_pipeline_outcome
+from notifications.service import notify_pipeline_outcome
 from subscription.entitlements import Entitlements
 from subscription.service import (
     SubscriptionService,
@@ -1450,15 +1450,6 @@ async def _mark_cancelled(project_id: str) -> None:
     )
 
 
-def _clip_count(results: dict) -> int | None:
-    gen_result = results.get("clip_generation") or results.get("metadata_generation")
-    if gen_result:
-        clips = gen_result.get("clips") or []
-        if isinstance(clips, list):
-            return len(clips)
-    return None
-
-
 async def _run_pipeline(
     orchestrator: PipelineOrchestrator,
     project_id: str,
@@ -1478,15 +1469,6 @@ async def _run_pipeline(
 
         if user:
             await notify_pipeline_outcome(user["user_id"], project_id, success=True)
-
-        if user and (user.get("email") or user.get("phone")):
-            await NotificationService().notify_pipeline_complete(
-                user_email=user.get("email"),
-                user_phone=user.get("phone"),
-                project_id=project_id,
-                success=True,
-                clip_count=_clip_count(results),
-            )
     except asyncio.CancelledError:
         if requeue_on_interrupt:
             # A worker shutting down: its job is redelivered and resumes from
@@ -1521,13 +1503,6 @@ async def _run_pipeline(
         if user:
             await notify_pipeline_outcome(
                 user["user_id"], project_id, success=False, refunded=credit_refund_callback is not None
-            )
-            await NotificationService().notify_pipeline_complete(
-                user_email=user.get("email"),
-                user_phone=user.get("phone"),
-                project_id=project_id,
-                success=False,
-                error=str(exc),
             )
     finally:
         _active_orchestrators.pop(project_id, None)

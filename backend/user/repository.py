@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.model import User
@@ -33,3 +33,12 @@ class UserRepository:
             stmt = stmt.where(User.id > after_id)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
+
+    async def set_email_notifications(self, user_id: str, enabled: bool) -> None:
+        await self._session.execute(update(User).where(User.id == user_id).values(email_notifications=enabled))
+        await self._session.commit()
+
+    async def delete(self, user_id: str) -> None:
+        """Delete the user; foreign keys cascade to or detach everything they own."""
+        await self._session.execute(delete(User).where(User.id == user_id))
+        await self._session.commit()

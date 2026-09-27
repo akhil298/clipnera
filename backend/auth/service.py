@@ -29,6 +29,16 @@ class LoginClient:
     user_agent: str | None = None
 
 
+def _require_terms(accepted: bool) -> None:
+    """New accounts are for adults who accepted the Terms and Privacy Policy."""
+    if not accepted:
+        raise CustomException(
+            message="Confirm you are 18 or older and accept the Terms and Privacy Policy to create an account.",
+            code="TERMS_NOT_ACCEPTED",
+            status_code=400,
+        )
+
+
 class AuthService:
     """Business logic for auth — all async, CPU-bound ops in thread pool."""
 
@@ -52,6 +62,7 @@ class AuthService:
                 log.error(f"Failed to activate free plan for user {user_id}: {exc}")
 
     async def register(self, data: RegisterRequest) -> UserResponse:
+        _require_terms(data.accept_terms)
         existing = await self._repo.get_user_by_email(data.email)
         if existing:
             log.warning(f"Registration failed: email already exists email={data.email}")
@@ -98,7 +109,12 @@ class AuthService:
         return await self._start_session(user.id, AuthProvider.PASSWORD, client)
 
     async def oauth_login(
-        self, provider: str, code: str, redirect_uri: str, client: LoginClient | None = None
+        self,
+        provider: str,
+        code: str,
+        redirect_uri: str,
+        client: LoginClient | None = None,
+        accept_terms: bool = False,
     ) -> TokenResponse:
         provider_enum = OAuthProvider.get_provider_enum(provider)
 
@@ -144,6 +160,7 @@ class AuthService:
             return await self._start_session(user.id, provider_enum, client)
 
         # Case 3: New user → create
+        _require_terms(accept_terms)
         user = await self._repo.create_oauth_user(
             email=email,
             full_name=oauth_user.get("name"),

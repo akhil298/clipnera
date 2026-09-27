@@ -5,17 +5,17 @@ export function HowItWorks() {
     {
       num: '01',
       title: 'Ingest URL, Upload or Prompt',
-      description: 'Paste any YouTube video link, drag in raw podcast files, or provide a text story prompt. Our ingestion engine parses audio streams instantly.',
+      description: 'Paste a link to your YouTube video, upload a video file, or write a story prompt.',
     },
     {
       num: '02',
       title: 'AI Denoise & Clip Extraction',
-      description: 'Gemini 3.7 isolates highest-virality segments, eliminates background room hum, centers speakers at 9:16, and generates kinetic subtitles.',
+      description: 'AI finds the strongest moments, reduces background noise, reframes speakers to 9:16 and adds animated subtitles.',
     },
     {
       num: '03',
       title: 'Refine in Studio & Auto-Post',
-      description: 'Fine-tune captions, drop sound effects, and schedule directly to TikTok, YouTube Shorts, and Instagram Reels with 1 click.',
+      description: 'Fine-tune captions and sound effects, then download your clips or publish them to TikTok, YouTube Shorts and Instagram Reels.',
     },
   ];
 
@@ -27,20 +27,20 @@ export function HowItWorks() {
             Simple 3-Step Flow
           </span>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white font-['Syne',sans-serif]">
-            From raw footage to 10 viral shorts in under a minute
+            From raw footage to ready-to-post shorts in three steps
           </h2>
         </div>
 
         <div className="grid md:grid-cols-3 gap-8 relative">
           {steps.map((step) => (
             <div key={step.num} className="p-6 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-4">
-              <div className={`text-4xl font-extrabold font-['Syne',sans-serif] ${
+              <div aria-hidden="true" className={`text-4xl font-extrabold font-['Syne',sans-serif] ${
                 step.num === '01' ? 'text-neutral-700' : step.num === '02' ? 'text-amber-500/50' : 'text-emerald-500/50'
               }`}>
                 {step.num}
               </div>
               <h3 className="text-base font-bold text-white font-['Syne',sans-serif]">{step.title}</h3>
-              <p className="text-xs text-neutral-400 leading-relaxed">{step.description}</p>
+              <p className="text-xs text-neutral-300 leading-relaxed">{step.description}</p>
             </div>
           ))}
         </div>

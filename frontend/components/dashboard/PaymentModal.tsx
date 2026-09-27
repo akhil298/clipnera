@@ -119,9 +119,10 @@ export function PaymentModal({ isOpen, onClose, plan, creditPack = null, onPayme
             </h2>
             <button
               onClick={onClose}
+              aria-label="Close"
               className="p-2 rounded-xl bg-neutral-800 border border-neutral-700 text-neutral-300 hover:text-white hover:border-neutral-600 transition-colors"
             >
-              ✕
+              <span aria-hidden="true">✕</span>
             </button>
           </div>
 
@@ -177,6 +178,15 @@ export function PaymentModal({ isOpen, onClose, plan, creditPack = null, onPayme
                     : 'Your plan is activated as soon as we verify the payment.'}
                 </p>
               </div>
+
+              <p className="text-[11px] text-neutral-400 leading-relaxed">
+                {creditPack ? 'One-time payment.' : 'One-time payment; Pro does not renew automatically.'} Payments are
+                non-refundable except as described in our{' '}
+                <a href="/refunds" target="_blank" className="text-amber-300 underline underline-offset-2">
+                  Refund Policy
+                </a>
+                . Credits used by processing that fails are always returned.
+              </p>
 
               <button
                 onClick={() => setStep('pay')}
