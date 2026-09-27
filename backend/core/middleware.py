@@ -14,7 +14,8 @@ def register_middlewares(app: FastAPI) -> None:
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000"],
+        # The deployed frontend (PUBLIC_APP_URL) plus local `next dev`.
+        allow_origins=list({settings.PUBLIC_APP_URL.rstrip("/"), "http://localhost:3000"}),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
