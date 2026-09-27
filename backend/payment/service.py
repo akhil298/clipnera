@@ -14,6 +14,7 @@ from clients.services.s3 import S3
 from core.config import get_settings
 from core.exceptions import CustomException
 from core.logging_config import get_logger
+from notifications.service import notify_payment_approved
 from payment.repository import ManualPaymentRepository
 from payment.schema import AdminPaymentResponse, PaymentResponse, UpiCheckoutResponse
 from subscription.entitlements import CREDIT_PACKS, PLAN_PRICES, PURCHASABLE_PLAN, CreditPack
@@ -214,12 +215,18 @@ class PaymentService:
             await self._subscription_service.grant_purchased_credits(
                 tx.user_id, tx.credits, f"Bought {tx.credits} credits", reference_id=tx.id, commit=False
             )
+            credits_added = tx.credits
         else:
+            # A plan's credits come from its cycle reset (none for a renewal or a
+            # queued period), so the balance change is what the user actually got.
+            balance_before = await self._subscription_service.get_user_credit_balance(tx.user_id)
             await self._subscription_service.extend_plan(
                 tx.user_id, tx.plan, PLAN_PRICES[BillingPeriod(tx.plan_type)].days, commit=False
             )
+            credits_added = await self._subscription_service.get_user_credit_balance(tx.user_id) - balance_before
         await self._tx_repo.commit()
         log.info(f"UPI payment approved: tx={tx_id} user={tx.user_id} by={admin_id}")
+        await notify_payment_approved(tx.user_id, credits_added, tx.plan.name if tx.plan else None)
         return await self.get_for_admin(tx_id)
 
     async def reject(self, tx_id: str, admin_id: str, reason: str) -> AdminPaymentResponse:

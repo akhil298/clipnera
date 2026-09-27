@@ -167,9 +167,33 @@ async def notify_pipeline_outcome(user_id: str, project_id: str, success: bool, 
                 kind = NotificationKind.PIPELINE_FAILED
                 heading = "Processing failed"
                 message = f"{name} could not be processed." + (" Your credits were refunded." if refunded else "")
-            notification = await NotificationRepository(session).create(
-                user_id, kind, heading, message, project_id=project_id
-            )
-        broker.publish(user_id, InAppNotificationResponse.model_validate(notification).model_dump(mode="json"))
+            await _deliver(session, user_id, kind, heading, message, project_id=project_id)
     except Exception as exc:
         log.warning(f"In-app notification failed: project={project_id} error={type(exc).__name__}")
+
+
+async def notify_payment_approved(user_id: str, credits_added: int, plan_name: str | None) -> None:
+    """Tell the user an admin approved their payment. Best effort, like
+    notify_pipeline_outcome: the approval stands whether or not this lands."""
+    if credits_added > 0:
+        message = f"Your payment has been approved. {credits_added} credits have been added to your account."
+    else:
+        message = f"Your payment has been approved. Your {plan_name or 'plan'} purchase is on your account."
+    try:
+        async with AsyncSessionLocal() as session:
+            await _deliver(session, user_id, NotificationKind.PAYMENT_APPROVED, "Payment approved", message)
+    except Exception as exc:
+        log.warning(f"In-app notification failed: payment user={user_id} error={type(exc).__name__}")
+
+
+async def _deliver(
+    session: AsyncSession,
+    user_id: str,
+    kind: NotificationKind,
+    title: str,
+    message: str,
+    project_id: str | None = None,
+) -> None:
+    """Store a notification in the user's inbox and push it to their open dashboards."""
+    notification = await NotificationRepository(session).create(user_id, kind, title, message, project_id=project_id)
+    broker.publish(user_id, InAppNotificationResponse.model_validate(notification).model_dump(mode="json"))

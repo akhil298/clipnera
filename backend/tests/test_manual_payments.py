@@ -93,11 +93,22 @@ class _PlanRepo:
 
 
 class _SubscriptionService:
-    def __init__(self) -> None:
+    def __init__(self, plan_credits: int = 0) -> None:
         self.started: list[dict] = []
+        self.granted: list[tuple] = []
+        self.balance = 20
+        self.plan_credits = plan_credits
 
     async def extend_plan(self, user_id, plan, days, commit=True):
         self.started.append({"user_id": user_id, "plan": plan, "days": days, "commit": commit})
+        self.balance += self.plan_credits
+
+    async def grant_purchased_credits(self, user_id, amount, reason, reference_id, commit=True):
+        self.granted.append((user_id, amount, commit))
+        self.balance += amount
+
+    async def get_user_credit_balance(self, user_id):
+        return self.balance
 
 
 class _Storage:
@@ -116,6 +127,17 @@ def storage(monkeypatch):
     fake = _Storage()
     monkeypatch.setattr(svc, "_storage", lambda: fake)
     return fake
+
+
+@pytest.fixture(autouse=True)
+def approval_notices(monkeypatch):
+    sent: list[tuple] = []
+
+    async def _notify(user_id, credits_added, plan_name):
+        sent.append((user_id, credits_added, plan_name))
+
+    monkeypatch.setattr(svc, "notify_payment_approved", _notify)
+    return sent
 
 
 @pytest.fixture(autouse=True)
@@ -273,13 +295,30 @@ async def test_approve_grants_the_bought_period_in_the_same_transaction(storage,
 
 
 @pytest.mark.asyncio
-async def test_approve_twice_is_refused_and_grants_nothing(storage):
+async def test_approve_plan_notifies_the_credits_it_granted(storage, approval_notices):
+    await _service(_TxRepo(_tx()), subs=_SubscriptionService(plan_credits=280)).approve("tx-1", "admin-1")
+    assert approval_notices == [("user-1", 280, "Pro")]
+
+
+@pytest.mark.asyncio
+async def test_approve_credit_pack_notifies_the_pack_credits(storage, approval_notices):
+    tx = _tx()
+    tx.plan, tx.credit_pack, tx.credits = None, "creator", 200
+    repo, subs = _TxRepo(tx), _SubscriptionService()
+    await _service(repo, subs=subs).approve("tx-1", "admin-1")
+    assert subs.granted == [("user-1", 200, False)]
+    assert approval_notices == [("user-1", 200, None)]
+
+
+@pytest.mark.asyncio
+async def test_approve_twice_is_refused_and_grants_nothing(storage, approval_notices):
     repo, subs = _TxRepo(_tx(PaymentStatus.SUCCESS), pending=False), _SubscriptionService()
     with pytest.raises(CustomException) as exc:
         await _service(repo, subs=subs).approve("tx-1", "admin-1")
     assert _code(exc) == "PAYMENT_ALREADY_RESOLVED"
     assert subs.started == []
     assert repo.commits == 0
+    assert approval_notices == []
 
 
 @pytest.mark.asyncio

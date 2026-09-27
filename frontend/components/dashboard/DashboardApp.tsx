@@ -169,6 +169,8 @@ export default function DashboardApp() {
     clearAll: handleClearNotifications,
   } = useNotificationInbox(Boolean(isAuthed), (notification) => {
     setSnackbars((prev) => [...prev, notification].slice(-3));
+    // An approved payment changed the plan or balance on the server.
+    if (notification.type === 'credit_update') void refreshAccount();
     // The status poll only follows the open project, so reflect the outcome
     // here for every other one too.
     if (notification.projectId) {
@@ -659,23 +661,23 @@ export default function DashboardApp() {
     if (project) handleOpenFolder(project);
   };
 
+  // The plan or credit balance just changed, so refetch the capability set and profile.
+  async function refreshAccount() {
+    setEntitlementsRefreshKey((k) => k + 1);
+    try {
+      const profile = await userApi.getMe();
+      setCurrentUser((prev) => toUserProfile(profile, prev?.activeWorkspaceId || ''));
+    } catch {
+      // ignore
+    }
+  }
+
   const handlePaymentComplete = async () => {
     setIsPaymentModalOpen(false);
     setIsPlanModalOpen(false);
     setSelectedPlan(null);
     setUpgradeReason(undefined);
-    // The plan just changed, so the cached capability set is stale.
-    setEntitlementsRefreshKey((k) => k + 1);
-    let cancelled = false;
-    try {
-      const profile = await userApi.getMe();
-      if (!cancelled) {
-        setCurrentUser(toUserProfile(profile, currentUser?.activeWorkspaceId || ''));
-      }
-    } catch {
-      // ignore
-    }
-    return () => { cancelled = true; };
+    await refreshAccount();
   };
 
   const handlePlanSelected = (plan: SelectedPlan) => {

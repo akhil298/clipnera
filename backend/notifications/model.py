@@ -18,6 +18,7 @@ from core.database import Base
 class NotificationKind(str, enum.Enum):
     PIPELINE_COMPLETED = "pipeline_completed"
     PIPELINE_FAILED = "pipeline_failed"
+    PAYMENT_APPROVED = "payment_approved"
 
 
 class Notification(Base):

@@ -4,6 +4,8 @@ import { AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import { AppNotification } from '@/lib/types';
 
 const AUTO_DISMISS_MS = 6000;
+// Credit updates are a quick confirmation; the drawer keeps them for later.
+const CREDIT_UPDATE_DISMISS_MS = 2000;
 
 interface SnackbarStackProps {
   items: AppNotification[];
@@ -19,7 +21,7 @@ const Snackbar: React.FC<{
 }> = ({ item, onDismiss, onView }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isTabVisible, setIsTabVisible] = useState(() => document.visibilityState === 'visible');
-  const remainingMs = useRef(AUTO_DISMISS_MS);
+  const remainingMs = useRef(item.type === 'credit_update' ? CREDIT_UPDATE_DISMISS_MS : AUTO_DISMISS_MS);
 
   useEffect(() => {
     const onVisibilityChange = () => setIsTabVisible(document.visibilityState === 'visible');

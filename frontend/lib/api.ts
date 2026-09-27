@@ -1662,7 +1662,7 @@ export interface AdminFeatureFlagListResponse {
 }
 
 /** Mirrors NotificationKind in backend/notifications/model.py. */
-export type InAppNotificationKind = 'pipeline_completed' | 'pipeline_failed';
+export type InAppNotificationKind = 'pipeline_completed' | 'pipeline_failed' | 'payment_approved';
 
 export interface InAppNotificationResponse {
   id: string;

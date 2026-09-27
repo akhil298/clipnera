@@ -18,12 +18,18 @@ function timeAgo(iso: string): string {
   return hours < 24 ? `${hours}h ago` : `${Math.floor(hours / 24)}d ago`;
 }
 
+const TYPE_BY_KIND: Record<InAppNotificationResponse['kind'], AppNotification['type']> = {
+  pipeline_completed: 'render_complete',
+  pipeline_failed: 'render_failed',
+  payment_approved: 'credit_update',
+};
+
 function toAppNotification(n: InAppNotificationResponse): AppNotification {
   return {
     id: n.id,
     title: n.title,
     message: n.message,
-    type: n.kind === 'pipeline_failed' ? 'render_failed' : 'render_complete',
+    type: TYPE_BY_KIND[n.kind],
     timestamp: timeAgo(n.created_at),
     read: n.read_at !== null,
     projectId: n.project_id ?? undefined,
