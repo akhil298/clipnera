@@ -462,6 +462,7 @@ const PLAN_ERROR_CODES = new Set([
   'ASPECT_RATIO_NOT_ENTITLED',
   'CAPTION_STYLE_NOT_ENTITLED',
   'DURATION_NOT_ENTITLED',
+  'INSUFFICIENT_CREDITS',
 ]);
 
 /** Fired on window for any plan error, so the dashboard can open the upsell
@@ -962,8 +963,11 @@ export interface PlanResponse {
 export interface PaymentTransactionResponse {
   id: string;
   user_id: string;
-  plan_id: string;
-  plan: PlanResponse;
+  /** Set for a plan payment; credit_pack and credits for a credit-pack one. */
+  plan_id: string | null;
+  plan: PlanResponse | null;
+  credit_pack: string | null;
+  credits: number | null;
   amount: number;
   currency: string;
   status: string;
@@ -1037,6 +1041,8 @@ export interface PlanCapabilities {
 export interface EntitlementsResponse extends PlanCapabilities {
   credit_minutes_total: number;
   credit_minutes_remaining: number;
+  /** The bought part of credit_minutes_remaining; never expires. */
+  purchased_credits_remaining: number;
   current_period_end: string | null;
   subscription_status: string;
   /** When paid access ends, counting queued renewals; null on Free. */
@@ -1066,8 +1072,18 @@ export interface PlanOfferResponse {
   prices: PlanPriceResponse[];
 }
 
+/** A one-off credit pack. Mirrors CreditPackResponse in backend/subscription/schema.py. */
+export interface CreditPackResponse {
+  slug: string;
+  name: string;
+  credits: number;
+  amount: number;
+  currency: string;
+}
+
 export interface PlansResponse {
   plans: PlanOfferResponse[];
+  credit_packs: CreditPackResponse[];
 }
 
 export const subscriptionApi = {
@@ -1083,10 +1099,13 @@ export const subscriptionApi = {
 
 export type PaymentStatus = 'pending' | 'success' | 'failed' | 'rejected';
 
+/** A plan period (plan_*) or a credit pack (credit_pack, credits). */
 export interface UpiCheckoutResponse {
-  plan_slug: string;
-  plan_name: string;
-  plan_type: BillingPeriod;
+  plan_slug: string | null;
+  plan_name: string | null;
+  plan_type: BillingPeriod | null;
+  credit_pack: string | null;
+  credits: number | null;
   amount: number;
   currency: string;
   upi_id: string;
@@ -1099,9 +1118,12 @@ export interface UpiCheckoutResponse {
 
 export interface PaymentResponse {
   id: string;
-  plan_slug: string;
-  plan_name: string;
-  plan_type: BillingPeriod;
+  /** Set for a plan payment; credit_pack and credits for a credit-pack one. */
+  plan_slug: string | null;
+  plan_name: string | null;
+  plan_type: BillingPeriod | null;
+  credit_pack: string | null;
+  credits: number | null;
   amount: number;
   currency: string;
   utr_number: string | null;
@@ -1127,9 +1149,24 @@ export interface SubmitPaymentPayload {
   screenshot: File;
 }
 
+export interface SubmitCreditPackPaymentPayload {
+  credit_pack: string;
+  utr_number: string;
+  screenshot: File;
+}
+
 export const paymentsApi = {
   getCheckout: (planSlug: string, planType: BillingPeriod) =>
     authedRequest<UpiCheckoutResponse>(`/payments/qr${queryString({ plan_slug: planSlug, plan_type: planType })}`),
+  getCreditPackCheckout: (packSlug: string) =>
+    authedRequest<UpiCheckoutResponse>(`/payments/credit-packs/${encodeURIComponent(packSlug)}/qr`),
+  submitCreditPack: ({ credit_pack, utr_number, screenshot }: SubmitCreditPackPaymentPayload) => {
+    const form = new FormData();
+    form.append('credit_pack', credit_pack);
+    form.append('utr_number', utr_number);
+    form.append('screenshot', screenshot);
+    return authedRequest<PaymentResponse>('/payments/credit-packs', { method: 'POST', body: form });
+  },
   submit: ({ plan_slug, plan_type, utr_number, screenshot }: SubmitPaymentPayload) => {
     const form = new FormData();
     form.append('plan_slug', plan_slug);
@@ -1209,6 +1246,104 @@ export interface AdminUserResponse {
   plan: string;
   plan_expires_at: string | null;
   created_at: string;
+  last_login_at: string | null;
+  /** Last UTC day with a signed-in request (YYYY-MM-DD); tracked from launch of this field. */
+  last_active_on: string | null;
+  projects: number;
+  clips: number;
+  credits_left: number;
+  /** Approved payments, in INR. */
+  total_paid: number;
+  ai_cost_usd: number;
+}
+
+export type AdminUserSort = 'newest' | 'last_active' | 'projects' | 'ai_cost';
+
+export interface AdminUserListParams extends AdminListParams {
+  sort?: AdminUserSort;
+}
+
+export interface AdminUserProject {
+  id: string;
+  title: string;
+  source_type: string;
+  source_url: string | null;
+  status: string;
+  duration_seconds: number | null;
+  clips: number;
+  /** Net of refunds. */
+  credits_charged: number;
+  ai_cost_usd: number;
+  created_at: string;
+}
+
+export interface AdminLoginEntry {
+  created_at: string;
+  method: string;
+  ip: string | null;
+  user_agent: string | null;
+}
+
+export interface AdminUserPayment {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  /** A payment buys either a plan period or a credit pack. */
+  plan_type: string | null;
+  credit_pack: string | null;
+  credits: number | null;
+  created_at: string;
+  verified_at: string | null;
+}
+
+export interface AdminCreditEntry {
+  created_at: string;
+  amount: number;
+  balance_after: number;
+  reason: string;
+}
+
+export interface AdminUserDetailResponse {
+  user: AdminUserResponse;
+  credits_total: number;
+  next_credit_reset_at: string | null;
+  active_days: number;
+  projects: AdminUserProject[];
+  logins: AdminLoginEntry[];
+  payments: AdminUserPayment[];
+  credit_history: AdminCreditEntry[];
+}
+
+export interface AdminDailyGrowth {
+  /** UTC day, YYYY-MM-DD. */
+  day: string;
+  signups: number;
+  active_users: number;
+  logins: number;
+  projects: number;
+  clips: number;
+  /** Approved payments by the day they were verified, in INR. */
+  revenue: number;
+  ai_cost_usd: number;
+}
+
+export interface AdminGrowthResponse {
+  days: number;
+  total_users: number;
+  new_users: number;
+  /** Distinct users active at any point in the range. */
+  active_in_window: number;
+  active_today: number;
+  active_7d: number;
+  active_30d: number;
+  pro_users: number;
+  projects: number;
+  clips: number;
+  revenue: number;
+  currency: string;
+  ai_cost_usd: number;
+  daily: AdminDailyGrowth[];
 }
 
 export interface AdminUserPlanRequest {
@@ -1227,13 +1362,15 @@ export interface AdminOverviewResponse {
 }
 
 export const adminUsersApi = {
-  list: (params: AdminListParams = {}) => authedRequest<AdminUserResponse[]>(`/admin/users${queryString(params)}`),
+  list: (params: AdminUserListParams = {}) => authedRequest<AdminUserResponse[]>(`/admin/users${queryString(params)}`),
+  getDetail: (userId: string) => envelopeRequest<AdminUserDetailResponse>(`/admin/users/${userId}/detail`),
   setPlan: (userId: string, body: AdminUserPlanRequest) =>
     authedRequest<AdminUserResponse>(`/admin/users/${userId}/plan`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     }),
   getOverview: () => authedRequest<AdminOverviewResponse>('/admin/overview'),
+  getGrowth: (days = 30) => envelopeRequest<AdminGrowthResponse>(`/admin/growth${queryString({ days })}`),
 };
 
 export interface DashboardStatsResponse {

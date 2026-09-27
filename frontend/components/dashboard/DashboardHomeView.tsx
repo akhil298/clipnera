@@ -29,6 +29,7 @@ import { VideoProject, ViralClip, UserProfile, TabType, Workspace } from '@/lib/
 import { analyticsApi } from '@/lib/api';
 import { StatsSkeleton } from '@/components/skeletons';
 import { usePlan } from '@/hooks/usePlan';
+import { creditResetLabel, useEntitlements } from '@/hooks/useEntitlements';
 
 interface DashboardHomeViewProps {
   user: UserProfile;
@@ -56,6 +57,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   onUpgradePlan,
 }) => {
   const { isPro, hasPendingPayment } = usePlan();
+  const { entitlements } = useEntitlements();
   const [selectedGenreFilter, setSelectedGenreFilter] = useState<string>('all');
   const [stats, setStats] = useState<{
     total_viral_shorts: number;
@@ -163,7 +165,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
                   <span>AI Render Quota ({user.plan.toUpperCase()})</span>
                 </span>
                 <span className="text-xs font-mono font-bold text-amber-400">
-                  {user.aiCreditsMinutesRemaining}m / {user.aiCreditsTotal}m
+                  {user.aiCreditsMinutesRemaining} / {user.aiCreditsTotal} credits
                 </span>
               </div>
               <div className="h-2 w-full bg-neutral-800 rounded-full overflow-hidden">
@@ -175,9 +177,9 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
                 />
               </div>
               <div className="flex items-center justify-between text-[11px] text-neutral-400">
-                <span>Resets in 18 days</span>
+                <span>{creditResetLabel(entitlements.next_credit_reset_at)}</span>
                 <button
-                  onClick={() => onNavigateTab('settings')}
+                  onClick={onUpgradePlan || (() => onNavigateTab('settings'))}
                   className="text-amber-400 hover:underline font-semibold"
                 >
                   Refill Quota +

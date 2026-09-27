@@ -10,11 +10,14 @@ PlanTypeValue = Literal["monthly", "yearly"]
 
 
 class UpiCheckoutResponse(BaseModel):
-    """What the user needs to pay for a plan through UPI."""
+    """What the user needs to pay through UPI for a plan period (plan_*) or a
+    credit pack (credit_pack, credits)."""
 
-    plan_slug: str
-    plan_name: str
-    plan_type: PlanTypeValue
+    plan_slug: Optional[str] = None
+    plan_name: Optional[str] = None
+    plan_type: Optional[PlanTypeValue] = None
+    credit_pack: Optional[str] = None
+    credits: Optional[int] = None
     amount: float
     currency: str
     upi_id: str
@@ -27,9 +30,12 @@ class UpiCheckoutResponse(BaseModel):
 
 class PaymentResponse(BaseModel):
     id: str
-    plan_slug: str
-    plan_name: str
-    plan_type: PlanTypeValue
+    # Set for a plan payment; credit_pack and credits for a credit-pack one.
+    plan_slug: Optional[str] = None
+    plan_name: Optional[str] = None
+    plan_type: Optional[PlanTypeValue] = None
+    credit_pack: Optional[str] = None
+    credits: Optional[int] = None
     amount: float
     currency: str
     utr_number: Optional[str] = None

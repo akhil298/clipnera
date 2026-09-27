@@ -4,7 +4,6 @@ import {
   Menu,
   Bell,
   Plus,
-  Zap,
   Film,
   Briefcase,
   ChevronRight,
@@ -24,6 +23,7 @@ import { useEntitlements, planLabel, isPaidPlan } from '@/hooks/useEntitlements'
 import { Skeleton } from '@/components/skeletons';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
 import { Avatar } from './Avatar';
+import { CreditsPopover } from './CreditsPopover';
 
 interface HeaderProps {
   activeTab: TabType;
@@ -163,20 +163,11 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
         {/* AI Credits remaining badge */}
-        <button
-          onClick={() => onNavigateTab('settings')}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs text-neutral-300 font-mono hover:border-amber-500/40 hover:text-white transition-all"
-          title={`${user.aiCreditsMinutesRemaining} of ${user.aiCreditsTotal} AI minutes remaining`}
-        >
-          <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-          <span className="font-semibold">
-            {user.aiCreditsMinutesRemaining}
-            {user.aiCreditsTotal > 0 && (
-              <span className="text-neutral-500">/{user.aiCreditsTotal}</span>
-            )}
-            m
-          </span>
-        </button>
+        <CreditsPopover
+          remaining={user.aiCreditsMinutesRemaining}
+          total={user.aiCreditsTotal}
+          onManagePlan={onUpgradePlan || (() => onNavigateTab('settings'))}
+        />
 
         {/* Upgrade Plan Button for Free Users, or the pending state once they have paid */}
         {!planLoading && !isPaidPlan(entitlements) && entitlements.has_pending_payment && (

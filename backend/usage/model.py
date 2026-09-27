@@ -20,6 +20,7 @@ class LlmUsage(Base):
     __table_args__ = (
         Index("ix_llm_usage_project", "project_id"),
         Index("ix_llm_usage_created", "created_at"),
+        Index("ix_llm_usage_user", "user_id"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))

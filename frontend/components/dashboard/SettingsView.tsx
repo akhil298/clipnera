@@ -19,15 +19,16 @@ import {
 } from 'lucide-react';
 import { UserProfile, Workspace } from '@/lib/types';
 import { Avatar } from './Avatar';
-import { workspaceApi, type AssignableWorkspaceRole } from '@/lib/api';
+import { workspaceApi, type AssignableWorkspaceRole, type CreditPackResponse } from '@/lib/api';
 import { TableSkeleton } from '@/components/skeletons';
 import { PlanSelectionModal, type SelectedPlan } from './PlanSelectionModal';
 import { ProLockBadge } from './ProLockBadge';
-import { useEntitlements, planLabel } from '@/hooks/useEntitlements';
+import { useEntitlements, planLabel, videoMinutesFor } from '@/hooks/useEntitlements';
 import { FEATURE_LABELS, usePlan } from '@/hooks/usePlan';
 import { formatDate } from '@/lib/utils/dates';
 import { PaymentModal } from './PaymentModal';
 import { MyPaymentsCard } from '@/components/payments/MyPaymentsCard';
+import { CreditPacksCard } from '@/components/payments/CreditPacksCard';
 import { ConnectedPlatformsPanel, useSocialTabVisible } from '@/components/social/ConnectedPlatformsPanel';
 import { Select, SelectOption } from '@/components/ui/Select';
 
@@ -62,6 +63,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
+  const [selectedPack, setSelectedPack] = useState<CreditPackResponse | null>(null);
   const [paymentsRefreshKey, setPaymentsRefreshKey] = useState(0);
   const { entitlements, isLoading: loadingSub, refresh: refreshPlan } = useEntitlements();
   const { isPro, canUse, promptUpgrade } = usePlan();
@@ -283,7 +285,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <>
                     <span className="text-xs text-neutral-400 block">Credits Remaining</span>
                     <span className="text-xs font-mono font-bold text-white">
-                      {entitlements.credit_minutes_remaining} / {entitlements.credit_minutes_total} mins
+                      {entitlements.credit_minutes_remaining} / {entitlements.credit_minutes_total} credits
                     </span>
                   </>
                 )}
@@ -298,7 +300,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <span>AI Rendering Quota</span>
                 </span>
                 <span className="font-mono text-amber-400 font-bold">
-                  {entitlements.credit_minutes_remaining} of {entitlements.credit_minutes_total} mins
+                  {entitlements.credit_minutes_remaining} of {entitlements.credit_minutes_total} credits
                 </span>
               </div>
               <div className="h-2.5 w-full bg-neutral-900 rounded-full overflow-hidden">
@@ -307,10 +309,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   style={{ width: `${entitlements.credit_minutes_total > 0 ? Math.min(100, (entitlements.credit_minutes_remaining / entitlements.credit_minutes_total) * 100) : 0}%` }}
                 />
               </div>
+              {entitlements.purchased_credits_remaining > 0 && (
+                <p className="text-[11px] text-emerald-400">
+                  Includes {entitlements.purchased_credits_remaining} bought credits that never expire.
+                </p>
+              )}
               <p className="text-[11px] text-neutral-500">
                 {entitlements.next_credit_reset_at
-                  ? `Resets to ${entitlements.credit_minutes} mins on ${formatDate(entitlements.next_credit_reset_at)}. Unused minutes don't roll over.`
-                  : `Resets to ${entitlements.credit_minutes} mins every 30 days.`}
+                  ? `≈ ${videoMinutesFor(entitlements, entitlements.credit_minutes_remaining)} min of video left at ${entitlements.credits_per_video_minute} credits/min. Plan credits reset to ${entitlements.credit_minutes} on ${formatDate(entitlements.next_credit_reset_at)}; unused ones don't roll over.`
+                  : `≈ ${videoMinutesFor(entitlements, entitlements.credit_minutes_remaining)} min of video left at ${entitlements.credits_per_video_minute} credits/min. Plan credits reset to ${entitlements.credit_minutes} every 30 days.`}
               </p>
             </div>
 
@@ -326,6 +333,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 {isPro ? 'Renew Pro' : 'Upgrade to Pro'}
               </button>
             )}
+          </div>
+
+          <div className="lg:col-span-12">
+            <CreditPacksCard
+              onSelect={(pack) => {
+                setSelectedPack(pack);
+                setIsPaymentModalOpen(true);
+              }}
+            />
           </div>
 
           <div className="lg:col-span-12">
@@ -505,11 +521,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         onClose={() => {
           setIsPaymentModalOpen(false);
           setSelectedPlan(null);
+          setSelectedPack(null);
         }}
         plan={selectedPlan}
+        creditPack={selectedPack}
         onPaymentComplete={() => {
           setIsPaymentModalOpen(false);
           setSelectedPlan(null);
+          setSelectedPack(null);
           void refreshPlan();
           setPaymentsRefreshKey((k) => k + 1);
         }}

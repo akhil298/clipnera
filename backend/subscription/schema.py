@@ -35,8 +35,11 @@ class UserSubscriptionResponse(BaseModel):
 class PaymentTransactionResponse(BaseModel):
     id: str
     user_id: str
-    plan_id: str
-    plan: PlanResponse
+    # Set for a plan payment; credit_pack and credits for a credit-pack one.
+    plan_id: Optional[str] = None
+    plan: Optional[PlanResponse] = None
+    credit_pack: Optional[str] = None
+    credits: Optional[int] = None
     amount: float
     currency: str
     status: str
@@ -128,6 +131,8 @@ class EntitlementsResponse(PlanCapabilities):
 
     credit_minutes_total: int = 0
     credit_minutes_remaining: int = 0
+    # The bought part of credit_minutes_remaining; never expires.
+    purchased_credits_remaining: int = 0
     current_period_end: Optional[datetime] = None
     subscription_status: str = "none"
     # When paid access ends, counting renewals queued after the current period.
@@ -158,5 +163,16 @@ class PlanOfferResponse(BaseModel):
     prices: List[PlanPriceResponse]
 
 
+class CreditPackResponse(BaseModel):
+    """A one-off credit pack. Mirrors CreditPack in subscription/entitlements.py."""
+
+    slug: str
+    name: str
+    credits: int
+    amount: int
+    currency: str
+
+
 class PlansResponse(BaseModel):
     plans: List[PlanOfferResponse]
+    credit_packs: List[CreditPackResponse] = []

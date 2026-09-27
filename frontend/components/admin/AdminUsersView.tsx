@@ -1,18 +1,50 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Crown, Search } from 'lucide-react';
-import { adminUsersApi, AdminUserResponse } from '@/lib/api';
+import { adminUsersApi, AdminUserResponse, AdminUserSort } from '@/lib/api';
 import { isPaidPlanSlug, planLabel } from '@/hooks/useEntitlements';
-import { formatDate } from '@/lib/utils/dates';
+import { formatDate, formatDay } from '@/lib/utils/dates';
+import { formatAmount, formatDateTime } from '@/lib/utils/payments';
 import { AdminLayout } from './AdminLayout';
+import { usd } from './AdminUi';
 
 const PAGE_SIZE = 50;
 const GRANT_PRESETS = [7, 30, 365];
+const SORTS: { value: AdminUserSort; label: string }[] = [
+  { value: 'newest', label: 'Newest sign-ups' },
+  { value: 'last_active', label: 'Recently active' },
+  { value: 'projects', label: 'Most projects' },
+  { value: 'ai_cost', label: 'Highest AI cost' },
+];
+
+function UserFigures({ user }: { user: AdminUserResponse }) {
+  const figures: [string, string][] = [
+    ['Last active', user.last_active_on ? formatDay(user.last_active_on) : '—'],
+    ['Last login', user.last_login_at ? formatDateTime(user.last_login_at) : '—'],
+    ['Projects', user.projects.toLocaleString()],
+    ['Clips', user.clips.toLocaleString()],
+    ['Credits left', user.credits_left.toLocaleString()],
+    ['Paid', formatAmount(user.total_paid, 'INR')],
+    ['AI cost', usd(user.ai_cost_usd)],
+  ];
+  return (
+    <dl className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-x-4 gap-y-2">
+      {figures.map(([label, value]) => (
+        <div key={label}>
+          <dt className="text-[10px] font-bold text-neutral-500">{label}</dt>
+          <dd className="text-xs font-mono text-neutral-200">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
 
 export function AdminUsersView() {
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<AdminUserSort>('newest');
   const [users, setUsers] = useState<AdminUserResponse[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -31,7 +63,7 @@ export function AdminUsersView() {
       setLoading(true);
       setError(null);
       try {
-        const page = await adminUsersApi.list({ q: query || undefined, limit: PAGE_SIZE, offset });
+        const page = await adminUsersApi.list({ q: query || undefined, limit: PAGE_SIZE, offset, sort });
         setUsers((prev) => (offset === 0 ? page : [...prev, ...page]));
         setHasMore(page.length === PAGE_SIZE);
       } catch (err: any) {
@@ -40,7 +72,7 @@ export function AdminUsersView() {
         setLoading(false);
       }
     },
-    [query],
+    [query, sort],
   );
 
   useEffect(() => {
@@ -73,8 +105,21 @@ export function AdminUsersView() {
   return (
     <AdminLayout
       title="Users"
-      subtitle="Grant Pro for refunds, gifts or testing, or revoke it."
+      subtitle="Grant Pro for refunds, gifts or testing, or revoke it. Open a user to see everything they have done."
       actions={
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as AdminUserSort)}
+          aria-label="Sort users"
+          className="px-3 py-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-sm text-white focus:outline-none focus:border-amber-500/60"
+        >
+          {SORTS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
         <div className="relative w-full sm:w-72">
           <Search className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -84,6 +129,7 @@ export function AdminUsersView() {
             placeholder="Search email or name"
             className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:border-amber-500/60"
           />
+        </div>
         </div>
       }
     >
@@ -102,7 +148,12 @@ export function AdminUsersView() {
                     {u.role === 'admin' && <span className="ml-2 text-[10px] font-bold text-violet-300">ADMIN</span>}
                   </p>
                   <p className="text-xs text-neutral-400">{u.email}</p>
-                  <p className="text-[11px] text-neutral-500">Joined {formatDate(u.created_at)}</p>
+                  <p className="text-[11px] text-neutral-500">
+                    Joined {formatDate(u.created_at)} ·{' '}
+                    <Link href={`/admin/users/${u.id}`} className="font-bold text-amber-300 hover:text-amber-200">
+                      View activity
+                    </Link>
+                  </p>
                 </div>
                 <div className="text-right">
                   <p
@@ -136,6 +187,8 @@ export function AdminUsersView() {
                   </button>
                 </div>
               </div>
+
+              <UserFigures user={u} />
 
               {granting?.id === u.id && (
                 <div className="p-3 rounded-xl bg-neutral-950 border border-amber-500/30 flex flex-wrap items-center gap-2">

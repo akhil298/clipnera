@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,14 @@ from subscription.model import PlanSlug
 
 settings = get_settings()
 log = get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class LoginClient:
+    """Where a sign-in came from, kept in the login history."""
+
+    ip: str | None = None
+    user_agent: str | None = None
 
 
 class AuthService:
@@ -57,7 +66,7 @@ class AuthService:
         asyncio.create_task(self._activate_free_plan(user.id))
         return self._to_user_response(user)
 
-    async def login(self, email: str, password: str) -> TokenResponse:
+    async def login(self, email: str, password: str, client: LoginClient | None = None) -> TokenResponse:
         user = await self._repo.get_user_by_email(email)
         if not user or not user.is_active:
             log.warning(f"Login failed: invalid credentials email={email}")
@@ -86,9 +95,11 @@ class AuthService:
             )
 
         log.info(f"User logged in: user_id={user.id} email={email}")
-        return self._create_token(user.id)
+        return await self._start_session(user.id, AuthProvider.PASSWORD, client)
 
-    async def oauth_login(self, provider: str, code: str, redirect_uri: str) -> TokenResponse:
+    async def oauth_login(
+        self, provider: str, code: str, redirect_uri: str, client: LoginClient | None = None
+    ) -> TokenResponse:
         provider_enum = OAuthProvider.get_provider_enum(provider)
 
         if provider == "google":
@@ -111,7 +122,7 @@ class AuthService:
         account = await self._repo.get_account(provider_enum, provider_user_id)
         if account:
             log.info(f"OAuth login: existing account user_id={account.user_id}")
-            return self._create_token(account.user_id)
+            return await self._start_session(account.user_id, provider_enum, client)
 
         # Case 2: User with same email exists → link OAuth
         user = await self._repo.get_user_by_email(email)
@@ -122,7 +133,7 @@ class AuthService:
                 provider_user_id=provider_user_id,
             )
             log.info(f"OAuth login: linked to existing user user_id={user.id}")
-            return self._create_token(user.id)
+            return await self._start_session(user.id, provider_enum, client)
 
         # Case 3: New user → create
         user = await self._repo.create_oauth_user(
@@ -137,7 +148,7 @@ class AuthService:
         )
         log.info(f"OAuth login: new user created user_id={user.id}")
         asyncio.create_task(self._activate_free_plan(user.id))
-        return self._create_token(user.id)
+        return await self._start_session(user.id, provider_enum, client)
 
     async def forgot_password(self, email: str) -> None:
         user = await self._repo.get_user_by_email(email)
@@ -182,7 +193,10 @@ class AuthService:
                 return account
         return None
 
-    def _create_token(self, user_id: str) -> TokenResponse:
+    async def _start_session(self, user_id: str, method: AuthProvider, client: LoginClient | None) -> TokenResponse:
+        """Issue an access token and record the sign-in in the login history."""
+        client = client or LoginClient()
+        await self._repo.add_login_event(user_id, method.value, client.ip, client.user_agent)
         token = create_access_token(user_id)
         return TokenResponse(
             access_token=token,

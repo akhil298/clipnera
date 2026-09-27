@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { CreditCard, CheckCircle2, Copy, Check, ImageUp, Smartphone } from 'lucide-react';
-import { paymentsApi, UpiCheckoutResponse } from '@/lib/api';
+import { paymentsApi, type CreditPackResponse, type UpiCheckoutResponse } from '@/lib/api';
 import type { SelectedPlan } from './PlanSelectionModal';
 import {
   BILLING_PERIOD_LABELS,
@@ -17,6 +17,8 @@ interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   plan: SelectedPlan | null;
+  /** A credit pack to buy instead of a plan. */
+  creditPack?: CreditPackResponse | null;
   onPaymentComplete: () => void;
 }
 
@@ -28,7 +30,7 @@ function screenshotError(file: File): string | null {
   return null;
 }
 
-export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: PaymentModalProps) {
+export function PaymentModal({ isOpen, onClose, plan, creditPack = null, onPaymentComplete }: PaymentModalProps) {
   const [step, setStep] = useState<Step>('confirm');
   const [checkout, setCheckout] = useState<UpiCheckoutResponse | null>(null);
   const [screenshot, setScreenshot] = useState<File | null>(null);
@@ -39,11 +41,12 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
 
   const planSlug = plan?.slug;
   const planType = plan?.planType;
+  const packSlug = creditPack?.slug;
 
-  // Each time the modal opens for a plan, start over and load its UPI price.
-  // The amount always comes from the server; the user cannot change it.
+  // Each time the modal opens for a purchase, start over and load its UPI
+  // price. The amount always comes from the server; the user cannot change it.
   useEffect(() => {
-    if (!isOpen || !planSlug || !planType) return;
+    if (!isOpen || !(packSlug || (planSlug && planType))) return;
     let cancelled = false;
     setStep('confirm');
     setCheckout(null);
@@ -51,8 +54,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
     setUtr('');
     setError(null);
     setLoading(true);
-    paymentsApi
-      .getCheckout(planSlug, planType)
+    (packSlug ? paymentsApi.getCreditPackCheckout(packSlug) : paymentsApi.getCheckout(planSlug!, planType!))
       .then((data) => {
         if (!cancelled) setCheckout(data);
       })
@@ -65,7 +67,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
     return () => {
       cancelled = true;
     };
-  }, [isOpen, planSlug, planType]);
+  }, [isOpen, planSlug, planType, packSlug]);
 
   const utrValid = UTR_PATTERN.test(normalizeUtr(utr));
   const canSubmit = Boolean(checkout && screenshot && utrValid && !loading);
@@ -82,12 +84,12 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
     setLoading(true);
     setError(null);
     try {
-      await paymentsApi.submit({
-        plan_slug: checkout.plan_slug,
-        plan_type: checkout.plan_type,
-        utr_number: normalizeUtr(utr),
-        screenshot,
-      });
+      const utrNumber = normalizeUtr(utr);
+      if (creditPack) {
+        await paymentsApi.submitCreditPack({ credit_pack: creditPack.slug, utr_number: utrNumber, screenshot });
+      } else if (plan) {
+        await paymentsApi.submit({ plan_slug: plan.slug, plan_type: plan.planType, utr_number: utrNumber, screenshot });
+      }
       setStep('submitted');
     } catch (err: any) {
       setError(err.message || 'Failed to submit payment');
@@ -103,7 +105,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
     setTimeout(() => setCopied(false), 1500);
   };
 
-  if (!isOpen || !plan) return null;
+  if (!isOpen || (!plan && !creditPack)) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -132,18 +134,33 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
           {step === 'confirm' && (
             <div className="space-y-6">
               <div className="p-4 rounded-xl bg-neutral-950 border border-neutral-800">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-neutral-300">Plan</span>
-                  <span className="text-sm font-bold text-white">{plan.name}</span>
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-neutral-300">Billing</span>
-                  <span className="text-sm font-bold text-white">{BILLING_PERIOD_LABELS[plan.planType]}</span>
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-neutral-300">Credits</span>
-                  <span className="text-sm font-bold text-amber-400">{plan.creditMinutes} min every 30 days</span>
-                </div>
+                {creditPack ? (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-neutral-300">Credit pack</span>
+                      <span className="text-sm font-bold text-white">{creditPack.name}</span>
+                    </div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-neutral-300">Credits</span>
+                      <span className="text-sm font-bold text-amber-400">{creditPack.credits} · never expire</span>
+                    </div>
+                  </>
+                ) : plan && (
+                  <>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-neutral-300">Plan</span>
+                      <span className="text-sm font-bold text-white">{plan.name}</span>
+                    </div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-neutral-300">Billing</span>
+                      <span className="text-sm font-bold text-white">{BILLING_PERIOD_LABELS[plan.planType]}</span>
+                    </div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-neutral-300">Credits</span>
+                      <span className="text-sm font-bold text-amber-400">{plan.creditMinutes} every 30 days</span>
+                    </div>
+                  </>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-neutral-300">Amount</span>
                   <span className="text-sm font-bold text-white">
@@ -154,7 +171,10 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
 
               <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
                 <p className="text-xs text-amber-300 leading-relaxed">
-                  Pay by scanning our UPI QR code with any UPI app, then upload the payment screenshot and UTR. Your plan is activated as soon as we verify the payment.
+                  Pay by scanning our UPI QR code with any UPI app, then upload the payment screenshot and UTR.{' '}
+                  {creditPack
+                    ? 'Your credits are added as soon as we verify the payment.'
+                    : 'Your plan is activated as soon as we verify the payment.'}
                 </p>
               </div>
 
@@ -284,7 +304,7 @@ export function PaymentModal({ isOpen, onClose, plan, onPaymentComplete }: Payme
               <div>
                 <h3 className="text-lg font-bold text-white">Payment submitted</h3>
                 <p className="text-sm text-neutral-400 mt-1">
-                  Pro activation is pending verification, which usually takes a few minutes. Track it under Settings → Plan &amp; Billing → My Payments.
+                  {creditPack ? 'Your credits will be added once we verify the payment' : 'Pro activation is pending verification'}, which usually takes a few minutes. Track it under Settings → Plan &amp; Billing → My Payments.
                 </p>
               </div>
               <button

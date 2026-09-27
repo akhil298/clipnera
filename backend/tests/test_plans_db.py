@@ -75,7 +75,7 @@ async def db(monkeypatch):
     async with maker() as session:
         session.add_all(
             [
-                Plan(id="plan-free", name="Free", slug=PlanSlug.FREE, credit_minutes=60, price_monthly=0),
+                Plan(id="plan-free", name="Free", slug=PlanSlug.FREE, credit_minutes=20, price_monthly=0),
                 Plan(id="plan-pro", name="Pro", slug=PlanSlug.PRO, credit_minutes=600, price_monthly=0, price_inr=499),
                 Plan(
                     id="plan-pp", name="Pro Plus", slug=PlanSlug.PRO_PLUS, credit_minutes=1200,
@@ -140,7 +140,7 @@ async def test_new_user_starts_free_and_free_credits_cannot_be_farmed(db):
             await SubscriptionService.for_session(session).activate_free_plan(user_id)
 
     plan, balance, expires = await _state(db, user_id)
-    assert (plan, balance, expires) == ("free", 60, None)
+    assert (plan, balance, expires) == ("free", 20, None)
 
 
 # Payments
@@ -308,13 +308,44 @@ async def test_free_credits_reset_every_30_days_from_signup(db, clock):
     async with db() as session:
         service = SubscriptionService.for_session(session)
         await service.activate_free_plan(user_id)
-        await service.deduct_credits(user_id, 50, "render")
+        await service.deduct_credits(user_id, 10, "render")
     assert (await _state(db, user_id))[1] == 10
 
     clock["delta"] = timedelta(days=29)
     assert (await _state(db, user_id))[1] == 10
     clock["delta"] = timedelta(days=30, minutes=1)
-    assert (await _state(db, user_id))[1] == 60
+    assert (await _state(db, user_id))[1] == 20
+
+
+@pytest.mark.asyncio
+async def test_bought_credits_survive_resets_and_are_spent_last(db, clock):
+    user_id = await _user(db, "pack@example.com")
+    async with db() as session:
+        await SubscriptionService.for_session(session).activate_free_plan(user_id)
+        tx = await ManualPaymentRepository(session).create(
+            user_id=user_id, amount=299, currency="INR", utr_number="777777777777",
+            screenshot_key=None, payment_method="upi_manual", credit_pack="creator", credits=200,
+        )
+    async with db() as session:
+        summary = await SubscriptionService.for_session(session).get_plan_summary(user_id)
+    # A pending pack changes no plan, so nothing should say activation is pending.
+    assert summary.has_pending_payment is False
+
+    async with db() as session:
+        await _payments(session).approve(tx.id, admin_id=user_id)
+    async with db() as session:
+        service = SubscriptionService.for_session(session)
+        summary = await service.get_plan_summary(user_id)
+        assert (summary.credit_minutes_remaining, summary.purchased_credits_remaining) == (220, 200)
+        # 20 Free credits go first, then 10 bought ones.
+        await service.deduct_credits(user_id, 30, "render")
+        summary = await service.get_plan_summary(user_id)
+        assert (summary.credit_minutes_remaining, summary.purchased_credits_remaining) == (190, 190)
+
+    clock["delta"] = timedelta(days=30, minutes=1)
+    async with db() as session:
+        summary = await SubscriptionService.for_session(session).get_plan_summary(user_id)
+    assert (summary.credit_minutes_remaining, summary.purchased_credits_remaining) == (210, 190)
 
 
 # Pro Plus
@@ -373,7 +404,7 @@ async def test_admin_can_grant_extend_and_revoke_pro(db):
 
     revoked = await set_plan("free")
     assert (revoked.plan, revoked.plan_expires_at) == ("free", None)
-    assert (await _state(db, user_id))[1] == 60
+    assert (await _state(db, user_id))[1] == 20
 
 
 @pytest.mark.asyncio

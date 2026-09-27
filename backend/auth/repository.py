@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.model import User, UserAccount, AuthProvider
+from auth.model import LoginEvent, User, UserAccount, AuthProvider
 from core.exceptions import CustomException
 from core.security import hash_password
 
@@ -111,4 +111,10 @@ class UserRepository:
 
     async def update_password(self, account: UserAccount, new_password: str) -> None:
         account.password_hash = await asyncio.to_thread(hash_password, new_password)
+        await self._session.commit()
+
+    async def add_login_event(self, user_id: str, method: str, ip: str | None, user_agent: str | None) -> None:
+        self._session.add(
+            LoginEvent(user_id=user_id, method=method, ip=ip, user_agent=(user_agent or None) and user_agent[:255])
+        )
         await self._session.commit()

@@ -51,6 +51,7 @@ export const FREE_TIER_FALLBACK: EntitlementsResponse = {
   },
   credit_minutes_total: 0,
   credit_minutes_remaining: 0,
+  purchased_credits_remaining: 0,
   current_period_end: null,
   subscription_status: 'none',
   plan_expires_at: null,
@@ -69,6 +70,14 @@ export const daysUntil = (isoDate: string | null): number | null => {
   if (Number.isNaN(end)) return null;
   const days = Math.ceil((end - Date.now()) / 86_400_000);
   return days >= 0 ? days : null;
+};
+
+/** When the credit balance next resets, as a short phrase. */
+export const creditResetLabel = (nextResetAt: string | null): string => {
+  const days = daysUntil(nextResetAt);
+  if (days === null) return 'Resets every 30 days';
+  if (days === 0) return 'Resets today';
+  return `Resets in ${days} day${days === 1 ? '' : 's'}`;
 };
 
 export interface EntitlementsContextValue {
@@ -116,6 +125,12 @@ export const estimateVideoCredits = (
   const extra = Math.max(0, ratioCount - 1) * entitlements.extra_aspect_ratio_credit_share;
   return Math.max(1, Math.ceil(base * (1 + extra)));
 };
+
+/** Whole minutes of source video a credit balance covers at one output format. */
+export const videoMinutesFor = (entitlements: EntitlementsResponse, credits: number): number =>
+  entitlements.credits_per_video_minute > 0
+    ? Math.floor(credits / entitlements.credits_per_video_minute)
+    : 0;
 
 /** Whether a plan slug is a paid tier. The one place the UI compares slugs. */
 export const isPaidPlanSlug = (plan: string): boolean => plan !== 'free';

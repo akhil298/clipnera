@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth.activity import record_activity
 from auth.model import User, UserRole
 from auth.repository import UserRepository
 from auth.oauth_service import OAuthService
@@ -42,6 +43,7 @@ async def get_current_user(request: Request) -> dict:
             status_code=401,
         )
 
+    await record_activity(payload["sub"])
     return {"user_id": payload["sub"]}
 
 

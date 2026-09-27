@@ -69,6 +69,31 @@ async def submit_payment(
     )
 
 
+@payments.get("/credit-packs/{pack_slug}/qr", response_model=UpiCheckoutResponse)
+async def get_credit_pack_checkout(
+    pack_slug: str, _: CurrentUserDep, service: PaymentServiceDep
+) -> UpiCheckoutResponse:
+    return await service.get_credit_pack_checkout(pack_slug)
+
+
+@payments.post("/credit-packs", response_model=PaymentResponse, status_code=201)
+async def submit_credit_pack_payment(
+    current_user: CurrentUserDep,
+    service: PaymentServiceDep,
+    credit_pack: str = Form(...),
+    utr_number: str = Form(...),
+    screenshot: UploadFile = File(...),
+) -> PaymentResponse:
+    data = await screenshot.read(MAX_SCREENSHOT_BYTES + 1)
+    return await service.submit_credit_pack(
+        user_id=current_user["user_id"],
+        pack_slug=credit_pack,
+        utr_number=utr_number,
+        screenshot=data,
+        content_type=screenshot.content_type,
+    )
+
+
 @payments.get("/my", response_model=list[PaymentResponse])
 async def list_my_payments(current_user: CurrentUserDep, service: PaymentServiceDep) -> list[PaymentResponse]:
     return await service.list_for_user(current_user["user_id"])

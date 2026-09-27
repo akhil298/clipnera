@@ -57,6 +57,27 @@ PLAN_PRICES: dict[BillingPeriod, PlanPrice] = {
     BillingPeriod.YEARLY: PlanPrice(amount_inr=6990, days=365),
 }
 
+
+@dataclass(frozen=True)
+class CreditPack:
+    slug: str
+    name: str
+    credits: int
+    amount_inr: int
+
+
+# One-off credits sold through UPI, on any plan. Bought credits never expire and
+# are spent after the plan's allowance. Each costs more per credit than Pro
+# (₹699 for 600), so a subscription stays the better deal for regular use.
+CREDIT_PACKS: dict[str, CreditPack] = {
+    pack.slug: pack
+    for pack in (
+        CreditPack(slug="starter", name="Starter", credits=60, amount_inr=99),
+        CreditPack(slug="creator", name="Creator", credits=200, amount_inr=299),
+        CreditPack(slug="studio", name="Studio", credits=500, amount_inr=649),
+    )
+}
+
 # Caption templates available without a paid plan. The rest of the catalogue
 # (see subtitle_styling/templates.py) is a Pro feature.
 FREE_CAPTION_STYLES: tuple[str, ...] = (

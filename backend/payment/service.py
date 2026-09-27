@@ -16,7 +16,7 @@ from core.exceptions import CustomException
 from core.logging_config import get_logger
 from payment.repository import ManualPaymentRepository
 from payment.schema import AdminPaymentResponse, PaymentResponse, UpiCheckoutResponse
-from subscription.entitlements import PLAN_PRICES, PURCHASABLE_PLAN
+from subscription.entitlements import CREDIT_PACKS, PLAN_PRICES, PURCHASABLE_PLAN, CreditPack
 from subscription.model import BillingPeriod, PaymentStatus, PaymentTransaction, Plan
 from subscription.repository import PlanRepository
 from subscription.service import SubscriptionService
@@ -102,23 +102,21 @@ class PaymentService:
 
     async def get_checkout(self, plan_slug: str, plan_type: BillingPeriod) -> UpiCheckoutResponse:
         plan = await self._get_purchasable_plan(plan_slug)
-        amount = float(PLAN_PRICES[plan_type].amount_inr)
-        upi_uri = build_upi_uri(
-            self._settings.UPI_ID,
-            self._settings.UPI_PAYEE_NAME,
-            amount,
+        return self._checkout(
+            float(PLAN_PRICES[plan_type].amount_inr),
             f"{self._settings.APP_NAME} {plan.name} {plan_type.value}",
-        )
-        return UpiCheckoutResponse(
             plan_slug=_slug(plan),
             plan_name=plan.name,
             plan_type=plan_type.value,
-            amount=amount,
-            currency="INR",
-            upi_id=self._settings.UPI_ID,
-            payee_name=self._settings.UPI_PAYEE_NAME,
-            upi_uri=upi_uri,
-            qr_image=segno.make(upi_uri, error="m").svg_data_uri(scale=8, border=2),
+        )
+
+    async def get_credit_pack_checkout(self, pack_slug: str) -> UpiCheckoutResponse:
+        pack = self._get_credit_pack(pack_slug)
+        return self._checkout(
+            float(pack.amount_inr),
+            f"{self._settings.APP_NAME} {pack.credits} credits",
+            credit_pack=pack.slug,
+            credits=pack.credits,
         )
 
     async def submit(
@@ -131,6 +129,40 @@ class PaymentService:
         content_type: str | None,
     ) -> PaymentResponse:
         plan = await self._get_purchasable_plan(plan_slug)
+        tx = await self._record_payment(
+            user_id,
+            utr_number,
+            screenshot,
+            content_type,
+            plan_id=plan.id,
+            plan_type=plan_type,
+            # Always the server's price for this period, never the client's.
+            amount=float(PLAN_PRICES[plan_type].amount_inr),
+        )
+        log.info(f"UPI payment submitted: user={user_id} plan={_slug(plan)} period={plan_type.value} tx={tx.id}")
+        return self._to_response(tx)
+
+    async def submit_credit_pack(
+        self, user_id: str, pack_slug: str, utr_number: str, screenshot: bytes, content_type: str | None
+    ) -> PaymentResponse:
+        pack = self._get_credit_pack(pack_slug)
+        tx = await self._record_payment(
+            user_id,
+            utr_number,
+            screenshot,
+            content_type,
+            credit_pack=pack.slug,
+            credits=pack.credits,
+            amount=float(pack.amount_inr),
+        )
+        log.info(f"UPI payment submitted: user={user_id} credit_pack={pack.slug} tx={tx.id}")
+        return self._to_response(tx)
+
+    async def _record_payment(
+        self, user_id: str, utr_number: str, screenshot: bytes, content_type: str | None, **purchase
+    ) -> PaymentTransaction:
+        """Validate the proof, store the screenshot and create the pending
+        transaction for ``purchase`` (a plan period or a credit pack)."""
         utr = normalize_utr(utr_number)
         image_type = validate_screenshot(screenshot, content_type)
         await self._enforce_rate_limit(user_id)
@@ -142,25 +174,19 @@ class PaymentService:
         await asyncio.to_thread(_storage().put_object, bucket, key, screenshot, ContentType=image_type)
 
         try:
-            tx = await self._tx_repo.create(
+            return await self._tx_repo.create(
                 user_id=user_id,
-                plan_id=plan.id,
-                # Always the server's price for this period, never the client's.
-                amount=float(PLAN_PRICES[plan_type].amount_inr),
                 currency="INR",
-                plan_type=plan_type,
                 utr_number=utr,
                 screenshot_key=key,
                 payment_method=PAYMENT_METHOD,
+                **purchase,
             )
         except IntegrityError:
             # Lost a race with another submission of the same UTR.
             await self._tx_repo.rollback()
             await asyncio.to_thread(_storage().delete_object, bucket, key)
             raise _duplicate_utr()
-
-        log.info(f"UPI payment submitted: user={user_id} plan={_slug(plan)} period={plan_type.value} tx={tx.id}")
-        return self._to_response(tx)
 
     async def list_for_user(self, user_id: str) -> list[PaymentResponse]:
         return [self._to_response(tx) for tx in await self._tx_repo.get_by_user(user_id)]
@@ -177,15 +203,21 @@ class PaymentService:
         return self._to_admin_response(await self._get_tx(tx_id))
 
     async def approve(self, tx_id: str, admin_id: str) -> AdminPaymentResponse:
-        """Mark the payment SUCCESS and give the user its plan for the period
-        bought, in one transaction. A renewal extends the current end date."""
+        """Mark the payment SUCCESS and give the user what it bought, in one
+        transaction: the plan for the period paid (a renewal extends the current
+        end date) or the credit pack's credits."""
         tx = await self._get_tx(tx_id)
         if not await self._tx_repo.resolve_pending(tx_id, PaymentStatus.SUCCESS, verified_by=admin_id):
             raise _already_resolved()
 
-        await self._subscription_service.extend_plan(
-            tx.user_id, tx.plan, PLAN_PRICES[BillingPeriod(tx.plan_type)].days, commit=False
-        )
+        if tx.credit_pack:
+            await self._subscription_service.grant_purchased_credits(
+                tx.user_id, tx.credits, f"Bought {tx.credits} credits", reference_id=tx.id, commit=False
+            )
+        else:
+            await self._subscription_service.extend_plan(
+                tx.user_id, tx.plan, PLAN_PRICES[BillingPeriod(tx.plan_type)].days, commit=False
+            )
         await self._tx_repo.commit()
         log.info(f"UPI payment approved: tx={tx_id} user={tx.user_id} by={admin_id}")
         return await self.get_for_admin(tx_id)
@@ -202,13 +234,35 @@ class PaymentService:
 
     # Helpers
 
-    async def _get_purchasable_plan(self, plan_slug: str) -> Plan:
+    def _checkout(self, amount: float, note: str, **item) -> UpiCheckoutResponse:
+        upi_uri = build_upi_uri(self._settings.UPI_ID, self._settings.UPI_PAYEE_NAME, amount, note)
+        return UpiCheckoutResponse(
+            **item,
+            amount=amount,
+            currency="INR",
+            upi_id=self._settings.UPI_ID,
+            payee_name=self._settings.UPI_PAYEE_NAME,
+            upi_uri=upi_uri,
+            qr_image=segno.make(upi_uri, error="m").svg_data_uri(scale=8, border=2),
+        )
+
+    def _require_upi(self) -> None:
         if not self._settings.UPI_ID:
             raise CustomException(
                 message="UPI payments are not available right now",
                 code="PAYMENTS_UNAVAILABLE",
                 status_code=503,
             )
+
+    def _get_credit_pack(self, pack_slug: str) -> CreditPack:
+        self._require_upi()
+        pack = CREDIT_PACKS.get(pack_slug)
+        if not pack:
+            raise CustomException(message="Unknown credit pack", code="CREDIT_PACK_NOT_FOUND", status_code=400)
+        return pack
+
+    async def _get_purchasable_plan(self, plan_slug: str) -> Plan:
+        self._require_upi()
         plan = await self._plan_repo.get_by_slug(plan_slug)
         if plan_slug != PURCHASABLE_PLAN or not plan or not plan.is_active:
             raise CustomException(
@@ -255,9 +309,11 @@ class PaymentService:
     def _response_fields(self, tx: PaymentTransaction) -> dict:
         return {
             "id": tx.id,
-            "plan_slug": _slug(tx.plan),
-            "plan_name": tx.plan.name,
-            "plan_type": str(getattr(tx.plan_type, "value", tx.plan_type)),
+            "plan_slug": _slug(tx.plan) if tx.plan else None,
+            "plan_name": tx.plan.name if tx.plan else None,
+            "plan_type": str(getattr(tx.plan_type, "value", tx.plan_type)) if tx.plan_type else None,
+            "credit_pack": tx.credit_pack,
+            "credits": tx.credits,
             "amount": float(tx.amount),
             "currency": tx.currency,
             "utr_number": tx.utr_number,

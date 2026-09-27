@@ -7,3 +7,8 @@ export function parseApiDate(iso: string): Date {
 export function formatDate(iso: string): string {
   return parseApiDate(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
 }
+
+/** Format a calendar day the API sends as YYYY-MM-DD (a UTC day). */
+export function formatDay(day: string): string {
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, { dateStyle: 'medium', timeZone: 'UTC' });
+}

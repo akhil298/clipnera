@@ -30,7 +30,7 @@ import {
 import Link from 'next/link';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
 import { Skeleton } from '@/components/skeletons';
-import { useEntitlements, planLabel, isPaidPlan, daysUntil } from '@/hooks/useEntitlements';
+import { useEntitlements, planLabel, isPaidPlan, creditResetLabel } from '@/hooks/useEntitlements';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 interface SidebarProps {
@@ -71,8 +71,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [foldersExpanded, setFoldersExpanded] = useState(true);
   const { entitlements, isLoading: planLoading } = useEntitlements();
   const { flags } = useFeatureFlags();
-  // Credits reset every 30 days on every plan, Free included.
-  const renewalDays = daysUntil(entitlements.next_credit_reset_at);
   const activeWorkspace = workspaces.find((w) => w.id === user.activeWorkspaceId) || workspaces[0];
 
   const primaryNavItems = [
@@ -495,7 +493,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span>AI Render Quota</span>
               </span>
               <span className="text-[11px] font-mono text-amber-400 font-bold">
-                {user.aiCreditsMinutesRemaining}m / {user.aiCreditsTotal}m
+                {user.aiCreditsMinutesRemaining} / {user.aiCreditsTotal} credits
               </span>
             </div>
             <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
@@ -506,11 +504,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div className="flex items-center justify-between text-[10px] text-neutral-400 pt-0.5">
               <span>
-                {renewalDays === null
-                  ? 'Resets every 30 days'
-                  : renewalDays === 0
-                  ? 'Resets today'
-                  : `Resets in ${renewalDays} day${renewalDays === 1 ? '' : 's'}`}
+                {creditResetLabel(entitlements.next_credit_reset_at)}
               </span>
               <button
                 onClick={() => handleNavClick('settings')}
@@ -524,10 +518,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div
             onClick={() => handleNavClick('settings')}
             className="cursor-pointer flex flex-col items-center p-2 rounded-xl bg-neutral-900 border border-neutral-800 text-amber-400 hover:border-amber-500/50 transition-all"
-            title={`AI Credits: ${user.aiCreditsMinutesRemaining}m remaining`}
+            title={`AI Credits: ${user.aiCreditsMinutesRemaining} remaining`}
           >
             <Zap className="w-4 h-4 fill-amber-400 mb-0.5" />
-            <span className="text-[9px] font-mono font-bold">{user.aiCreditsMinutesRemaining}m</span>
+            <span className="text-[9px] font-mono font-bold">{user.aiCreditsMinutesRemaining}</span>
           </div>
         )}
 

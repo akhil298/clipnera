@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Path, Request
 
 from auth.dependencies import AuthServiceDep, CurrentUserDep
+from auth.service import LoginClient
 from auth.schema import (
     RegisterRequest,
     LoginRequest,
@@ -16,6 +17,14 @@ from auth.schema import (
 auth = APIRouter(prefix="/auth", tags=["auth"])
 
 
+def _login_client(request: Request) -> LoginClient:
+    # Behind nginx, uvicorn's proxy headers make request.client the visitor's address.
+    return LoginClient(
+        ip=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+
+
 @auth.post("/register", response_model=UserResponse, status_code=201)
 async def register(request: Request, data: RegisterRequest, auth_service: AuthServiceDep):
     return await auth_service.register(data)
@@ -23,7 +32,7 @@ async def register(request: Request, data: RegisterRequest, auth_service: AuthSe
 
 @auth.post("/login", response_model=TokenResponse)
 async def login(request: Request, data: LoginRequest, auth_service: AuthServiceDep):
-    return await auth_service.login(data.email, data.password)
+    return await auth_service.login(data.email, data.password, _login_client(request))
 
 
 @auth.post("/logout", response_model=MessageResponse)
@@ -39,7 +48,7 @@ async def oauth_login(
     data: OAuthLoginRequest = ...,
     auth_service: AuthServiceDep = ...,
 ):
-    return await auth_service.oauth_login(provider.value, data.code, data.redirect_uri)
+    return await auth_service.oauth_login(provider.value, data.code, data.redirect_uri, _login_client(request))
 
 
 @auth.post("/forgot-password", response_model=MessageResponse)

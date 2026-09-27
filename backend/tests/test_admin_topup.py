@@ -21,6 +21,9 @@ class _LedgerRepo:
     async def get_latest_balance(self, user_id):
         return self.balance
 
+    async def get_latest_balances(self, user_id):
+        return self.balance, 0
+
     async def add_entry(self, **fields):
         self.entries.append(fields)
         return SimpleNamespace(id="entry-1", **fields)

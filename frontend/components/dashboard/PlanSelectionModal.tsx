@@ -37,7 +37,7 @@ const limitLabel = (limit: number | null, noun: string) =>
 /** The comparison rows for a plan, all derived from the server's plan rules. */
 function comparisonRows(c: PlanCapabilities, social: boolean): { label: string; included: boolean }[] {
   return [
-    { label: `${c.credit_minutes} AI minutes every 30 days`, included: true },
+    { label: `${c.credit_minutes} credits every 30 days`, included: true },
     { label: `Videos up to ${Math.round(c.max_upload_duration_seconds / 60)} min`, included: true },
     { label: `${c.max_clips_per_video} clips per video`, included: true },
     { label: `Formats: ${c.aspect_ratios.join(', ')}`, included: true },

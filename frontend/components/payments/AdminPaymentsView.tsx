@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, Copy, Search, XCircle } from 'lucide-react';
 import { adminPaymentsApi, AdminPaymentResponse, PaymentStatus } from '@/lib/api';
 import { AdminLayout } from '@/components/admin/AdminLayout';
-import { BILLING_PERIOD_LABELS, formatAmount, formatDateTime } from '@/lib/utils/payments';
+import { formatAmount, formatDateTime, paymentLabel } from '@/lib/utils/payments';
 import { PaymentStatusBadge } from './PaymentStatusBadge';
 
 const PAGE_SIZE = 50;
@@ -92,7 +92,7 @@ export function AdminPaymentsView() {
 
   const approve = (p: AdminPaymentResponse) => {
     const confirmed = window.confirm(
-      `Approve ${formatAmount(p.amount, p.currency)} from ${p.user_email} (UTR ${p.utr_number})?\n\nThis gives them ${p.plan_name} (${BILLING_PERIOD_LABELS[p.plan_type].toLowerCase()}), added on top of any time they have left.`,
+      `Approve ${formatAmount(p.amount, p.currency)} from ${p.user_email} (UTR ${p.utr_number})?\n\n${p.credits ? `This adds ${p.credits} credits that never expire.` : `This gives them ${paymentLabel(p)}, added on top of any time they have left.`}`,
     );
     if (confirmed) runAction(p.id, () => adminPaymentsApi.approve(p.id));
   };
@@ -177,7 +177,7 @@ export function AdminPaymentsView() {
               <div className="space-y-1 text-right">
                 <p className="text-lg font-bold text-white">{formatAmount(p.amount, p.currency)}</p>
                 <p className="text-xs text-neutral-400">
-                  {p.plan_name} · {BILLING_PERIOD_LABELS[p.plan_type]}
+                  {paymentLabel(p)}
                 </p>
                 {p.utr_number && (
                   <button

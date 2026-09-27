@@ -139,9 +139,12 @@ class PaymentTransactionRepository:
         self._session = session
 
     async def has_pending(self, user_id: str) -> bool:
+        """Whether a plan payment awaits approval. Credit-pack payments do not
+        count: they change no plan, so nothing should say activation is pending."""
         stmt = select(PaymentTransaction.id).where(
             PaymentTransaction.user_id == user_id,
             PaymentTransaction.status == PaymentStatus.PENDING,
+            PaymentTransaction.plan_id.is_not(None),
         )
         result = await self._session.execute(stmt.limit(1))
         return result.first() is not None
@@ -160,7 +163,7 @@ class CreditLedgerRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get_latest_balance(self, user_id: str) -> int:
+    async def _latest_entry(self, user_id: str) -> CreditLedger | None:
         stmt = (
             select(CreditLedger)
             .where(CreditLedger.user_id == user_id)
@@ -168,8 +171,31 @@ class CreditLedgerRepository:
             .limit(1)
         )
         result = await self._session.execute(stmt)
-        entry = result.scalar_one_or_none()
+        return result.scalar_one_or_none()
+
+    async def get_latest_balance(self, user_id: str) -> int:
+        entry = await self._latest_entry(user_id)
         return entry.balance_after if entry else 0
+
+    async def get_latest_balances(self, user_id: str) -> tuple[int, int]:
+        """The total balance and the bought part of it."""
+        entry = await self._latest_entry(user_id)
+        return (entry.balance_after, entry.purchased_balance_after) if entry else (0, 0)
+
+    async def get_latest_charge(self, user_id: str, reference_id: str) -> CreditLedger | None:
+        """The newest deduction made for ``reference_id``."""
+        stmt = (
+            select(CreditLedger)
+            .where(
+                CreditLedger.user_id == user_id,
+                CreditLedger.reference_id == reference_id,
+                CreditLedger.amount < 0,
+            )
+            .order_by(desc(CreditLedger.created_at))
+            .limit(1)
+        )
+        result = await self._session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def get_balance_at_time(self, user_id: str, at: datetime) -> int:
         stmt = (
@@ -182,11 +208,13 @@ class CreditLedgerRepository:
         entry = result.scalar_one_or_none()
         return entry.balance_after if entry else 0
 
-    async def add_entry(self, user_id: str, amount: int, balance_after: int, reason: str, reference_id: str | None = None, reference_type: str | None = None, commit: bool = True, created_by: str | None = None) -> CreditLedger:
+    async def add_entry(self, user_id: str, amount: int, balance_after: int, purchased_balance_after: int, reason: str, reference_id: str | None = None, reference_type: str | None = None, commit: bool = True, created_by: str | None = None, purchased_amount: int = 0) -> CreditLedger:
         entry = CreditLedger(
             user_id=user_id,
             amount=amount,
             balance_after=balance_after,
+            purchased_balance_after=purchased_balance_after,
+            purchased_amount=purchased_amount,
             reason=reason,
             reference_id=reference_id,
             reference_type=reference_type,

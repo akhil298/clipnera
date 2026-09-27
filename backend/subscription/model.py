@@ -4,7 +4,7 @@ import enum
 from datetime import date, datetime
 from uuid import uuid4
 
-from sqlalchemy import String, Integer, Text, Boolean, Date, DateTime, Enum, ForeignKey, Index, Numeric, UniqueConstraint
+from sqlalchemy import CheckConstraint, String, Integer, Text, Boolean, Date, DateTime, Enum, ForeignKey, Index, Numeric, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.database import Base
@@ -93,15 +93,28 @@ class UserSubscription(Base):
 
 class PaymentTransaction(Base):
     __tablename__ = "payment_transactions"
-    __table_args__ = (Index("ix_payment_transactions_status_created_at", "status", "created_at"),)
+    __table_args__ = (
+        Index("ix_payment_transactions_status_created_at", "status", "created_at"),
+        CheckConstraint(
+            "(plan_id IS NOT NULL AND plan_type IS NOT NULL AND credit_pack IS NULL AND credits IS NULL)"
+            " OR (plan_id IS NULL AND plan_type IS NULL AND credit_pack IS NOT NULL AND credits > 0)",
+            name="ck_payment_transactions_plan_or_credit_pack",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    plan_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("plans.id", ondelete="RESTRICT"), nullable=False, index=True
+    # A payment buys either a plan period (plan_id, plan_type) or a credit pack
+    # (credit_pack, credits); the check constraint enforces exactly one.
+    plan_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("plans.id", ondelete="RESTRICT"), nullable=True, index=True
     )
+    credit_pack: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Credits granted on approval, fixed at purchase so a later price change
+    # does not alter what was bought.
+    credits: Mapped[int | None] = mapped_column(Integer, nullable=True)
     amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
     status: Mapped[PaymentStatus] = mapped_column(
@@ -113,11 +126,9 @@ class PaymentTransaction(Base):
     payment_method: Mapped[str | None] = mapped_column(String(50), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Which period was bought; approval extends the plan by that period's days.
-    plan_type: Mapped[BillingPeriod] = mapped_column(
+    plan_type: Mapped[BillingPeriod | None] = mapped_column(
         Enum(BillingPeriod, values_callable=lambda obj: [e.value for e in obj], name="billing_period"),
-        default=BillingPeriod.MONTHLY,
-        server_default=BillingPeriod.MONTHLY.value,
-        nullable=False,
+        nullable=True,
     )
     # Unique so one bank transfer cannot be claimed twice.
     utr_number: Mapped[str | None] = mapped_column(String(30), unique=True, nullable=True)
@@ -133,7 +144,7 @@ class PaymentTransaction(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
 
-    plan: Mapped["Plan"] = relationship("Plan", back_populates="transactions", lazy="selectin")
+    plan: Mapped["Plan | None"] = relationship("Plan", back_populates="transactions", lazy="selectin")
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="selectin")
 
 
@@ -146,7 +157,13 @@ class CreditLedger(Base):
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Total balance after this entry, bought credits included.
     balance_after: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The part of balance_after that was bought: it survives cycle resets and is
+    # spent only once the plan's allowance runs out.
+    purchased_balance_after: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # How this entry changed the bought part, so a refund can return it there.
+    purchased_amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     reason: Mapped[str] = mapped_column(String(255), nullable=False)
     reference_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     reference_type: Mapped[str | None] = mapped_column(String(50), nullable=True)

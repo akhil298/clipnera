@@ -1,5 +1,6 @@
 ﻿"use client";
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Link as LinkIcon,
   Sparkles,
@@ -20,7 +21,7 @@ import {
   FileVideo
 } from 'lucide-react';
 import { VideoProject, AudioEnhancementConfig, DownloadProgress, AspectRatio } from '@/lib/types';
-import { useEntitlements } from '@/hooks/useEntitlements';
+import { estimateVideoCredits, useEntitlements } from '@/hooks/useEntitlements';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { analyzeVideoSource, extractYoutubeVideoId } from '@/lib/utils/urlParser';
 import { formatBytes, formatDuration, readVideoDuration, titleFromFileName } from '@/lib/utils/videoFile';
@@ -50,7 +51,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [customTitle, setCustomTitle] = useState('Alex Hormozi — $100M Leads Masterclass');
   const [customFolderName, setCustomFolderName] = useState('Alex Hormozi — $100M Leads Masterclass');
 
-  const { entitlements } = useEntitlements();
+  const { entitlements, promptUpgrade } = useEntitlements();
+  const router = useRouter();
   const { flags } = useFeatureFlags();
   const uploadEnabled = flags.video_upload;
   const cutawaysEnabled = flags['broll_studio.cutaways'];
@@ -130,7 +132,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
   const isYoutubeUrl = extractYoutubeVideoId(urlInput) !== null;
   const isUpload = uploadEnabled && sourceMode === 'upload';
-  const canStart = isUpload ? uploadFile !== null : isYoutubeUrl;
+  const sourceDurationSeconds = (isUpload ? uploadDuration : ytMeta?.duration_seconds) || null;
+  // Same estimate the server charges, so a run it would refuse is stopped here.
+  const creditsNeeded = sourceDurationSeconds
+    ? estimateVideoCredits(entitlements, sourceDurationSeconds, outputRatios.length)
+    : null;
+  const hasEnoughCredits = creditsNeeded === null || creditsNeeded <= entitlements.credit_minutes_remaining;
+  const canStart = (isUpload ? uploadFile !== null : isYoutubeUrl) && hasEnoughCredits;
 
   const handleFilePicked = async (file: File | undefined) => {
     setUploadFile(null);
@@ -747,8 +755,36 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               <OutputFormatPicker
                 value={outputRatios}
                 onChange={setOutputRatios}
-                durationSeconds={(isUpload ? uploadDuration : ytMeta?.duration_seconds) || null}
+                durationSeconds={sourceDurationSeconds}
               />
+
+              {!hasEnoughCredits && creditsNeeded !== null && (
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-rose-500/10 border border-rose-500/30 px-3 py-2.5">
+                  <span className="text-[11px] text-rose-200">
+                    This video needs <span className="font-bold">{creditsNeeded} credits</span>; you have{' '}
+                    <span className="font-bold">{entitlements.credit_minutes_remaining}</span>. Pick fewer formats or get more credits.
+                  </span>
+                  <div className="flex shrink-0 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        router.push('/dashboard/settings?tab=billing');
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-white text-[11px] font-bold transition-colors"
+                    >
+                      Buy credits
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => promptUpgrade('More credits every month')}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-[11px] font-bold transition-colors"
+                    >
+                      Upgrade plan
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* AI Auto-Editing Options */}
               <div className="border-t border-neutral-800/80 pt-4 space-y-4">

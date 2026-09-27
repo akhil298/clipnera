@@ -50,7 +50,7 @@ export function AdminLayout({ title, subtitle, actions, children }: AdminLayoutP
               key={item.href}
               href={item.href}
               className={`pb-2 -mb-px text-sm font-bold border-b-2 transition-colors ${
-                pathname === item.href
+                pathname === item.href || pathname?.startsWith(`${item.href}/`)
                   ? 'border-amber-400 text-white'
                   : 'border-transparent text-neutral-400 hover:text-white'
               }`}

@@ -32,6 +32,9 @@ export function upgradeReasonFor(detail: UpgradeRequiredDetail): string {
   if (detail.error === 'LIMIT_REACHED' && detail.feature && detail.feature in USAGE_LABELS) {
     return `Going past today's ${USAGE_LABELS[detail.feature as UsageKey]} limit`;
   }
+  if (detail.error === 'INSUFFICIENT_CREDITS') {
+    return 'More credits every month';
+  }
   if (detail.feature && detail.feature in FEATURE_LABELS) {
     return FEATURE_LABELS[detail.feature as PlanFeature];
   }

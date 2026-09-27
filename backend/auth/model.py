@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import enum
-from datetime import datetime
+from datetime import date, datetime
 from uuid import uuid4
 
-from sqlalchemy import String, Boolean, ForeignKey, Enum, DateTime, Text, false as sa_false
+from sqlalchemy import String, Boolean, Date, ForeignKey, Enum, DateTime, Index, Text, false as sa_false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.database import Base
@@ -71,3 +71,37 @@ class UserAccount(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     user: Mapped["User"] = relationship("User", back_populates="accounts", lazy="selectin")
+
+
+class LoginEvent(Base):
+    """One row per successful sign-in, for the admin panel's login history."""
+
+    __tablename__ = "login_events"
+    __table_args__ = (
+        Index("ix_login_events_user_created", "user_id", "created_at"),
+        Index("ix_login_events_created", "created_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # An AuthProvider value: how the user proved who they are.
+    method: Mapped[str] = mapped_column(String(20), nullable=False)
+    ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class UserActivityDay(Base):
+    """The user made at least one signed-in request on this UTC day.
+
+    Tokens last for days, so logins undercount who actually uses the app; this
+    is what daily, weekly and monthly active users are counted from.
+    """
+
+    __tablename__ = "user_activity_days"
+    __table_args__ = (Index("ix_user_activity_days_day", "day"),)
+
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    day: Mapped[date] = mapped_column(Date, primary_key=True)

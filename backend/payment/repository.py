@@ -16,17 +16,21 @@ class ManualPaymentRepository(PaymentTransactionRepository):
     async def create(
         self,
         user_id: str,
-        plan_id: str,
         amount: float,
         currency: str,
         utr_number: str,
         screenshot_key: str,
         payment_method: str,
-        plan_type: BillingPeriod,
+        plan_id: str | None = None,
+        plan_type: BillingPeriod | None = None,
+        credit_pack: str | None = None,
+        credits: int | None = None,
     ) -> PaymentTransaction:
         tx = PaymentTransaction(
             user_id=user_id,
             plan_id=plan_id,
+            credit_pack=credit_pack,
+            credits=credits,
             amount=amount,
             currency=currency,
             status=PaymentStatus.PENDING,

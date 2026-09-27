@@ -11,6 +11,7 @@ from subscription.model import Plan, UserSubscription, PaymentTransaction, Credi
 from auth.repository import UserRepository
 from subscription.entitlements import (
     CREDIT_CYCLE_DAYS,
+    CREDIT_PACKS,
     DEFAULT_OUTPUT_ASPECT_RATIO,
     PLAN_PRICES,
     PURCHASABLE_PLAN,
@@ -29,6 +30,7 @@ from subscription.repository import (
 from subscription.schema import (
     AdminCreditTopupResponse,
     CreditLedgerResponse,
+    CreditPackResponse,
     EntitlementsResponse,
     PaymentTransactionResponse,
     PlanOfferResponse,
@@ -49,6 +51,8 @@ CREDIT_COST_PER_2_MINUTES = 4
 ADMIN_TOPUP_REFERENCE = "admin_topup"
 # Ledger reference_type for the balance being reset at the start of a cycle.
 CREDIT_REFILL_REFERENCE = "credit_refill"
+# Ledger reference_type for a credit pack bought through an approved payment.
+CREDIT_PACK_REFERENCE = "credit_pack"
 
 USAGE_KEYS: tuple[str, ...] = get_args(UsageKey)
 _USAGE_LABELS = {
@@ -75,6 +79,7 @@ def entitlements_response(summary: PlanSummary) -> EntitlementsResponse:
         **ent.to_dict(),
         credit_minutes_total=ent.credit_minutes,
         credit_minutes_remaining=summary.credit_minutes_remaining,
+        purchased_credits_remaining=summary.purchased_credits_remaining,
         current_period_end=summary.current_period_end,
         subscription_status=summary.subscription_status,
         plan_expires_at=summary.plan_expires_at,
@@ -186,6 +191,8 @@ class PlanSummary:
     current_period_end: datetime | None
     subscription_status: str
     credit_minutes_remaining: int
+    # The bought part of credit_minutes_remaining; it survives resets.
+    purchased_credits_remaining: int
     next_credit_reset_at: datetime | None
     usage_today: dict[str, int]
     has_pending_payment: bool
@@ -245,7 +252,11 @@ class SubscriptionService:
                     ],
                 )
             )
-        return PlansResponse(plans=offers)
+        packs = [
+            CreditPackResponse(slug=p.slug, name=p.name, credits=p.credits, amount=p.amount_inr, currency="INR")
+            for p in CREDIT_PACKS.values()
+        ]
+        return PlansResponse(plans=offers, credit_packs=packs)
 
     async def entitlements_summary(self, user_id: str) -> EntitlementsResponse:
         return entitlements_response(await self.get_plan_summary(user_id))
@@ -345,13 +356,15 @@ class SubscriptionService:
         ]
         anchor, _ = await self._credit_cycle(user_id, subscription)
         account = await self._sub_repo.get_account(user_id)
+        balance, purchased = await self._ledger_repo.get_latest_balances(user_id)
         now = datetime.utcnow()
         return PlanSummary(
             entitlements=entitlements,
             plan_expires_at=max(paid_ends, default=None),
             current_period_end=subscription.current_period_end if subscription else None,
             subscription_status=subscription.status.value if subscription else "none",
-            credit_minutes_remaining=await self._ledger_repo.get_latest_balance(user_id),
+            credit_minutes_remaining=balance,
+            purchased_credits_remaining=purchased,
             next_credit_reset_at=(
                 cycle_start(anchor, now) + timedelta(days=CREDIT_CYCLE_DAYS) if anchor else None
             ),
@@ -389,9 +402,10 @@ class SubscriptionService:
         return await self._sub_repo.get_account_created_at(user_id), f"{CREDIT_REFILL_REFERENCE}:free"
 
     async def refresh_credits(self, user_id: str, commit: bool = True) -> bool:
-        """Reset the balance to the plan's allowance once per credit cycle.
+        """Reset the plan part of the balance to the plan's allowance once per
+        credit cycle; bought credits are kept.
 
-        Unused minutes do not roll over. Safe to call any number of times, from
+        Unused plan credits do not roll over. Safe to call any number of times, from
         requests and the daily job at once: each cycle is claimed in
         usage_tracking under a unique key, so only the first call applies it.
         Returns whether a reset was applied.
@@ -405,17 +419,17 @@ class SubscriptionService:
             return False
 
         allowance = (await self.get_entitlements(user_id)).credit_minutes
-        balance = await self._ledger_repo.get_latest_balance(user_id)
-        await self._ledger_repo.add_entry(
-            user_id=user_id,
-            amount=allowance - balance,
-            balance_after=allowance,
-            reason=f"Credits reset to {allowance} min for the cycle starting {start:%d %b %Y}",
+        balance, purchased = await self._ledger_repo.get_latest_balances(user_id)
+        await self._record(
+            user_id,
+            allowance + purchased - balance,
+            f"Plan credits reset to {allowance} for the cycle starting {start:%d %b %Y}",
+            balances=(balance, purchased),
             reference_id=subscription.id if subscription else None,
             reference_type=CREDIT_REFILL_REFERENCE,
             commit=commit,
         )
-        log.info(f"Credits reset: user={user_id} key={key} cycle={start.date()} balance={allowance}")
+        log.info(f"Credits reset: user={user_id} key={key} cycle={start.date()} plan={allowance} purchased={purchased}")
         return True
 
     async def extend_plan(self, user_id: str, plan: Plan, days: int, commit: bool = True) -> UserSubscription:
@@ -464,13 +478,13 @@ class SubscriptionService:
             sub.canceled_at = now
 
         free_allowance = entitlements_for(PlanSlug.FREE.value).credit_minutes
-        balance = await self._ledger_repo.get_latest_balance(user_id)
-        if revoked and balance > free_allowance:
-            await self._ledger_repo.add_entry(
-                user_id=user_id,
-                amount=free_allowance - balance,
-                balance_after=free_allowance,
-                reason="Pro revoked: balance capped at the Free allowance",
+        balance, purchased = await self._ledger_repo.get_latest_balances(user_id)
+        if revoked and balance - purchased > free_allowance:
+            await self._record(
+                user_id,
+                free_allowance + purchased - balance,
+                "Pro revoked: plan credits capped at the Free allowance",
+                balances=(balance, purchased),
                 reference_type=CREDIT_REFILL_REFERENCE,
                 commit=False,
             )
@@ -488,58 +502,101 @@ class SubscriptionService:
 
         # A new cycle may have started since the balance was last touched.
         await self.refresh_credits(user_id)
-        current_balance = await self._ledger_repo.get_latest_balance(user_id)
-        if current_balance < amount:
+        balance, purchased = await self._ledger_repo.get_latest_balances(user_id)
+        if balance < amount:
             raise InsufficientCreditsError(
-                f"Insufficient credits: required={amount}, available={current_balance}"
+                f"Insufficient credits: required={amount}, available={balance}"
             )
 
-        new_balance = current_balance - amount
-        entry = await self._ledger_repo.add_entry(
-            user_id=user_id,
-            amount=-amount,
-            balance_after=new_balance,
-            reason=reason,
+        # Plan credits expire at the next reset, so they are spent first.
+        from_purchased = max(0, amount - (balance - purchased))
+        entry = await self._record(
+            user_id,
+            -amount,
+            reason,
+            balances=(balance, purchased),
+            purchased_amount=-from_purchased,
             reference_id=reference_id,
             reference_type=reference_type,
         )
-        log.info(f"Credits deducted: user={user_id} amount={amount} reason={reason} balance={new_balance}")
+        log.info(f"Credits deducted: user={user_id} amount={amount} purchased={from_purchased} reason={reason} balance={entry.balance_after}")
         return entry
 
     async def refund_credits(self, user_id: str, amount: int, reason: str, reference_id: str | None = None, reference_type: str | None = None) -> CreditLedger:
         if amount <= 0:
             raise ValueError("Refund amount must be positive")
 
-        current_balance = await self._ledger_repo.get_latest_balance(user_id)
-        new_balance = current_balance + amount
-        entry = await self._ledger_repo.add_entry(
-            user_id=user_id,
-            amount=amount,
-            balance_after=new_balance,
-            reason=reason,
+        # Bought credits the refunded charge spent go back to the bought part,
+        # so a failed run cannot make them expire at the next reset.
+        charge = await self._ledger_repo.get_latest_charge(user_id, reference_id) if reference_id else None
+        to_purchased = min(amount, -charge.purchased_amount) if charge else 0
+        entry = await self._record(
+            user_id,
+            amount,
+            reason,
+            purchased_amount=to_purchased,
             reference_id=reference_id,
             reference_type=reference_type,
         )
-        log.info(f"Credits refunded: user={user_id} amount={amount} reason={reason} balance={new_balance}")
+        log.info(f"Credits refunded: user={user_id} amount={amount} purchased={to_purchased} reason={reason} balance={entry.balance_after}")
         return entry
 
     async def topup_credits(self, user_id: str, amount: int, reason: str, reference_id: str | None = None, reference_type: str | None = None, created_by: str | None = None) -> CreditLedger:
         if amount <= 0:
             raise ValueError("Top-up amount must be positive")
 
-        current_balance = await self._ledger_repo.get_latest_balance(user_id)
-        new_balance = current_balance + amount
-        entry = await self._ledger_repo.add_entry(
+        entry = await self._record(
+            user_id, amount, reason, reference_id=reference_id, reference_type=reference_type, created_by=created_by
+        )
+        log.info(f"Credits topped up: user={user_id} amount={amount} reason={reason} balance={entry.balance_after} by={created_by}")
+        return entry
+
+    async def grant_purchased_credits(self, user_id: str, amount: int, reason: str, reference_id: str, commit: bool = True) -> CreditLedger:
+        """Add bought credits, which never expire. With ``commit=False`` the
+        entry is only flushed, for approving a payment in one transaction."""
+        if amount <= 0:
+            raise ValueError("Purchased credit amount must be positive")
+
+        entry = await self._record(
+            user_id,
+            amount,
+            reason,
+            purchased_amount=amount,
+            reference_id=reference_id,
+            reference_type=CREDIT_PACK_REFERENCE,
+            commit=commit,
+        )
+        log.info(f"Credits purchased: user={user_id} amount={amount} balance={entry.balance_after} purchased={entry.purchased_balance_after}")
+        return entry
+
+    async def _record(
+        self,
+        user_id: str,
+        amount: int,
+        reason: str,
+        *,
+        balances: tuple[int, int] | None = None,
+        purchased_amount: int = 0,
+        reference_id: str | None = None,
+        reference_type: str | None = None,
+        created_by: str | None = None,
+        commit: bool = True,
+    ) -> CreditLedger:
+        """Write a ledger entry, carrying the bought part of the balance forward.
+        Every balance change goes through here so that part is never dropped."""
+        balance, purchased = balances or await self._ledger_repo.get_latest_balances(user_id)
+        return await self._ledger_repo.add_entry(
             user_id=user_id,
             amount=amount,
-            balance_after=new_balance,
+            balance_after=balance + amount,
+            purchased_balance_after=purchased + purchased_amount,
+            purchased_amount=purchased_amount,
             reason=reason,
             reference_id=reference_id,
             reference_type=reference_type,
             created_by=created_by,
+            commit=commit,
         )
-        log.info(f"Credits topped up: user={user_id} amount={amount} reason={reason} balance={new_balance} by={created_by}")
-        return entry
 
     async def admin_topup(self, user_id: str, amount: int, reason: str, admin_id: str) -> CreditLedger:
         """Credit a user by hand. The ledger entry records which admin did it."""

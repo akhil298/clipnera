@@ -1,4 +1,4 @@
-import type { BillingPeriod } from '@/lib/api';
+import type { BillingPeriod, PaymentResponse } from '@/lib/api';
 import { parseApiDate } from './dates';
 
 const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
@@ -9,6 +9,12 @@ export function formatAmount(amount: number, currency: string): string {
 }
 
 export const BILLING_PERIOD_LABELS: Record<BillingPeriod, string> = { monthly: 'Monthly', yearly: 'Yearly' };
+
+/** What a payment bought, e.g. "Pro Monthly" or "200 credits". */
+export function paymentLabel(p: Pick<PaymentResponse, 'plan_name' | 'plan_type' | 'credits'>): string {
+  if (p.credits) return `${p.credits} credits`;
+  return `${p.plan_name ?? 'Plan'}${p.plan_type ? ` ${BILLING_PERIOD_LABELS[p.plan_type]}` : ''}`;
+}
 
 export function formatDateTime(iso: string): string {
   return parseApiDate(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
