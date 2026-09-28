@@ -8,6 +8,10 @@ interface CaptionStylePreviewProps {
   /** Words shown in the preview. Four keeps every card the same rhythm. */
   words?: string[];
   className?: string;
+  /** Font size in px; defaults to the template's size scaled into a card-sized band. */
+  fontSize?: number;
+  /** Drop the card backdrop, for previews laid over footage. */
+  overlay?: boolean;
 }
 
 const SAMPLE_WORDS = ['THIS', 'CHANGES', 'EVERY', 'THING'];
@@ -34,6 +38,8 @@ export const CaptionStylePreview: React.FC<CaptionStylePreviewProps> = ({
   config,
   words = SAMPLE_WORDS,
   className = '',
+  fontSize,
+  overlay = false,
 }) => {
   const motion = MOTION[config.animation] ?? MOTION.none;
   const text = config.uppercase ? (w: string) => w.toUpperCase() : (w: string) => w;
@@ -41,7 +47,7 @@ export const CaptionStylePreview: React.FC<CaptionStylePreviewProps> = ({
   // The card is a fixed size, so the template's real px font size would overflow
   // the wide presets and look lost on the small ones. Scaled into a legible band
   // that still preserves the relative difference between templates.
-  const previewFontSize = Math.round(Math.min(22, Math.max(11, config.fontSize * 0.42)));
+  const previewFontSize = fontSize ?? Math.round(Math.min(22, Math.max(11, config.fontSize * 0.42)));
 
   const shadow = config.shadowIntensity > 0
     ? `0 ${Math.round(config.shadowIntensity * 2)}px ${Math.round(config.shadowIntensity * 5)}px rgba(0,0,0,0.85)`
@@ -52,11 +58,11 @@ export const CaptionStylePreview: React.FC<CaptionStylePreviewProps> = ({
 
   return (
     <div
-      className={`relative flex items-center justify-center overflow-hidden rounded-lg bg-black/60 px-2 py-2.5 ${className}`}
+      className={`relative flex items-center justify-center overflow-hidden ${overlay ? '' : 'rounded-lg bg-black/60 px-2 py-2.5'} ${className}`}
       aria-hidden="true"
     >
       {/* A faint checker keeps light-on-light templates legible against the card. */}
-      <div
+      {!overlay && <div
         className="pointer-events-none absolute inset-0 opacity-[0.07]"
         style={{
           backgroundImage:
@@ -64,7 +70,7 @@ export const CaptionStylePreview: React.FC<CaptionStylePreviewProps> = ({
           backgroundSize: '10px 10px',
           backgroundPosition: '0 0, 5px 5px',
         }}
-      />
+      />}
 
       <p
         className="relative flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-center leading-tight"

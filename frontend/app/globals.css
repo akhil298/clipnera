@@ -157,6 +157,22 @@
   background-color: rgb(115 115 115);
 }
 
+/* Landing hero: a playhead sweeping the source timeline. */
+@keyframes landing-playhead {
+  from { left: 0; }
+  to { left: 100%; }
+}
+
+.landing-playhead {
+  animation: landing-playhead 14s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-playhead {
+    animation: none;
+  }
+}
+
 /* Caption line entrances; mirror _entrance() in backend ass_generator.py so the
    editor preview animates the way the export burns. */
 @keyframes caption-rise {

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { BUSINESS, LEGAL_LINKS } from '@/components/legal/LegalPage';
+import { BrandMark } from './BrandMark';
 
 interface FooterProps {
   onLaunchApp: () => void;
@@ -11,16 +12,11 @@ interface FooterProps {
 export function Footer({ onLaunchApp, onOpenAuthModal }: FooterProps) {
   return (
     <footer className="border-t border-neutral-800 bg-neutral-950 py-10 text-xs text-neutral-400">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+      <div className="mx-auto max-w-[1440px] space-y-8 px-4 sm:px-8 xl:px-16">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div aria-hidden="true" className="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs">
-              C
-            </div>
-            <span className="font-bold text-white font-['Syne',sans-serif]">
-              Clipnera AI Studio
-            </span>
-            <span>• Next-Gen Shorts Repurposing</span>
+          <div className="flex items-center gap-3">
+            <BrandMark small />
+            <span>Long videos in, Shorts out.</span>
           </div>
 
           <nav aria-label="App" className="flex flex-wrap items-center justify-center gap-6 text-neutral-300">

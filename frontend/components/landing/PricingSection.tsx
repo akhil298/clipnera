@@ -21,16 +21,16 @@ export function PricingSection({ onLaunchStudio }: PricingSectionProps) {
   }, []);
 
   return (
-    <section id="pricing" className="py-20">
+    <section id="pricing" className="scroll-mt-20 py-20 lg:py-24">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
-        <div className="text-center max-w-2xl mx-auto space-y-3">
-          <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400 font-['Syne',sans-serif]">
-            Transparent Pricing
-          </span>
-          <h2 className="text-2xl sm:text-3xl font-extrabold text-white font-['Syne',sans-serif]">
-            Simple plans for creators of all sizes
+        <div className="text-center max-w-3xl mx-auto space-y-4">
+          <p className="font-jetbrains text-xs font-medium uppercase tracking-[0.14em] text-amber-400">Pricing</p>
+          <h2 className="font-syne text-[28px] font-extrabold leading-none tracking-[-0.03em] text-white sm:text-5xl">
+            Start free.
+            <br />
+            Upgrade when it's working.
           </h2>
-          <p className="text-xs text-neutral-300">
+          <p className="text-sm text-neutral-300">
             Start free. Prices in Indian rupees; the amount shown is the amount you pay. Pro does not renew automatically.
           </p>
         </div>

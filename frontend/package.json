@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "media:landing": "node scripts/fetch-landing-media.mjs"
   },
   "dependencies": {
     "@fontsource/anton": "^5.3.0",

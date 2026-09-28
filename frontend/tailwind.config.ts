@@ -34,6 +34,7 @@ const config: Config = {
       fontFamily: {
         jakarta: ['"Plus Jakarta Sans"', "sans-serif"],
         syne: ["Syne", "sans-serif"],
+        jetbrains: ['"JetBrains Mono"', "monospace"],
       },
     },
   },

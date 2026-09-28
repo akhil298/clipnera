@@ -7,12 +7,13 @@ import { GoogleSignIn } from '@/components/auth/GoogleSignIn';
 import { isAuthenticated } from '@/lib/auth';
 import { Navbar } from './Navbar';
 import { HeroSection } from './HeroSection';
+import { ClipWall } from './ClipWall';
+import { EngineSection } from './EngineSection';
 import { BeforeAfterShowcase } from './BeforeAfterShowcase';
-import { SocialProof } from './SocialProof';
-import { FeaturesGrid } from './FeaturesGrid';
 import { CaptionTypographyShowcase } from './CaptionTypographyShowcase';
-import { HowItWorks } from './HowItWorks';
+import { ResultsPreview } from './ResultsPreview';
 import { RoiCalculator } from './RoiCalculator';
+import { PublishSection } from './PublishSection';
 import { PricingSection } from './PricingSection';
 import { FaqSection } from './FaqSection';
 import { BottomCta } from './BottomCta';
@@ -22,7 +23,6 @@ export default function LandingPageView() {
   const router = useRouter();
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [heroUrl, setHeroUrl] = useState('');
-  const [previewCaptionPreset, setPreviewCaptionPreset] = useState<'hormozi' | 'mrbeast' | 'cyberpunk' | 'neon'>('hormozi');
 
   const faqs = [
     {
@@ -96,35 +96,25 @@ export default function LandingPageView() {
         onLaunchStudio={handleLaunchStudio}
       />
 
-      <BeforeAfterShowcase
-        previewCaptionPreset={previewCaptionPreset}
-        setPreviewCaptionPreset={setPreviewCaptionPreset}
-        onLaunchStudio={handleLaunchStudio}
-      />
+      <ClipWall onLaunchStudio={handleLaunchStudio} />
 
-      <SocialProof />
+      <EngineSection />
 
-      <section id="features" className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-16">
-          <div className="text-center max-w-3xl mx-auto space-y-3">
-            <span className="text-xs font-extrabold uppercase tracking-wider text-amber-400 font-['Syne',sans-serif]">Complete Viral Production Suite</span>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-white font-['Syne',sans-serif]">Everything you need to turn long videos into shorts</h2>
-            <p className="text-xs sm:text-sm text-neutral-300">No manual timeline scrubbing. No complex video editing software. Clipnera handles clipping, captions and reframing, and you review the result.</p>
-          </div>
-          <FeaturesGrid />
-          <CaptionTypographyShowcase />
-        </div>
-      </section>
+      <BeforeAfterShowcase />
 
-      <HowItWorks />
+      <CaptionTypographyShowcase />
+
+      <ResultsPreview />
 
       <RoiCalculator onLaunchStudio={handleLaunchStudio} />
+
+      <PublishSection />
 
       <PricingSection onLaunchStudio={handleLaunchStudio} />
 
       <FaqSection faqs={faqs} />
 
-      <BottomCta onLaunchStudio={handleLaunchStudio} />
+      <BottomCta heroUrl={heroUrl} setHeroUrl={setHeroUrl} onLaunchStudio={handleLaunchStudio} />
       </main>
 
       <Footer onLaunchApp={handleLaunchStudio} onOpenAuthModal={() => setIsAuthModalOpen(true)} />

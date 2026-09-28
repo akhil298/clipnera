@@ -1,6 +1,9 @@
 'use client';
 
-import { Sparkles, Youtube, CheckCircle2 } from 'lucide-react';
+import { useState } from 'react';
+import { Upload, Wand2 } from 'lucide-react';
+import { VideoLinkForm } from './VideoLinkForm';
+import { HeroStage } from './HeroStage';
 
 interface HeroSectionProps {
   heroUrl: string;
@@ -8,74 +11,95 @@ interface HeroSectionProps {
   onLaunchStudio: () => void;
 }
 
-export function HeroSection({
-  heroUrl,
-  setHeroUrl,
-  onLaunchStudio,
-}: HeroSectionProps) {
+type SourceMode = 'link' | 'upload' | 'prompt';
+
+const SOURCE_MODES: Array<{ id: SourceMode; label: string }> = [
+  { id: 'link', label: 'YouTube link' },
+  { id: 'upload', label: 'Upload a file' },
+  { id: 'prompt', label: 'Write a prompt' },
+];
+
+const PROMISES = ['Free plan, no card', 'Free credits every 30 days', 'Background noise reduction'];
+
+export function HeroSection({ heroUrl, setHeroUrl, onLaunchStudio }: HeroSectionProps) {
+  const [mode, setMode] = useState<SourceMode>('link');
+
   return (
-    <section className="relative pt-12 pb-20 overflow-hidden">
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-amber-500/10 blur-[120px] pointer-events-none rounded-full" />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="text-center max-w-3xl mx-auto space-y-5">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-semibold">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
-            <span>AI Clip Finder • Noise Reduction • Prompt-to-Shorts</span>
+    <section className="relative overflow-hidden pb-20 pt-10 lg:pt-12">
+      <div className="mx-auto max-w-[1440px] space-y-10 px-4 sm:px-8 xl:px-16">
+        <header className="space-y-7">
+          <div className="space-y-5">
+            <p className="flex items-center gap-2.5 font-jetbrains text-xs font-medium uppercase tracking-[0.14em] text-amber-400">
+              <span aria-hidden="true" className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
+              Live demo · real footage, real output
+            </p>
+            <h1 className="font-syne text-[44px] font-extrabold leading-[0.98] tracking-[-0.035em] text-white sm:text-6xl lg:text-6xl xl:text-[76px]">
+              One long video in.
+              <br />A week of <span className="text-amber-500">Shorts</span> out.
+            </h1>
           </div>
 
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight font-['Syne',sans-serif] leading-[1.12]">
-            Turn 1 Long Video or Prompt into{' '}
-            <span className="text-amber-400">Ready-to-Post Shorts</span>
-          </h1>
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
+            <div className="max-w-[600px] space-y-3.5">
+              <p className="text-base leading-relaxed text-neutral-300 sm:text-[17px]">
+                Clipnera finds the moments worth posting, reframes them to 9:16 around the speaker, cleans the audio and
+                burns in word-by-word captions. You review, then publish.
+              </p>
+              <ul className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-neutral-400">
+                {PROMISES.map((promise) => (
+                  <li key={promise}>
+                    <span aria-hidden="true" className="text-emerald-400">✓ </span>
+                    {promise}
+                  </li>
+                ))}
+              </ul>
+            </div>
 
-          <p className="text-sm sm:text-base text-neutral-300 leading-relaxed font-normal max-w-2xl mx-auto">
-            Find the strongest moments and cut them into 9:16 clips automatically. Reframes around faces, reduces background noise, adds animated word-by-word subtitles, and inserts B-roll cutaways.
-          </p>
-
-          <div className="pt-3 max-w-2xl mx-auto">
-            <div className="p-2 rounded-2xl bg-neutral-900/90 border border-neutral-800 shadow-xl space-y-3">
-              <div className="p-1">
-                <div className="flex items-center gap-2 py-1.5 px-3 rounded-lg bg-neutral-800 text-amber-400 shadow text-xs font-bold">
-                  <Youtube className="w-3.5 h-3.5 text-red-400" aria-hidden="true" />
-                  <span>YouTube Link</span>
-                </div>
+            <div className="w-full space-y-2.5 lg:w-[560px] lg:flex-shrink-0">
+              <div role="group" aria-label="How to add your video" className="flex flex-wrap gap-1.5">
+                {SOURCE_MODES.map(({ id, label }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setMode(id)}
+                    aria-pressed={mode === id}
+                    className={`h-9 rounded-[10px] border px-3.5 text-[13px] transition-colors ${
+                      mode === id
+                        ? 'border-amber-900 bg-amber-950/60 font-bold text-amber-300'
+                        : 'border-neutral-800 font-semibold text-neutral-300 hover:text-white'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-2">
-                <input
-                  type="url"
-                  value={heroUrl}
-                  onChange={(e) => setHeroUrl(e.target.value)}
-                  aria-label="Link to your YouTube video"
-                  placeholder="Paste a link to your YouTube video..."
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-neutral-950 border border-neutral-700/80 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-amber-400 transition-colors shadow-inner"
-                />
+              {mode === 'link' && <VideoLinkForm id="hero-url" url={heroUrl} setUrl={setHeroUrl} onSubmit={onLaunchStudio} />}
+              {mode === 'upload' && (
                 <button
+                  type="button"
                   onClick={onLaunchStudio}
-                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/15 active:scale-95 transition-all flex items-center justify-center gap-2 whitespace-nowrap"
+                  className="flex h-[62px] w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-neutral-700 bg-neutral-900 text-[15px] font-bold text-white transition-colors hover:border-amber-500"
                 >
-                  <Sparkles className="w-4 h-4" aria-hidden="true" />
-                  <span>Extract Clips</span>
+                  <Upload className="h-4 w-4 text-amber-400" aria-hidden="true" />
+                  Choose a video file
                 </button>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-1 text-[11px] text-neutral-300">
-                <span className="flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
-                  <span>Free plan, no card needed</span>
-                </span>
-                <span className="flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
-                  <span>Free credits every 30 days</span>
-                </span>
-                <span className="flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
-                  <span>Background noise reduction</span>
-                </span>
-              </div>
+              )}
+              {mode === 'prompt' && (
+                <button
+                  type="button"
+                  onClick={onLaunchStudio}
+                  className="flex h-[62px] w-full items-center justify-center gap-2 rounded-2xl border border-neutral-800 bg-neutral-900 text-[15px] font-bold text-white transition-colors hover:border-amber-500"
+                >
+                  <Wand2 className="h-4 w-4 text-amber-400" aria-hidden="true" />
+                  Turn a story idea into a Short
+                </button>
+              )}
             </div>
           </div>
-        </div>
+        </header>
+
+        <HeroStage />
       </div>
     </section>
   );
