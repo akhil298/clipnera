@@ -5,13 +5,14 @@ import { CalendarDays, ExternalLink, Loader2 } from 'lucide-react';
 import { socialApi, type SocialPostResponse, type SocialPostStatus } from '@/lib/api';
 import { formatInZone } from '@/lib/utils/timezones';
 import { PLATFORM_STYLE } from './platforms';
+import { StatusPill, type StatusTone } from '@/components/ui/StatusPill';
 
-const STATUS_STYLE: Record<SocialPostStatus, { label: string; className: string }> = {
-  scheduled: { label: 'Scheduled', className: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-  publishing: { label: 'Publishing…', className: 'bg-sky-500/10 text-sky-300 border-sky-500/20' },
-  published: { label: 'Published', className: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  failed: { label: 'Failed', className: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
-  cancelled: { label: 'Cancelled', className: 'bg-neutral-800 text-neutral-400 border-neutral-700' },
+const STATUS: Record<SocialPostStatus, { label: string; tone: StatusTone }> = {
+  scheduled: { label: 'Scheduled', tone: 'scheduled' },
+  publishing: { label: 'Publishing…', tone: 'processing' },
+  published: { label: 'Published', tone: 'ready' },
+  failed: { label: 'Failed', tone: 'failed' },
+  cancelled: { label: 'Cancelled', tone: 'neutral' },
 };
 
 interface ScheduledPostsQueueProps {
@@ -39,13 +40,13 @@ export function ScheduledPostsQueue({ posts, timeZone, onChanged }: ScheduledPos
   };
 
   return (
-    <div className="p-5 rounded-xl bg-neutral-900/90 border border-neutral-800 space-y-4 shadow-lg">
+    <section className="p-4 sm:p-5 rounded-2xl bg-neutral-900/80 border border-neutral-800 space-y-4" aria-labelledby="queue-title">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
+        <h2 id="queue-title" className="text-sm font-bold text-white flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-amber-400" />
-          <span>Scheduled Content Queue</span>
-        </h3>
-        <span className="text-xs font-mono text-neutral-400">{posts?.length ?? 0} posts</span>
+          Queue
+        </h2>
+        <span className="text-xs text-neutral-500 tabular-nums">{posts?.length ?? 0} posts</span>
       </div>
 
       {error && <p className="text-[11px] text-rose-300">{error}</p>}
@@ -59,25 +60,23 @@ export function ScheduledPostsQueue({ posts, timeZone, onChanged }: ScheduledPos
       ) : (
         <div className="space-y-3">
           {posts.map((post) => {
-            const status = STATUS_STYLE[post.status];
+            const status = STATUS[post.status];
             return (
               <div
                 key={post.id}
-                className="p-3.5 rounded-lg bg-neutral-950 border border-neutral-800 space-y-2 hover:border-neutral-700 transition-all"
+                className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-2 hover:border-neutral-700 transition-colors"
               >
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-neutral-800 text-white shrink-0">
-                      {PLATFORM_STYLE[post.platform].name}
+                    <span className={`w-6 h-6 rounded-md bg-gradient-to-br ${PLATFORM_STYLE[post.platform].color} flex items-center justify-center text-[9px] font-extrabold text-white shrink-0`} title={PLATFORM_STYLE[post.platform].name}>
+                      {PLATFORM_STYLE[post.platform].short}
                     </span>
                     <span className="text-[11px] text-neutral-400 truncate">{post.account_handle}</span>
                   </div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${status.className}`}>
-                    {status.label}
-                  </span>
+                  <StatusPill tone={status.tone}>{status.label}</StatusPill>
                 </div>
 
-                <h4 className="text-xs font-bold text-white line-clamp-1">{post.clip_title}</h4>
+                <h3 className="text-[13px] font-semibold text-white line-clamp-1">{post.clip_title}</h3>
                 {post.caption && <p className="text-[11px] text-neutral-400 italic line-clamp-2">&quot;{post.caption}&quot;</p>}
 
                 {post.error_message && post.status !== 'published' && (
@@ -86,7 +85,7 @@ export function ScheduledPostsQueue({ posts, timeZone, onChanged }: ScheduledPos
                   </p>
                 )}
 
-                <div className="flex items-center justify-between text-[10px] text-neutral-500 pt-1 border-t border-neutral-900 font-mono">
+                <div className="flex items-center justify-between text-[11px] text-neutral-500 pt-2 border-t border-neutral-900">
                   <span className="text-neutral-300">
                     {formatInZone(post.published_at ?? post.scheduled_at, timeZone)}
                   </span>
@@ -103,7 +102,7 @@ export function ScheduledPostsQueue({ posts, timeZone, onChanged }: ScheduledPos
                     <button
                       onClick={() => cancel(post.id)}
                       disabled={cancelling !== null}
-                      className="text-neutral-400 hover:text-rose-400 font-bold disabled:opacity-50"
+                      className="text-neutral-400 hover:text-rose-300 font-semibold disabled:opacity-50"
                     >
                       {cancelling === post.id ? 'Cancelling…' : 'Cancel'}
                     </button>
@@ -114,6 +113,6 @@ export function ScheduledPostsQueue({ posts, timeZone, onChanged }: ScheduledPos
           })}
         </div>
       )}
-    </div>
+    </section>
   );
 }
