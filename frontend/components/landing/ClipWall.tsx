@@ -75,7 +75,7 @@ export function ClipWall({ onLaunchStudio }: ClipWallProps) {
         ))}
         <div
           ref={stripRef}
-          className="flex snap-x snap-mandatory gap-6 overflow-x-auto px-4 [scrollbar-width:none] sm:px-8 xl:px-16 [&::-webkit-scrollbar]:hidden"
+          className="flex snap-x snap-mandatory scroll-px-4 gap-6 overflow-x-auto px-4 sm:scroll-px-8 xl:scroll-px-16 [scrollbar-width:none] sm:px-8 xl:px-16 [&::-webkit-scrollbar]:hidden"
         >
           {TILES.map((tile) => {
             const shown = category === 'All' || tile.category === category;
