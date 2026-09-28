@@ -41,16 +41,16 @@ export function DailyBarChart({
     return (
       <div className="rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-xs shadow-lg">
         <p className="text-neutral-400">{formatDay(String(label))}</p>
-        <p className="font-mono font-bold text-white">{format(Number(payload[0].value))}</p>
+        <p className="font-bold text-white tabular-nums">{format(Number(payload[0].value))}</p>
       </div>
     );
   };
 
   return (
-    <section className="p-4 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-3">
+    <section className="p-4 rounded-2xl bg-neutral-900/80 border border-neutral-800 space-y-3">
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="text-xs font-bold text-neutral-300">{title}</h3>
-        <span className="text-sm font-bold font-mono text-white">{total}</span>
+        <span className="text-sm font-bold tabular-nums text-white">{total}</span>
       </div>
       <div className="h-40" role="img" aria-label={`${title} per day: ${total} in total`}>
         <ResponsiveContainer width="100%" height="100%">

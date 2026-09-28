@@ -152,7 +152,7 @@ export function AdminBrollView() {
               <option key={s} value={s}>{s ? s.replace('_', ' ') : 'All statuses'}</option>
             ))}
           </select>
-          <span className="text-xs text-neutral-400 font-mono">{total} shots</span>
+          <span className="text-xs text-neutral-400 tabular-nums">{total} shots</span>
         </div>
 
         {error && <p className="text-xs text-rose-400">{error}</p>}

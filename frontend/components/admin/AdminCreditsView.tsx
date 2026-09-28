@@ -147,8 +147,8 @@ export function AdminCreditsView() {
                     <p className="text-white text-xs font-bold">{entry.user_name || entry.user_email}</p>
                     <p className="text-[11px] text-neutral-500">{entry.user_email}</p>
                   </td>
-                  <td className="px-4 py-2 text-right font-mono text-emerald-400">+{entry.amount}</td>
-                  <td className="px-4 py-2 text-right font-mono text-neutral-300">{entry.balance_after}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-emerald-400">+{entry.amount}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-neutral-300">{entry.balance_after}</td>
                   <td className="px-4 py-2 text-xs text-neutral-300">{entry.reason}</td>
                   <td className="px-4 py-2 text-xs text-neutral-400">{entry.created_by_email ?? 'Deleted admin'}</td>
                 </tr>

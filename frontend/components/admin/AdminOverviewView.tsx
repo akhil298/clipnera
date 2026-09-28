@@ -113,7 +113,13 @@ export function AdminOverviewView() {
           <StatTile label="Free users" value={overview.free_users.toLocaleString()} href="/admin/users" />
           <StatTile label="Active Pro users" value={overview.pro_users.toLocaleString()} href="/admin/users" />
           <StatTile label="Revenue this month" value={formatAmount(overview.revenue_this_month, overview.currency)} />
-          <StatTile label="Pending payments" value={overview.pending_payments.toLocaleString()} href="/admin/payments" />
+          <StatTile
+            label="Payments to review"
+            value={overview.pending_payments.toLocaleString()}
+            hint={overview.pending_payments > 0 ? 'Review now' : 'All caught up'}
+            href="/admin/payments"
+            attention={overview.pending_payments > 0}
+          />
         </div>
       )}
 

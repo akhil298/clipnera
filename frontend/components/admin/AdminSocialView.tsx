@@ -69,7 +69,7 @@ export function AdminSocialView() {
             {overview.platforms.map((stats) => (
               <div key={stats.platform} className={`${card} space-y-1`}>
                 <p className="text-[11px] font-bold text-neutral-400">{PLATFORM_STYLE[stats.platform].name}</p>
-                <p className="text-2xl font-bold text-white font-mono">{stats.accounts.active ?? 0}</p>
+                <p className="text-2xl font-bold text-white tabular-nums">{stats.accounts.active ?? 0}</p>
                 <p className="text-[11px] text-neutral-400">
                   connected · {stats.accounts.needs_reconnect ?? 0} need reconnect
                 </p>
@@ -84,13 +84,13 @@ export function AdminSocialView() {
           <div className="grid sm:grid-cols-2 gap-3">
             <div className={card}>
               <p className="text-[11px] font-bold text-neutral-400">YouTube uploads today (app-wide)</p>
-              <p className="text-lg font-bold text-white font-mono">
+              <p className="text-lg font-bold text-white tabular-nums">
                 {youtubeQuota?.used ?? 0} / {youtubeQuota?.limit ?? 0}
               </p>
             </div>
             <div className={card}>
               <p className="text-[11px] font-bold text-neutral-400">X spend this month</p>
-              <p className="text-lg font-bold text-white font-mono">
+              <p className="text-lg font-bold text-white tabular-nums">
                 ${(xQuota?.spent_usd ?? 0).toFixed(2)} / ${(xQuota?.budget_usd ?? 0).toFixed(2)}
               </p>
             </div>
