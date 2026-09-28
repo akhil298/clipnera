@@ -47,6 +47,12 @@ def render_credits(duration_s: float) -> int:
     return get_settings().REEL_BASE_CREDITS + math.ceil(max(0.0, duration_s) / 2)
 
 
+def cover_key(images_json: str) -> str | None:
+    """S3 key of the image a reel shows as its cover: the first one uploaded."""
+    images = json.loads(images_json)
+    return images[0]["key"] if images else None
+
+
 class ReelService:
     def __init__(self, session: AsyncSession, s3: S3 | None = None) -> None:
         self._session = session
@@ -68,7 +74,13 @@ class ReelService:
         rows = (await self._session.execute(
             select(ReelProject).where(ReelProject.user_id == user_id).order_by(ReelProject.created_at.desc()).limit(100)
         )).scalars().all()
-        return [ReelSummary(id=r.id, title=r.title, status=r.status.value, duration_s=r.duration_s, created_at=r.created_at) for r in rows]
+        return [
+            ReelSummary(
+                id=r.id, title=r.title, status=r.status.value, duration_s=r.duration_s, created_at=r.created_at,
+                cover_url=self._url(cover_key(r.images)),
+            )
+            for r in rows
+        ]
 
     async def get(self, user_id: str, reel_id: str) -> ReelResponse:
         return await self.response(await self._reel(user_id, reel_id))

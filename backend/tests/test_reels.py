@@ -7,7 +7,7 @@ import pytest
 from reels import planner
 from reels.jobs import spoken_language
 from reels.planner import Scene, scenes_from_json, scenes_to_json, split_scenes, validate_visuals
-from reels.service import render_credits
+from reels.service import cover_key, render_credits
 from reels.voice import chunks, reading_timings
 
 
@@ -187,3 +187,11 @@ class TestSceneColours:
             for name in ("a.mp4", "b.mp4")
         }
         assert tags == {"yuv420p,tv,bt709"}
+
+
+class TestCover:
+    def test_the_first_image_is_the_cover(self):
+        assert cover_key(json.dumps([{"key": "reels/a.jpg"}, {"key": "reels/b.jpg"}])) == "reels/a.jpg"
+
+    def test_no_images_means_no_cover(self):
+        assert cover_key("[]") is None

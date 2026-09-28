@@ -88,6 +88,8 @@ class ReelSummary(BaseModel):
     status: str
     duration_s: float
     created_at: datetime
+    # The reel's first image, shown as its cover in lists; None without images.
+    cover_url: str | None = None
 
 
 class ReelSceneUpdate(BaseModel):

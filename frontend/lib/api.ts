@@ -2135,6 +2135,8 @@ export interface ReelSummary {
   status: ReelStatus;
   duration_s: number;
   created_at: string;
+  /** The reel's first image, shown as its cover; null without images. */
+  cover_url: string | null;
 }
 
 export interface ReelSceneUpdate {
