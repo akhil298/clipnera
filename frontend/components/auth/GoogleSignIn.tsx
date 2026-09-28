@@ -38,7 +38,7 @@ export function GoogleSignIn({ mode = 'login' }: GoogleSignInProps) {
   return (
     <div className="w-full rounded-2xl bg-neutral-900/90 border border-neutral-800 p-6 shadow-xl">
       <div className="text-center mb-6">
-        <h2 className="text-xl font-bold mb-1.5 font-['Syne',sans-serif] text-white">
+        <h2 className="text-xl font-bold mb-1.5 text-white">
           {mode === 'login' ? 'Welcome back' : 'Create account'}
         </h2>
         <p className="text-neutral-400 text-xs">
@@ -46,7 +46,7 @@ export function GoogleSignIn({ mode = 'login' }: GoogleSignInProps) {
         </p>
       </div>
 
-      <label className="mb-4 flex items-start gap-2.5 text-[11px] text-neutral-300 leading-relaxed cursor-pointer">
+      <label className="mb-4 flex items-start gap-2.5 p-3 rounded-xl border border-neutral-800 bg-neutral-950/60 text-xs text-neutral-300 leading-relaxed cursor-pointer">
         <input
           type="checkbox"
           checked={acceptTerms}
@@ -64,7 +64,8 @@ export function GoogleSignIn({ mode = 'login' }: GoogleSignInProps) {
         type="button"
         onClick={handleClick}
         disabled={loading || !acceptTerms}
-        className="w-full py-2.5 rounded-xl bg-white hover:bg-neutral-100 text-neutral-900 font-bold transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2.5 text-xs shadow-md"
+        aria-describedby={acceptTerms ? undefined : 'google-signin-hint'}
+        className="w-full h-11 rounded-xl bg-white hover:bg-neutral-100 text-neutral-900 font-bold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2.5 text-[13px] shadow-md"
       >
         {loading ? (
           <div className="w-4 h-4 border-2 border-neutral-900/30 border-t-neutral-900 rounded-full animate-spin" />
@@ -75,6 +76,12 @@ export function GoogleSignIn({ mode = 'login' }: GoogleSignInProps) {
           </>
         )}
       </button>
+
+      {!acceptTerms && !loading && (
+        <p id="google-signin-hint" className="mt-2.5 text-center text-[11.5px] text-neutral-500">
+          Tick the box above to continue.
+        </p>
+      )}
 
       {error && (
         <div role="alert" className="mt-3 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
