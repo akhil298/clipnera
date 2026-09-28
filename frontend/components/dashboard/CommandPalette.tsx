@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   CalendarDays,
   Clapperboard,
@@ -17,6 +18,7 @@ import {
 import type { TabType, VideoProject, ViralClip } from '@/lib/types';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { projectStatus, statusDotClass } from '@/components/ui/StatusPill';
+import { SOCIAL_SETTINGS_PATH } from '@/components/social/platforms';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -55,6 +57,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onOpenProject,
   onOpenClip,
 }) => {
+  const router = useRouter();
   const { flags } = useFeatureFlags();
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -83,7 +86,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       ...(flags.social_publishing
         ? [
             { id: 'p-scheduler', group: 'Pages' as const, label: 'Scheduler', icon: <CalendarDays className={iconClass} />, keywords: 'post publish calendar', run: () => onNavigate('scheduler') },
-            { id: 'a-connect', group: 'Actions' as const, label: 'Connect a social account', hint: 'Settings', icon: <Sparkles className={iconClass} />, keywords: 'instagram tiktok youtube', run: () => onNavigate('settings') },
+            { id: 'a-connect', group: 'Actions' as const, label: 'Connect a social account', hint: 'Settings', icon: <Sparkles className={iconClass} />, keywords: 'instagram tiktok youtube', run: () => router.push(SOCIAL_SETTINGS_PATH) },
           ]
         : []),
       { id: 'p-brand', group: 'Pages', label: 'Brand kit', icon: <Palette className={iconClass} />, keywords: 'logo watermark font colors captions', run: () => onNavigate('brand_kit') },
@@ -115,7 +118,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       });
     });
     return items;
-  }, [projects, flags, onNavigate, onOpenUpload, onOpenBilling, onOpenProject, onOpenClip]);
+  }, [projects, flags, router, onNavigate, onOpenUpload, onOpenBilling, onOpenProject, onOpenClip]);
 
   const results = useMemo(() => {
     const terms = query.toLowerCase().split(/\s+/).filter(Boolean);

@@ -6,7 +6,7 @@ import { Trash2 } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { UploadModal } from './UploadModal';
-import { DashboardHomeView } from './DashboardHomeView';
+import { DashboardHomeView, type OpenUploadOptions } from './DashboardHomeView';
 import { ProjectFoldersView } from './ProjectFoldersView';
 import { ClipGeneratorView } from './ClipGeneratorView';
 import { VideoEditorStudio } from './VideoEditorStudio';
@@ -192,8 +192,13 @@ export default function DashboardApp() {
   // Auth / Workspace Modal
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  // Upload modal state
+  // Upload modal state; a link pasted on Home opens it prefilled.
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [uploadOptions, setUploadOptions] = useState<OpenUploadOptions>({});
+  const openUpload = useCallback((options: OpenUploadOptions = {}) => {
+    setUploadOptions(options);
+    setIsUploadOpen(true);
+  }, []);
 
   // ⌘K / Ctrl+K search
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
@@ -610,7 +615,16 @@ export default function DashboardApp() {
   };
 
   // Handle selecting clip for studio editing
+  // A clip opened from anywhere makes its own project the open one, so the
+  // editor, scheduler and sidebar all agree on which project is in view.
+  const focusClipProject = (clip: ViralClip) => {
+    if (!clip.projectId || clip.projectId === activeProject?.id) return;
+    const owner = projects.find((p) => p.id === clip.projectId);
+    if (owner) setActiveProject(owner);
+  };
+
   const handleSelectClipForEdit = (clip: ViralClip) => {
+    focusClipProject(clip);
     setSelectedClip(clip);
     navigateToTab('editor', clip.projectId || activeProject?.id, clip.id);
   };
@@ -624,6 +638,7 @@ export default function DashboardApp() {
 
   // Handle scheduling a clip
   const handleScheduleClip = (clip: ViralClip) => {
+    focusClipProject(clip);
     setSelectedClip(clip);
     navigateToTab('scheduler', clip.projectId || activeProject?.id, clip.id);
   };
@@ -725,7 +740,7 @@ export default function DashboardApp() {
       <Sidebar
         activeTab={activeTab}
         onTabChange={navigateToTab}
-        onOpenUpload={() => setIsUploadOpen(true)}
+        onOpenUpload={() => openUpload()}
         user={currentUser}
         workspaces={workspaces}
         projects={projects}
@@ -742,11 +757,11 @@ export default function DashboardApp() {
       />
 
       {/* Main Workspace Column */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
+      <div className="flex-1 flex flex-col min-w-0 min-h-[100dvh]">
         {/* Top Header */}
         <Header
           activeTab={activeTab}
-          onOpenUpload={() => setIsUploadOpen(true)}
+          onOpenUpload={() => openUpload()}
           user={currentUser}
           workspaces={workspaces}
           projects={projects}
@@ -769,11 +784,12 @@ export default function DashboardApp() {
               user={currentUser}
               projects={projects}
               workspaces={workspaces}
-              activeProject={activeProject}
-              onOpenUpload={() => setIsUploadOpen(true)}
+              projectsLoading={!projectsLoaded}
               onSelectProject={handleSelectProject}
-              onSelectClipForEdit={handleSelectClipForEdit}
+              onOpenClip={handleOpenClipFromSearch}
               onScheduleClip={handleScheduleClip}
+              onOpenUpload={openUpload}
+              onCancelPipeline={handleCancelPipeline}
               onNavigateTab={navigateToTab}
               onUpgradePlan={navigateToBilling}
             />
@@ -801,7 +817,7 @@ export default function DashboardApp() {
               project={activeProject || projects[0]}
               onSelectClipForEdit={handleSelectClipForEdit}
               onScheduleClip={handleScheduleClip}
-              onOpenUpload={() => setIsUploadOpen(true)}
+              onOpenUpload={() => openUpload()}
               onRenameFolder={handleRenameFolder}
               onNavigateTab={navigateToTab}
               pipelineSteps={pipelineSteps}
@@ -870,7 +886,7 @@ export default function DashboardApp() {
       <MobileTabBar
         activeTab={activeTab}
         onTabChange={navigateToTab}
-        onOpenUpload={() => setIsUploadOpen(true)}
+        onOpenUpload={() => openUpload()}
         onOpenMore={() => setIsMobileMenuOpen(true)}
       />
 
@@ -879,7 +895,7 @@ export default function DashboardApp() {
         onClose={() => setIsPaletteOpen(false)}
         projects={projects}
         onNavigate={navigateToTab}
-        onOpenUpload={() => setIsUploadOpen(true)}
+        onOpenUpload={() => openUpload()}
         onOpenBilling={navigateToBilling}
         onOpenProject={handleOpenFolder}
         onOpenClip={handleOpenClipFromSearch}
@@ -915,6 +931,8 @@ export default function DashboardApp() {
       {/* Upload & AI Configuration Modal */}
       <UploadModal
         isOpen={isUploadOpen}
+        initialUrl={uploadOptions.url}
+        initialMode={uploadOptions.mode}
         onClose={() => setIsUploadOpen(false)}
         onProjectCreated={handleProjectCreated}
       />

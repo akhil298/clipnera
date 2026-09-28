@@ -1,11 +1,11 @@
 import type { SocialPlatform } from '@/lib/api';
 
 /** Display details per platform. Behaviour and limits come from the API. */
-export const PLATFORM_STYLE: Record<SocialPlatform, { name: string; color: string }> = {
-  youtube: { name: 'YouTube Shorts', color: 'from-red-600 to-rose-700' },
-  tiktok: { name: 'TikTok', color: 'from-pink-500 to-rose-600' },
-  instagram: { name: 'Instagram Reels', color: 'from-purple-500 to-pink-500' },
-  x: { name: 'X (Twitter)', color: 'from-neutral-700 to-neutral-900' },
+export const PLATFORM_STYLE: Record<SocialPlatform, { name: string; short: string; color: string }> = {
+  youtube: { name: 'YouTube Shorts', short: 'YT', color: 'from-red-600 to-rose-700' },
+  tiktok: { name: 'TikTok', short: 'TT', color: 'from-pink-500 to-rose-600' },
+  instagram: { name: 'Instagram Reels', short: 'IG', color: 'from-purple-500 to-pink-500' },
+  x: { name: 'X (Twitter)', short: 'X', color: 'from-neutral-700 to-neutral-900' },
 };
 
 export const PLATFORM_ORDER: SocialPlatform[] = ['youtube', 'tiktok', 'instagram', 'x'];

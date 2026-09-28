@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { ViralClip } from '@/lib/types';
 import { ClipPoster } from './ClipPoster';
+import { ScoreRing } from '@/components/ui/ScoreRing';
 
 interface ClipCardProps {
   clip: ViralClip;
@@ -31,34 +32,8 @@ function formatTimecode(seconds: number): string {
   return `${minutes}:${String(rest).padStart(2, '0')}`;
 }
 
-/** Amber above 85, neutral below, so the eye finds the strong clips first. */
-function scoreTone(score: number): { ring: string; text: string; chip: string } {
-  if (score >= 85) {
-    return {
-      ring: 'stroke-amber-400',
-      text: 'text-amber-300',
-      chip: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-    };
-  }
-  if (score >= 70) {
-    return {
-      ring: 'stroke-emerald-400',
-      text: 'text-emerald-300',
-      chip: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25',
-    };
-  }
-  return {
-    ring: 'stroke-neutral-500',
-    text: 'text-neutral-300',
-    chip: 'bg-neutral-800 text-neutral-300 border-neutral-700',
-  };
-}
-
 // Only one card plays with sound at a time; starting another pauses this one.
 let audibleVideo: HTMLVideoElement | null = null;
-
-const RADIUS = 15;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export const ClipCard: React.FC<ClipCardProps> = ({
   clip,
@@ -76,7 +51,6 @@ export const ClipCard: React.FC<ClipCardProps> = ({
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  const tone = scoreTone(clip.viralityScore);
   const hasVideo = Boolean(clip.presignedUrl) && !failed;
 
   const togglePlay = useCallback(
@@ -182,27 +156,7 @@ export const ClipCard: React.FC<ClipCardProps> = ({
         </div>
 
         <div className="absolute right-2.5 top-2.5">
-          <div className="relative h-9 w-9">
-            <svg viewBox="0 0 36 36" className="h-9 w-9 -rotate-90">
-              <circle cx="18" cy="18" r={RADIUS} fill="rgba(0,0,0,0.65)" stroke="rgba(255,255,255,0.12)" strokeWidth="3" />
-              <circle
-                cx="18"
-                cy="18"
-                r={RADIUS}
-                fill="none"
-                strokeWidth="3"
-                strokeLinecap="round"
-                className={tone.ring}
-                strokeDasharray={CIRCUMFERENCE}
-                strokeDashoffset={CIRCUMFERENCE * (1 - Math.min(100, Math.max(0, clip.viralityScore)) / 100)}
-              />
-            </svg>
-            <span
-              className={`absolute inset-0 flex items-center justify-center font-mono text-[11px] font-black ${tone.text}`}
-            >
-              {clip.viralityScore}
-            </span>
-          </div>
+          <ScoreRing score={clip.viralityScore} />
         </div>
 
         {/* Play control */}

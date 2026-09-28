@@ -33,12 +33,18 @@ import { OutputFormatPicker } from './OutputFormatPicker';
 
 interface UploadModalProps {
   isOpen: boolean;
+  /** A YouTube link to start from, e.g. one pasted on Home. */
+  initialUrl?: string;
+  /** Which source tab opens first. */
+  initialMode?: SourceMode;
   onClose: () => void;
   onProjectCreated: (project: VideoProject) => void;
 }
 
 export const UploadModal: React.FC<UploadModalProps> = ({
   isOpen,
+  initialUrl,
+  initialMode,
   onClose,
   onProjectCreated,
 }) => {
@@ -120,6 +126,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       cancelled = true;
     };
   }, [urlInput]);
+
+  // Opening from Home with a pasted link (or the Upload button) starts there.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialMode) setSourceMode(initialMode);
+    if (initialUrl) setUrlInput(initialUrl);
+  }, [isOpen, initialUrl, initialMode]);
 
   useEffect(() => {
     return () => {
