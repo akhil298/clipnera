@@ -1043,7 +1043,7 @@ export type PlanFeature =
   | 'social_scheduling'
   | 'custom_aspect_ratios';
 
-export type UsageKey = 'exports' | 'audio_enhancements' | 'reel_renders' | 'ai_shots';
+export type UsageKey = 'exports' | 'audio_enhancements' | 'reel_renders' | 'ai_shots' | 'auto_edits';
 
 export type BillingPeriod = 'monthly' | 'yearly';
 
@@ -1692,7 +1692,9 @@ export type FeatureFlagKey =
   | 'broll_studio'
   | 'broll_studio.cutaways'
   | 'broll_studio.reels'
-  | 'broll_studio.ai_shots';
+  | 'broll_studio.ai_shots'
+  | 'broll_studio.reels.footage'
+  | 'broll_studio.reels.footage.opus_director';
 
 export interface FeatureFlagsResponse {
   flags: Record<FeatureFlagKey, boolean>;
@@ -1714,7 +1716,8 @@ export interface AdminFeatureFlagListResponse {
 }
 
 /** Mirrors NotificationKind in backend/notifications/model.py. */
-export type InAppNotificationKind = 'pipeline_completed' | 'pipeline_failed' | 'payment_approved';
+export type InAppNotificationKind =
+  | 'pipeline_completed' | 'pipeline_failed' | 'payment_approved' | 'reel_ready' | 'reel_failed';
 
 export interface InAppNotificationResponse {
   id: string;
@@ -2180,4 +2183,274 @@ export const reelsApi = {
     );
     return reelsApi.completeAssets(reelId, uploads.map((u) => u.key));
   },
+};
+
+// -- Reels from raw footage (backend edit_engine/) -------------------------------------
+// Mirrors backend/edit_engine/schema.py.
+
+export type EditScriptMode = 'auto' | 'spoken' | 'voiceover' | 'onscreen' | 'direction';
+/** How the planner actually used the script; `none` when there was none. */
+export type EditResolvedScriptMode = 'none' | 'spoken' | 'voiceover' | 'onscreen' | 'direction';
+export type EditTargetSeconds = 0 | 15 | 30 | 45 | 60 | 90;
+export type EditStatus = 'draft' | 'analyzing' | 'planned' | 'rendering' | 'done' | 'failed';
+export type EditLayout = 'talking' | 'voiceover' | 'montage';
+export type EditSourceType =
+  | 'video/mp4' | 'video/quicktime' | 'video/webm'
+  | 'image/jpeg' | 'image/png' | 'image/webp'
+  | 'audio/mpeg' | 'audio/wav' | 'audio/x-wav' | 'audio/mp4' | 'audio/x-m4a' | 'audio/webm';
+export type EditChangeOp =
+  | 'set_script_mode' | 'restore_line' | 'remove_line' | 'set_hook' | 'set_music' | 'set_look'
+  | 'set_caption_style' | 'set_length' | 'remove_pop' | 'skip_missing_lines';
+
+export interface EditCreateRequest {
+  title?: string;
+  script?: string | null;
+  script_mode?: EditScriptMode;
+  intent?: string | null;
+  language?: string;
+  caption_style?: string;
+  target_seconds?: EditTargetSeconds;
+  autopilot?: boolean;
+}
+
+export interface EditSourceFile {
+  filename: string;
+  content_type: EditSourceType;
+  size_bytes: number;
+  duration_s?: number | null;
+}
+
+export interface EditUpload {
+  key: string;
+  url: string;
+  content_type: string;
+}
+
+export interface EditChange {
+  op: EditChangeOp;
+  value?: string | null;
+}
+
+export interface EditSourceResponse {
+  key: string;
+  kind: 'video' | 'image' | 'voice';
+  name: string;
+  duration_s: number;
+  url: string | null;
+}
+
+export interface EditLine {
+  id: string;
+  text: string;
+}
+
+export interface EditMusicResponse {
+  id: string;
+  title: string;
+  artist: string;
+  licence: string;
+  credit_text: string;
+  url: string | null;
+}
+
+export interface EditPlanResponse {
+  content_type: string;
+  layout: EditLayout;
+  script_mode: EditResolvedScriptMode;
+  script_lines_found: number;
+  script_lines_total: number;
+  missing_lines: string[];
+  skip_missing: boolean;
+  removed_lines: EditLine[];
+  hook: string;
+  title: string;
+  look: string;
+  caption_style: string;
+  music: EditMusicResponse | null;
+  music_mood: string;
+  broll_count: number;
+  own_broll_count: number;
+  pop_count: number;
+  director_model: string;
+  caption: string;
+  hashtags: string[];
+}
+
+export interface EditPicture {
+  kind: 'video' | 'image' | 'card';
+  at: number;
+  dur: number;
+  src: number | null;
+  source_start: number | null;
+  source_end: number | null;
+  zoom: number | null;
+  crop_x: number | null;
+  text: string | null;
+}
+
+export interface EditVoicePiece {
+  src: number;
+  source_start: number;
+  source_end: number;
+  at: number;
+}
+
+export interface EditText {
+  kind: 'hook' | 'pop' | 'line';
+  text: string;
+  at: number;
+  dur: number;
+}
+
+export interface EditWord {
+  word: string;
+  start: number;
+  end: number;
+}
+
+export interface EditTimelineMusic {
+  track_id: string;
+  offset: number;
+  gain_db: number;
+  duck: boolean;
+}
+
+export interface EditTimelineResponse {
+  duration: number;
+  width: number;
+  height: number;
+  look: string;
+  picture: EditPicture[];
+  voice: EditVoicePiece[];
+  voiceover_src: number | null;
+  texts: EditText[];
+  words: EditWord[];
+  music: EditTimelineMusic | null;
+}
+
+export interface EditResponse {
+  id: string;
+  title: string;
+  status: EditStatus;
+  progress: string | null;
+  script: string | null;
+  script_mode: EditScriptMode;
+  intent: string | null;
+  language: string;
+  caption_style: string;
+  target_seconds: number;
+  autopilot: boolean;
+  sources: EditSourceResponse[];
+  raw_seconds: number;
+  duration_s: number;
+  plan: EditPlanResponse | null;
+  timeline: EditTimelineResponse | null;
+  credits_estimate: number;
+  credits_charged: number;
+  renders: number;
+  replans_left: number;
+  chat_edits_left: number;
+  output_url: string | null;
+  music_credit: string | null;
+  error: string | null;
+  created_at: string;
+}
+
+export interface EditSummary {
+  id: string;
+  title: string;
+  status: EditStatus;
+  duration_s: number;
+  created_at: string;
+}
+
+export interface EditLimitsResponse {
+  max_raw_seconds: number;
+  max_files: number;
+  max_output_seconds: number;
+  output_height: number;
+  opus_director: boolean;
+}
+
+export interface MusicTrackResponse {
+  id: string;
+  title: string;
+  artist: string;
+  source: string;
+  source_url: string;
+  licence: string;
+  licence_url: string;
+  credit_text: string;
+  mood: string;
+  energy: number;
+  bpm: number | null;
+  duration_s: number;
+  status: 'live' | 'pulled';
+  used_by: number;
+  created_at: string;
+}
+
+export const EDIT_VIDEO_TYPES: readonly EditSourceType[] = ['video/mp4', 'video/quicktime', 'video/webm'];
+export const EDIT_IMAGE_TYPES: readonly EditSourceType[] = ['image/jpeg', 'image/png', 'image/webp'];
+export const EDIT_AUDIO_TYPES: readonly EditSourceType[] = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/x-m4a', 'audio/webm'];
+/** Mirrors LOOKS / LOOK_LABELS in backend/edit_engine/looks.py. */
+export const EDIT_LOOKS: Record<string, string> = {
+  natural: 'Natural', clean_bright: 'Clean & bright', warm_film: 'Warm film', teal_orange: 'Teal & orange',
+  moody: 'Moody', vivid: 'Vivid', bw_punch: 'Black & white',
+};
+/** Mirrors MOODS in backend/edit_engine/music.py. */
+export const EDIT_MOODS = ['upbeat', 'chill', 'lofi', 'inspiring', 'cinematic', 'dramatic', 'emotional', 'funny', 'energetic', 'corporate'] as const;
+
+export const editsApi = {
+  limits: () => envelopeRequest<EditLimitsResponse>('/edits/limits'),
+  create: (payload: EditCreateRequest) => envelopeRequest<EditResponse>('/edits', post(payload)),
+  list: () => envelopeRequest<EditSummary[]>('/edits'),
+  get: (editId: string) => envelopeRequest<EditResponse>(`/edits/${editId}`),
+  initSources: (editId: string, files: EditSourceFile[]) =>
+    envelopeRequest<{ uploads: EditUpload[] }>(`/edits/${editId}/sources/init`, post({ files })),
+  completeSources: (editId: string, keys: string[]) =>
+    envelopeRequest<EditResponse>(`/edits/${editId}/sources/complete`, post({ keys })),
+  analyze: (editId: string) => envelopeRequest<EditResponse>(`/edits/${editId}/analyze`, post({})),
+  replan: (editId: string) => envelopeRequest<EditResponse>(`/edits/${editId}/plan`, post({})),
+  change: (editId: string, changes: EditChange[]) =>
+    envelopeRequest<EditResponse>(`/edits/${editId}/changes`, post({ changes })),
+  chat: (editId: string, message: string) => envelopeRequest<EditResponse>(`/edits/${editId}/chat`, post({ message })),
+  render: (editId: string) => envelopeRequest<EditResponse>(`/edits/${editId}/render`, post({})),
+
+  /** Uploads footage, photos and a voiceover straight to S3 (with per-file progress), then attaches them. */
+  async uploadSources(
+    editId: string,
+    files: { file: File; durationS: number | null }[],
+    onProgress?: (index: number, fraction: number) => void,
+  ): Promise<EditResponse> {
+    const { uploads } = await editsApi.initSources(
+      editId,
+      files.map(({ file, durationS }) => ({
+        filename: file.name, content_type: file.type as EditSourceType, size_bytes: file.size, duration_s: durationS,
+      })),
+    );
+    await Promise.all(uploads.map((upload, i) => putWithProgress(upload, files[i].file, (f) => onProgress?.(i, f))));
+    return editsApi.completeSources(editId, uploads.map((u) => u.key));
+  },
+};
+
+function putWithProgress(upload: EditUpload, file: File, onProgress: (fraction: number) => void): Promise<void> {
+  // XHR rather than fetch: only XHR reports upload progress, which matters for large videos.
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', upload.url);
+    xhr.setRequestHeader('Content-Type', upload.content_type);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.onload = () => (xhr.status < 300 ? resolve() : reject(new Error(`Upload of ${file.name} failed (${xhr.status})`)));
+    xhr.onerror = () => reject(new Error(`Upload of ${file.name} failed`));
+    xhr.send(file);
+  });
+}
+
+export const adminMusicApi = {
+  list: () => envelopeRequest<MusicTrackResponse[]>('/admin/music'),
+  /** Adds a free-licence track; the form carries the licence record (see backend edit_engine/route.py). */
+  add: (form: FormData) => envelopeRequest<MusicTrackResponse>('/admin/music', { method: 'POST', body: form }),
+  setStatus: (trackId: string, status: 'live' | 'pulled') =>
+    envelopeRequest<MusicTrackResponse>(`/admin/music/${trackId}/status`, post({ status })),
 };

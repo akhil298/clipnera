@@ -101,10 +101,11 @@ const getDashboardPath = (
 export default function DashboardApp() {
   const router = useRouter();
   const pathname = usePathname();
-  const params = useParams<{ projectId?: string; clipId?: string; reelId?: string }>();
+  const params = useParams<{ projectId?: string; clipId?: string; reelId?: string; editId?: string }>();
   const routeProjectId = typeof params.projectId === 'string' ? params.projectId : undefined;
   const routeClipId = typeof params.clipId === 'string' ? params.clipId : undefined;
   const routeReelId = typeof params.reelId === 'string' ? params.reelId : undefined;
+  const routeEditId = typeof params.editId === 'string' ? params.editId : undefined;
 
   // Auth gate: only authenticated users may view the dashboard.
   const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
@@ -868,7 +869,7 @@ export default function DashboardApp() {
           {/* TAB 7: BRAND KIT & SUBTITLE STYLES */}
           {activeTab === 'brand_kit' && <BrandKitView />}
 
-          {activeTab === 'reels' && flags['broll_studio.reels'] && <ReelsView reelId={routeReelId} />}
+          {activeTab === 'reels' && flags['broll_studio.reels'] && <ReelsView reelId={routeReelId} editId={routeEditId} />}
 
           {/* TAB 8: SETTINGS, WORKSPACE & BILLING */}
           {activeTab === 'settings' && currentUser && (

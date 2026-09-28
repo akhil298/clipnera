@@ -98,6 +98,20 @@ async def notify_payment_approved(user_id: str, credits_added: int, plan_name: s
         log.warning(f"In-app notification failed: payment user={user_id} error={type(exc).__name__}")
 
 
+async def notify_reel_outcome(user_id: str, title: str, success: bool) -> None:
+    """Tell the user a footage reel finished rendering, or failed and was refunded. Best effort."""
+    if success:
+        kind, heading, message = NotificationKind.REEL_READY, "Your reel is ready", f"“{title}” has finished rendering."
+    else:
+        kind, heading, message = (NotificationKind.REEL_FAILED, "Reel render failed",
+                                  f"“{title}” could not be rendered. Your credits were refunded.")
+    try:
+        async with AsyncSessionLocal() as session:
+            await _deliver(session, user_id, kind, heading, message)
+    except Exception as exc:
+        log.warning(f"In-app notification failed: reel user={user_id} error={type(exc).__name__}")
+
+
 async def _deliver(
     session: AsyncSession,
     user_id: str,

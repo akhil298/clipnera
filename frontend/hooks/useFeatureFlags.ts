@@ -16,6 +16,8 @@ const ALL_OFF: Record<FeatureFlagKey, boolean> = {
   'broll_studio.cutaways': false,
   'broll_studio.reels': false,
   'broll_studio.ai_shots': false,
+  'broll_studio.reels.footage': false,
+  'broll_studio.reels.footage.opus_director': false,
 };
 
 // One request per page load, shared by every component that asks.

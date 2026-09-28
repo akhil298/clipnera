@@ -81,7 +81,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       { id: 'p-home', group: 'Pages', label: 'Home', icon: <Home className={iconClass} />, keywords: 'dashboard', run: () => onNavigate('dashboard') },
       { id: 'p-projects', group: 'Pages', label: 'Projects', icon: <Folder className={iconClass} />, keywords: 'folders videos', run: () => onNavigate('folders') },
       ...(flags['broll_studio.reels']
-        ? [{ id: 'p-reels', group: 'Pages' as const, label: 'Reels from images', icon: <Clapperboard className={iconClass} />, keywords: 'photos script', run: () => onNavigate('reels') }]
+        ? [{ id: 'p-reels', group: 'Pages' as const, label: 'Reels', icon: <Clapperboard className={iconClass} />, keywords: 'photos script footage raw video edit', run: () => onNavigate('reels') }]
         : []),
       ...(flags.social_publishing
         ? [

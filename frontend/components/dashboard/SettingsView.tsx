@@ -159,6 +159,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       ['audio_enhancements', 'Audio clean-ups'],
       ['reel_renders', 'Reel renders'],
       ['ai_shots', 'AI shots'],
+      ['auto_edits', 'Footage edits'],
     ] as const
   ).map(([key, label]) => ({
     key,

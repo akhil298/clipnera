@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clapperboard, Download, Image as ImageIcon, Loader2, Mic, RotateCcw, Sparkles, Type, Video, X } from 'lucide-react';
+import { Clapperboard, Download, Film, Image as ImageIcon, Loader2, Mic, RotateCcw, Sparkles, Type, Video, X } from 'lucide-react';
 import {
   REEL_AUDIO_TYPES,
   REEL_IMAGE_TYPES,
@@ -14,6 +14,8 @@ import {
   ReelStyle,
   ReelSummary,
   AI_SHOT_CREDITS,
+  EditSummary,
+  editsApi,
   reelsApi,
 } from '@/lib/api';
 import { useEntitlements } from '@/hooks/useEntitlements';
@@ -21,6 +23,9 @@ import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { formatRelativeTime } from '@/lib/utils/dates';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusPill, type StatusTone } from '@/components/ui/StatusPill';
+import { EDIT_STATUS } from '@/lib/utils/footageReels';
+import { FootageReelBoard } from './FootageReelBoard';
+import { FootageReelForm } from './FootageReelForm';
 
 const LANGUAGES = [
   ['en', 'English'], ['hi', 'Hindi'], ['te', 'Telugu'], ['hinglish', 'Hinglish'], ['tenglish', 'Tenglish'],
@@ -390,20 +395,59 @@ function ReelBoard({ reelId, onBack }: { reelId: string; onBack: () => void }) {
   );
 }
 
-export function ReelsView({ reelId }: { reelId?: string }) {
+type ReelCard = {
+  id: string; title: string; kind: 'footage' | 'images'; duration_s: number; created_at: string;
+  cover_url: string | null; status: { tone: StatusTone; label: string }; href: string;
+};
+
+const imageCard = (r: ReelSummary): ReelCard => ({
+  ...r, kind: 'images', status: REEL_STATUS[r.status], href: `/dashboard/reels/${r.id}`,
+});
+const footageCard = (e: EditSummary): ReelCard => ({
+  ...e, kind: 'footage', cover_url: null, status: EDIT_STATUS[e.status], href: `/dashboard/reels/footage/${e.id}`,
+});
+
+export function ReelsView({ reelId, editId }: { reelId?: string; editId?: string }) {
   const router = useRouter();
-  const [reels, setReels] = useState<ReelSummary[] | null>(null);
+  const { flags } = useFeatureFlags();
+  const footage = flags['broll_studio.reels.footage'];
+  const [mode, setMode] = useState<'footage' | 'images'>('footage');
+  const [reels, setReels] = useState<ReelCard[] | null>(null);
 
   useEffect(() => {
-    if (!reelId) reelsApi.list().then(setReels).catch(() => setReels([]));
-  }, [reelId]);
+    if (reelId || editId) return;
+    Promise.all([
+      reelsApi.list().then((list) => list.map(imageCard)).catch(() => []),
+      footage ? editsApi.list().then((list) => list.map(footageCard)).catch(() => []) : Promise.resolve([] as ReelCard[]),
+    ]).then(([images, edits]) => setReels([...images, ...edits].sort((a, b) => b.created_at.localeCompare(a.created_at))));
+  }, [reelId, editId, footage]);
 
+  if (editId) return <FootageReelBoard editId={editId} onBack={() => router.push('/dashboard/reels')} />;
   if (reelId) return <ReelBoard reelId={reelId} onBack={() => router.push('/dashboard/reels')} />;
+  const showFootage = footage && mode === 'footage';
   return (
     <div className="space-y-6">
-      <PageHeader title="Reels from images" description="Turn your photos and a short script into a narrated reel with scenes you can change." />
+      <PageHeader
+        title={footage ? 'Reels' : 'Reels from images'}
+        description={footage
+          ? 'Drop your raw footage and we edit it into a finished reel: best takes, cuts, B-roll, captions, music and colour. Or build one from photos and a script.'
+          : 'Turn your photos and a short script into a narrated reel with scenes you can change.'} />
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] gap-6 items-start">
-        <NewReelForm onCreated={(id) => router.push(`/dashboard/reels/${id}`)} />
+        <div className="space-y-3">
+          {footage && (
+            <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-neutral-950 border border-neutral-800" role="group" aria-label="How to make the reel">
+              {([['footage', Film, 'Edit my footage'], ['images', ImageIcon, 'Build from images']] as const).map(([m, Icon, name]) => (
+                <button key={m} type="button" onClick={() => setMode(m)} aria-pressed={mode === m}
+                  className={`h-9 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${mode === m ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:text-white'}`}>
+                  <Icon className={`w-3.5 h-3.5 ${mode === m ? 'text-amber-400' : ''}`} /> {name}
+                </button>
+              ))}
+            </div>
+          )}
+          {showFootage
+            ? <FootageReelForm onCreated={(id) => router.push(`/dashboard/reels/footage/${id}`)} />
+            : <NewReelForm onCreated={(id) => router.push(`/dashboard/reels/${id}`)} />}
+        </div>
         <section className="space-y-3" aria-labelledby="your-reels">
           <div className="flex items-center gap-2">
             <h2 id="your-reels" className="text-sm font-bold text-white">Your reels</h2>
@@ -419,34 +463,36 @@ export function ReelsView({ reelId }: { reelId?: string }) {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-              {reels.map((r) => {
-                const status = REEL_STATUS[r.status];
-                return (
-                  <button key={r.id} type="button" onClick={() => router.push(`/dashboard/reels/${r.id}`)}
-                    className="group text-left rounded-2xl bg-neutral-900/80 border border-neutral-800 hover:border-neutral-700 overflow-hidden transition-colors">
-                    <span className="relative block aspect-[9/16] bg-neutral-950">
-                      {r.cover_url ? (
-                        <img src={r.cover_url} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />
-                      ) : (
-                        <span className="absolute inset-0 flex items-center justify-center px-3 text-center text-sm font-black uppercase text-amber-300/80 bg-[radial-gradient(circle_at_50%_30%,rgba(245,158,11,0.15),transparent_65%)]">
-                          {r.title}
-                        </span>
-                      )}
-                      <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
-                      <span className="absolute top-2 left-2"><StatusPill tone={status.tone}>{status.label}</StatusPill></span>
-                      {r.duration_s > 0 && (
-                        <span className="absolute bottom-2 right-2 rounded-md bg-black/70 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-white">
-                          {formatSeconds(r.duration_s)}
-                        </span>
-                      )}
-                    </span>
-                    <span className="block p-3">
-                      <span className="block text-[13px] font-semibold text-white truncate">{r.title}</span>
-                      <span className="block text-[11px] text-neutral-500">{formatRelativeTime(r.created_at)}</span>
-                    </span>
-                  </button>
-                );
-              })}
+              {reels.map((r) => (
+                <button key={r.href} type="button" onClick={() => router.push(r.href)}
+                  className="group text-left rounded-2xl bg-neutral-900/80 border border-neutral-800 hover:border-neutral-700 overflow-hidden transition-colors">
+                  <span className="relative block aspect-[9/16] bg-neutral-950">
+                    {r.cover_url ? (
+                      <img src={r.cover_url} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500" />
+                    ) : (
+                      <span className="absolute inset-0 flex items-center justify-center px-3 text-center text-sm font-black uppercase text-amber-300/80 bg-[radial-gradient(circle_at_50%_30%,rgba(245,158,11,0.15),transparent_65%)]">
+                        {r.title}
+                      </span>
+                    )}
+                    <span className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+                    <span className="absolute top-2 left-2"><StatusPill tone={r.status.tone}>{r.status.label}</StatusPill></span>
+                    {footage && (
+                      <span className="absolute top-2 right-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-200">
+                        {r.kind === 'footage' ? 'Footage' : 'Images'}
+                      </span>
+                    )}
+                    {r.duration_s > 0 && (
+                      <span className="absolute bottom-2 right-2 rounded-md bg-black/70 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-white">
+                        {formatSeconds(r.duration_s)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="block p-3">
+                    <span className="block text-[13px] font-semibold text-white truncate">{r.title}</span>
+                    <span className="block text-[11px] text-neutral-500">{formatRelativeTime(r.created_at)}</span>
+                  </span>
+                </button>
+              ))}
             </div>
           )}
         </section>

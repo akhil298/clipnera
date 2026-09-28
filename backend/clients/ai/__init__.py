@@ -47,6 +47,7 @@ class ModelChoice:
 GROQ_SMALL = ModelChoice("groq", "openai/gpt-oss-20b")
 GROQ_LARGE = ModelChoice("groq", "openai/gpt-oss-120b")
 SONNET_LOW = ModelChoice("anthropic", "claude-sonnet-5", "low")
+SONNET_MEDIUM = ModelChoice("anthropic", "claude-sonnet-5", "medium")
 OPUS_MEDIUM = ModelChoice("anthropic", "claude-opus-5-5", "medium")
 
 # (free, pro) per step. Pro pays for judgement only where it decides what the
@@ -65,7 +66,16 @@ STEP_MODELS: dict[str, tuple[ModelChoice, ModelChoice]] = {
     "transliteration": (GROQ_SMALL, GROQ_LARGE),
     # Where to cut away and what to search for: editorial, but low stakes per call.
     "broll_planning": (GROQ_LARGE, SONNET_LOW),
+    # Footage reels: one call decides the whole edit. Pro runs Sonnet by default;
+    # the reel editor's Opus flag swaps in REEL_DIRECTOR_OPUS (see edit_engine.director).
+    "reel_director": (GROQ_LARGE, SONNET_MEDIUM),
+    # Turning a chat message into a few timeline edits needs little judgement.
+    "reel_chat": (GROQ_SMALL, SONNET_LOW),
+    # Captions for a contact sheet of shots, and the Instagram caption.
+    "reel_copy": (GROQ_SMALL, SONNET_LOW),
 }
+
+REEL_DIRECTOR_OPUS = OPUS_MEDIUM
 
 
 def _default_choice(is_pro: bool) -> ModelChoice:
@@ -132,16 +142,18 @@ def get_text_client(
     provider: str | None = None,
     is_pro: bool | None = None,
     step: str | None = None,
+    choice: ModelChoice | None = None,
 ) -> BaseAI:
     """The client a text step of the pipeline runs on.
 
     Pass ``is_pro`` and ``step`` to use the plan's model for that step; pass
-    ``provider`` to force one at its configured default model. An unknown or
+    ``provider`` to force one at its configured default model, or ``choice``
+    for an exact model (e.g. a flag-selected upgrade for one step). An unknown or
     unconfigured provider falls back to the other rather than failing the run,
     and says so in the log -- a paid user briefly getting the free model is far
     better than their job dying.
     """
-    if provider is not None:
+    if choice is None and provider is not None:
         name = provider.strip().lower()
         if name not in TEXT_PROVIDERS:
             log.error(
@@ -150,7 +162,7 @@ def get_text_client(
             )
             name = DEFAULT_TEXT_PROVIDER
         choice = _default_choice(name == "anthropic")
-    else:
+    elif choice is None:
         choice = model_for_step(bool(is_pro), step)
 
     # A provider selected without a key would fail on every call with an opaque
@@ -183,4 +195,5 @@ __all__ = [
     "get_ai",
     "get_text_client",
     "TEXT_PROVIDERS",
+    "REEL_DIRECTOR_OPUS",
 ]

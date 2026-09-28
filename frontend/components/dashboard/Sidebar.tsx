@@ -85,7 +85,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: 'Home', icon: Home },
     { id: 'folders', label: 'Projects', icon: Folder, badge: projects.length ? `${projects.length}` : undefined },
     // Shown while an admin has Reels from Images switched on.
-    ...(flags['broll_studio.reels'] ? [{ id: 'reels' as TabType, label: 'Reels from images', icon: Clapperboard }] : []),
+    ...(flags['broll_studio.reels'] ? [{ id: 'reels' as TabType, label: 'Reels', icon: Clapperboard }] : []),
   ];
 
   // Clips and the editor only make sense with a project open, so they sit

@@ -31,7 +31,7 @@ const TAB_TITLES: Record<TabType, string> = {
   scheduler: 'Scheduler',
   analytics: 'Analytics',
   brand_kit: 'Brand kit',
-  reels: 'Reels from images',
+  reels: 'Reels',
   settings: 'Settings',
 };
 

@@ -22,6 +22,8 @@ const TYPE_BY_KIND: Record<InAppNotificationResponse['kind'], AppNotification['t
   pipeline_completed: 'render_complete',
   pipeline_failed: 'render_failed',
   payment_approved: 'credit_update',
+  reel_ready: 'render_complete',
+  reel_failed: 'render_failed',
 };
 
 function toAppNotification(n: InAppNotificationResponse): AppNotification {

@@ -57,6 +57,7 @@ CREDIT_PACK_REFERENCE = "credit_pack"
 USAGE_KEYS: tuple[str, ...] = get_args(UsageKey)
 _USAGE_LABELS = {
     "exports": "exports", "audio_enhancements": "audio enhancements", "reel_renders": "reel renders", "ai_shots": "AI shots",
+    "auto_edits": "footage edits",
 }
 _CYCLE_SECONDS = CREDIT_CYCLE_DAYS * 24 * 60 * 60
 

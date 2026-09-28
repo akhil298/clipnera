@@ -25,6 +25,7 @@ const USAGE_LABELS: Record<UsageKey, string> = {
   audio_enhancements: 'audio enhancement',
   reel_renders: 'reel render',
   ai_shots: 'AI shot',
+  auto_edits: 'footage edit',
 };
 
 /** The upgrade-prompt reason for a plan error returned by the API. */

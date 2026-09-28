@@ -25,6 +25,8 @@ BROLL_STUDIO = "broll_studio"
 BROLL_CUTAWAYS = f"{BROLL_STUDIO}.cutaways"
 BROLL_REELS = f"{BROLL_STUDIO}.reels"
 BROLL_AI_SHOTS = f"{BROLL_STUDIO}.ai_shots"
+REEL_EDITOR = f"{BROLL_REELS}.footage"
+REEL_EDITOR_OPUS = f"{REEL_EDITOR}.opus_director"
 
 
 def social_platform_flag(platform: str) -> str:
@@ -79,6 +81,19 @@ _DEFINITIONS = (
         "AI-generated shots (Pro)",
         "Pro users can generate a scene or cutaway with Veo (120 credits). Needs Veo quota on the Gemini key.",
         BROLL_STUDIO,
+    ),
+    FlagDefinition(
+        REEL_EDITOR,
+        "Reels from raw footage",
+        "Users upload raw videos, photos, an optional script and voiceover; the AI plans and renders a finished reel.",
+        BROLL_REELS,
+    ),
+    FlagDefinition(
+        REEL_EDITOR_OPUS,
+        "Opus director for Pro footage reels",
+        "Pro footage reels are planned by Claude Opus 5.5 instead of Sonnet 5. Opus costs more, so these reels "
+        "cost 1.5x the credits while this is on.",
+        REEL_EDITOR,
     ),
 )
 

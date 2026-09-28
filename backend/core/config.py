@@ -126,6 +126,25 @@ class BaseConfig(BaseSettings):
     REEL_MAX_IMAGES_FREE: int = 5
     REEL_MAX_IMAGES_PRO: int = 30
 
+    # Reels from raw footage (edit_engine/). Credits, per the margin notes in
+    # edit_engine/pricing.py: base + 1 per EDIT_OUTPUT_SECONDS_PER_CREDIT seconds
+    # of output + 1 per raw minute analysed; x1.5 while the Opus director is on.
+    EDIT_BASE_CREDITS: int = 6
+    EDIT_OUTPUT_SECONDS_PER_CREDIT: int = 3
+    EDIT_OPUS_CREDIT_MULTIPLIER: float = 1.5
+    # A re-render after edits reuses the analysis and plan: this share of the price.
+    EDIT_RERENDER_SHARE: float = 0.25
+    EDIT_MAX_RAW_SECONDS_FREE: int = 180
+    EDIT_MAX_RAW_SECONDS_PRO: int = 1800
+    EDIT_MAX_FILES_FREE: int = 10
+    EDIT_MAX_FILES_PRO: int = 40
+    EDIT_MAX_OUTPUT_SECONDS_FREE: int = 45
+    EDIT_MAX_OUTPUT_SECONDS_PRO: int = 90
+    # Director calls per reel after the first (each is a paid LLM call).
+    EDIT_MAX_REPLANS: int = 3
+    EDIT_MAX_CHAT_EDITS_FREE: int = 5
+    EDIT_MAX_CHAT_EDITS_PRO: int = 30
+
     # AI-generated B-roll (Pro): Veo on the Gemini API, reusing GEMINI_API_KEY.
     VEO_MODEL: str = "veo-3.1-lite-generate-preview"
     VEO_RESOLUTION: Literal["720p", "1080p"] = "720p"

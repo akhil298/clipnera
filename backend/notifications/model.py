@@ -19,6 +19,8 @@ class NotificationKind(str, enum.Enum):
     PIPELINE_COMPLETED = "pipeline_completed"
     PIPELINE_FAILED = "pipeline_failed"
     PAYMENT_APPROVED = "payment_approved"
+    REEL_READY = "reel_ready"
+    REEL_FAILED = "reel_failed"
 
 
 class Notification(Base):
