@@ -90,7 +90,7 @@ export function ConnectedPlatformsPanel() {
           </p>
         </div>
         {data && (
-          <span className="text-[11px] text-neutral-400 font-mono">
+          <span className="text-[11px] text-neutral-400 tabular-nums">
             {data.accounts.length}/{data.max_accounts} accounts
           </span>
         )}
@@ -126,7 +126,7 @@ export function ConnectedPlatformsPanel() {
                       onClick={() => connect(platform)}
                       disabled={busy !== null || locked || atLimit || !info.available}
                       title={locked ? 'Available on Pro' : atLimit ? 'Account limit reached for your plan' : undefined}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-gradient-to-r from-amber-500 to-rose-500 text-neutral-950 disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-amber-500 hover:bg-amber-400 text-neutral-950 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {busy === platform ? 'Redirecting…' : locked ? 'Pro only' : 'Connect Account'}
                     </button>
@@ -213,7 +213,7 @@ function AccountRow({
               {account.handle || account.display_name}
             </p>
             <span
-              className="text-[10px] text-emerald-400 font-mono"
+              className="text-[10.5px] text-emerald-400 tabular-nums"
               title={account.follower_count_updated_at ? `Updated ${formatDate(account.follower_count_updated_at)}` : undefined}
             >
               {formatAudience(account.follower_count)} Audience

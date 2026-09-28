@@ -112,7 +112,7 @@ export function PaymentModal({ isOpen, onClose, plan, creditPack = null, onPayme
       <div className="bg-neutral-900 border border-neutral-800 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6 lg:p-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-white font-['Syne',sans-serif]">
+            <h2 className="text-xl font-bold text-white">
               {step === 'confirm' && 'Complete Payment'}
               {step === 'pay' && 'Pay with UPI'}
               {step === 'submitted' && 'Payment Submitted'}

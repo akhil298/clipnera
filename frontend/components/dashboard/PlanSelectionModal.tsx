@@ -73,7 +73,7 @@ export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, upgradeRea
         <div className="p-6 lg:p-8">
           <div className="flex items-start justify-between gap-4 mb-6">
             <div>
-              <h2 className="text-2xl font-bold text-white font-['Syne',sans-serif]">Choose Your Plan</h2>
+              <h2 className="text-2xl font-bold text-white">Choose Your Plan</h2>
               <p className="text-sm text-neutral-400 mt-1">Start free. Upgrade when you need more.</p>
               {upgradeReason && (
                 <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-400/10 px-2.5 py-1 text-xs font-semibold text-amber-300 ring-1 ring-amber-400/25">
@@ -140,7 +140,7 @@ export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, upgradeRea
                       <div className="space-y-4">
                         <div className="flex items-center gap-2">
                           {isPaid ? <Crown className="w-5 h-5 text-amber-400" /> : <Zap className="w-5 h-5 text-neutral-400" />}
-                          <h3 className="text-base font-bold text-white font-['Syne',sans-serif]">{plan.name}</h3>
+                          <h3 className="text-base font-bold text-white">{plan.name}</h3>
                           {isCurrent && (
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-300 font-bold">
                               Current
@@ -148,7 +148,7 @@ export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, upgradeRea
                           )}
                         </div>
                         <div className="flex items-baseline gap-1">
-                          <span className="text-3xl font-extrabold text-white font-mono">
+                          <span className="text-3xl font-extrabold text-white tabular-nums">
                             {price ? formatAmount(price.amount, price.currency) : formatAmount(0, 'INR')}
                           </span>
                           {price && <span className="text-xs text-neutral-400">{PERIOD_SUFFIX[period]}</span>}

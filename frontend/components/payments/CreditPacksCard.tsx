@@ -63,7 +63,7 @@ export function CreditPacksCard({ onSelect }: { onSelect: (pack: CreditPackRespo
             <div key={pack.slug} className="p-4 rounded-xl bg-neutral-950 border border-neutral-800 flex flex-col gap-3">
               <div>
                 <p className="text-xs font-bold text-neutral-300">{pack.name}</p>
-                <p className="text-2xl font-extrabold text-white font-mono">{pack.credits}</p>
+                <p className="text-2xl font-extrabold text-white tabular-nums">{pack.credits}</p>
                 <p className="text-[11px] text-neutral-400">
                   credits · ≈ {videoMinutesFor(entitlements, pack.credits)} min of video
                 </p>

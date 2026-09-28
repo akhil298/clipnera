@@ -45,7 +45,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <div className="w-12 h-12 rounded-2xl bg-amber-500 flex items-center justify-center text-neutral-950 font-black text-xl shadow-md shadow-amber-500/15 mx-auto">
             C
           </div>
-          <h2 className="text-xl font-bold text-white font-['Syne',sans-serif]">
+          <h2 className="text-xl font-bold text-white">
             Account & Workspace
           </h2>
           <p className="text-xs text-neutral-400">

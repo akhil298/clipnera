@@ -75,7 +75,7 @@ export const PipelineProgressTracker: React.FC<PipelineProgressTrackerProps> = (
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-white font-['Syne',sans-serif]">
+            <h3 className="text-sm font-bold text-white">
               {isDownloadComplete ? 'AI Pipeline Processing' : 'Uploading Video to Cloud'}
             </h3>
             <p className="text-[11px] text-neutral-400">

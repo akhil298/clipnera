@@ -49,7 +49,7 @@ export function AccountPrivacyPanel({ user, onUpdateUser }: AccountPrivacyPanelP
 
   return (
     <div className="max-w-2xl p-6 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-6 shadow-xl">
-      <h3 className="text-sm font-bold text-white uppercase tracking-wider">Privacy &amp; data</h3>
+      <h3 className="text-sm font-bold text-white">Privacy &amp; data</h3>
 
       <div className="flex items-start justify-between gap-4">
         <div>
