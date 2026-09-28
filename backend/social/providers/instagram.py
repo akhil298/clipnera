@@ -183,12 +183,21 @@ class InstagramProvider(PlatformProvider):
             problems.append("Instagram accepts audio up to 48 kHz.")
         if caption.count("#") > 30:
             problems.append("Instagram captions can have at most 30 hashtags.")
+        offset = options.get("thumb_offset")
+        if isinstance(offset, int) and offset > clip.duration_seconds * 1000:
+            problems.append("The Reels cover frame is past the end of the video.")
         return problems
 
     def validate_options(self, options: dict[str, Any]) -> list[str]:
+        problems: list[str] = []
         if "share_to_feed" in options and not isinstance(options["share_to_feed"], bool):
-            return ["Choose whether the reel also appears in the Instagram feed."]
-        return []
+            problems.append("Choose whether the reel also appears in the Instagram feed.")
+        if "thumb_offset" in options:
+            offset = options["thumb_offset"]
+            # bool is an int subclass; a checkbox value is never a frame position.
+            if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+                problems.append("The Reels cover frame must be a position in the video, in milliseconds.")
+        return problems
 
     async def publish(
         self, tokens: TokenSet, request: PublishRequest, save_checkpoint: SaveCheckpoint
@@ -196,17 +205,17 @@ class InstagramProvider(PlatformProvider):
         if request.clip.presign is None:
             raise PlatformError(ErrorKind.PERMANENT, "no_source_url", "This clip is not stored where Instagram can fetch it.")
         await self._check_publishing_limit(tokens)
-        response = await self.request(
-            "POST",
-            f"{API}/me/media",
-            headers=self._auth(tokens),
-            data={
-                "media_type": "REELS",
-                "video_url": request.clip.presign(VIDEO_URL_TTL_SECONDS),
-                "caption": request.caption,
-                "share_to_feed": "true" if request.options.get("share_to_feed", True) else "false",
-            },
-        )
+        data = {
+            "media_type": "REELS",
+            "video_url": request.clip.presign(VIDEO_URL_TTL_SECONDS),
+            "caption": request.caption,
+            "share_to_feed": "true" if request.options.get("share_to_feed", True) else "false",
+        }
+        # The Reels cover: the frame shown in the profile grid and on the feed
+        # before playback. Instagram picks one itself when this is absent.
+        if isinstance(request.options.get("thumb_offset"), int):
+            data["thumb_offset"] = str(request.options["thumb_offset"])
+        response = await self.request("POST", f"{API}/me/media", headers=self._auth(tokens), data=data)
         container_id = json_of(response).get("id")
         if not container_id:
             raise PlatformError(ErrorKind.TRANSIENT, "no_container", "Instagram did not accept the video.")

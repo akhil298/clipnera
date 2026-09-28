@@ -9,9 +9,9 @@ import {
   Pause,
   Play,
   Scissors,
-  Sparkles,
 } from 'lucide-react';
 import { ViralClip } from '@/lib/types';
+import { ClipPoster } from './ClipPoster';
 
 interface ClipCardProps {
   clip: ViralClip;
@@ -165,14 +165,11 @@ export const ClipCard: React.FC<ClipCardProps> = ({
             }}
           />
         ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-neutral-950">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-neutral-800/70">
-              <Sparkles className="h-5 w-5 text-neutral-500" />
-            </div>
-            <p className="px-4 text-center text-[10px] text-neutral-500">
-              {failed ? 'Preview link expired' : 'Render still processing'}
-            </p>
-          </div>
+          <ClipPoster
+            clip={clip}
+            className="h-full"
+            pendingLabel={failed ? 'Preview link expired. Refresh to load it again.' : 'Rendering…'}
+          />
         )}
 
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/50" />

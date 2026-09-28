@@ -6,6 +6,7 @@ import { CalendarDays, Loader2, Send } from 'lucide-react';
 import {
   socialApi,
   type ConnectedAccountResponse,
+  type InstagramPostOptions,
   type SocialConnectionsResponse,
   type SocialPlatform,
   type TikTokCreatorInfoResponse,
@@ -16,6 +17,7 @@ import { ProLockBadge } from '@/components/dashboard/ProLockBadge';
 import { usePlan } from '@/hooks/usePlan';
 import { PLATFORM_STYLE, SOCIAL_SETTINGS_PATH } from './platforms';
 import { Select, SelectOption } from '@/components/ui/Select';
+import { ReelsCoverPicker } from './ReelsCoverPicker';
 
 type Options = Record<string, unknown>;
 
@@ -47,7 +49,7 @@ function defaultOptions(platform: SocialPlatform, clip: ViralClip | undefined): 
         brand_organic_toggle: false,
       };
     case 'instagram':
-      return { share_to_feed: true };
+      return { share_to_feed: true } satisfies InstagramPostOptions;
     default:
       return {};
   }
@@ -210,6 +212,7 @@ export function PublishComposer({ clip, baseCaption, timeZone, onPublished }: Pu
             />
             <PlatformOptions
               platform={account.platform}
+              clip={clip}
               options={opts}
               creator={creatorInfo[account.id]}
               onChange={(key, value) => setOption(account.id, key, value)}
@@ -275,11 +278,13 @@ export function PublishComposer({ clip, baseCaption, timeZone, onPublished }: Pu
 
 function PlatformOptions({
   platform,
+  clip,
   options,
   creator,
   onChange,
 }: {
   platform: SocialPlatform;
+  clip: ViralClip | undefined;
   options: Options;
   creator: TikTokCreatorInfoResponse | 'error' | undefined;
   onChange: (key: string, value: unknown) => void;
@@ -409,11 +414,21 @@ function PlatformOptions({
   }
 
   if (platform === 'instagram') {
+    const instagram = options as InstagramPostOptions;
     return (
-      <label className={check}>
-        <input type="checkbox" checked={options.share_to_feed !== false} onChange={(e) => onChange('share_to_feed', e.target.checked)} />
-        Also share to the main feed
-      </label>
+      <div className="space-y-3">
+        <label className={check}>
+          <input type="checkbox" checked={instagram.share_to_feed !== false} onChange={(e) => onChange('share_to_feed', e.target.checked)} />
+          Also share to the main feed
+        </label>
+        {clip && (
+          <ReelsCoverPicker
+            clip={clip}
+            value={instagram.thumb_offset}
+            onChange={(value) => onChange('thumb_offset', value)}
+          />
+        )}
+      </div>
     );
   }
 

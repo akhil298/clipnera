@@ -255,6 +255,37 @@ async def test_instagram_publish_uses_a_short_lived_url(clip):
 
 
 @pytest.mark.asyncio
+async def test_instagram_publish_sends_the_chosen_cover_frame(clip):
+    sent = {}
+
+    def handler(request):
+        path = request.url.path
+        if path.endswith("/content_publishing_limit"):
+            return httpx.Response(200, json={"data": []})
+        if path.endswith("/me/media"):
+            sent.update(parse_qs(request.content.decode()))
+            return httpx.Response(200, json={"id": "container-1"})
+        if path.endswith("/container-1"):
+            return httpx.Response(200, json={"status_code": "FINISHED"})
+        if path.endswith("/media_publish"):
+            return httpx.Response(200, json={"id": "media-1"})
+        return httpx.Response(200, json={})
+
+    request = PublishRequest(caption="", options={"thumb_offset": 2500}, clip=clip)
+    await InstagramProvider(_client(handler)).publish(TOKENS, request, Checkpoints())
+    assert sent["thumb_offset"] == ["2500"]
+
+
+def test_instagram_cover_frame_must_be_a_position_in_the_video(clip):
+    provider = InstagramProvider()
+    assert provider.validate_options({"thumb_offset": 1200}) == []
+    for bad in (-1, 1.5, "10", True):
+        assert provider.validate_options({"thumb_offset": bad}), bad
+    past_end = int(clip.duration_seconds * 1000) + 1
+    assert any("past the end" in p for p in provider.validate(clip, "", {"thumb_offset": past_end}))
+
+
+@pytest.mark.asyncio
 async def test_instagram_full_publishing_quota_defers(clip):
     def handler(request):
         return httpx.Response(200, json={"data": [{"quota_usage": 100, "config": {"quota_total": 100}}]})

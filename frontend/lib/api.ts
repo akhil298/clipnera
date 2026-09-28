@@ -1594,6 +1594,13 @@ export interface TikTokCreatorInfoResponse {
   max_video_post_duration_sec: number | null;
 }
 
+/** Instagram's keys in SocialPostTarget.options; validated by backend/social/providers/instagram.py. */
+export interface InstagramPostOptions {
+  share_to_feed?: boolean;
+  /** The Reels cover: milliseconds into the clip. Omitted lets Instagram choose. */
+  thumb_offset?: number;
+}
+
 export interface SocialPostTarget {
   account_id: string;
   caption: string;
