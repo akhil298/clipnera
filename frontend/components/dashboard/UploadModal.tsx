@@ -6,7 +6,6 @@ import {
   Sparkles,
   X,
   CheckCircle2,
-  Sliders,
   Scissors,
   Film,
   Zap,
@@ -30,6 +29,17 @@ import { CaptionScript, clipApi, pipelineApi, uploadApi, VIDEO_UPLOAD_TYPES, Vid
 type SourceMode = 'youtube' | 'upload';
 import { PipelineProgressTracker } from './PipelineProgressTracker';
 import { OutputFormatPicker } from './OutputFormatPicker';
+import { NotWiredBadge } from '@/components/ui/NotWiredBadge';
+
+/** A numbered section title, so the form reads as a short sequence. */
+const StepHeading: React.FC<{ number: number; title: string }> = ({ number, title }) => (
+  <h3 className="flex items-center gap-2 text-[13px] font-bold text-white">
+    <span className="w-5 h-5 rounded-full bg-amber-500 text-neutral-950 text-[11px] font-extrabold flex items-center justify-center">
+      {number}
+    </span>
+    {title}
+  </h3>
+);
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -54,8 +64,9 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [uploadDuration, setUploadDuration] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
-  const [customTitle, setCustomTitle] = useState('Alex Hormozi — $100M Leads Masterclass');
-  const [customFolderName, setCustomFolderName] = useState('Alex Hormozi — $100M Leads Masterclass');
+  // Filled from the video's title (or file name) once it is known.
+  const [customTitle, setCustomTitle] = useState('');
+  const [customFolderName, setCustomFolderName] = useState('');
 
   const { entitlements, promptUpgrade } = useEntitlements();
   const router = useRouter();
@@ -428,25 +439,36 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-3xl rounded-2xl bg-neutral-900 border border-neutral-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !isProcessing) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="new-video-title"
+        className="relative w-full sm:max-w-3xl rounded-t-2xl sm:rounded-2xl bg-neutral-900 border border-neutral-800 shadow-2xl overflow-hidden flex flex-col max-h-[94dvh] sm:max-h-[92vh]"
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 bg-neutral-950/70">
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-neutral-800 bg-neutral-950/70">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-white font-['Syne',sans-serif]">
-                Create Viral Clips with AI
+              <h2 id="new-video-title" className="text-base font-bold text-white">
+                New video
               </h2>
               <p className="text-xs text-neutral-400">
-                Generate viral 9:16 Shorts from a YouTube link or your own video
+                Turn one long video into short clips. You’ll see the cost before anything is charged.
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
           >
             <X className="w-5 h-5" />
@@ -454,9 +476,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-6">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-6 overscroll-contain">
           {!isProcessing ? (
             <>
+              <StepHeading number={1} title="Source" />
+
               {/* Source picker: YouTube link or a video from this device (while uploads are switched on) */}
               {uploadEnabled && (
               <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-neutral-950 border border-neutral-800" role="tablist">
@@ -486,24 +510,25 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 {!isUpload && (
                 <>
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-neutral-300 flex items-center gap-1.5">
+                  <label htmlFor="new-video-url" className="text-xs font-bold text-neutral-300 flex items-center gap-1.5">
                     <LinkIcon className="w-4 h-4 text-red-400" />
-                    <span>Paste YouTube Video URL:</span>
+                    <span>YouTube link</span>
                   </label>
-                  <span className="text-[10px] text-amber-400 font-semibold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                    Creates Dedicated Project Folder
-                  </span>
+                  <span className="text-[11px] text-neutral-500">Creates a new project</span>
                 </div>
 
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <LinkIcon className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500" />
                     <input
+                      id="new-video-url"
                       type="url"
+                      inputMode="url"
+                      autoComplete="off"
                       value={urlInput}
                       onChange={(e) => handleUrlChange(e.target.value)}
                       placeholder="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-                      className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-amber-400 font-mono"
+                      className="w-full h-11 pl-9 pr-4 rounded-xl bg-neutral-950 border border-neutral-800 text-[13px] text-white placeholder-neutral-600 focus:outline-none focus:border-amber-400"
                     />
                   </div>
                 </div>
@@ -516,7 +541,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 )}
 
                 {/* YouTube thumbnail + metadata preview */}
-                <div className="rounded-xl border border-amber-500/30 bg-neutral-950/80 overflow-hidden">
+                {(metadataLoading || ytMetaError || ytMeta) && (
+                <div className="rounded-xl border border-neutral-800 bg-neutral-950/80 overflow-hidden">
                   {metadataLoading && (
                     <div className="flex items-center gap-3 p-3">
                       <div className="w-40 aspect-video rounded-lg bg-neutral-900 animate-pulse shrink-0" />
@@ -536,7 +562,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
                   {ytMeta && !metadataLoading && (
                     <div className="flex gap-3 p-3">
-                      <div className="relative w-40 aspect-video rounded-lg overflow-hidden bg-neutral-900 border border-neutral-800 shrink-0">
+                      <div className="relative w-28 sm:w-40 aspect-video rounded-lg overflow-hidden bg-neutral-900 border border-neutral-800 shrink-0">
                         {ytMeta.thumbnail_url ? (
                           <img
                             src={ytMeta.thumbnail_url}
@@ -590,6 +616,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     </div>
                   )}
                 </div>
+                )}
                 </>
                 )}
 
@@ -644,27 +671,28 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 {/* Project Folder Destination Preview Card */}
                 <div className="p-3 rounded-xl bg-neutral-950/80 border border-neutral-800 space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 text-neutral-300 font-semibold text-[11px]">
+                    <label htmlFor="new-video-project-name" className="flex items-center gap-1.5 text-neutral-300 font-semibold text-[11px]">
                       <Folder className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Project Folder Output Name:</span>
-                    </span>
-                    <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-1.5 py-0.5 rounded">
-                      Auto Organized
-                    </span>
+                      <span>Project name</span>
+                    </label>
+                    <span className="text-[11px] text-neutral-500">Filled from the video title</span>
                   </div>
 
                   <input
+                    id="new-video-project-name"
                     type="text"
                     value={customFolderName}
                     onChange={(e) => setCustomFolderName(e.target.value)}
-                    placeholder="Folder name..."
-                    className="w-full px-3 py-2 rounded-lg bg-neutral-900 border border-neutral-800 text-xs font-semibold text-white focus:outline-none focus:border-amber-400"
+                    placeholder={isUpload ? 'Uses the file name if left empty' : 'Uses the video title if left empty'}
+                    className="w-full h-10 px-3 rounded-lg bg-neutral-900 border border-neutral-800 text-[13px] font-semibold text-white placeholder:font-normal placeholder:text-neutral-600 focus:outline-none focus:border-amber-400"
                   />
                 </div>
               </div>
 
-              {/* ⭐ SECTION: AI BACKGROUND NOISE REMOVAL & AUDIO ENHANCEMENT */}
-              <div className="rounded-xl p-4 bg-gradient-to-r from-neutral-950 via-neutral-900 to-neutral-950 border border-amber-500/30 space-y-3">
+              <StepHeading number={2} title="Clean up audio" />
+
+              {/* AI background noise removal and audio enhancement */}
+              <div className="rounded-xl p-4 bg-neutral-950/80 border border-neutral-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
@@ -673,19 +701,17 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-white">
-                          AI Background Noise Removal & Studio Voice
-                        </span>
-                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold">
-                          AI DENOISE
+                          Studio voice
                         </span>
                       </div>
                       <p className="text-[10px] text-neutral-400">
-                        Isolates dialogue, eliminates room echo, microphone hiss, fan hum & background noise
+                        Removes room echo, microphone hiss, fan hum and background noise
                       </p>
                     </div>
                   </div>
 
-                  <label className="relative inline-flex items-center cursor-pointer">
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <span className="sr-only">Studio voice</span>
                     <input
                       type="checkbox"
                       checked={aiDenoise}
@@ -702,10 +728,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-[11px] text-neutral-300 flex items-center gap-1">
                           <SlidersHorizontal className="w-3 h-3 text-amber-400" />
-                          <span>Noise Suppression Strength:</span>
+                          <span>Strength</span>
                         </span>
-                        <span className="font-mono text-amber-400 font-bold text-xs">
-                          {noiseSuppressionStrength}% (Studio Isolation)
+                        <span className="text-amber-300 font-bold text-xs tabular-nums">
+                          {noiseSuppressionStrength}% · {noiseSuppressionStrength >= 80 ? 'Maximum' : noiseSuppressionStrength >= 55 ? 'Balanced' : 'Light'}
                         </span>
                       </div>
                       <input
@@ -717,14 +743,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                         onChange={(e) => setNoiseSuppressionStrength(Number(e.target.value))}
                         className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-400"
                       />
-                      <div className="flex justify-between text-[9px] text-neutral-500 font-mono">
-                        <span>Mild (Room Hum)</span>
-                        <span>Balanced Studio</span>
-                        <span>Max Vocal Isolation</span>
+                      <div className="flex justify-between text-[10px] text-neutral-500">
+                        <span>Light</span>
+                        <span>Balanced</span>
+                        <span>Maximum</span>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                       <label className="flex items-center gap-2 p-2 rounded-lg bg-neutral-950/80 border border-neutral-800/80 cursor-pointer hover:border-neutral-700">
                         <input
                           type="checkbox"
@@ -732,8 +758,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                           onChange={(e) => setDeReverb(e.target.checked)}
                           className="w-3.5 h-3.5 rounded accent-amber-400"
                         />
-                        <span className="text-[11px] text-neutral-300 font-medium truncate">
-                          De-Reverb / Echo
+                        <span className="text-[11px] text-neutral-300 font-medium">
+                          Remove echo
                         </span>
                       </label>
 
@@ -744,8 +770,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                           onChange={(e) => setVocalClarityEq(e.target.checked)}
                           className="w-3.5 h-3.5 rounded accent-amber-400"
                         />
-                        <span className="text-[11px] text-neutral-300 font-medium truncate">
-                          Vocal Clarity EQ
+                        <span className="text-[11px] text-neutral-300 font-medium">
+                          Voice clarity EQ
                         </span>
                       </label>
 
@@ -756,14 +782,16 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                           onChange={(e) => setHumFilter(e.target.checked)}
                           className="w-3.5 h-3.5 rounded accent-amber-400"
                         />
-                        <span className="text-[11px] text-neutral-300 font-medium truncate">
-                          50/60Hz Hum Filter
+                        <span className="text-[11px] text-neutral-300 font-medium">
+                          50/60 Hz hum filter
                         </span>
                       </label>
                     </div>
                   </div>
                 )}
               </div>
+
+              <StepHeading number={3} title="Output formats" />
 
               <OutputFormatPicker
                 value={outputRatios}
@@ -800,13 +828,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               )}
 
               {/* AI Auto-Editing Options */}
-              <div className="border-t border-neutral-800/80 pt-4 space-y-4">
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-amber-400" />
-                    <span>Viral Style & Captions Setup</span>
-                  </h3>
-                  <span className="text-[11px] text-amber-400 font-medium">
+                  <StepHeading number={4} title="Clip style" />
+                  <span className="text-[11px] text-neutral-500">
                     {`Reframed ${outputRatios.join(' · ')}`}
                   </span>
                 </div>
@@ -816,7 +841,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     <div className="flex items-center gap-2.5">
                       <Scissors className="w-4 h-4 text-emerald-400" />
                       <div>
-                        <span className="text-xs font-bold text-white block">Auto Filler & Silence Cut</span>
+                        <span className="text-xs font-bold text-white flex flex-wrap items-center gap-1.5">Auto filler & silence cut <NotWiredBadge label="Not wired" reason="This switch is not sent to the pipeline yet, so it has no effect." /></span>
                         <span className="text-[10px] text-neutral-400">Cut 'um', 'uh', & pauses &gt;0.5s</span>
                       </div>
                     </div>
@@ -833,7 +858,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     <div className="flex items-center gap-2.5">
                       <Film className="w-4 h-4 text-rose-400" />
                       <div>
-                        <span className="text-xs font-bold text-white block">AI B-Roll Cutaways</span>
+                        <span className="text-xs font-bold text-white block">AI B-roll cutaways</span>
                         <span className="text-[10px] text-neutral-400">Auto-match footage to concepts · 5 credits per clip that gets B-roll</span>
                       </div>
                     </div>
@@ -850,7 +875,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     <div className="flex items-center gap-2.5">
                       <Volume2 className="w-4 h-4 text-sky-400" />
                       <div>
-                        <span className="text-xs font-bold text-white block">Auto Sound Effects (SFX)</span>
+                        <span className="text-xs font-bold text-white flex flex-wrap items-center gap-1.5">Auto sound effects <NotWiredBadge label="Not wired" reason="This switch is not sent to the pipeline yet, so it has no effect." /></span>
                         <span className="text-[10px] text-neutral-400">Whooshes, dings, and sub drops</span>
                       </div>
                     </div>
@@ -862,7 +887,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     />
                   </label>
 
-                  <div className="sm:col-span-2 flex items-center justify-between gap-3 p-3 rounded-xl bg-neutral-950 border border-neutral-800">
+                  <div className="sm:col-span-2 flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-neutral-950 border border-neutral-800">
                     <div>
                       <span className="text-xs font-bold text-white block">Hindi / Telugu caption script</span>
                       <span className="text-[10px] text-neutral-400">Auto writes Hinglish & Tenglish in Roman letters</span>
@@ -893,8 +918,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     <div className="flex items-center gap-2.5">
                       <Zap className="w-4 h-4 text-amber-400" />
                       <div>
-                        <span className="text-xs font-bold text-white block">Dynamic Auto-Zoom</span>
-                        <span className="text-[10px] text-neutral-400">Boosts watch retention by +34%</span>
+                        <span className="text-xs font-bold text-white flex flex-wrap items-center gap-1.5">Dynamic auto-zoom <NotWiredBadge label="Not wired" reason="This switch is not sent to the pipeline yet, and renders apply no zoom." /></span>
+                        <span className="text-[10px] text-neutral-400">Zooms in on key words</span>
                       </div>
                     </div>
                     <input
@@ -918,11 +943,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                     </div>
 
                     <div>
-                      <h3 className="text-base font-bold text-white font-['Syne',sans-serif]">
-                        AI Generation & Denoising Engine Active
+                      <h3 className="text-base font-bold text-white mt-4">
+                        Setting up your project
                       </h3>
                       <p className="text-xs text-neutral-400 mt-1">
-                        Analyzing speech cadence, virality hooks, cleaning audio, and auto-reframing video...
+                        {isUpload ? 'Uploading your video. Keep this tab open until the upload finishes.' : 'Fetching the video from YouTube.'}
                       </p>
                     </div>
                   </div>
@@ -942,7 +967,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                       </div>
                       <div className="h-2 w-full bg-neutral-800 rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all duration-300 ease-out"
+                          className="h-full bg-amber-500 transition-all duration-300 ease-out"
                           style={{ width: `${Math.min(downloadProgress.percent ?? 0, 100)}%` }}
                         />
                       </div>
@@ -996,32 +1021,48 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer: what it costs and the one action */}
         {!isProcessing && (
-          <div className="px-6 py-4 border-t border-neutral-800 bg-neutral-950/80 flex items-center justify-between">
-            <div className="text-[11px] text-neutral-400 flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span>
-                {aiDenoise ? 'AI Audio Denoise & Clean Voice: ON' : 'AI Render Ready'}
+          <div className="px-4 sm:px-6 py-3.5 border-t border-neutral-800 bg-neutral-950/80 flex flex-wrap items-center gap-3 pb-[max(0.875rem,env(safe-area-inset-bottom))]">
+            <div className="min-w-0 flex-1 text-[11.5px] leading-snug">
+              {creditsNeeded !== null ? (
+                <>
+                  <span className="font-bold text-white tabular-nums">{creditsNeeded} credits</span>
+                  <span className="text-neutral-400">
+                    {' '}· {Math.max(0, entitlements.credit_minutes_remaining - creditsNeeded)} left after
+                  </span>
+                </>
+              ) : (
+                <span className="text-neutral-400">
+                  {isUpload
+                    ? uploadFile
+                      ? 'Reading the video length…'
+                      : 'Choose a video to see the cost'
+                    : isYoutubeUrl
+                      ? 'Checking the video length…'
+                      : 'Paste a YouTube link to see the cost'}
+                </span>
+              )}
+              <span className="hidden sm:block text-neutral-500">
+                {outputRatios.length} format{outputRatios.length === 1 ? '' : 's'}
+                {aiDenoise ? ' · studio voice on' : ''}
               </span>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                id="btn-start-ai-generate"
-                onClick={startAiProcessing}
-                disabled={!canStart}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-violet-600 hover:from-amber-400 hover:to-violet-500 text-white text-xs font-bold shadow-lg shadow-rose-500/25 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>Generate Viral Clips Now</span>
-              </button>
-            </div>
+            <button
+              onClick={onClose}
+              className="hidden sm:block h-10 px-4 rounded-xl text-xs font-semibold text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              id="btn-start-ai-generate"
+              onClick={startAiProcessing}
+              disabled={!canStart}
+              className="h-10 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-[13px] font-bold shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>{creditsNeeded !== null ? `Generate clips · ${creditsNeeded} credits` : 'Generate clips'}</span>
+            </button>
           </div>
         )}
       </div>

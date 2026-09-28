@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Coins, Crop } from 'lucide-react';
+import { Coins } from 'lucide-react';
 import type { AspectRatio } from '@/lib/types';
 import {
   canUseAspectRatio,
@@ -59,14 +59,14 @@ export function OutputFormatPicker({ value, onChange, durationSeconds }: OutputF
   const extraShare = Math.round(entitlements.extra_aspect_ratio_credit_share * 100);
 
   return (
-    <div className="border-t border-neutral-800/80 pt-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
-          <Crop className="w-4 h-4 text-amber-400" />
-          <span>Output Formats</span>
-        </h3>
-        {!canChoose && <ProLockBadge feature="Choosing output formats" />}
-      </div>
+    <div className="space-y-3">
+      {/* The host form titles this section; only the plan limit is added here. */}
+      {!canChoose && (
+        <div className="flex items-center justify-between gap-2 text-[11.5px] text-neutral-400">
+          <span>Every plan renders 9:16. More formats come with Pro.</span>
+          <ProLockBadge feature="Choosing output formats" />
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" role="group" aria-label="Output formats">
         {OUTPUT_FORMATS.map((format) => {
