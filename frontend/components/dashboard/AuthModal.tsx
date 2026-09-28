@@ -64,7 +64,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             />
             <div>
               <h4 className="text-xs font-bold text-white">{currentUser.name}</h4>
-              <p className="text-[11px] text-neutral-400 font-mono">{currentUser.email}</p>
+              <p className="text-[11px] text-neutral-400">{currentUser.email}</p>
             </div>
           </div>
           <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">

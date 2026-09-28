@@ -322,7 +322,7 @@ export const AudioEnhancerPanel: React.FC<AudioEnhancerPanelProps> = ({
         <button
           onClick={handleBackendProcess}
           disabled={isProcessing}
-          className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-neutral-950 font-bold text-xs shadow-lg shadow-rose-500/25 active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+          className="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs shadow-lg shadow-rose-500/25 active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
         >
           {isProcessing ? (
             <>

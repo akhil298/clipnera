@@ -116,7 +116,7 @@ export const PipelineProgressTracker: React.FC<PipelineProgressTrackerProps> = (
           </div>
           <div className="h-2 w-full bg-neutral-800 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-amber-500 to-rose-500 transition-all duration-300 ease-out"
+              className="h-full bg-amber-500 transition-all duration-300 ease-out"
               style={{ width: `${Math.min(downloadProgress.percent ?? 0, 100)}%` }}
             />
           </div>

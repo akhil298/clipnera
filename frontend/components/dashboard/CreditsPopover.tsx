@@ -39,7 +39,7 @@ export const CreditsPopover: React.FC<CreditsPopoverProps> = ({ remaining, total
     <div ref={containerRef} className="relative">
       <button
         onClick={() => setIsOpen((open) => !open)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs text-neutral-300 font-mono hover:border-amber-500/40 hover:text-white transition-all"
+        className="flex items-center gap-1.5 h-9 px-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs text-neutral-300 tabular-nums hover:border-amber-500/40 hover:text-white transition-all"
         title={`${remaining} of ${total} AI credits remaining`}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
@@ -48,7 +48,7 @@ export const CreditsPopover: React.FC<CreditsPopoverProps> = ({ remaining, total
         <span className="font-semibold">
           {remaining}
           {total > 0 && <span className="text-neutral-500">/{total}</span>}
-          <span className="hidden sm:inline font-sans text-neutral-400"> credits</span>
+          <span className="hidden sm:inline text-neutral-400"> credits</span>
         </span>
       </button>
 
@@ -63,7 +63,7 @@ export const CreditsPopover: React.FC<CreditsPopoverProps> = ({ remaining, total
               <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
               <span>AI Credits</span>
             </span>
-            <span className="font-mono font-bold text-amber-400">
+            <span className="font-bold text-amber-300 tabular-nums">
               {remaining} / {total}
             </span>
           </div>
