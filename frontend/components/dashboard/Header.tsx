@@ -91,7 +91,7 @@ export const Header: React.FC<HeaderProps> = ({
       </button>
 
       {/* Where you are */}
-      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[13px] min-w-0 flex-1">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[13px] min-w-0 flex-1 overflow-hidden">
         {crumbs.map((crumb, i) => {
           const isLast = i === crumbs.length - 1;
           return (
@@ -105,7 +105,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   type="button"
                   onClick={() => crumb.tab && onNavigateTab(crumb.tab)}
-                  className="hidden md:block font-medium text-neutral-400 hover:text-white truncate max-w-[180px] shrink-0 transition-colors"
+                  className="hidden md:block font-medium text-neutral-400 hover:text-white truncate max-w-[180px] min-w-[3rem] transition-colors"
                 >
                   {crumb.label}
                 </button>

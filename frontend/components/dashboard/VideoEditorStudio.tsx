@@ -36,7 +36,8 @@ import {
   SlidersHorizontal,
   ShieldCheck,
   CheckCircle2,
-  Mic2
+  Mic2,
+  CalendarDays,
 } from 'lucide-react';
 import {
   ViralClip,
@@ -61,6 +62,7 @@ import { AudioEnhancerPanel } from './AudioEnhancerPanel';
 import { HookTransitionPanel } from './HookTransitionPanel';
 import { brandKitApi, clipApi } from '@/lib/api';
 import { Select, SelectOption } from '@/components/ui/Select';
+import { NotWiredBadge } from '@/components/ui/NotWiredBadge';
 
 const PLAYBACK_SPEED_OPTIONS: SelectOption<number>[] = [
   { value: 0.75, label: '0.75x' },
@@ -92,6 +94,17 @@ const stageWidthClass = (aspectRatio: string): string =>
     : aspectRatio === '4:5'
     ? 'w-[300px] sm:w-[340px]'
     : 'w-full';
+
+/**
+ * Where each app draws its own UI over a vertical video, as a share of the
+ * frame (approximate; the apps change them over time). Captions inside these
+ * bands end up under the caption text, handle or buttons.
+ */
+const SAFE_ZONES: Record<'tiktok' | 'reels' | 'shorts', { name: string; top: number; bottom: number; right: number }> = {
+  tiktok: { name: 'TikTok', top: 13, bottom: 26, right: 16 },
+  reels: { name: 'Instagram Reels', top: 14, bottom: 34, right: 15 },
+  shorts: { name: 'YouTube Shorts', top: 12, bottom: 28, right: 16 },
+};
 
 /** Exported frame size per aspect ratio; mirrors output_dimensions() in video_processor/geometry.py. */
 const EXPORT_SIZE: Record<string, string> = {
@@ -568,6 +581,8 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
   }, [safeClip.id]);
 
   const saveTimerRef = useRef<number | null>(null);
+  // Shown in the toolbar so an edit never feels lost.
+  const [saveState, setSaveState] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
   const isFirstRenderRef = useRef(true);
   const saveEditorSettings = () => clipApi.saveEditorSettings(safeClip.id, editorSettings());
 
@@ -578,9 +593,16 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
       return;
     }
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    setSaveState('pending');
     saveTimerRef.current = window.setTimeout(() => {
       saveTimerRef.current = null;
-      saveEditorSettings().catch((err) => console.warn('Could not save editor settings:', err));
+      setSaveState('saving');
+      saveEditorSettings()
+        .then(() => setSaveState('saved'))
+        .catch((err) => {
+          console.warn('Could not save editor settings:', err);
+          setSaveState('error');
+        });
     }, 1000);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aspectRatio, captionConfig, hookTransition, watermarkEnabled, transcriptSegments, removedWords]);
@@ -705,32 +727,78 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
 
   return (
     <div className="space-y-4 animate-in fade-in duration-300 pb-12">
-      {/* Top Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-neutral-900/90 border border-neutral-800 p-4 rounded-2xl">
+      {/* Toolbar */}
+      <div className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-3 sm:p-4 space-y-3">
         <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={onBackToGenerator}
-            className="p-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors"
-            title="Back to Clips"
+            className="h-9 w-9 shrink-0 flex items-center justify-center rounded-xl border border-neutral-700 bg-neutral-800/60 hover:bg-neutral-800 text-neutral-300 hover:text-white transition-colors"
+            title="Back to clips"
+            aria-label="Back to clips"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-400/10 text-amber-300 border border-amber-400/20">
-                Score {safeClip.viralityScore}/100
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm sm:text-base font-bold text-white truncate">{safeClip.title}</h2>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] text-neutral-400">
+              <span className="inline-flex items-center h-5 px-1.5 rounded-md text-[11px] font-bold bg-amber-500/15 text-amber-300 tabular-nums" title="Virality score">
+                {safeClip.viralityScore}
               </span>
-              <span className="text-xs text-neutral-400 font-mono">
-                {duration.toFixed(1)}s • {aspectRatio}
+              <span className="tabular-nums">{duration.toFixed(1)}s</span>
+              <span aria-hidden="true">·</span>
+              <span>{aspectRatio}</span>
+              <span aria-hidden="true">·</span>
+              <span
+                role="status"
+                className={saveState === 'error' ? 'text-rose-300' : saveState === 'saved' ? 'text-emerald-400' : 'text-neutral-500'}
+              >
+                {saveState === 'pending' || saveState === 'saving'
+                  ? 'Saving…'
+                  : saveState === 'error'
+                  ? 'Not saved. Check your connection.'
+                  : saveState === 'saved'
+                  ? 'All changes saved'
+                  : 'Changes save automatically'}
               </span>
             </div>
-            <h2 className="text-sm lg:text-base font-bold text-white font-['Syne',sans-serif] truncate max-w-md">
-              {safeClip.title}
-            </h2>
           </div>
+          <button
+            onClick={handleStartExport}
+            className="hidden sm:flex shrink-0 h-9 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-[13px] font-bold shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Export HD
+          </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Preview as it will look on each platform */}
+          <div
+            className="flex items-center bg-neutral-950 p-0.5 rounded-xl border border-neutral-800 text-xs overflow-x-auto [scrollbar-width:none] max-w-full"
+            role="group"
+            aria-label="Preview on platform"
+          >
+            {(
+              [
+                ['none', 'Clean'],
+                ['tiktok', 'TikTok'],
+                ['reels', 'Reels'],
+                ['shorts', 'Shorts'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setSocialOverlay(id)}
+                aria-pressed={socialOverlay === id}
+                className={`h-8 px-3 rounded-[10px] font-semibold whitespace-nowrap transition-colors ${
+                  socialOverlay === id ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           {/* AI Noise Reduction Quick Toggle */}
           <button
             onClick={() => {
@@ -741,59 +809,16 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
               setAudioEnhanceConfig(updated);
               onUpdateClip({ ...safeClip, audioEnhancement: updated });
             }}
-            className={`px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all ${
-              audioEnhanceConfig.aiDenoise
-                ? 'bg-amber-500/10 border-amber-500/40 text-amber-400'
-                : 'bg-neutral-950 border-neutral-800 text-neutral-500 hover:text-neutral-300'
-            }`}
-            title="Toggle AI Background Noise Cancellation"
+            role="switch"
+            aria-checked={audioEnhanceConfig.aiDenoise}
+            className="h-9 px-3 rounded-xl border border-neutral-800 bg-neutral-950 hover:border-neutral-700 text-xs font-semibold flex items-center gap-2 text-neutral-300 transition-colors"
+            title="Toggle AI background noise removal"
           >
-            <Headphones className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Denoise:</span>
-            <span className="font-bold">{audioEnhanceConfig.aiDenoise ? 'ON' : 'OFF'}</span>
-          </button>
-
-          {/* Social Platform UI Overlay Toggle */}
-          <div className="flex items-center bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-xs">
-            <button
-              onClick={() => setSocialOverlay('none')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                socialOverlay === 'none' ? 'bg-neutral-800 text-white' : 'text-neutral-400'
-              }`}
-            >
-              Clean
-            </button>
-            <button
-              onClick={() => setSocialOverlay('tiktok')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                socialOverlay === 'tiktok' ? 'bg-neutral-800 text-white' : 'text-neutral-400'
-              }`}
-            >
-              TikTok
-            </button>
-            <button
-              onClick={() => setSocialOverlay('reels')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                socialOverlay === 'reels' ? 'bg-neutral-800 text-white' : 'text-neutral-400'
-              }`}
-            >
-              Reels
-            </button>
-            <button
-              onClick={() => setSocialOverlay('shorts')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                socialOverlay === 'shorts' ? 'bg-neutral-800 text-white' : 'text-neutral-400'
-              }`}
-            >
-              Shorts
-            </button>
-          </div>
-
-          <button
-            onClick={() => onScheduleClip(safeClip)}
-            className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-sky-400 text-xs font-semibold border border-neutral-700 transition-colors flex items-center gap-1.5"
-          >
-            <span>Schedule</span>
+            <Headphones className="w-3.5 h-3.5 text-amber-400" />
+            Denoise
+            <span className={`relative w-7 h-4 rounded-full transition-colors ${audioEnhanceConfig.aiDenoise ? 'bg-amber-500' : 'bg-neutral-600'}`}>
+              <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${audioEnhanceConfig.aiDenoise ? 'left-3.5' : 'left-0.5'}`} />
+            </span>
           </button>
 
           <button
@@ -805,12 +830,12 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                 ? 'Removing the watermark requires a paid plan'
                 : 'Add the Clipnera watermark to the export'
             }
-            className="px-3 py-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold border border-neutral-700 transition-colors flex items-center gap-2 text-neutral-300"
+            className="h-9 px-3 rounded-xl border border-neutral-800 bg-neutral-950 hover:border-neutral-700 text-xs font-semibold transition-colors flex items-center gap-2 text-neutral-300"
           >
-            <span>Watermark</span>
+            Watermark
             <span
               className={`relative w-7 h-4 rounded-full transition-colors ${
-                watermarkEnabled || entitlements.watermark_forced ? 'bg-emerald-500' : 'bg-neutral-600'
+                watermarkEnabled || entitlements.watermark_forced ? 'bg-amber-500' : 'bg-neutral-600'
               }`}
             >
               <span
@@ -822,20 +847,29 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
             {entitlements.watermark_forced && <ProLockBadge feature="Removing the watermark" />}
           </button>
 
+          <span className="flex-1" />
+
+          <button
+            onClick={() => onScheduleClip(safeClip)}
+            className="h-9 px-3 rounded-xl border border-neutral-700 bg-neutral-800/60 hover:bg-neutral-800 text-white text-xs font-semibold transition-colors flex items-center gap-1.5"
+          >
+            <CalendarDays className="w-3.5 h-3.5 text-amber-400" />
+            Schedule
+          </button>
           <button
             onClick={handleStartExport}
-            className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-neutral-950 text-xs font-bold shadow-md shadow-rose-500/20 active:scale-95 transition-all flex items-center gap-1.5"
+            className="sm:hidden h-9 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/20 flex items-center gap-1.5"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export HD</span>
+            Export HD
           </button>
         </div>
       </div>
 
       {/* Main Studio Grid: Video Player (Left/Center) + Customizer Panels (Right) */}
-      <div className="grid lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* LEFT/CENTER: 9:16 Canvas & Player Controls (7 cols) */}
-        <div className="lg:col-span-7 flex flex-col items-center space-y-4 lg:sticky lg:top-20 lg:self-start">
+        <div className="lg:col-span-7 min-w-0 flex flex-col items-center space-y-4 lg:sticky lg:top-20 lg:self-start">
           {/* Vertical Video Stage */}
           <div
             ref={stageRef}
@@ -994,6 +1028,23 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
               ) : null}
             </div>
 
+            {socialOverlay !== 'none' && aspectRatio === '9:16' && (
+              <div
+                className="absolute z-40 pointer-events-none rounded-md border border-dashed border-white/50"
+                style={{
+                  top: `${SAFE_ZONES[socialOverlay].top}%`,
+                  bottom: `${SAFE_ZONES[socialOverlay].bottom}%`,
+                  left: '4%',
+                  right: `${SAFE_ZONES[socialOverlay].right}%`,
+                }}
+                aria-hidden="true"
+              >
+                <span className="absolute -top-4 left-0 text-[8px] font-bold uppercase tracking-wide text-white/80 bg-black/50 px-1 rounded">
+                  Safe area
+                </span>
+              </div>
+            )}
+
             {/* Social Platform UI Mockup Overlays */}
             {socialOverlay === 'tiktok' && (
               <div className="absolute inset-0 z-40 pointer-events-none p-3 flex flex-col justify-between text-white">
@@ -1070,6 +1121,30 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
             )}
           </div>
 
+          {/* Where the chosen platform covers the frame */}
+          {socialOverlay !== 'none' && aspectRatio === '9:16' && (() => {
+            const zone = SAFE_ZONES[socialOverlay];
+            const unsafe = captionConfig.positionY > 100 - zone.bottom || captionConfig.positionY < zone.top;
+            return (
+              <div
+                role="status"
+                className={`${stageWidthClass(aspectRatio)} max-w-full rounded-xl border px-3 py-2 text-[11.5px] flex items-start gap-2 ${
+                  unsafe ? 'border-rose-500/30 bg-rose-500/10 text-rose-200' : 'border-emerald-500/25 bg-emerald-500/5 text-emerald-200'
+                }`}
+              >
+                <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${unsafe ? 'bg-rose-400' : 'bg-emerald-400'}`} />
+                {unsafe ? (
+                  <span>
+                    Captions sit where {zone.name} shows its own text and buttons. Move them to between {zone.top}% and{' '}
+                    {100 - zone.bottom}% with Captions → Vertical Pos (Y).
+                  </span>
+                ) : (
+                  <span>Captions are clear of the {zone.name} interface. The dashed box is the safe area.</span>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Player Transport Controls */}
           <div className={`${stageWidthClass(aspectRatio)} max-w-full bg-neutral-900 border border-neutral-800 rounded-2xl p-3 space-y-2.5 shadow-lg`}>
             {/* Scrubber Bar */}
@@ -1104,7 +1179,8 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
 
                 <button
                   onClick={() => setIsPlaying(!isPlaying)}
-                  className="p-3 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-neutral-950 shadow-md shadow-rose-500/20 active:scale-95 transition-all"
+                  className="p-3 rounded-full bg-amber-500 hover:bg-amber-400 text-neutral-950 shadow-md shadow-amber-500/25 active:scale-95 transition-all"
+                  aria-label={isPlaying ? 'Pause' : 'Play'}
                 >
                   {isPlaying ? (
                     <Pause className="w-5 h-5 fill-current" />
@@ -1152,95 +1228,44 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
         </div>
 
         {/* RIGHT: Studio Tabs & Customizer Panels (5 cols) */}
-        <div className="lg:col-span-5 space-y-4">
-          {/* Studio Tab Navigation */}
-          <div className="flex items-center p-1 bg-neutral-900 border border-neutral-800 rounded-xl overflow-x-auto">
-            <button
-              onClick={() => setActiveStudioTab('captions')}
-              className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
-                activeStudioTab === 'captions'
-                  ? 'bg-neutral-800 text-amber-400 shadow'
-                  : 'text-neutral-400 hover:text-neutral-200'
-              }`}
-            >
-              <Type className="w-3.5 h-3.5" />
-              <span>Captions</span>
-            </button>
-
-            <button
-              onClick={() => setActiveStudioTab('hook')}
-              className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
-                activeStudioTab === 'hook'
-                  ? 'bg-neutral-800 text-fuchsia-400 shadow'
-                  : 'text-neutral-400 hover:text-neutral-200'
-              }`}
-            >
-              <Zap className="w-3.5 h-3.5" />
-              <span>Hook</span>
-            </button>
-
-            <button
-              onClick={() => setActiveStudioTab('transcript')}
-              className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
-                activeStudioTab === 'transcript'
-                  ? 'bg-neutral-800 text-rose-400 shadow'
-                  : 'text-neutral-400 hover:text-neutral-200'
-              }`}
-            >
-              <Scissors className="w-3.5 h-3.5" />
-              <span>Transcript Edit</span>
-            </button>
-
-            <button
-              onClick={() => setActiveStudioTab('broll')}
-              className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
-                activeStudioTab === 'broll'
-                  ? 'bg-neutral-800 text-sky-400 shadow'
-                  : 'text-neutral-400 hover:text-neutral-200'
-              }`}
-            >
-              <Film className="w-3.5 h-3.5" />
-              <span>B-Roll ({bRollOverlays.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveStudioTab('sfx')}
-              className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
-                activeStudioTab === 'sfx'
-                  ? 'bg-neutral-800 text-emerald-400 shadow'
-                  : 'text-neutral-400 hover:text-neutral-200'
-              }`}
-            >
-              <Music className="w-3.5 h-3.5" />
-              <span>SFX ({soundEffects.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveStudioTab('audio')}
-              className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
-                activeStudioTab === 'audio'
-                  ? 'bg-neutral-800 text-amber-400 shadow'
-                  : 'text-neutral-400 hover:text-neutral-200'
-              }`}
-            >
-              <Headphones className="w-3.5 h-3.5 text-amber-400" />
-              <span>AI Denoise</span>
-              {audioEnhanceConfig.aiDenoise && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveStudioTab('reframe')}
-              className={`flex-1 py-2 px-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all whitespace-nowrap ${
-                activeStudioTab === 'reframe'
-                  ? 'bg-neutral-800 text-violet-400 shadow'
-                  : 'text-neutral-400 hover:text-neutral-200'
-              }`}
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span>Auto-Crop</span>
-            </button>
+        <div className="lg:col-span-5 min-w-0 space-y-4">
+          {/* Studio tools: every tab fits, on every screen */}
+          <div className="grid grid-cols-4 sm:grid-cols-7 lg:grid-cols-4 xl:grid-cols-7 gap-1 p-1 bg-neutral-900 border border-neutral-800 rounded-xl" role="tablist" aria-label="Editing tools">
+            {(
+              [
+                { id: 'captions', label: 'Captions', icon: Type },
+                { id: 'hook', label: 'Hook', icon: Zap },
+                { id: 'transcript', label: 'Transcript', icon: Scissors },
+                { id: 'broll', label: `B-roll${bRollOverlays.length ? ` ${bRollOverlays.length}` : ''}`, icon: Film },
+                { id: 'sfx', label: `SFX${soundEffects.length ? ` ${soundEffects.length}` : ''}`, icon: Music, previewOnly: true },
+                { id: 'audio', label: 'Denoise', icon: Headphones, live: audioEnhanceConfig.aiDenoise },
+                { id: 'reframe', label: 'Format', icon: Sliders },
+              ] as const
+            ).map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeStudioTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setActiveStudioTab(tab.id)}
+                  title={'previewOnly' in tab ? 'Preview only: sound effects are not saved or exported yet' : undefined}
+                  className={`relative flex flex-col items-center justify-center gap-1 py-2 rounded-lg text-[11px] font-semibold transition-colors ${
+                    isActive ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/40'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-amber-400' : ''}`} />
+                  <span className="truncate max-w-full px-1">{tab.label}</span>
+                  {'previewOnly' in tab && (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-400 ring-2 ring-neutral-900" aria-hidden="true" />
+                  )}
+                  {'live' in tab && tab.live && (
+                    <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" aria-hidden="true" />
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* PANEL 1: CAPTION STYLER */}
@@ -1776,11 +1801,15 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
           {activeStudioTab === 'sfx' && (
             <div className="p-5 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-4">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300">
-                  Sound Effects (SFX) Trigger Bank
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300">Sound effects</h3>
+                  <NotWiredBadge
+                    label="Preview only"
+                    reason="Sound effects play in this preview but are not saved with the clip or added to the export yet."
+                  />
+                </div>
                 <p className="text-[11px] text-neutral-400">
-                  Click any effect to preview sound and stamp it onto timeline
+                  Tap an effect to hear it and place it at the playhead. They play in this preview only for now.
                 </p>
               </div>
 
@@ -1918,8 +1947,9 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
               <div className="space-y-3 pt-2 border-t border-neutral-800/80">
                 <label className="flex items-center justify-between p-3 rounded-xl bg-neutral-950 border border-neutral-800 cursor-pointer">
                   <div>
-                    <span className="text-xs font-bold text-white block">
+                    <span className="text-xs font-bold text-white flex items-center gap-2">
                       Dynamic Kinetic Auto-Zoom
+                      <NotWiredBadge label="Preview only" reason="Auto-zoom is shown in the preview but not applied to exports yet." />
                     </span>
                     <span className="text-[10px] text-neutral-400">
                       Preview only — zooms in on punch words. Not applied to the
@@ -1969,12 +1999,12 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
       {isExporting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-md p-6 rounded-2xl bg-neutral-900 border border-neutral-800 text-center space-y-4 shadow-2xl">
-            <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-amber-500 to-rose-500 mx-auto flex items-center justify-center text-white shadow-lg shadow-rose-500/30">
+            <div className="w-16 h-16 rounded-full bg-amber-500/15 border border-amber-500/30 mx-auto flex items-center justify-center text-amber-300">
               <Download className="w-8 h-8 animate-bounce" />
             </div>
 
             <div>
-              <h3 className="text-base font-bold text-white font-['Syne',sans-serif]">
+              <h3 className="text-base font-bold text-white">
                 {exportError ? 'Export failed' : exportComplete ? 'Your clip is ready!' : 'Exporting your clip...'}
               </h3>
               <p className="text-xs text-neutral-400 mt-1">
@@ -1995,7 +2025,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
               <div className="space-y-2 pt-2">
                 <button
                   onClick={handleStartExport}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-neutral-950 font-bold text-xs shadow-lg shadow-rose-500/25 active:scale-95 transition-all"
+                  className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs shadow-lg shadow-amber-500/20 active:scale-95 transition-all disabled:opacity-50"
                 >
                   Try again
                 </button>
@@ -2013,11 +2043,11 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
             <div className="space-y-1.5">
               <div className="h-3 w-full bg-neutral-950 rounded-full overflow-hidden border border-neutral-800">
                 <div
-                  className="h-full bg-gradient-to-r from-amber-500 via-rose-500 to-violet-500 transition-all duration-300"
+                  className="h-full bg-amber-500 transition-all duration-300"
                   style={{ width: `${exportProgress}%` }}
                 />
               </div>
-              <p className="text-xs font-mono text-neutral-400">{exportProgress}% Complete</p>
+              <p className="text-xs text-neutral-400 tabular-nums">{exportProgress}% complete</p>
             </div>
             )}
 
@@ -2038,7 +2068,7 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                     link.click();
                     link.remove();
                   }}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 text-neutral-950 font-bold text-xs shadow-lg shadow-rose-500/25 active:scale-95 transition-all"
+                  className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs shadow-lg shadow-amber-500/20 active:scale-95 transition-all disabled:opacity-50"
                 >
                   Download MP4 ({EXPORT_SIZE[aspectRatio] ?? 'HD'})
                 </button>
