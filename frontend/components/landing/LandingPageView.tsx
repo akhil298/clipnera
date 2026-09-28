@@ -104,7 +104,7 @@ export default function LandingPageView() {
 
       <CaptionTypographyShowcase />
 
-      <ResultsPreview />
+      <ResultsPreview onLaunchStudio={handleLaunchStudio} />
 
       <RoiCalculator onLaunchStudio={handleLaunchStudio} />
 

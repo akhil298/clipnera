@@ -68,24 +68,25 @@ export function BeforeAfterShowcase() {
               </LandingVideo>
             </div>
 
-            <div className="pointer-events-none absolute inset-y-0 w-0.5 -translate-x-1/2 bg-white" style={{ left: `${split}%` }}>
-              <span className="absolute left-1/2 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-neutral-950 shadow-lg">
-                <ChevronsLeftRight className="h-[18px] w-[18px]" aria-hidden="true" />
-              </span>
-            </div>
-          </div>
-
-          <label className="block space-y-2 text-[13px] text-neutral-400">
-            <span>Compare before and after</span>
+            {/* An invisible native slider spans the whole phone: press or drag anywhere on the
+                image to move the divider, and it still works with the keyboard and screen readers. */}
             <input
               type="range"
               min={0}
               max={100}
               value={split}
               onChange={(e) => setSplit(Number(e.target.value))}
-              className="h-11 w-full cursor-ew-resize accent-amber-500"
+              aria-label="Compare before and after"
+              className="peer absolute inset-0 z-20 m-0 h-full w-full cursor-ew-resize appearance-none bg-transparent opacity-0 [touch-action:pan-y]"
             />
-          </label>
+
+            <div className="pointer-events-none absolute inset-y-0 z-10 w-0.5 -translate-x-1/2 bg-white" style={{ left: `${split}%` }}>
+              <span className="absolute left-1/2 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white text-neutral-950 shadow-lg">
+                <ChevronsLeftRight className="h-[18px] w-[18px]" aria-hidden="true" />
+              </span>
+            </div>
+            <span className="pointer-events-none absolute inset-0 z-10 hidden rounded-[34px] ring-2 ring-inset ring-amber-400 peer-focus-visible:block" />
+          </div>
         </div>
       </div>
     </section>

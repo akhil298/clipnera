@@ -11,6 +11,8 @@ interface LandingVideoProps {
   /** Must include a position (`relative` or `absolute`): the media and overlays are absolute inside it. */
   className?: string;
   mediaClassName?: string;
+  /** Hold the video still, e.g. behind a pause button. */
+  paused?: boolean;
   children?: ReactNode;
 }
 
@@ -19,7 +21,7 @@ interface LandingVideoProps {
  * the frame is never empty: the video fades in once it can play, pauses while
  * off screen, and is skipped entirely for reduced-motion visitors.
  */
-export function LandingVideo({ clip, position = '50% 50%', className = '', mediaClassName = '', children }: LandingVideoProps) {
+export function LandingVideo({ clip, position = '50% 50%', className = '', mediaClassName = '', paused = false, children }: LandingVideoProps) {
   const { poster, video, alt } = LANDING_CLIPS[clip];
   const videoRef = useRef<HTMLVideoElement>(null);
   const [ready, setReady] = useState(false);
@@ -30,13 +32,17 @@ export function LandingVideo({ clip, position = '50% 50%', className = '', media
   useEffect(() => {
     const el = videoRef.current;
     if (!el || !playVideo) return;
+    if (paused) {
+      el.pause();
+      return;
+    }
     const observer = new IntersectionObserver(
       ([entry]) => (entry.isIntersecting ? el.play().catch(() => undefined) : el.pause()),
       { threshold: 0.15 },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [playVideo]);
+  }, [playVideo, paused]);
 
   const media = `absolute inset-0 h-full w-full object-cover text-transparent ${mediaClassName}`;
 
