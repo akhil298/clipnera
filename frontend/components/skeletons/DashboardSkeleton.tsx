@@ -15,7 +15,7 @@ export const DashboardSkeleton: React.FC = () => {
           <div className="relative overflow-hidden rounded-2xl bg-neutral-900/90 border border-neutral-800 p-6 lg:p-8 shadow-xl space-y-4">
             <div className="space-y-2">
               <Skeleton className="h-3 w-40" />
-              <Skeleton className="h-6 w-96" />
+              <Skeleton className="h-6 w-full max-w-sm" />
               <Skeleton className="h-4 w-full max-w-xl" />
             </div>
             <Skeleton className="h-10 w-full max-w-xl rounded-xl" />

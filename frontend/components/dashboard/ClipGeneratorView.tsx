@@ -1,35 +1,20 @@
-﻿"use client";
+"use client";
 import React, { useState, useEffect } from 'react';
 import {
-  Sparkles,
-  Play,
-  Pause,
-  Scissors,
-  Calendar,
-  Download,
-  Share2,
-  Check,
-  TrendingUp,
-  Eye,
-  Zap,
-  Flame,
-  Clock,
-  Layers,
-  ArrowRight,
-  Filter,
-  Copy,
-  ExternalLink,
-  Smartphone,
-  ChevronRight,
-  Folder,
-  FolderOpen,
-  Edit2,
-  Youtube,
-  ArrowLeft,
-  Headphones,
   AlertCircle,
   ArrowDownWideNarrow,
-  RotateCcw
+  CheckSquare,
+  Copy,
+  Download,
+  Edit2,
+  ExternalLink,
+  Film,
+  Filter,
+  Layers,
+  Loader2,
+  Sparkles,
+  X,
+  Zap,
 } from 'lucide-react';
 import { VideoProject, ViralClip, TabType, PipelineStep } from '@/lib/types';
 import { clipApi } from '@/lib/api';
@@ -39,6 +24,9 @@ import { PipelineStepIndicator } from './PipelineStepIndicator';
 import { AudioBeforeAfter } from './AudioBeforeAfter';
 import confetti from 'canvas-confetti';
 import { Select, SelectOption } from '@/components/ui/Select';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { StatusPill } from '@/components/ui/StatusPill';
+import { scoreTone } from '@/components/ui/ScoreRing';
 
 type SortMode = 'score' | 'timeline' | 'duration';
 
@@ -54,6 +42,14 @@ const SCORE_FILTER_OPTIONS: SelectOption<number>[] = [
   { value: 85, label: 'High (85+)' },
   { value: 90, label: 'Ultra viral (90+)' },
 ];
+
+const formatClock = (seconds: number) => {
+  const safe = Math.max(0, Math.round(seconds || 0));
+  const h = Math.floor(safe / 3600);
+  const m = Math.floor((safe % 3600) / 60);
+  const s = safe % 60;
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
+};
 
 interface ClipGeneratorViewProps {
   project: VideoProject;
@@ -86,7 +82,7 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
   onRevertAudio,
   onApplyAudio,
 }) => {
-  const safeProject = project || { clips: [] as ViralClip[], title: '', folderName: '' };
+  const safeProject = project || ({ clips: [] as ViralClip[], title: '', folderName: '', duration: 0 } as unknown as VideoProject);
   const [selectedClip, setSelectedClip] = useState<ViralClip | null>(safeProject.clips[0] || null);
 
   const [filterScore, setFilterScore] = useState<number>(0);
@@ -96,6 +92,9 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
   const [exportError, setExportError] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
   const [newFolderName, setNewFolderName] = useState(safeProject.folderName || safeProject.title || '');
+  const [selectMode, setSelectMode] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<string[]>([]);
+  const [idCopied, setIdCopied] = useState(false);
 
   // Renders the clip with its own caption style, size and hook transition, then
   // downloads that. It used to download `presignedUrl`, the raw cut, which has
@@ -128,12 +127,15 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
     }
   };
 
-  const handleBatchExport = async () => {
+  /** Exports every clip, or only the checked ones in select mode. */
+  const handleBatchExport = async (clips: ViralClip[] = safeProject.clips) => {
     setExportError(null);
     setIsBatchExporting(true);
     try {
-      await exportAllProjectClips(safeProject);
+      await exportAllProjectClips({ ...safeProject, clips });
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+      setSelectMode(false);
+      setCheckedIds([]);
     } catch (error) {
       setExportError(error instanceof Error ? error.message : 'Export failed. Please try again.');
     } finally {
@@ -147,6 +149,19 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
     }
     setIsRenaming(false);
   };
+
+  const copyProjectId = () => {
+    navigator.clipboard
+      ?.writeText(safeProject.id)
+      .then(() => {
+        setIdCopied(true);
+        setTimeout(() => setIdCopied(false), 1600);
+      })
+      .catch(() => undefined);
+  };
+
+  const toggleChecked = (clip: ViralClip) =>
+    setCheckedIds((prev) => (prev.includes(clip.id) ? prev.filter((id) => id !== clip.id) : [...prev, clip.id]));
 
   // Memoised so the identity is stable: the selection effect below depends on
   // it, and a fresh array every render would re-run that effect forever.
@@ -170,52 +185,198 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
     );
   }, [visibleClips]);
 
+  const isProcessing = safeProject.processingStatus === 'processing';
+  const isFailed = safeProject.processingStatus === 'failed';
+  const averageScore = Math.round(
+    safeProject.clips.reduce((acc, c) => acc + c.viralityScore, 0) / (safeProject.clips.length || 1),
+  );
+  const rankById = new Map(
+    [...safeProject.clips].sort((a, b) => b.viralityScore - a.viralityScore).map((clip, i) => [clip.id, i + 1]),
+  );
+  const checkedClips = safeProject.clips.filter((c) => checkedIds.includes(c.id));
+  const thumb = safeProject.posterUrl || safeProject.clips.find((c) => c.posterUrl)?.posterUrl || '';
+  const displayName = safeProject.folderName || safeProject.title;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Breadcrumb & Quick Back to Folders Hub */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={() => onNavigateTab && onNavigateTab('folders')}
-          className="flex items-center gap-2 text-xs font-semibold text-neutral-400 hover:text-amber-300 transition-colors group"
-        >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-          <span> Back to All Project Folders</span>
-        </button>
+      <PageHeader
+        back={onNavigateTab ? { label: 'Projects', onClick: () => onNavigateTab('folders') } : undefined}
+        title={
+          isRenaming ? (
+            <form
+              className="flex items-center gap-2 max-w-xl"
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveRename();
+              }}
+            >
+              <label htmlFor="project-rename" className="sr-only">
+                Project name
+              </label>
+              <input
+                id="project-rename"
+                type="text"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Escape' && setIsRenaming(false)}
+                className="flex-1 min-w-0 h-10 px-3 rounded-xl bg-neutral-950 border border-amber-400 text-base font-bold text-white focus:outline-none"
+                autoFocus
+              />
+              <button type="submit" className="h-10 px-3.5 rounded-xl bg-amber-500 text-neutral-950 font-bold text-xs hover:bg-amber-400">
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsRenaming(false)}
+                className="h-10 px-3.5 rounded-xl text-neutral-400 text-xs font-semibold hover:bg-neutral-800"
+              >
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <span className="inline-flex items-center gap-2">
+              {displayName}
+              <button
+                type="button"
+                onClick={() => {
+                  setNewFolderName(displayName);
+                  setIsRenaming(true);
+                }}
+                className="p-1.5 rounded-lg text-neutral-500 hover:text-amber-400 hover:bg-neutral-800 transition-colors"
+                title="Rename project"
+                aria-label="Rename project"
+              >
+                <Edit2 className="w-4 h-4" />
+              </button>
+            </span>
+          )
+        }
+        eyebrow={
+          <>
+            {isProcessing ? (
+              <StatusPill tone="processing">Processing {Math.round(safeProject.processingProgress ?? 0)}%</StatusPill>
+            ) : isFailed ? (
+              <StatusPill tone="failed">Failed</StatusPill>
+            ) : (
+              <StatusPill tone={safeProject.clips.length ? 'ready' : 'neutral'}>
+                {safeProject.clips.length} clip{safeProject.clips.length === 1 ? '' : 's'} ready
+              </StatusPill>
+            )}
+            <StatusPill tone="neutral" dot={false}>
+              {safeProject.folderCategory || 'Project'}
+            </StatusPill>
+            {(safeProject.creditsDeducted ?? 0) > 0 && (
+              <StatusPill tone="neutral" dot={false}>
+                <Zap className="w-3 h-3 text-amber-400" />
+                {safeProject.creditsDeducted} credit{safeProject.creditsDeducted !== 1 ? 's' : ''} used
+              </StatusPill>
+            )}
+          </>
+        }
+        description={
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>{safeProject.sourceChannel || 'Original source'}</span>
+            <span aria-hidden="true">·</span>
+            <span className="tabular-nums">{formatClock(safeProject.duration)}</span>
+            {safeProject.clips.length > 0 && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>
+                  average virality <span className="font-semibold text-amber-300 tabular-nums">{averageScore}</span>
+                </span>
+              </>
+            )}
+            {typeof safeProject.aiCostUsd === 'number' && safeProject.aiCostUsd > 0 && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="tabular-nums">AI cost ${safeProject.aiCostUsd.toFixed(2)}</span>
+              </>
+            )}
+            {safeProject.sourceUrl && (
+              <a
+                href={safeProject.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-neutral-300 hover:text-amber-300"
+              >
+                Original video <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+            {safeProject.id && (
+              <button
+                type="button"
+                onClick={copyProjectId}
+                className="inline-flex items-center gap-1 text-neutral-500 hover:text-neutral-300"
+                title={`Project ID ${safeProject.id}`}
+              >
+                <Copy className="w-3 h-3" /> {idCopied ? 'Copied' : 'Copy ID'}
+              </button>
+            )}
+          </span>
+        }
+        actions={
+          <>
+            <button
+              id="btn-process-another-video"
+              type="button"
+              onClick={onOpenUpload}
+              className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 text-[13px] font-semibold text-white transition-colors"
+            >
+              <Layers className="w-4 h-4 text-amber-400" />
+              Add more
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBatchExport()}
+              disabled={isBatchExporting || safeProject.clips.length === 0}
+              className="inline-flex items-center gap-2 h-9 px-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-[13px] font-bold shadow-md shadow-amber-500/20 transition-colors disabled:opacity-50"
+            >
+              {isBatchExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {isBatchExporting ? 'Exporting…' : `Export all ${safeProject.clips.length}`}
+            </button>
+          </>
+        }
+      />
 
-        <div className="flex items-center gap-2 text-xs text-neutral-400">
-          <span className="text-neutral-500 font-mono">Folder ID: {safeProject.id}</span>
+      {exportError && (
+        <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-200">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span className="flex-1">{exportError}</span>
+          <button type="button" onClick={() => setExportError(null)} aria-label="Dismiss" className="text-rose-300 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
         </div>
-      </div>
+      )}
 
-      {/* Processing Overlay */}
-      {safeProject.processingStatus === 'processing' && (
-        <div className="rounded-2xl bg-neutral-900/90 border border-amber-500/30 p-6 flex items-center justify-center gap-4">
-          <div className="relative w-12 h-12 flex items-center justify-center">
-            <div className="absolute inset-0 rounded-full border-4 border-amber-400/20 border-t-amber-400 animate-spin" />
-            <Sparkles className="w-5 h-5 text-amber-400 animate-pulse" />
+      {isProcessing && (
+        <div className="rounded-2xl bg-neutral-900/80 border border-amber-500/25 p-4 sm:p-5 space-y-3">
+          <div className="flex items-center gap-3">
+            <Loader2 className="w-5 h-5 text-amber-400 animate-spin shrink-0" />
+            <div className="flex-1 min-w-0">
+              <h2 className="text-sm font-semibold text-white">Finding the best moments</h2>
+              <p className="text-xs text-neutral-400">Clips show up here as soon as they are rendered. You can leave this page.</p>
+            </div>
+            <span className="text-sm font-bold text-amber-300 tabular-nums">{Math.round(safeProject.processingProgress ?? 0)}%</span>
           </div>
+          <div className="h-2 w-full rounded-full bg-neutral-800 overflow-hidden">
+            <div className="h-full bg-amber-500 rounded-full transition-all duration-500" style={{ width: `${safeProject.processingProgress ?? 0}%` }} />
+          </div>
+        </div>
+      )}
+
+      {isFailed && (
+        <div className="rounded-2xl bg-rose-500/5 border border-rose-500/25 p-4 sm:p-5 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
           <div>
-            <h2 className="text-sm font-bold text-white">Processing Video...</h2>
+            <h2 className="text-sm font-semibold text-white">Processing stopped</h2>
             <p className="text-xs text-neutral-400">
-              Downloading and preparing your project folder. Please wait {safeProject.processingProgress ?? 0}%
+              Something went wrong while processing this video. Add it again from New video to retry.
             </p>
           </div>
         </div>
       )}
 
-      {safeProject.processingStatus === 'failed' && (
-        <div className="rounded-2xl bg-neutral-900/90 border border-rose-500/30 p-6 flex items-center justify-center gap-4">
-          <AlertCircle className="w-6 h-6 text-rose-400" />
-          <div>
-            <h2 className="text-sm font-bold text-white">Processing Failed</h2>
-            <p className="text-xs text-neutral-400">There was an error processing this video. Please try again.</p>
-          </div>
-        </div>
-      )}
-
-      {pipelineSteps && pipelineSteps.length > 0 && (
-        <PipelineStepIndicator steps={pipelineSteps} onRevert={onRevertPipelineStep} />
-      )}
+      {pipelineSteps && pipelineSteps.length > 0 && <PipelineStepIndicator steps={pipelineSteps} onRevert={onRevertPipelineStep} />}
 
       {(audioBeforeUrl || audioAfterUrl) && (
         <AudioBeforeAfter
@@ -227,278 +388,187 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
         />
       )}
 
-      {/* Project Folder Banner & Virality Spikes Timeline */}
-      <div className="rounded-2xl bg-neutral-900/90 border border-neutral-800 p-5 lg:p-6 relative overflow-hidden shadow-xl">
-        {/* Loading overlay: dark gradient sweep from left to right as processing progresses */}
-        {safeProject.processingStatus === 'processing' && (
-          <>
-            <div
-              className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/40 to-black/10 pointer-events-none transition-all duration-500 ease-out"
-              style={{ width: `${safeProject.processingProgress ?? 0}%`, left: 0 }}
-            />
-            <div
-              className="absolute top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-amber-400 shadow-lg animate-pulse"
-              style={{ left: `calc(${safeProject.processingProgress ?? 0}% - 10px)` }}
-            />
-          </>
-        )}
-
-        {/* Credits Charged Badge */}
-        {safeProject.creditsDeducted && safeProject.creditsDeducted > 0 && (
-          <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/20">
-            <Zap className="w-3 h-3 text-amber-400" />
-            <span className="text-[10px] font-mono font-semibold text-amber-300">
-              {safeProject.creditsDeducted} credit{safeProject.creditsDeducted !== 1 ? 's' : ''} deducted
-            </span>
-          </div>
-        )}
-
-        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5">
-          <div className="space-y-2 flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1.5">
-                <Folder className="w-3.5 h-3.5" />
-                <span>{safeProject.folderCategory || 'Project Folder'}</span>
-              </span>
-              <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400">
-                {safeProject.clips.length} Respected Videos Ready
-              </span>
-              {safeProject.sourceUrl && (
-                <a
-                  href={safeProject.sourceUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-2.5 py-0.5 rounded-md text-[11px] font-medium bg-neutral-950 text-neutral-400 hover:text-amber-300 border border-neutral-800 flex items-center gap-1 transition-colors"
-                >
-                  <Youtube className="w-3.5 h-3.5 text-red-400" />
-                  <span>Original Link</span>
-                  <ExternalLink className="w-2.5 h-2.5" />
-                </a>
+      {/* Where each clip sits in the source */}
+      {safeProject.clips.length > 0 && safeProject.duration > 0 && (
+        <section className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-4 sm:p-5" aria-labelledby="clip-map-title">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-3">
+            <h2 id="clip-map-title" className="text-sm font-semibold text-white flex items-center gap-2">
+              {thumb && (
+                <span className="hidden sm:block relative w-10 aspect-video rounded overflow-hidden bg-neutral-800">
+                  <img src={thumb} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                </span>
               )}
-            </div>
-
-            {/* Folder Title + Rename Action */}
-            {isRenaming ? (
-              <div className="flex items-center gap-2 pt-1 max-w-lg">
-                <input
-                  type="text"
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  className="flex-1 px-3 py-1.5 rounded-lg bg-neutral-950 border border-amber-400 text-sm font-bold text-white focus:outline-none"
-                  autoFocus
-                />
-                <button
-                  onClick={handleSaveRename}
-                  className="px-3 py-1.5 rounded-lg bg-amber-500 text-neutral-950 font-bold text-xs hover:bg-amber-400"
-                >
-                  Save
-                </button>
-                <button
-                  onClick={() => setIsRenaming(false)}
-                  className="px-3 py-1.5 rounded-lg bg-neutral-800 text-neutral-400 text-xs hover:bg-neutral-700"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 group/name">
-                <h1 className="text-xl lg:text-2xl font-extrabold text-white tracking-tight">
-                  {safeProject.folderName || safeProject.title}
-                </h1>
-                <button
-                  onClick={() => {
-                    setNewFolderName(safeProject.folderName || safeProject.title);
-                    setIsRenaming(true);
-                  }}
-                  className="opacity-60 hover:opacity-100 p-1.5 rounded-lg hover:bg-neutral-800 text-neutral-400 hover:text-amber-400 transition-all"
-                  title="Rename Folder"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            <p className="text-xs text-neutral-400 flex flex-wrap items-center gap-2">
-              <span>Channel: <strong className="text-neutral-200">{safeProject.sourceChannel || 'Original Source'}</strong></span>
-              <span>•</span>
-              <Clock className="w-3.5 h-3.5 text-neutral-500 inline" />
-              <span>Duration: {Math.floor(safeProject.duration / 60)}m {safeProject.duration % 60}s</span>
-              <span>•</span>
-              <span className="text-amber-400 font-semibold">
-                Average Virality: {Math.round(safeProject.clips.reduce((acc, c) => acc + c.viralityScore, 0) / (safeProject.clips.length || 1))}/100
-              </span>
-            </p>
+              Where the clips come from
+            </h2>
+            <span className="text-xs text-neutral-500">each block is a clip, numbered by rank</span>
+            <span className="ml-auto font-mono text-[11px] text-neutral-500">0:00 – {formatClock(safeProject.duration)}</span>
           </div>
-
-          <div className="flex items-center gap-2.5 flex-wrap shrink-0">
-            <button
-              id="btn-process-another-video"
-              onClick={onOpenUpload}
-              className="px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-semibold text-neutral-200 border border-neutral-700 transition-colors flex items-center gap-2"
-            >
-              <Layers className="w-3.5 h-3.5 text-amber-400" />
-              <span>Add / Ingest More</span>
-            </button>
-
-            <button
-              onClick={handleBatchExport}
-              disabled={isBatchExporting}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold shadow-md shadow-amber-500/15 active:scale-95 transition-all flex items-center gap-2"
-            >
-              <Download className="w-4 h-4" />
-              <span>{isBatchExporting ? 'Exporting...' : `Batch Export All (${safeProject.clips.length})`}</span>
-            </button>
-          </div>
-        </div>
-
-        {exportError && (
-          <div className="mt-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
-            {exportError}
-          </div>
-        )}
-
-        {/* Interactive Virality Spikes Visualizer across Raw Video Duration */}
-        <div className="mt-6 pt-5 border-t border-neutral-800/80">
-          <div className="flex items-center justify-between text-xs mb-2">
-            <div className="flex items-center gap-2 text-neutral-300 font-medium">
-              <Flame className="w-4 h-4 text-amber-400" />
-              <span>AI Virality Spikes Across Timeline:</span>
-            </div>
-            <span className="text-[11px] text-neutral-400 font-mono">
-              00:00 - {Math.floor(safeProject.duration / 60)}:{String(safeProject.duration % 60).padStart(2, '0')}
-            </span>
-          </div>
-
-          <div className="relative h-10 w-full bg-neutral-950 rounded-xl border border-neutral-800/80 overflow-hidden flex items-center px-2">
-            {/* Background waveform simulation */}
-            <div className="absolute inset-0 flex items-center justify-between px-3 opacity-20 pointer-events-none">
-              {Array.from({ length: 48 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="w-1 bg-neutral-400 rounded-full"
-                  style={{
-                    height: `${20 + Math.sin(i * 0.4) * 15 + (i % 3) * 10}%`,
-                  }}
-                />
-              ))}
-            </div>
-
-            {/* Render Highlighted Clip Spans */}
+          <div className="relative h-11 w-full rounded-xl bg-neutral-950 border border-neutral-800 overflow-hidden">
+            {/* Quarter marks */}
+            {[25, 50, 75].map((pct) => (
+              <span key={pct} className="absolute inset-y-0 w-px bg-neutral-800" style={{ left: `${pct}%` }} aria-hidden="true" />
+            ))}
             {safeProject.clips.map((clip) => {
-              const leftPercent = (clip.startTime / safeProject.duration) * 100;
-              const widthPercent = Math.max(3, (clip.duration / safeProject.duration) * 100);
+              const leftPercent = Math.min(97, (clip.startTime / safeProject.duration) * 100);
+              const widthPercent = Math.max(2.5, (clip.duration / safeProject.duration) * 100);
               const isSelected = selectedClip?.id === clip.id;
-
+              const tone = scoreTone(clip.viralityScore);
               return (
-                <div
+                <button
                   key={clip.id}
+                  type="button"
                   onClick={() => setSelectedClip(clip)}
-                  title={`${clip.title} (${clip.viralityScore}/100)`}
-                  style={{
-                    left: `${leftPercent}%`,
-                    width: `${widthPercent}%`,
-                  }}
-                  className={`absolute h-7 rounded-lg cursor-pointer flex items-center justify-center transition-all ${
+                  title={`#${rankById.get(clip.id)} ${clip.title} · score ${clip.viralityScore} · ${formatClock(clip.startTime)}`}
+                  aria-label={`Clip ${rankById.get(clip.id)}, ${clip.title}, score ${clip.viralityScore}`}
+                  aria-pressed={isSelected}
+                  style={{ left: `${leftPercent}%`, width: `${widthPercent}%` }}
+                  className={`absolute top-1.5 bottom-1.5 rounded-md border flex items-center justify-center text-[10px] font-extrabold transition-all ${
                     isSelected
-                      ? 'bg-amber-400 text-neutral-950 ring-2 ring-white shadow-md z-10 font-bold'
-                      : clip.viralityScore >= 95
-                      ? 'bg-amber-500/80 text-neutral-950 hover:bg-amber-400'
-                      : 'bg-neutral-700 text-neutral-200 hover:bg-neutral-600'
+                      ? 'bg-amber-400 border-white text-neutral-950 z-10'
+                      : `${tone.chip} hover:brightness-125`
                   }`}
                 >
-                  <span className="text-[10px] font-bold font-mono">
-                    {clip.viralityScore}
-                  </span>
-                </div>
+                  {rankById.get(clip.id)}
+                </button>
               );
             })}
           </div>
-        </div>
-      </div>
+          <div className="mt-1.5 flex justify-between font-mono text-[10px] text-neutral-600" aria-hidden="true">
+            <span>0:00</span>
+            <span>{formatClock(safeProject.duration / 4)}</span>
+            <span>{formatClock(safeProject.duration / 2)}</span>
+            <span>{formatClock((safeProject.duration * 3) / 4)}</span>
+            <span>{formatClock(safeProject.duration)}</span>
+          </div>
+        </section>
+      )}
 
-      {/* Clip Grid */}
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold text-white">Extracted Viral Clips</h2>
-            <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs font-semibold text-neutral-300">
-              {visibleClips.length}
-              {visibleClips.length !== safeProject.clips.length && ` of ${safeProject.clips.length}`}
+      {/* Clips */}
+      <section className="space-y-4" aria-labelledby="clips-title">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 id="clips-title" className="text-base font-bold text-white">
+            Clips
+          </h2>
+          <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-xs font-semibold text-neutral-300 tabular-nums">
+            {visibleClips.length}
+            {visibleClips.length !== safeProject.clips.length && ` of ${safeProject.clips.length}`}
+          </span>
+          <span className="flex-1" />
+          {safeProject.clips.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectMode((on) => !on);
+                setCheckedIds([]);
+              }}
+              aria-pressed={selectMode}
+              className={`h-8 px-3 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-colors ${
+                selectMode ? 'border-amber-500/60 bg-amber-500/10 text-amber-200' : 'border-neutral-800 text-neutral-300 hover:bg-neutral-800'
+              }`}
+            >
+              <CheckSquare className="w-3.5 h-3.5" />
+              {selectMode ? 'Done' : 'Select'}
+            </button>
+          )}
+          <div className="flex items-center gap-1.5">
+            <ArrowDownWideNarrow className="h-3.5 w-3.5 text-neutral-500" aria-hidden="true" />
+            <Select
+              value={sortMode}
+              onChange={setSortMode}
+              options={SORT_OPTIONS}
+              className="h-8 rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 text-xs text-white focus:border-amber-400 focus:outline-none"
+              aria-label="Sort clips"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Filter className="h-3.5 w-3.5 text-neutral-500" aria-hidden="true" />
+            <Select
+              value={filterScore}
+              onChange={setFilterScore}
+              options={SCORE_FILTER_OPTIONS}
+              className="h-8 rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 text-xs text-white focus:border-amber-400 focus:outline-none"
+              aria-label="Filter clips by score"
+            />
+          </div>
+        </div>
+
+        {selectMode && (
+          <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-amber-500/30 bg-neutral-900/95 backdrop-blur px-3.5 py-2.5">
+            <span className="text-[13px] font-semibold text-white tabular-nums">
+              {checkedIds.length ? `${checkedIds.length} selected` : 'Tap clips to select them'}
             </span>
+            <button
+              type="button"
+              onClick={() => setCheckedIds(visibleClips.map((c) => c.id))}
+              className="text-xs font-semibold text-amber-300 hover:text-amber-200"
+            >
+              Select all
+            </button>
+            <span className="flex-1" />
+            <button
+              type="button"
+              onClick={() => setCheckedIds([])}
+              disabled={checkedIds.length === 0}
+              className="h-8 px-3 rounded-lg text-xs font-semibold text-neutral-300 hover:bg-neutral-800 disabled:opacity-40"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBatchExport(checkedClips)}
+              disabled={checkedIds.length === 0 || isBatchExporting}
+              className="h-8 px-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-neutral-950 text-xs font-bold flex items-center gap-1.5 disabled:opacity-40"
+            >
+              {isBatchExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              Export {checkedIds.length || ''}
+            </button>
           </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5">
-              <ArrowDownWideNarrow className="h-3.5 w-3.5 text-neutral-400" />
-              <Select
-                value={sortMode}
-                onChange={setSortMode}
-                options={SORT_OPTIONS}
-                className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-xs text-white focus:border-amber-400 focus:outline-none"
-                aria-label="Sort clips"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <Filter className="h-3.5 w-3.5 text-neutral-400" />
-              <Select
-                value={filterScore}
-                onChange={setFilterScore}
-                options={SCORE_FILTER_OPTIONS}
-                className="rounded-lg border border-neutral-800 bg-neutral-900 px-2.5 py-1 text-xs text-white focus:border-amber-400 focus:outline-none"
-                aria-label="Filter clips by score"
-              />
-            </div>
-          </div>
-        </div>
+        )}
 
         {visibleClips.length > 0 && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {visibleClips.map((clip, index) => (
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            {visibleClips.map((clip) => (
               <ClipCard
                 key={clip.id}
                 clip={clip}
-                index={index}
+                index={(rankById.get(clip.id) ?? 1) - 1}
                 isSelected={selectedClip?.id === clip.id}
                 isExporting={quickExportingId === clip.id}
                 onSelect={setSelectedClip}
                 onEdit={onSelectClipForEdit}
                 onSchedule={onScheduleClip}
                 onExport={handleQuickExport}
+                selectMode={selectMode}
+                checked={checkedIds.includes(clip.id)}
+                onToggleChecked={toggleChecked}
               />
             ))}
           </div>
         )}
 
         {safeProject.clips.length > 0 && visibleClips.length === 0 && (
-          <div className="rounded-xl border border-dashed border-neutral-800 bg-neutral-900/60 p-8 text-center">
-            <p className="text-xs text-neutral-400">No clips match the current filter.</p>
-            <button
-              onClick={() => setFilterScore(0)}
-              className="mt-2 text-[11px] font-semibold text-amber-300 hover:text-amber-200"
-            >
-              Reset filter
+          <div className="rounded-2xl border border-dashed border-neutral-800 p-8 text-center">
+            <p className="text-xs text-neutral-400">No clips match this score filter.</p>
+            <button type="button" onClick={() => setFilterScore(0)} className="mt-2 text-xs font-semibold text-amber-300 hover:text-amber-200">
+              Show all scores
             </button>
           </div>
         )}
 
         {safeProject.clips.length === 0 && (
-          <div className="rounded-xl border border-dashed border-neutral-800 bg-neutral-900/60 p-10 text-center">
+          <div className="rounded-2xl border border-dashed border-neutral-800 p-10 text-center">
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-neutral-800/70">
-              <Sparkles className="h-5 w-5 text-neutral-500" />
+              {isProcessing ? <Sparkles className="h-5 w-5 text-amber-400" /> : <Film className="h-5 w-5 text-neutral-500" />}
             </div>
-            <p className="text-sm font-semibold text-white">
-              {safeProject.processingStatus === 'processing' ? 'Finding your best moments' : 'No clips yet'}
-            </p>
+            <p className="text-sm font-semibold text-white">{isProcessing ? 'Finding your best moments' : 'No clips yet'}</p>
             <p className="mt-1 text-xs text-neutral-400">
-              {safeProject.processingStatus === 'processing'
+              {isProcessing
                 ? 'Clips appear here as soon as the pipeline finishes rendering them.'
                 : 'Run the pipeline on this project to generate clips.'}
             </p>
           </div>
         )}
-      </div>
-
+      </section>
     </div>
   );
 };

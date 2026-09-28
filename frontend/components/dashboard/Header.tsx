@@ -91,21 +91,21 @@ export const Header: React.FC<HeaderProps> = ({
       </button>
 
       {/* Where you are */}
-      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[13px] min-w-0 flex-1 md:flex-none">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[13px] min-w-0 flex-1">
         {crumbs.map((crumb, i) => {
           const isLast = i === crumbs.length - 1;
           return (
             <React.Fragment key={`${crumb.label}-${i}`}>
               {i > 0 && <ChevronRight className="hidden md:block w-3.5 h-3.5 text-neutral-600 shrink-0" />}
               {isLast ? (
-                <span className="font-semibold text-white truncate" aria-current="page">
+                <span className="font-semibold text-white truncate min-w-0" aria-current="page">
                   {crumb.label}
                 </span>
               ) : (
                 <button
                   type="button"
                   onClick={() => crumb.tab && onNavigateTab(crumb.tab)}
-                  className="hidden md:block font-medium text-neutral-400 hover:text-white truncate max-w-[200px] transition-colors"
+                  className="hidden md:block font-medium text-neutral-400 hover:text-white truncate max-w-[180px] shrink-0 transition-colors"
                 >
                   {crumb.label}
                 </button>
@@ -127,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
       <button
         type="button"
         onClick={onOpenCommandPalette}
-        className="hidden sm:flex items-center gap-2 md:ml-auto w-9 lg:w-64 xl:w-72 h-9 px-2.5 lg:px-3 rounded-xl border border-neutral-800 bg-neutral-900/60 text-neutral-500 hover:text-neutral-300 hover:border-neutral-700 transition-colors justify-center lg:justify-start"
+        className="hidden sm:flex shrink-0 items-center gap-2 w-9 lg:w-56 xl:w-72 h-9 px-2.5 lg:px-3 rounded-xl border border-neutral-800 bg-neutral-900/60 text-neutral-500 hover:text-neutral-300 hover:border-neutral-700 transition-colors justify-center lg:justify-start"
         aria-label="Search projects, clips and actions"
         aria-keyshortcuts="Meta+K Control+K"
       >

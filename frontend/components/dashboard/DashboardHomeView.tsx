@@ -503,7 +503,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
 
       {/* Up next and setup */}
       {(flags.social_publishing || showChecklist) && (
-        <div className={`grid gap-4 ${flags.social_publishing && showChecklist ? 'lg:grid-cols-2' : ''}`}>
+        <div className={`grid grid-cols-1 gap-4 ${flags.social_publishing && showChecklist ? 'lg:grid-cols-2' : ''}`}>
           {flags.social_publishing && (
             <section className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-4 sm:p-5" aria-labelledby="home-up-next">
               <div className="flex items-center gap-2 mb-2">

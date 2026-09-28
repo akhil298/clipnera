@@ -23,6 +23,10 @@ interface ClipCardProps {
   onEdit: (clip: ViralClip) => void;
   onSchedule: (clip: ViralClip) => void;
   onExport: (clip: ViralClip) => void;
+  /** Select mode: the card toggles a checkbox instead of becoming the focused clip. */
+  selectMode?: boolean;
+  checked?: boolean;
+  onToggleChecked?: (clip: ViralClip) => void;
 }
 
 function formatTimecode(seconds: number): string {
@@ -44,6 +48,9 @@ export const ClipCard: React.FC<ClipCardProps> = ({
   onEdit,
   onSchedule,
   onExport,
+  selectMode = false,
+  checked = false,
+  onToggleChecked,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -104,11 +111,13 @@ export const ClipCard: React.FC<ClipCardProps> = ({
 
   return (
     <article
-      onClick={() => onSelect(clip)}
+      onClick={() => (selectMode ? onToggleChecked?.(clip) : onSelect(clip))}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-neutral-900 transition-all duration-200 cursor-pointer ${
-        isSelected
+        selectMode && checked
+          ? 'border-amber-400 ring-2 ring-amber-400/40'
+          : isSelected
           ? 'border-amber-500/70 ring-1 ring-amber-500/30 shadow-lg shadow-amber-500/5'
           : 'border-neutral-800 hover:border-neutral-700 hover:shadow-lg hover:shadow-black/40'
       }`}
@@ -149,10 +158,23 @@ export const ClipCard: React.FC<ClipCardProps> = ({
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-black/50" />
 
         {/* Rank + score dial */}
-        <div className="absolute left-2.5 top-2.5 flex items-center gap-2">
-          <span className="rounded-md bg-black/70 px-1.5 py-0.5 font-mono text-[10px] font-bold text-neutral-200 backdrop-blur-sm">
-            #{index + 1}
-          </span>
+        <div className="absolute left-2.5 top-2.5 z-10 flex items-center gap-2">
+          {selectMode ? (
+            <span
+              role="checkbox"
+              aria-checked={checked}
+              aria-label={`Select ${clip.title}`}
+              className={`flex h-6 w-6 items-center justify-center rounded-md border-2 ${
+                checked ? 'border-amber-400 bg-amber-400 text-neutral-950' : 'border-white/80 bg-black/40'
+              }`}
+            >
+              {checked && <Check className="h-4 w-4 stroke-[3]" />}
+            </span>
+          ) : (
+            <span className="rounded-md bg-black/70 px-1.5 py-0.5 font-mono text-[10px] font-bold text-neutral-200 backdrop-blur-sm">
+              #{index + 1}
+            </span>
+          )}
         </div>
 
         <div className="absolute right-2.5 top-2.5">
@@ -160,7 +182,7 @@ export const ClipCard: React.FC<ClipCardProps> = ({
         </div>
 
         {/* Play control */}
-        {hasVideo && (
+        {hasVideo && !selectMode && (
           <button
             onClick={togglePlay}
             aria-label={isPlaying && withSound ? 'Pause clip' : 'Play clip with sound'}
