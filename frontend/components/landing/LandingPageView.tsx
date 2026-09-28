@@ -108,7 +108,7 @@ export default function LandingPageView() {
 
       <RoiCalculator onLaunchStudio={handleLaunchStudio} />
 
-      <PublishSection onLaunchStudio={handleLaunchStudio} />
+      <PublishSection />
 
       <PricingSection onLaunchStudio={handleLaunchStudio} />
 
