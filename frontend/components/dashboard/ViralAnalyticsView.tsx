@@ -41,6 +41,8 @@ const EMPTY_RETENTION_DATA = [
 ];
 
 import { AnalyticsSkeleton } from '@/components/skeletons';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { NotWiredBadge } from '@/components/ui/NotWiredBadge';
 
 export const ViralAnalyticsView: React.FC = () => {
   const [activePlatformFilter, setActivePlatformFilter] = useState<'all' | 'tiktok' | 'reels' | 'shorts'>('all');
@@ -72,10 +74,10 @@ export const ViralAnalyticsView: React.FC = () => {
 
   // Platform Performance dataset
   const PLATFORM_PERFORMANCE = [
-    { platform: 'TikTok', views: 840000, completionRate: 78, shares: 34200, retentionAvg: '82%' },
-    { platform: 'IG Reels', views: 520000, completionRate: 71, shares: 18900, retentionAvg: '76%' },
-    { platform: 'YT Shorts', views: 960000, completionRate: 84, shares: 41000, retentionAvg: '86%' },
-    { platform: 'X / LinkedIn', views: 210000, completionRate: 64, shares: 9400, retentionAvg: '68%' },
+    { key: 'tiktok', platform: 'TikTok', views: 840000, completionRate: 78, shares: 34200, retentionAvg: '82%' },
+    { key: 'reels', platform: 'IG Reels', views: 520000, completionRate: 71, shares: 18900, retentionAvg: '76%' },
+    { key: 'shorts', platform: 'YT Shorts', views: 960000, completionRate: 84, shares: 41000, retentionAvg: '86%' },
+    { key: 'x', platform: 'X / LinkedIn', views: 210000, completionRate: 64, shares: 9400, retentionAvg: '68%' },
   ];
 
   const handleRunSimulator = () => {
@@ -99,36 +101,41 @@ export const ViralAnalyticsView: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Top Header */}
-      <div className="rounded-2xl bg-neutral-900/90 border border-neutral-800 p-5 lg:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-xl">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              Cross-Platform Analytics
-            </span>
-            <span className="text-xs text-neutral-400">
-              Real-Time Virality Telemetry & Retention Science
-            </span>
+      <PageHeader
+        title="Analytics"
+        description="How your clips perform after you post them."
+        actions={
+          <div className="inline-flex p-0.5 rounded-xl bg-neutral-900 border border-neutral-800" role="group" aria-label="Platform">
+            {(
+              [
+                ['all', 'All'],
+                ['tiktok', 'TikTok'],
+                ['reels', 'Reels'],
+                ['shorts', 'Shorts'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActivePlatformFilter(id)}
+                aria-pressed={activePlatformFilter === id}
+                className={`h-8 px-3 rounded-[10px] text-xs font-semibold transition-colors ${
+                  activePlatformFilter === id ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-          <h1 className="text-xl lg:text-2xl font-extrabold text-white tracking-tight font-['Syne',sans-serif]">
-            Viral Performance Dashboard
-          </h1>
-          <p className="text-xs text-neutral-400 mt-1">
-            Tracking 2.53M+ views generated across TikTok, Instagram Reels, and YouTube Shorts.
-          </p>
-        </div>
+        }
+      />
 
-        {/* Quick Highlights Summary */}
-        <div className="flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 text-right">
-            <span className="text-[10px] text-neutral-500 block uppercase font-bold">
-              Avg Watchtime Lift
-            </span>
-            <span className="text-base font-extrabold text-emerald-400 font-mono">
-              +285% vs Raw
-            </span>
-          </div>
-        </div>
+      {/* Nothing on this page is measured yet; say so before any number. */}
+      <div role="note" className="flex items-start gap-3 rounded-2xl border border-dashed border-rose-400/40 bg-rose-500/[0.06] px-4 py-3">
+        <NotWiredBadge label="Sample data" reason="Every figure on this page is a fixed example; it is not connected to platform analytics yet." className="mt-0.5 shrink-0" />
+        <p className="text-[13px] text-rose-100/90">
+          These are example numbers. Analytics isn’t connected to YouTube, Instagram or TikTok yet, so nothing here reflects your posts. The hook tester gives a simulated score.
+        </p>
       </div>
 
       {/* 4 Big KPI Metric Cards */}
@@ -139,7 +146,7 @@ export const ViralAnalyticsView: React.FC = () => {
             <Eye className="w-4 h-4 text-sky-400" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-white font-mono">2,530,000</span>
+            <span className="text-2xl font-bold text-white tabular-nums tracking-tight">2,530,000</span>
             <span className="text-xs font-bold text-emerald-400 flex items-center">
               <ArrowUpRight className="w-3 h-3" /> +34.2%
             </span>
@@ -153,7 +160,7 @@ export const ViralAnalyticsView: React.FC = () => {
             <TrendingUp className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-white font-mono">79.4%</span>
+            <span className="text-2xl font-bold text-white tabular-nums tracking-tight">79.4%</span>
             <span className="text-xs font-bold text-emerald-400 flex items-center">
               <ArrowUpRight className="w-3 h-3" /> +48%
             </span>
@@ -167,7 +174,7 @@ export const ViralAnalyticsView: React.FC = () => {
             <Share2 className="w-4 h-4 text-rose-400" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-white font-mono">103,500</span>
+            <span className="text-2xl font-bold text-white tabular-nums tracking-tight">103,500</span>
             <span className="text-xs font-bold text-rose-400 flex items-center">
               <ArrowUpRight className="w-3 h-3" /> 4.1% Rate
             </span>
@@ -181,7 +188,7 @@ export const ViralAnalyticsView: React.FC = () => {
             <Flame className="w-4 h-4 text-amber-400" />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-white font-mono">94.8 / 100</span>
+            <span className="text-2xl font-bold text-white tabular-nums tracking-tight">94.8 / 100</span>
             <span className="text-xs font-bold text-amber-400">Top 1%</span>
           </div>
           <p className="text-[11px] text-neutral-500">Clipnera AI Quality Rating</p>
@@ -194,8 +201,8 @@ export const ViralAnalyticsView: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <TrendingUp className="w-5 h-5 text-amber-400" />
-              <h3 className="text-sm lg:text-base font-bold text-white font-['Syne',sans-serif]">
-                Audience Retention Curve: Raw Video vs. Clipnera AI Enhanced Clip
+              <h3 className="text-sm lg:text-base font-bold text-white">
+                Audience retention: Clipnera clip vs. unedited video
               </h3>
             </div>
             <p className="text-xs text-neutral-400 mt-0.5">
@@ -281,25 +288,25 @@ export const ViralAnalyticsView: React.FC = () => {
       </div>
 
       {/* Grid: Platform Breakdown (Left) + AI Virality Hook Predictor Simulator (Right) */}
-      <div className="grid lg:grid-cols-12 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left: Platform Distribution Bars (6 cols) */}
         <div className="lg:col-span-6 p-5 rounded-2xl bg-neutral-900/90 border border-neutral-800 space-y-4 shadow-xl">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-2">
               <Smartphone className="w-4 h-4 text-sky-400" />
-              <span>Multi-Channel Performance Breakdown</span>
+              <span>By platform</span>
             </h3>
           </div>
 
           <div className="space-y-3">
-            {PLATFORM_PERFORMANCE.map((p, idx) => (
+            {PLATFORM_PERFORMANCE.filter((p) => activePlatformFilter === 'all' || p.key === activePlatformFilter).map((p, idx) => (
               <div
                 key={idx}
                 className="p-3.5 rounded-xl bg-neutral-950 border border-neutral-800 space-y-2"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-white">{p.platform}</span>
-                  <span className="text-xs font-mono font-bold text-emerald-400">
+                  <span className="text-xs font-bold text-emerald-400 tabular-nums">
                     {formatNumber(p.views)} Views
                   </span>
                 </div>
@@ -307,17 +314,17 @@ export const ViralAnalyticsView: React.FC = () => {
                 <div className="space-y-1">
                   <div className="flex items-center justify-between text-[11px] text-neutral-400">
                     <span>Completion Rate</span>
-                    <span className="font-mono text-neutral-200">{p.completionRate}%</span>
+                    <span className="text-neutral-200 tabular-nums">{p.completionRate}%</span>
                   </div>
                   <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-amber-500 to-rose-500"
+                      className="h-full bg-amber-500"
                       style={{ width: `${p.completionRate}%` }}
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-[10px] text-neutral-500 font-mono pt-1">
+                <div className="flex items-center justify-between text-[11px] text-neutral-500 tabular-nums pt-1">
                   <span>Shares: {formatNumber(p.shares)}</span>
                   <span>Avg Retention: {p.retentionAvg}</span>
                 </div>
@@ -335,9 +342,7 @@ export const ViralAnalyticsView: React.FC = () => {
                 AI Virality Predictor & Hook Tester
               </h3>
             </div>
-            <span className="text-[10px] px-2 py-0.5 rounded bg-amber-400/10 text-amber-300 font-bold font-mono">
-              Clipnera AI Engine 2026
-            </span>
+            <NotWiredBadge label="Simulated" reason="The score is picked at random after a short wait; no model is called yet." />
           </div>
 
           <p className="text-xs text-neutral-400">
@@ -356,10 +361,10 @@ export const ViralAnalyticsView: React.FC = () => {
             <button
               onClick={handleRunSimulator}
               disabled={isSimulating}
-              className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-neutral-950 text-xs font-bold shadow-md shadow-rose-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+              className="w-full h-10 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-[13px] font-bold shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Zap className="w-3.5 h-3.5" />
-              <span>{isSimulating ? 'Simulating Algorithm Reaction...' : 'Predict Virality Score'}</span>
+              <span>{isSimulating ? 'Scoring…' : 'Score this hook'}</span>
             </button>
           </div>
 
@@ -370,7 +375,7 @@ export const ViralAnalyticsView: React.FC = () => {
                 <span className="text-xs font-bold text-neutral-300">
                   Predicted Virality Score:
                 </span>
-                <span className="text-xl font-black text-amber-400 font-mono">
+                <span className="text-xl font-bold text-amber-300 tabular-nums">
                   {simulatorResult.score} / 100
                 </span>
               </div>
