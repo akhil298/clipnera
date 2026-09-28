@@ -1,23 +1,20 @@
-﻿"use client";
-import React, { useState } from 'react';
+"use client";
+import React from 'react';
 import {
   Sparkles,
   Scissors,
   Film,
-  BarChart3,
   CalendarDays,
   Plus,
   Zap,
   Palette,
   Settings,
-  LayoutDashboard,
+  Home,
   Briefcase,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Folder,
-  FolderOpen,
-  FolderPlus,
   X,
   ShieldCheck,
   Users,
@@ -30,8 +27,10 @@ import {
 import Link from 'next/link';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
 import { Skeleton } from '@/components/skeletons';
-import { useEntitlements, planLabel, isPaidPlan, creditResetLabel } from '@/hooks/useEntitlements';
+import { useEntitlements, planLabel, creditResetLabel } from '@/hooks/useEntitlements';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
+import { projectStatus, statusDotClass } from '@/components/ui/StatusPill';
+import { Avatar } from './Avatar';
 
 interface SidebarProps {
   activeTab: TabType;
@@ -45,10 +44,19 @@ interface SidebarProps {
   onSelectProject?: (project: VideoProject) => void;
   selectedClip?: ViralClip;
   onOpenAuthModal: () => void;
+  /** Opens Settings on the Plan & billing tab. */
+  onOpenBilling?: () => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   isMobileOpen: boolean;
   onCloseMobile: () => void;
+}
+
+interface NavItem {
+  id: TabType;
+  label: string;
+  icon: React.FC<{ className?: string }>;
+  badge?: string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -63,100 +71,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectProject,
   selectedClip,
   onOpenAuthModal,
+  onOpenBilling,
   isCollapsed,
   onToggleCollapse,
   isMobileOpen,
   onCloseMobile,
 }) => {
-  const [foldersExpanded, setFoldersExpanded] = useState(true);
   const { entitlements, isLoading: planLoading } = useEntitlements();
   const { flags } = useFeatureFlags();
   const activeWorkspace = workspaces.find((w) => w.id === user.activeWorkspaceId) || workspaces[0];
 
-  const primaryNavItems = [
-    {
-      id: 'dashboard' as TabType,
-      label: 'Dashboard',
-      icon: LayoutDashboard,
-      description: 'Overview & recent projects',
-    },
-    {
-      id: 'folders' as TabType,
-      label: 'Project Folders',
-      icon: Folder,
-      badge: projects.length ? `${projects.length}` : undefined,
-      description: 'Organized video folders & YouTube ingests',
-    },
+  const createItems: NavItem[] = [
+    { id: 'dashboard', label: 'Home', icon: Home },
+    { id: 'folders', label: 'Projects', icon: Folder, badge: projects.length ? `${projects.length}` : undefined },
     // Shown while an admin has Reels from Images switched on.
-    ...(flags['broll_studio.reels']
-      ? [
-          {
-            id: 'reels' as TabType,
-            label: 'Reels from Images',
-            icon: Clapperboard,
-            description: 'Your photos + script into a full reel',
-          },
-        ]
-      : []),
+    ...(flags['broll_studio.reels'] ? [{ id: 'reels' as TabType, label: 'Reels from images', icon: Clapperboard }] : []),
+  ];
+
+  // Clips and the editor only make sense with a project open, so they sit
+  // under that project instead of pretending to be top-level pages.
+  const projectItems: NavItem[] = [
     {
-      id: 'generator' as TabType,
-      label: 'AI Viral Clips',
+      id: 'generator',
+      label: 'Clips',
       icon: Sparkles,
       badge: activeProject?.clips?.length ? `${activeProject.clips.length}` : undefined,
-      description: 'Extracted viral short clips',
     },
-    {
-      id: 'editor' as TabType,
-      label: 'Studio Editor',
-      icon: Scissors,
-      badge: selectedClip ? 'Active' : undefined,
-      description: 'Captions, B-roll & facial tracking',
-    },
+    { id: 'editor', label: 'Edit clip', icon: Scissors, badge: selectedClip ? 'Open' : undefined },
   ];
 
-  const distributionNavItems: Array<{ id: TabType; label: string; icon: React.FC<{ className?: string }>; description: string }> = [
-    // Shown while an admin has social publishing switched on.
-    ...(flags.social_publishing
-      ? [
-          {
-            id: 'scheduler' as TabType,
-            label: 'Social Scheduler',
-            icon: CalendarDays,
-            description: 'TikTok, IG & Shorts auto-post',
-          },
-        ]
-      : []),
-    // {
-    //   id: 'analytics' as TabType,
-    //   label: 'Virality Analytics',
-    //   icon: BarChart3,
-    //   description: 'Retention curves & virality scores',
-    // },
-  ];
+  // Shown while an admin has social publishing switched on.
+  const publishItems: NavItem[] = flags.social_publishing
+    ? [{ id: 'scheduler', label: 'Scheduler', icon: CalendarDays }]
+    : [];
 
-  const settingsNavItems = [
-    {
-      id: 'brand_kit' as TabType,
-      label: 'Brand Kit',
-      icon: Palette,
-      description: 'Fonts, colors & watermark styles',
-    },
-    {
-      id: 'settings' as TabType,
-      label: 'Settings & Billing',
-      icon: Settings,
-      description: 'Workspace, keys & subscriptions',
-    },
+  const accountItems: NavItem[] = [
+    { id: 'brand_kit', label: 'Brand kit', icon: Palette },
+    { id: 'settings', label: 'Settings & billing', icon: Settings },
   ];
 
   // Same pages as the admin panel's own tabs (components/admin/AdminLayout.tsx).
   const adminNavItems = [
-    { href: '/admin/overview', label: 'Admin Overview', icon: ShieldCheck },
+    { href: '/admin/overview', label: 'Overview', icon: ShieldCheck },
     { href: '/admin/users', label: 'Users', icon: Users },
     { href: '/admin/payments', label: 'Payments', icon: CreditCard },
     { href: '/admin/credits', label: 'Credits', icon: Coins },
-    { href: '/admin/social', label: 'Social Accounts', icon: Share2 },
-    { href: '/admin/usage', label: 'AI Usage', icon: Cpu },
+    { href: '/admin/social', label: 'Social accounts', icon: Share2 },
+    { href: '/admin/usage', label: 'AI usage', icon: Cpu },
   ];
 
   const handleNavClick = (tab: TabType) => {
@@ -164,422 +125,372 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onCloseMobile();
   };
 
-  const aiCreditPercent = Math.min(
-    100,
-    Math.max(0, Math.round((user.aiCreditsMinutesRemaining / user.aiCreditsTotal) * 100))
-  );
+  const openBilling = () => {
+    (onOpenBilling ?? (() => onTabChange('settings')))();
+    onCloseMobile();
+  };
 
-  const sidebarContent = (
-    <div className="h-full flex flex-col justify-between bg-neutral-950 text-neutral-200 select-none">
-      {/* Top section: Brand & Workspace */}
-      <div className="p-4 space-y-4">
-        {/* Brand Header */}
-        <div className="flex items-center justify-between">
-          <div
-            onClick={() => handleNavClick('dashboard')}
-            className="cursor-pointer flex items-center gap-2.5 group"
-          >
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-amber-500 text-neutral-950 shadow-md shadow-amber-500/20 group-hover:scale-105 transition-all shrink-0">
-              <Film className="w-5 h-5 stroke-[2.2]" />
-            </div>
-            {!isCollapsed && (
-              <div className="flex flex-col">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-extrabold text-base tracking-tight text-white font-['Plus_Jakarta_Sans',sans-serif]">
-                    Clip<span className="text-amber-400">nera</span>
-                  </span>
-                  <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 uppercase">
-                    PRO
-                  </span>
-                </div>
-                <span className="text-[10px] text-neutral-400">AI Video Repurposing</span>
-              </div>
+  // Plan credits and bought credits share one bar so the split is visible.
+  const total = Math.max(user.aiCreditsTotal, user.aiCreditsMinutesRemaining, 1);
+  const bought = Math.min(entitlements.purchased_credits_remaining, user.aiCreditsMinutesRemaining);
+  const planPercent = Math.max(0, ((user.aiCreditsMinutesRemaining - bought) / total) * 100);
+  const boughtPercent = Math.max(0, (bought / total) * 100);
+
+  const groupLabel = (label: string, collapsed: boolean) =>
+    collapsed ? (
+      <div className="mx-auto my-2 h-px w-6 bg-neutral-800" aria-hidden="true" />
+    ) : (
+      <div className="px-3 pt-4 pb-1.5 text-[10.5px] font-bold text-neutral-500 uppercase tracking-[0.08em]">{label}</div>
+    );
+
+  const navButton = (item: NavItem, collapsed: boolean, indent = false) => {
+    const Icon = item.icon;
+    const isActive = activeTab === item.id;
+    return (
+      <button
+        key={item.id}
+        id={`sidebar-nav-${item.id}`}
+        type="button"
+        onClick={() => handleNavClick(item.id)}
+        title={collapsed ? item.label : undefined}
+        aria-current={isActive ? 'page' : undefined}
+        className={`w-full flex items-center gap-3 rounded-lg text-[13px] transition-colors relative ${
+          collapsed ? 'justify-center p-2.5' : `px-3 py-2 ${indent ? 'pl-5' : ''}`
+        } ${
+          isActive
+            ? 'bg-neutral-800/80 text-white font-semibold'
+            : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 font-medium'
+        }`}
+      >
+        {isActive && (
+          <span className="absolute -left-3 top-2 bottom-2 w-[3px] rounded-r bg-amber-400" aria-hidden="true" />
+        )}
+        <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-amber-400' : ''}`} />
+        {!collapsed && (
+          <>
+            <span className="flex-1 text-left truncate">{item.label}</span>
+            {item.badge && (
+              <span className={`text-[11px] tabular-nums ${isActive ? 'text-amber-300' : 'text-neutral-500'}`}>
+                {item.badge}
+              </span>
             )}
-          </div>
+          </>
+        )}
+      </button>
+    );
+  };
 
-          {/* Desktop collapse button */}
+  const renderContent = (collapsed: boolean, inDrawer = false) => (
+    <div className="h-full flex flex-col bg-neutral-950 text-neutral-200 select-none">
+      {/* Brand, workspace and the primary action */}
+      <div className={`space-y-3 ${collapsed ? 'p-3' : 'p-4'}`}>
+        <div className={`flex items-center ${collapsed ? 'justify-center' : 'justify-between'}`}>
           <button
-            onClick={onToggleCollapse}
-            className="hidden lg:flex p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-900 transition-colors"
-            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            type="button"
+            onClick={() => handleNavClick('dashboard')}
+            className="flex items-center gap-2.5 group"
+            title="Clipnera home"
           >
-            {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            <span className="flex items-center justify-center w-8 h-8 rounded-[10px] bg-gradient-to-br from-amber-300 via-amber-500 to-amber-600 text-neutral-950 shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform shrink-0">
+              <Film className="w-4 h-4 stroke-[2.4]" />
+            </span>
+            {!collapsed && (
+              <span className="flex items-center gap-1.5">
+                <span className="font-extrabold text-[17px] tracking-tight text-white">
+                  Clip<span className="text-amber-400">nera</span>
+                </span>
+                {!planLoading && (
+                  <span className="px-1.5 py-px text-[9px] font-bold rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 uppercase">
+                    {planLabel(entitlements.plan)}
+                  </span>
+                )}
+              </span>
+            )}
           </button>
 
-          {/* Mobile close button */}
-          <button
-            onClick={onCloseMobile}
-            className="lg:hidden p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-900 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {!collapsed && !inDrawer && (
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className="hidden lg:flex p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-900 transition-colors"
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          )}
+          {inDrawer && (
+            <button
+              type="button"
+              onClick={onCloseMobile}
+              className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-900 transition-colors"
+              aria-label="Close menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
-        {/* Workspace Switcher */}
-        {!isCollapsed && (
+        {!collapsed && (
           <button
+            type="button"
             onClick={onOpenAuthModal}
-            className="w-full flex items-center justify-between p-2.5 rounded-xl bg-neutral-900/80 hover:bg-neutral-900 border border-neutral-800 text-xs text-neutral-300 hover:border-neutral-700 transition-all text-left group"
+            className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-neutral-900/70 hover:bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition-colors text-left group"
           >
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-6 h-6 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0 text-amber-400">
-                <Briefcase className="w-3.5 h-3.5" />
-              </div>
-              <div className="truncate">
-                <div className="font-semibold text-white truncate text-xs">
-                  {activeWorkspace?.name || 'My Workspace'}
-                </div>
-                <div className="text-[10px] text-neutral-400">
-                  {planLoading ? '…' : `${planLabel(entitlements.plan)} Plan`} • {workspaces.length} Spaces
-                </div>
-              </div>
-            </div>
-            <ChevronDown className="w-3.5 h-3.5 text-neutral-500 group-hover:text-neutral-300 shrink-0 ml-1" />
+            <span className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
+              <Briefcase className="w-3.5 h-3.5" />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block font-semibold text-white truncate text-[12.5px]">
+                {activeWorkspace?.name || 'My workspace'}
+              </span>
+              <span className="block text-[11px] text-neutral-500">
+                {planLoading ? '…' : `${planLabel(entitlements.plan)} plan`} · {workspaces.length}{' '}
+                {workspaces.length === 1 ? 'workspace' : 'workspaces'}
+              </span>
+            </span>
+            <ChevronDown className="w-3.5 h-3.5 text-neutral-500 group-hover:text-neutral-300 shrink-0" />
           </button>
         )}
 
-        {/* Primary Action Button: Process New Video */}
         <button
-          id="btn-sidebar-upload"
+          id={inDrawer ? undefined : collapsed ? undefined : 'btn-sidebar-upload'}
+          type="button"
           onClick={() => {
             onOpenUpload();
             onCloseMobile();
           }}
-          className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-xs shadow-md shadow-amber-500/15 active:scale-95 transition-all ${
-            isCollapsed ? 'px-2' : 'px-4'
+          className={`w-full flex items-center justify-center gap-2 h-9 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold text-[13px] shadow-md shadow-amber-500/20 active:scale-[0.98] transition-all ${
+            collapsed ? 'px-0' : 'px-4'
           }`}
-          title="Repurpose Long Video"
+          title="New video"
         >
           <Plus className="w-4 h-4 stroke-[2.5] shrink-0" />
-          {!isCollapsed && <span>New Video Project</span>}
+          {!collapsed && <span>New video</span>}
         </button>
       </div>
 
-      {/* Center: Navigation Links */}
-      <div className="flex-1 overflow-y-auto px-3 py-2 pb-6 space-y-6">
-        {/* Main Creation Group */}
-        <div className="space-y-1">
-          {!isCollapsed && (
-            <div className="px-3 text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
-              Studio & Clips
-            </div>
-          )}
-          {primaryNavItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                id={`sidebar-nav-${item.id}`}
-                onClick={() => handleNavClick(item.id)}
-                title={isCollapsed ? item.label : undefined}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs transition-all relative ${
-                  isActive
-                    ? 'bg-neutral-900 text-white font-bold border border-neutral-800 shadow-sm'
-                    : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900/50 font-medium'
-                } ${isCollapsed ? 'justify-center px-2' : ''}`}
-              >
-                {/* Active Indicator Bar */}
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r bg-amber-400" />
-                )}
-                <Icon
-                  className={`w-4 h-4 shrink-0 ${
-                    isActive ? 'text-amber-400' : 'text-neutral-400'
-                  }`}
+      {/* Navigation */}
+      <nav
+        aria-label="Main"
+        className={`flex-1 overflow-y-auto pb-4 ${collapsed ? 'px-2' : 'px-3'} [scrollbar-width:thin]`}
+      >
+        {groupLabel('Create', collapsed)}
+        <div className="space-y-0.5">{createItems.map((item) => navButton(item, collapsed))}</div>
+
+        {activeProject && (
+          <>
+            {collapsed ? (
+              groupLabel('Project', true)
+            ) : (
+              <div className="px-3 pt-4 pb-1.5 flex items-center gap-2 min-w-0">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDotClass(projectStatus(activeProject).tone)}`}
                 />
-                {!isCollapsed && (
-                  <div className="flex-1 flex items-center justify-between min-w-0">
-                    <span className="truncate">{item.label}</span>
-                    {item.badge && (
-                      <span
-                        className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
-                          isActive
-                            ? 'bg-amber-400/20 text-amber-300'
-                            : 'bg-neutral-800 text-neutral-400'
+                <span className="text-[10.5px] font-bold text-neutral-500 uppercase tracking-[0.08em] truncate">
+                  {activeProject.folderName || activeProject.title}
+                </span>
+              </div>
+            )}
+            <div className="space-y-0.5">{projectItems.map((item) => navButton(item, collapsed, true))}</div>
+          </>
+        )}
+
+        {publishItems.length > 0 && (
+          <>
+            {groupLabel('Publish', collapsed)}
+            <div className="space-y-0.5">{publishItems.map((item) => navButton(item, collapsed))}</div>
+          </>
+        )}
+
+        {groupLabel('Brand & account', collapsed)}
+        <div className="space-y-0.5">{accountItems.map((item) => navButton(item, collapsed))}</div>
+
+        {/* Recent projects */}
+        {!collapsed &&
+          (projectsLoading ? (
+            <div className="pt-2">
+              {groupLabel('Recent projects', false)}
+              <div className="space-y-1">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-1.5">
+                    <Skeleton className="w-2 h-2 rounded-full shrink-0" />
+                    <Skeleton className="h-3 flex-1" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            projects.length > 0 && (
+              <div className="pt-2">
+                <div className="px-3 pt-4 pb-1.5 flex items-center justify-between">
+                  <span className="text-[10.5px] font-bold text-neutral-500 uppercase tracking-[0.08em]">
+                    Recent projects
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleNavClick('folders')}
+                    className="text-[11px] font-semibold text-amber-400 hover:text-amber-300"
+                  >
+                    View all
+                  </button>
+                </div>
+                <div className="space-y-0.5">
+                  {projects.slice(0, 4).map((p) => {
+                    const isCurrent = p.id === activeProject?.id;
+                    const isProcessing = p.processingStatus === 'processing';
+                    const status = projectStatus(p);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          // A project still processing has no clips to open yet;
+                          // its progress lives on the Projects page.
+                          if (isProcessing || !onSelectProject) {
+                            handleNavClick('folders');
+                            return;
+                          }
+                          onSelectProject(p);
+                          onCloseMobile();
+                        }}
+                        title={`${p.folderName || p.title} · ${status.label}`}
+                        className={`w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[12.5px] text-left transition-colors ${
+                          isCurrent ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900'
                         }`}
                       >
-                        {item.badge}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Project Folders Quick Switcher (when not collapsed) */}
-        {!isCollapsed && (projectsLoading ? (
-          <div className="space-y-1.5 pt-1">
-            <div className="px-3 flex items-center justify-between text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
-              <span>Your Project Folders</span>
-            </div>
-            <div className="space-y-1 pl-1">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg">
-                  <Skeleton className="w-3.5 h-3.5 rounded shrink-0" />
-                  <Skeleton className="h-3 flex-1" />
-                  <Skeleton className="h-3 w-6 rounded shrink-0" />
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDotClass(status.tone)}`} />
+                        <span className="flex-1 truncate">{p.folderName || p.title}</span>
+                        <span className="text-[11px] tabular-nums text-neutral-500 shrink-0">
+                          {isProcessing ? `${Math.round(p.processingProgress || 0)}%` : p.clips.length}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-          </div>
-        ) : projects.length > 0 && (
-          <div className="space-y-1.5 pt-1">
-            <div className="px-3 flex items-center justify-between text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
-              <span>Your Project Folders</span>
-              <button
-                onClick={() => handleNavClick('folders')}
-                className="text-amber-400 hover:text-amber-300 font-semibold lowercase text-[10px]"
-              >
-                view all
-              </button>
-            </div>
+              </div>
+            )
+          ))}
 
-            <div className="space-y-1 pl-1">
-              {projects.slice(0, 4).map((p) => {
-                const isCurrent = p.id === activeProject?.id;
-                const displayName = p.folderName || p.title;
-                const isProcessing = p.processingStatus === 'processing';
-
+        {/* Admin: only for platform admins; the API checks the role again. */}
+        {user.role === 'admin' && (
+          <>
+            {groupLabel('Admin', collapsed)}
+            <div className="space-y-0.5">
+              {adminNavItems.map((item) => {
+                const Icon = item.icon;
                 return (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      if (isProcessing || !onSelectProject) return;
-                      onSelectProject(p);
-                      handleNavClick('generator');
-                    }}
-                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all text-left group ${
-                      isCurrent
-                        ? 'bg-neutral-900 text-amber-300 font-semibold border border-neutral-800'
-                        : isProcessing
-                        ? 'text-neutral-600 cursor-not-allowed'
-                        : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/40'
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onCloseMobile}
+                    title={collapsed ? item.label : undefined}
+                    className={`w-full flex items-center gap-3 rounded-lg text-[13px] font-medium text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900 transition-colors ${
+                      collapsed ? 'justify-center p-2.5' : 'px-3 py-2'
                     }`}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FolderOpen className={`w-3.5 h-3.5 shrink-0 ${isCurrent ? 'text-amber-400' : isProcessing ? 'text-neutral-600' : 'text-neutral-500'}`} />
-                      <span className="truncate text-[11px]">{displayName}</span>
-                      {isProcessing && (
-                        <span
-                          className="text-[9px] text-amber-400 animate-pulse font-mono shrink-0"
-                          title={`Processing ${Math.round(p.processingProgress || 0)}%`}
-                        >
-                          {Math.round(p.processingProgress || 0)}%
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-900 text-neutral-400 font-mono shrink-0 ml-1">
-                      {p.clips.length}
-                    </span>
-                  </button>
+                    <Icon className="w-4 h-4 shrink-0 text-violet-400" />
+                    {!collapsed && <span className="truncate">{item.label}</span>}
+                  </Link>
                 );
               })}
             </div>
-          </div>
-        ))}
-
-        {/* Distribution Group */}
-        <div className="space-y-1">
-          {distributionNavItems.length > 0 && !isCollapsed && (
-            <div className="px-3 text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
-              Distribution & Analytics
-            </div>
-          )}
-          {distributionNavItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                id={`sidebar-nav-${item.id}`}
-                onClick={() => handleNavClick(item.id)}
-                title={isCollapsed ? item.label : undefined}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs transition-all relative ${
-                  isActive
-                    ? 'bg-neutral-900 text-white font-bold border border-neutral-800 shadow-sm'
-                    : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900/50 font-medium'
-                } ${isCollapsed ? 'justify-center px-2' : ''}`}
-              >
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r bg-amber-400" />
-                )}
-                <Icon
-                  className={`w-4 h-4 shrink-0 ${
-                    isActive ? 'text-amber-400' : 'text-neutral-400'
-                  }`}
-                />
-                {!isCollapsed && <span className="truncate">{item.label}</span>}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Customization & Settings Group */}
-        <div className="space-y-1 mb-4">
-          {!isCollapsed && (
-            <div className="px-3 text-[10px] font-bold text-neutral-400 uppercase tracking-wider mb-1.5">
-              Settings & Brand
-            </div>
-          )}
-          {settingsNavItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                id={`sidebar-nav-${item.id}`}
-                onClick={() => handleNavClick(item.id)}
-                title={isCollapsed ? item.label : undefined}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs transition-all relative ${
-                  isActive
-                    ? 'bg-neutral-900 text-white font-bold border border-neutral-800 shadow-sm'
-                    : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900/50 font-medium'
-                } ${isCollapsed ? 'justify-center px-2' : ''}`}
-              >
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 rounded-r bg-amber-400" />
-                )}
-                <Icon
-                  className={`w-4 h-4 shrink-0 ${
-                    isActive ? 'text-amber-400' : 'text-neutral-400'
-                  }`}
-                />
-                {!isCollapsed && <span className="truncate">{item.label}</span>}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Admin Group: only for platform admins; the API checks the role again. */}
-        {user.role === 'admin' && (
-          <div className="space-y-1 mb-4">
-            {!isCollapsed && (
-              <div className="px-3 text-[10px] font-bold text-violet-300 uppercase tracking-wider mb-1.5">
-                Admin
-              </div>
-            )}
-            {adminNavItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={onCloseMobile}
-                  title={isCollapsed ? item.label : undefined}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-neutral-400 hover:text-neutral-100 hover:bg-neutral-900/50 transition-all ${
-                    isCollapsed ? 'justify-center px-2' : ''
-                  }`}
-                >
-                  <Icon className="w-4 h-4 shrink-0 text-violet-400" />
-                  {!isCollapsed && <span className="truncate">{item.label}</span>}
-                </Link>
-              );
-            })}
-          </div>
+          </>
         )}
-      </div>
+      </nav>
 
-      {/* Bottom Section: AI Credits Meter & User Profile */}
-      <div className="p-3 pb-6 border-t border-neutral-900 space-y-3 bg-neutral-950">
-        {/* Credits usage widget */}
-        {!isCollapsed ? (
-          <div className="p-3 rounded-xl bg-neutral-900/70 border border-neutral-800 space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="flex items-center gap-1.5 text-neutral-300 font-semibold text-[11px]">
-                <Zap className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                <span>AI Render Quota</span>
-              </span>
-              <span className="text-[11px] font-mono text-amber-400 font-bold">
-                {user.aiCreditsMinutesRemaining} / {user.aiCreditsTotal} credits
-              </span>
-            </div>
-            <div className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-amber-500 rounded-full transition-all duration-300"
-                style={{ width: `${aiCreditPercent}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-between text-[10px] text-neutral-400 pt-0.5">
-              <span>
-                {creditResetLabel(entitlements.next_credit_reset_at)}
-              </span>
-              <button
-                onClick={() => handleNavClick('settings')}
-                className="text-amber-400 hover:underline font-semibold"
-              >
-                Upgrade
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div
-            onClick={() => handleNavClick('settings')}
-            className="cursor-pointer flex flex-col items-center p-2 rounded-xl bg-neutral-900 border border-neutral-800 text-amber-400 hover:border-amber-500/50 transition-all"
-            title={`AI Credits: ${user.aiCreditsMinutesRemaining} remaining`}
+      {/* Credits and the signed-in user */}
+      <div className={`border-t border-neutral-900 space-y-2 ${collapsed ? 'p-2' : 'p-3'} pb-[max(0.75rem,env(safe-area-inset-bottom))]`}>
+        {collapsed ? (
+          <button
+            type="button"
+            onClick={openBilling}
+            className="w-full flex flex-col items-center gap-0.5 py-2 rounded-xl bg-neutral-900 border border-neutral-800 text-amber-400 hover:border-amber-500/50 transition-colors"
+            title={`${user.aiCreditsMinutesRemaining} credits left`}
           >
-            <Zap className="w-4 h-4 fill-amber-400 mb-0.5" />
-            <span className="text-[9px] font-mono font-bold">{user.aiCreditsMinutesRemaining}</span>
+            <Zap className="w-4 h-4 fill-amber-400" />
+            <span className="text-[10px] font-bold tabular-nums">{user.aiCreditsMinutesRemaining}</span>
+          </button>
+        ) : (
+          <div className="p-3 rounded-xl bg-neutral-900/70 border border-neutral-800 space-y-2">
+            <div className="flex items-baseline justify-between text-xs">
+              <span className="text-neutral-400 font-medium">Credits</span>
+              <span className="font-bold text-white tabular-nums">
+                {user.aiCreditsMinutesRemaining}
+                <span className="text-neutral-500 font-medium"> / {user.aiCreditsTotal}</span>
+              </span>
+            </div>
+            <div
+              className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden flex"
+              role="img"
+              aria-label={`${user.aiCreditsMinutesRemaining} of ${user.aiCreditsTotal} credits left${bought ? `, including ${bought} bought credits` : ''}`}
+            >
+              <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${planPercent}%` }} />
+              <div className="h-full bg-violet-400 transition-all duration-300" style={{ width: `${boughtPercent}%` }} />
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-neutral-500">{creditResetLabel(entitlements.next_credit_reset_at)}</span>
+              <button type="button" onClick={openBilling} className="text-amber-400 hover:text-amber-300 font-semibold">
+                Buy credits
+              </button>
+            </div>
           </div>
         )}
 
-        {/* User Profile Mini Bar */}
-        <div
+        <button
+          type="button"
           onClick={onOpenAuthModal}
-          className={`cursor-pointer flex items-center p-2 rounded-xl bg-neutral-900/40 hover:bg-neutral-900 border border-transparent hover:border-neutral-800 transition-all ${
-            isCollapsed ? 'justify-center p-1' : 'justify-between'
+          className={`w-full flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-neutral-900 transition-colors text-left ${
+            collapsed ? 'justify-center' : ''
           }`}
           title={`Signed in as ${user.name}`}
         >
-          <div className="flex items-center gap-2.5 min-w-0">
-            {user.avatarUrl ? (
-              <img
-                src={user.avatarUrl}
-                alt={user.name}
-                className="w-8 h-8 rounded-lg object-cover border border-neutral-700 shrink-0"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-lg bg-neutral-800 border border-neutral-700 shrink-0 flex items-center justify-center text-neutral-400 text-xs font-bold">
-                {user.name?.charAt(0)?.toUpperCase()}
-              </div>
-            )}
-            {!isCollapsed && (
-              <div className="truncate">
-                <div className="font-bold text-white text-xs truncate">{user.name}</div>
-                <div className="text-[10px] text-neutral-400 truncate">{user.email}</div>
-              </div>
-            )}
-          </div>
-        </div>
+          <Avatar initials={user.avatarInitials} src={user.avatarUrl} alt={user.name} className="w-8 h-8 shrink-0 text-xs" />
+          {!collapsed && (
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold text-white text-[12.5px] truncate">{user.name}</span>
+              <span className="block text-[11px] text-neutral-500 truncate">{user.email}</span>
+            </span>
+          )}
+        </button>
+
+        {collapsed && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="hidden lg:flex w-full justify-center p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-900 transition-colors"
+            title="Expand sidebar"
+            aria-label="Expand sidebar"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </div>
   );
 
   return (
     <>
-      {/* Desktop Persistent Left Sidebar */}
-      <aside
-        className={`hidden lg:flex flex-col shrink-0 border-r border-neutral-800/80 h-screen sticky top-0 transition-all duration-300 z-30 ${
-          isCollapsed ? 'w-20' : 'w-64'
-        }`}
-      >
-        {sidebarContent}
+      {/* Tablet: an icon rail, always compact */}
+      <aside className="hidden md:flex lg:hidden flex-col shrink-0 w-[72px] border-r border-neutral-800/80 h-[100dvh] sticky top-0 z-30">
+        {renderContent(true)}
       </aside>
 
-      {/* Mobile Drawer (Backdrop + Slide-out) */}
-      {isMobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden flex">
-          {/* Backdrop overlay */}
-          <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
-            onClick={onCloseMobile}
-          />
+      {/* Desktop: full sidebar, collapsible */}
+      <aside
+        className={`hidden lg:flex flex-col shrink-0 border-r border-neutral-800/80 h-[100dvh] sticky top-0 transition-[width] duration-300 z-30 ${
+          isCollapsed ? 'w-[76px]' : 'w-64'
+        }`}
+      >
+        {renderContent(isCollapsed)}
+      </aside>
 
-          {/* Drawer content */}
-          <div className="relative w-72 max-w-[85vw] h-full shadow-2xl z-10 animate-in slide-in-from-left duration-200">
-            {sidebarContent}
+      {/* Phone and tablet: the full menu as a drawer, opened from "More" */}
+      {isMobileOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex" role="dialog" aria-modal="true" aria-label="Menu">
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={onCloseMobile} />
+          <div className="relative w-72 max-w-[85vw] h-full shadow-2xl z-10 animate-in slide-in-from-left duration-200 border-r border-neutral-800">
+            {renderContent(false, true)}
           </div>
         </div>
       )}

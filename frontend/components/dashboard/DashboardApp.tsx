@@ -22,6 +22,8 @@ import { PlanSelectionModal, type SelectedPlan } from './PlanSelectionModal';
 import { PlanBanner } from './PlanBanner';
 import { EntitlementsProvider } from './EntitlementsProvider';
 import { PaymentModal } from './PaymentModal';
+import { MobileTabBar } from './MobileTabBar';
+import { CommandPalette } from './CommandPalette';
 import { VideoProject, ViralClip, TabType, UserProfile, Workspace, AppNotification, PipelineStep, PipelineStatus } from '@/lib/types';
 import { DashboardSkeleton } from '@/components/skeletons';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
@@ -192,6 +194,19 @@ export default function DashboardApp() {
 
   // Upload modal state
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+
+  // ⌘K / Ctrl+K search
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   // Plan & Payment modals state
   const [isPlanModalOpen, setIsPlanModalOpen] = useState(false);
@@ -600,6 +615,13 @@ export default function DashboardApp() {
     navigateToTab('editor', clip.projectId || activeProject?.id, clip.id);
   };
 
+  // Open a clip in the editor from search, whichever project it belongs to.
+  const handleOpenClipFromSearch = (clip: ViralClip, project: VideoProject) => {
+    setActiveProject(project);
+    setSelectedClip(clip);
+    navigateToTab('editor', project.id, clip.id);
+  };
+
   // Handle scheduling a clip
   const handleScheduleClip = (clip: ViralClip) => {
     setSelectedClip(clip);
@@ -712,6 +734,7 @@ export default function DashboardApp() {
         onSelectProject={handleOpenFolder}
         selectedClip={selectedClip}
         onOpenAuthModal={() => setIsAuthModalOpen(true)}
+        onOpenBilling={navigateToBilling}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
         isMobileOpen={isMobileMenuOpen}
@@ -723,21 +746,22 @@ export default function DashboardApp() {
         {/* Top Header */}
         <Header
           activeTab={activeTab}
-          onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
           onOpenUpload={() => setIsUploadOpen(true)}
           user={currentUser}
           workspaces={workspaces}
+          projects={projects}
           activeProject={activeProject}
           selectedClip={selectedClip}
           unreadNotificationsCount={unreadCount}
-        onOpenNotifications={() => setIsNotificationsOpen(true)}
-        onOpenAuthModal={() => setIsAuthModalOpen(true)}
-        onNavigateTab={navigateToTab}
-        onUpgradePlan={navigateToBilling}
-      />
+          onOpenNotifications={() => setIsNotificationsOpen(true)}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          onOpenCommandPalette={() => setIsPaletteOpen(true)}
+          onNavigateTab={navigateToTab}
+          onUpgradePlan={navigateToBilling}
+        />
 
-        {/* Main View Area */}
-        <main className="flex-1 min-h-0 w-full p-4 sm:p-6 lg:p-8">
+        {/* Main View Area. Phones leave room for the bottom tab bar. */}
+        <main className="flex-1 min-h-0 w-full max-w-[1600px] mx-auto px-4 pt-5 pb-28 sm:px-6 sm:pt-6 md:pb-10 lg:px-8">
           <PlanBanner />
           {/* TAB 1: DASHBOARD HOME */}
           {activeTab === 'dashboard' && (
@@ -843,6 +867,24 @@ export default function DashboardApp() {
         </main>
       </div>
 
+      <MobileTabBar
+        activeTab={activeTab}
+        onTabChange={navigateToTab}
+        onOpenUpload={() => setIsUploadOpen(true)}
+        onOpenMore={() => setIsMobileMenuOpen(true)}
+      />
+
+      <CommandPalette
+        isOpen={isPaletteOpen}
+        onClose={() => setIsPaletteOpen(false)}
+        projects={projects}
+        onNavigate={navigateToTab}
+        onOpenUpload={() => setIsUploadOpen(true)}
+        onOpenBilling={navigateToBilling}
+        onOpenProject={handleOpenFolder}
+        onOpenClip={handleOpenClipFromSearch}
+      />
+
       {/* Activity Notifications Drawer */}
       <NotificationsDrawer
         isOpen={isNotificationsOpen}
@@ -850,6 +892,7 @@ export default function DashboardApp() {
         notifications={notifications}
         onMarkAllRead={handleMarkAllRead}
         onClearAll={handleClearNotifications}
+        onView={handleViewNotificationProject}
       />
 
       {/* Snackbars for notifications that arrive while the dashboard is open */}
