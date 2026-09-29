@@ -74,3 +74,6 @@ backend/env
 
 # Large model weights (downloaded by setup_ec2.sh)
 backend/models/retinaface_r50.onnx
+
+# Local B-roll downloads (python -m broll.collect)
+broll_library/
