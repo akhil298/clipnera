@@ -41,7 +41,6 @@ interface StudioTopBarProps {
   onExport: () => void;
   onSchedule: () => void;
   captionsOn: boolean;
-  onToggleCaptions: () => void;
   titleOn: boolean;
   onToggleTitle: () => void;
   watermarkOn: boolean;
@@ -104,7 +103,7 @@ export function StudioTopBar(props: StudioTopBarProps) {
   const {
     layout, title, subtitle, score, aspectRatio, saveState, canUndo, canRedo, onUndo, onRedo, onBack,
     onOpenClips, clipCount, onShowShortcuts, menuOpen, onMenuOpenChange, onExport, onSchedule,
-    captionsOn, onToggleCaptions, titleOn, onToggleTitle, watermarkOn, watermarkForced, onToggleWatermark,
+    captionsOn, titleOn, onToggleTitle, watermarkOn, watermarkForced, onToggleWatermark,
   } = props;
   const menuRef = useRef<HTMLDivElement>(null);
   const phone = layout === 'phone';
@@ -125,14 +124,8 @@ export function StudioTopBar(props: StudioTopBarProps) {
     >
       <p className="px-2.5 pt-1.5 pb-0.5 text-[10.5px] font-bold uppercase tracking-wider text-neutral-500">In the video</p>
       <IncludeToggle
-        label="Captions"
-        hint={captionsOn ? 'Burned into the exported video' : 'Exported without captions'}
-        checked={captionsOn}
-        onToggle={onToggleCaptions}
-      />
-      <IncludeToggle
         label="Title text"
-        hint={captionsOn ? 'The headline at the top of the video' : 'Needs captions on'}
+        hint={captionsOn ? 'The headline at the top of the video' : 'Pick a caption style to use it'}
         checked={captionsOn && titleOn}
         disabled={!captionsOn}
         onToggle={onToggleTitle}
@@ -184,7 +177,7 @@ export function StudioTopBar(props: StudioTopBarProps) {
 
   const exportControl = (
     <div ref={menuRef} className="relative flex shrink-0">
-      {/* Opens the options first, so captions, title and watermark are chosen before exporting. */}
+      {/* Opens the options first, so title and watermark are chosen before exporting. */}
       <button
         type="button"
         onClick={() => onMenuOpenChange(!menuOpen)}

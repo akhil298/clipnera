@@ -469,9 +469,10 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
 
   const handlePickPreset = (preset: CaptionPreset) => {
     // The title is not part of a caption look, so a style switch keeps the
-    // user's title placement.
+    // user's title placement. Picking a style is also how captions come back on.
     commit((d) => ({
       ...d,
+      captionsEnabled: true,
       captionConfig: {
         ...getCaptionConfig(preset),
         titleFontSize: d.captionConfig.titleFontSize,
@@ -677,7 +678,6 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
       onExport={() => void handleStartExport()}
       onSchedule={() => onScheduleClip(clip)}
       captionsOn={doc.captionsEnabled}
-      onToggleCaptions={() => patch({ captionsEnabled: !doc.captionsEnabled })}
       titleOn={doc.titleEnabled}
       onToggleTitle={() => patch({ titleEnabled: !doc.titleEnabled })}
       watermarkOn={doc.watermarkEnabled}
@@ -765,6 +765,8 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
             config={doc.captionConfig}
             onChange={patchCaption}
             onPickPreset={handlePickPreset}
+            captionsOn={doc.captionsEnabled}
+            onTurnCaptionsOff={() => patch({ captionsEnabled: false })}
             preview={preview}
             aspectRatio={doc.aspectRatio}
           />

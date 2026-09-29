@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from 'react';
-import { AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import { AlertTriangle, Ban, CheckCircle2, Info } from 'lucide-react';
 import type { AspectRatio, CaptionConfig, CaptionPreset } from '@/lib/types';
 import { getAllCaptionStyles } from '@/lib/utils/captionStyles';
 import { EMOJI_COLLECTIONS } from '@/lib/data/emojiCollections';
@@ -10,7 +10,8 @@ import { ProLockBadge } from '../../ProLockBadge';
 import { Chip, ColorSwatches, Note, RangeField, Section, Switch } from '../controls';
 import { CAPTION_Y_MAX, CAPTION_Y_MIN, PreviewMode, captionsClear, safeZoneFor } from '../studioUtils';
 
-const COLLAPSED_STYLE_COUNT = 6;
+// Five styles plus the "No captions" tile fill two rows of three.
+const COLLAPSED_STYLE_COUNT = 5;
 const ACTIVE_COLOURS = ['#f59e0b', '#22c55e', '#facc15', '#ec4899', '#38bdf8'];
 const EMPHASIS_COLOURS = ['#a78bfa', '#f472b6', '#fb923c', '#4ade80', '#ffffff'];
 const POSITIONS: Array<[string, number]> = [
@@ -22,12 +23,15 @@ const POSITIONS: Array<[string, number]> = [
 interface CaptionsPanelProps {
   config: CaptionConfig;
   onChange: (changes: Partial<CaptionConfig>, coalesceKey?: string) => void;
+  /** Picking a style also turns captions on. */
   onPickPreset: (preset: CaptionPreset) => void;
+  captionsOn: boolean;
+  onTurnCaptionsOff: () => void;
   preview: PreviewMode;
   aspectRatio: AspectRatio;
 }
 
-export function CaptionsPanel({ config, onChange, onPickPreset, preview, aspectRatio }: CaptionsPanelProps) {
+export function CaptionsPanel({ config, onChange, onPickPreset, captionsOn, onTurnCaptionsOff, preview, aspectRatio }: CaptionsPanelProps) {
   const { entitlements, promptUpgrade } = useEntitlements();
   const [showAllStyles, setShowAllStyles] = useState(false);
   const styles = getAllCaptionStyles();
@@ -50,9 +54,21 @@ export function CaptionsPanel({ config, onChange, onPickPreset, preview, aspectR
         }
       >
         <div className="grid grid-cols-3 gap-1.5">
+          <button
+            type="button"
+            onClick={onTurnCaptionsOff}
+            aria-pressed={!captionsOn}
+            title="Export the video without captions"
+            className={`h-[62px] rounded-[10px] border-[1.5px] bg-neutral-900 flex flex-col items-center justify-center gap-1 text-neutral-400 ${
+              captionsOn ? 'border-neutral-800 hover:border-neutral-700 hover:text-neutral-200' : 'border-amber-400 ring-[3px] ring-amber-500/20 text-amber-300'
+            }`}
+          >
+            <Ban className="w-4 h-4" aria-hidden />
+            <span className="text-[9.5px] font-bold">No captions</span>
+          </button>
           {shown.map((style) => {
             const unlocked = canUseCaptionStyle(entitlements, style.id);
-            const active = config.preset === style.id;
+            const active = captionsOn && config.preset === style.id;
             return (
               <button
                 key={style.id}
@@ -74,6 +90,7 @@ export function CaptionsPanel({ config, onChange, onPickPreset, preview, aspectR
             );
           })}
         </div>
+        {!captionsOn && <Note icon={<Info />}>Captions are off, so the video exports without them. Pick a style to add them back.</Note>}
       </Section>
 
       <Section title="Look">
