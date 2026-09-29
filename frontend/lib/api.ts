@@ -405,19 +405,18 @@ function buildTranscriptSegments(clip: BackendClip): TranscriptSegment[] {
   });
 }
 
-/** Re-applies saved Transcript-tab edits to a freshly built transcript. */
+/**
+ * Re-applies saved highlights to a freshly built transcript. Cut words stay in
+ * it: the editor shows them struck through, so they can be restored, and skips
+ * them by `removedWords`.
+ */
 function applyTranscriptEdits(segments: TranscriptSegment[], edits?: TranscriptEdits): TranscriptSegment[] {
   if (!edits) return segments;
-  const removed = new Set(edits.removed);
   const highlighted = new Set(edits.highlighted);
-  return segments
-    .map((seg) => ({
-      ...seg,
-      words: seg.words
-        .filter((w) => w.sourceStart === undefined || !removed.has(w.sourceStart))
-        .map((w) => (w.sourceStart === undefined ? w : { ...w, highlighted: highlighted.has(w.sourceStart) })),
-    }))
-    .filter((seg) => seg.words.length > 0);
+  return segments.map((seg) => ({
+    ...seg,
+    words: seg.words.map((w) => (w.sourceStart === undefined ? w : { ...w, highlighted: highlighted.has(w.sourceStart) })),
+  }));
 }
 
 export function mapBackendClip(clip: BackendClip): ViralClip {

@@ -736,6 +736,19 @@ export default function DashboardApp() {
       refreshKey={entitlementsRefreshKey}
     >
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex font-['Plus_Jakarta_Sans',sans-serif]">
+      {/* The editor takes the whole screen; "Clips", Esc and browser back return to the list. */}
+      {activeTab === 'editor' ? (
+        <VideoEditorStudio
+          clip={selectedClip || activeProject?.clips?.[0] || projects[0]?.clips?.[0]}
+          clips={activeProject?.clips ?? []}
+          projectTitle={activeProject?.folderName || activeProject?.title}
+          onUpdateClip={handleUpdateClip}
+          onBackToGenerator={() => navigateToTab('generator')}
+          onScheduleClip={handleScheduleClip}
+          onSelectClip={handleSelectClipForEdit}
+        />
+      ) : (
+      <>
       {/* Left Navigation Sidebar */}
       <Sidebar
         activeTab={activeTab}
@@ -843,16 +856,6 @@ export default function DashboardApp() {
             />
           )}
 
-          {/* TAB 4: FULL VIDEO EDITOR STUDIO */}
-          {activeTab === 'editor' && (
-            <VideoEditorStudio
-              clip={selectedClip || activeProject?.clips?.[0] || projects[0]?.clips?.[0]}
-              onUpdateClip={handleUpdateClip}
-              onBackToGenerator={() => navigateToTab('generator')}
-              onScheduleClip={handleScheduleClip}
-            />
-          )}
-
           {/* TAB 5: POST TIMING & AI SCHEDULER (shown while social publishing is switched on) */}
           {flags.social_publishing && activeTab === 'scheduler' && (
             <SocialSchedulerView
@@ -889,6 +892,8 @@ export default function DashboardApp() {
         onOpenUpload={() => openUpload()}
         onOpenMore={() => setIsMobileMenuOpen(true)}
       />
+      </>
+      )}
 
       <CommandPalette
         isOpen={isPaletteOpen}
