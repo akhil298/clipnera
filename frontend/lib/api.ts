@@ -266,8 +266,6 @@ export interface BackendProject {
   status: string;
   duration_seconds: number;
   created_at: string | null;
-  /** AI spend on this video so far, in USD. */
-  ai_cost_usd: number;
   clips: BackendClip[];
 }
 
@@ -292,6 +290,8 @@ export interface SocialExportResponse {
   total_exported: number;
   /** The watermark actually applied: always true on plans that force it. */
   watermark_enabled: boolean;
+  /** One ZIP of every render; set only when the request asked for `bundle`. */
+  bundle_presigned_url?: string | null;
 }
 
 /** Mirrors backend SocialExportRequest. */
@@ -306,6 +306,8 @@ export interface ExportProjectOptions {
   watermarkEnabled?: boolean;
   /** Omitted means Auto. */
   hookTransition?: HookTransitionConfig;
+  /** Also pack every render into one ZIP (`bundle_presigned_url`). */
+  bundle?: boolean;
 }
 
 // New clips start on Clean Dark: animated white captions on a dark plate.
@@ -624,7 +626,7 @@ export const clipApi = {
   }),
   exportProject: (
     projectId: string,
-    { clipIds, maxClips, aspectRatio, captionConfig, watermarkEnabled = true, hookTransition }: ExportProjectOptions = {},
+    { clipIds, maxClips, aspectRatio, captionConfig, watermarkEnabled = true, hookTransition, bundle }: ExportProjectOptions = {},
   ) => authedRequest<SocialExportResponse>(`/pipeline/export/${projectId}`, {
     method: 'POST',
     body: JSON.stringify({
@@ -636,6 +638,7 @@ export const clipApi = {
       enable_emoji: captionConfig?.emojisEnabled ?? true,
       watermark_enabled: watermarkEnabled,
       ...(hookTransition ? { hook_transition: hookTransition } : {}),
+      ...(bundle ? { bundle } : {}),
       style_type: captionConfig?.preset || 'bold_captions',
       custom_config: captionConfig ? {
         font_size: captionConfig.fontSize,
@@ -830,6 +833,8 @@ export interface PipelineClipSettings {
   caption_script?: CaptionScript;
   /** Add B-roll cutaways to each clip (charged per clip that gets them). */
   broll?: boolean;
+  /** Also cut story clips: moments from across the video stitched into one clip. */
+  story_clips?: boolean;
 }
 
 export const pipelineApi = {
@@ -1558,6 +1563,8 @@ export interface ConnectedAccountResponse {
   status: SocialAccountStatus;
   status_reason: string | null;
   connected_at: string;
+  /** When Clipnera disconnects the account on its own; reconnecting restarts it. */
+  expires_at: string | null;
 }
 
 export interface SocialConnectionsResponse {
@@ -1717,7 +1724,8 @@ export interface AdminFeatureFlagListResponse {
 
 /** Mirrors NotificationKind in backend/notifications/model.py. */
 export type InAppNotificationKind =
-  | 'pipeline_completed' | 'pipeline_failed' | 'payment_approved' | 'reel_ready' | 'reel_failed';
+  | 'pipeline_completed' | 'pipeline_failed' | 'payment_approved' | 'reel_ready' | 'reel_failed'
+  | 'social_expiring' | 'social_expired';
 
 export interface InAppNotificationResponse {
   id: string;

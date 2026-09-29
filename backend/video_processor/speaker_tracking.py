@@ -413,6 +413,8 @@ def speaker_timeline(
     Unlike judging each instant alone, this holds the current speaker through
     pauses and only cuts to someone else once they have clearly been talking
     for ``SWITCH_HOLD_SECONDS``, so the crop does not flicker between faces.
+    The switch is then dated back to when they started, so the cut lands on
+    their first words as an editor's would, not a beat late.
     """
     if not timestamps or not tracks:
         return [None] * len(timestamps)
@@ -428,10 +430,10 @@ def speaker_timeline(
 
     current: SpeakerTrack | None = None
     challenger: SpeakerTrack | None = None
-    challenger_since = 0.0
+    challenger_since = 0
     timeline: list[SpeakerTrack | None] = []
 
-    for timestamp in timestamps:
+    for index, timestamp in enumerate(timestamps):
         visible = visible_tracks(timestamp, tracks)
         if current is not None and current not in visible:
             current = None  # They left the shot; pick afresh rather than frame empty space.
@@ -442,9 +444,10 @@ def speaker_timeline(
             challenger = None
         elif candidate is not None and candidate is not current:
             if candidate is not challenger:
-                challenger, challenger_since = candidate, timestamp
-            if timestamp - challenger_since >= SWITCH_HOLD_SECONDS:
+                challenger, challenger_since = candidate, index
+            if timestamp - timestamps[challenger_since] >= SWITCH_HOLD_SECONDS:
                 current, challenger = candidate, None
+                timeline[challenger_since:] = [current] * (index - challenger_since)
         else:
             challenger = None
         timeline.append(current)

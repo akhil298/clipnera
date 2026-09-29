@@ -3,7 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, Clapperboard, Coins, Cpu, CreditCard, Film, LayoutDashboard, Share2, ToggleRight, Users } from 'lucide-react';
+import { ArrowLeft, Clapperboard, Coins, Cpu, CreditCard, LayoutDashboard, Share2, ToggleRight, Users } from 'lucide-react';
+import { LogoMark } from '@/components/ui/LogoMark';
 
 const NAV: { href: string; label: string; icon: React.FC<{ className?: string }> }[] = [
   { href: '/admin/overview', label: 'Overview', icon: LayoutDashboard },
@@ -35,9 +36,7 @@ export function AdminLayout({ title, subtitle, actions, children }: AdminLayoutP
       {/* Desktop: the same side navigation as the app */}
       <aside className="hidden lg:flex flex-col w-60 shrink-0 h-[100dvh] sticky top-0 border-r border-neutral-800/80 p-4 gap-4">
         <Link href="/dashboard" className="flex items-center gap-2.5">
-          <span className="flex items-center justify-center w-8 h-8 rounded-[10px] bg-gradient-to-br from-amber-300 via-amber-500 to-amber-600 text-neutral-950">
-            <Film className="w-4 h-4 stroke-[2.4]" />
-          </span>
+          <LogoMark />
           <span className="font-extrabold text-[17px] tracking-tight">
             Clip<span className="text-amber-400">nera</span>
           </span>

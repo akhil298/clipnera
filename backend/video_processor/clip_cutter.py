@@ -9,10 +9,12 @@ Design notes:
 
 * Layout is inferred from faces actually detected in the clip, not from a
   separate analysis pass that had no face data to work with, and is decided
-  per camera shot: a stack of two speakers must not carry over into a
-  close-up of one of them, or into B-roll with nobody in it.
+  per camera shot and within it per exchange: two people are stacked only
+  while they trade quick replies on screen together, never through a
+  monologue, a close-up of one of them, or B-roll with nobody in it.
 * The crop follows the active speaker per frame and is smoothed, rather than
-  being a single static window per scene.
+  being a single static window per scene. A change of speaker is a hard cut,
+  as an editor would make it, not a pan across the room.
 * Output is deliberately caption-free. Subtitles are burned at export time from
   whichever style the user picks, so one cut serves every style.
 * Frames are sampled with a single downscaled FFmpeg pass per clip, which keeps
@@ -37,10 +39,13 @@ from core.logging_config import get_logger
 from video_processor.editing import (
     Layout,
     Part,
+    Turn,
     choose_layout,
+    framing_stretches,
     plan_parts,
     shot_cuts,
     shot_windows,
+    speaker_turns,
     tracks_in_shot,
 )
 from video_processor.face_detection import Face, FaceDetector
@@ -73,6 +78,9 @@ DETECT_WIDTH = 640
 # Crop targets computed per second of output, twice the sampling rate so the
 # smoothed path has a point between every pair of detections.
 TRACKING_FPS = 4.0
+# Played stretches closer than this are analysed as one: jump cuts leave short
+# gaps, while a story clip's pieces can sit half an hour apart.
+WINDOW_BRIDGE_SECONDS = 10.0
 # Exponential smoothing factor, applied forward then backward for zero phase
 # lag. Lower is calmer.
 SMOOTHING_ALPHA = 0.22
@@ -88,6 +96,13 @@ MAX_PAN_PER_SECOND = 0.35
 # Faces occupying less than this share of frame width suggest the subject is not
 # the point of the shot (gameplay, slides, wide stage).
 SMALL_FACE_RATIO = 0.08
+
+# A new speaker further than this share of the crop width from the last is cut
+# to; a nearer one is still inside the frame, so the crop glides.
+SWITCH_CUT_DISTANCE = 0.5
+# A cut in the crop path: the old position holds until this long before the
+# new one, so the move happens inside a single frame.
+CUT_HOLD_SECONDS = 0.01
 
 # Headroom so a framed face sits slightly above centre, as a camera operator
 # would frame it, instead of dead centre.
@@ -126,6 +141,22 @@ class CutRequest:
     @property
     def body_duration(self) -> float:
         return sum(end - start for start, end in self.body_spans)
+
+    @property
+    def windows(self) -> list[tuple[float, float]]:
+        """The source the clip plays (teaser and body), short gaps bridged.
+
+        Frames are sampled and tracked over these rather than ``[start, end)``,
+        which for a story clip spans everything between its pieces.
+        """
+        spans = sorted(self.body_spans + ([(self.hook.start, self.hook.end)] if self.hook else []))
+        windows = [list(spans[0])]
+        for start, end in spans[1:]:
+            if start - windows[-1][1] < WINDOW_BRIDGE_SECONDS:
+                windows[-1][1] = max(windows[-1][1], end)
+            else:
+                windows.append([start, end])
+        return [(start, end) for start, end in windows]
 
 
 @dataclass
@@ -169,6 +200,8 @@ class ClipCutter:
         frames = await self._sample_frames(request)
         faces_per_frame = await asyncio.to_thread(self._detect_faces, request.clip_id, frames)
         cuts = await asyncio.to_thread(shot_cuts, _decode_frames(frames))
+        # A jump between windows is a cut, so the crop never glides across it.
+        cuts = sorted(set(cuts) | {start for start, _ in request.windows[1:]})
         tracks = build_tracks(_decode_frames(frames), faces_per_frame)
         for track in tracks:
             log.info(
@@ -187,6 +220,7 @@ class ClipCutter:
             else [None] * len(timestamps)
         )
         _log_speaker_switches(request.clip_id, timestamps, speakers)
+        turns = speaker_turns(timestamps, speakers)
 
         result = CutResult(
             clip_id=request.clip_id,
@@ -222,7 +256,7 @@ class ClipCutter:
             result.crop_tracking[aspect_ratio] = [point.copy() for point in tracking]
             output_path = self._output_path(request, aspect_ratio)
             shots = _plan_shots(
-                request, layout, tracks, cuts, aspect_ratio, source_width, source_height,
+                request, layout, tracks, cuts, turns, aspect_ratio, source_width, source_height,
             )
             result.layout = next((frame.kind for _, frame in shots if frame.composite), result.layout)
             log.info("[LAYOUT] clip=%s ratio=%s hint=%s detected=%s used=%s beats=%d",
@@ -298,19 +332,34 @@ class ClipCutter:
     # ---- frame sampling ----------------------------------------------------
 
     async def _sample_frames(self, request: CutRequest) -> list[tuple[float, bytes]]:
-        """Evenly spaced JPEG frames from the clip range, from one FFmpeg pass.
+        """Evenly spaced JPEG frames from the clip's windows, one FFmpeg pass each.
 
-        One process per clip rather than one per frame. Frames stay compressed
-        (tens of KB each) and are decoded one at a time where used, so a long
-        clip at the lip-motion sample rate does not hold hundreds of raw
-        frames in memory.
+        One process per window rather than one per frame. Frames stay
+        compressed (tens of KB each) and are decoded one at a time where used,
+        so a long clip at the lip-motion sample rate does not hold hundreds of
+        raw frames in memory.
         """
         fps = 1.0 / SAMPLE_INTERVAL_SECONDS
+        frames: list[tuple[float, bytes]] = []
+        for start, end in request.windows:
+            frames.extend(await self._sample_window(request, start, end - start, fps))
+
+        log.info(
+            "[FRAMES] clip=%s sampled=%d fps=%.2f width=%d",
+            request.clip_id, len(frames), fps, DETECT_WIDTH,
+        )
+        if not frames:
+            log.warning("[FRAMES] clip=%s produced no decodable frames; face detection skipped", request.clip_id)
+        return frames
+
+    async def _sample_window(
+        self, request: CutRequest, start: float, duration: float, fps: float,
+    ) -> list[tuple[float, bytes]]:
         cmd = [
             "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
-            "-ss", f"{request.start:.3f}",
+            "-ss", f"{start:.3f}",
             "-i", request.source_path,
-            "-t", f"{request.duration:.3f}",
+            "-t", f"{duration:.3f}",
             "-vf", f"fps={fps:.4f},scale={DETECT_WIDTH}:-2",
             "-an", "-f", "image2pipe", "-vcodec", "mjpeg", "-q:v", "5",
             "pipe:1",
@@ -326,19 +375,7 @@ class ClipCutter:
             )
             return []
 
-        step = 1.0 / fps if fps > 0 else request.duration
-        frames = [
-            (request.start + index * step, payload)
-            for index, payload in enumerate(_split_mjpeg(stdout))
-        ]
-
-        log.info(
-            "[FRAMES] clip=%s sampled=%d fps=%.2f width=%d",
-            request.clip_id, len(frames), fps, DETECT_WIDTH,
-        )
-        if not frames:
-            log.warning("[FRAMES] clip=%s produced no decodable frames; face detection skipped", request.clip_id)
-        return frames
+        return [(start + index / fps, payload) for index, payload in enumerate(_split_mjpeg(stdout))]
 
     def _detect_faces(self, clip_id: str, frames: list[tuple[float, bytes]]) -> list[list[Face]]:
         started = time.monotonic()
@@ -431,7 +468,7 @@ class ClipCutter:
 
         strategy = self._strategy_for(layout)
         count = len(timestamps)
-        step = request.duration / max(1, count - 1)
+        step = 1.0 / TRACKING_FPS
         targets = [
             self._target_center(
                 ts, tracks, speaker, strategy, source_width, source_height, aspect_ratio
@@ -446,20 +483,24 @@ class ClipCutter:
         )
 
         # Smoothed shot by shot: a camera cut is a cut in the crop too, never a
-        # slow glide from where the last shot's subject was.
-        xs, ys = [], []
-        for low, high in _shot_ranges(timestamps, cuts or []):
-            xs.extend(_smooth_series([point[0] for point in raw[low:high]], step))
-            ys.extend(_smooth_series([point[1] for point in raw[low:high]], step))
-
-        return [
-            {
-                "timestamp": round(ts, 3),
-                "bbox": crop_around(x, y, source_width, source_height, aspect_ratio).as_dict(),
-                "strategy": strategy,
-            }
-            for ts, x, y in zip(timestamps, xs, ys)
-        ]
+        # slow glide from where the last shot's subject was. So is a switch to
+        # a speaker out of frame.
+        switches = _switch_cuts(timestamps, speakers, raw, crop_w / source_width)
+        points: list[dict[str, Any]] = []
+        for low, high in _shot_ranges(timestamps, sorted(set(cuts or []) | set(switches))):
+            xs = _smooth_series([point[0] for point in raw[low:high]], step)
+            ys = _smooth_series([point[1] for point in raw[low:high]], step)
+            if points:
+                points.append({**points[-1], "timestamp": round(timestamps[low] - CUT_HOLD_SECONDS, 3)})
+            points.extend(
+                {
+                    "timestamp": round(ts, 3),
+                    "bbox": crop_around(x, y, source_width, source_height, aspect_ratio).as_dict(),
+                    "strategy": strategy,
+                }
+                for ts, x, y in zip(timestamps[low:high], xs, ys)
+            )
+        return points
 
     def _target_center(
         self,
@@ -550,14 +591,20 @@ class ClipCutter:
                 source_width=source_width,
                 source_height=source_height,
                 zoom=part.zoom,
+                ease=part.ease,
             )
 
+        sentence_starts = [
+            float(segment.get("start", 0.0)) for segment in request.transcript_segments
+            if str(segment.get("text", "")).strip()
+        ]
         parts: list[tuple[Part, Layout]] = []
         for shot, frame in shots:
-            if can_reframe and frame.kind == "follow" and request.beats:
+            if can_reframe and frame.kind == "follow":
                 parts.extend(
                     (part, frame)
-                    for part in plan_parts(shot.start, shot.end, request.beats, listener_at or (lambda _t: None))
+                    for part in plan_parts(shot.start, shot.end, request.beats,
+                                           listener_at or (lambda _t: None), sentence_starts)
                 )
             else:
                 parts.append((shot, frame))
@@ -589,34 +636,54 @@ def _plan_shots(
     detected: str,
     tracks: list[SpeakerTrack],
     cuts: list[float],
+    turns: list[Turn],
     aspect_ratio: str,
     source_width: int,
     source_height: int,
 ) -> list[tuple[Part, Layout]]:
     """The clip in play order (hook first), one entry per run of shots sharing a layout.
 
-    Each shot is framed from the people in that shot alone. Neighbouring shots
-    that both follow the speaker, or both show the frame whole, render as one
-    part: the tracked crop already cuts cleanly at shot boundaries, and fewer
-    parts mean fewer encoder runs.
+    Each shot is framed from the people in that shot alone, and split further
+    where two of them trade replies (see :func:`framing_stretches`).
+    Neighbouring stretches that both follow the speaker, or both show the frame
+    whole, render as one part: the tracked crop already cuts cleanly at shot
+    boundaries, and fewer parts mean fewer encoder runs.
     """
     output_size = output_dimensions(aspect_ratio)
     spans = ([(request.hook.start, request.hook.end)] if request.hook else []) + request.body_spans
     shots: list[tuple[Part, Layout]] = []
     for span_start, span_end in spans:
         joinable = False  # Never join across spans: they are separate stretches of source.
-        for start, end in shot_windows(span_start, span_end, cuts):
-            present = tracks_in_shot(tracks, start, end, SAMPLE_INTERVAL_SECONDS)
-            frame = choose_layout(
-                request.layout_hint, detected, present, aspect_ratio,
-                source_width, source_height, *output_size,
+        for shot_start, shot_end in shot_windows(span_start, span_end, cuts):
+            stretches = framing_stretches(
+                shot_start, shot_end, turns, SAMPLE_INTERVAL_SECONDS, request.transcript_segments,
             )
-            if joinable and not frame.composite and shots[-1][1].kind == frame.kind:
-                shots[-1] = (Part(shots[-1][0].start, end), frame)
-            else:
-                shots.append((Part(start, end), frame))
-            joinable = True
+            for start, end, pair in stretches:
+                present = tracks_in_shot(tracks, start, end, SAMPLE_INTERVAL_SECONDS)
+                frame = choose_layout(
+                    request.layout_hint, detected, present, aspect_ratio,
+                    source_width, source_height, *output_size, pair=pair,
+                )
+                if joinable and not frame.composite and shots[-1][1].kind == frame.kind:
+                    shots[-1] = (Part(shots[-1][0].start, end), frame)
+                else:
+                    shots.append((Part(start, end), frame))
+                joinable = True
     return shots
+
+
+def _switch_cuts(
+    timestamps: list[float],
+    speakers: list[SpeakerTrack | None],
+    targets: list[tuple[float, float]],
+    crop_width: float,
+) -> list[float]:
+    """Times the framed speaker changes to someone outside the current crop."""
+    return [
+        timestamps[i] for i in range(1, len(timestamps))
+        if speakers[i] is not speakers[i - 1] and None not in (speakers[i], speakers[i - 1])
+        and abs(targets[i][0] - targets[i - 1][0]) > crop_width * SWITCH_CUT_DISTANCE
+    ]
 
 
 def _shot_ranges(timestamps: list[float], cuts: list[float]) -> list[tuple[int, int]]:
@@ -654,10 +721,13 @@ def _listener_finder(
 
 
 def _tracking_timestamps(request: CutRequest) -> list[float]:
-    """Source-video times at which a crop window is computed."""
-    count = max(2, int(request.duration * TRACKING_FPS))
-    step = request.duration / max(1, count - 1)
-    return [request.start + index * step for index in range(count)]
+    """Source-video times at which a crop window is computed, across the clip's windows."""
+    timestamps: list[float] = []
+    for start, end in request.windows:
+        count = max(2, int((end - start) * TRACKING_FPS))
+        step = (end - start) / (count - 1)
+        timestamps.extend(start + index * step for index in range(count))
+    return timestamps
 
 
 def _tracking_from(tracking: list[dict[str, Any]], start: float) -> list[dict[str, Any]]:

@@ -5,6 +5,11 @@ answer is repaired instead of rendered: ranges are sorted and de-overlapped,
 a clip opening mid-thought is walked back to the thought's start, the stitched
 length is fitted into the allowed band, the teaser is checked against the hook
 rules, and pauses and filler words are cut out of the body (jump cuts).
+
+Story clips (pieces from across the video) get their own repairs: every piece
+opens on its own thought, slivers are dropped, the payoff at the end is never
+trimmed, and a "story" whose pieces all sit together is refused, since that
+is just a moment clip.
 """
 
 from __future__ import annotations
@@ -12,7 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from clip_generation.hook import MAX_HOOK_SECONDS, MIN_HOOK_OFFSET_SECONDS, MIN_HOOK_SECONDS
-from content_intelligence.director import BEAT_EFFECTS, DIRECTOR_VERSION, LAYOUTS, RUBRIC
+from content_intelligence.director import BEAT_EFFECTS, DIRECTOR_VERSION, LAYOUTS, RUBRIC, STORY_SEPARATOR
 from content_intelligence.sentences import Sentence
 from core.logging_config import get_logger
 from transcription.language import is_hesitation
@@ -32,6 +37,12 @@ MIN_PIECE_SECONDS = 0.5
 RUBRIC_WEIGHTS = {"hook": 0.3, "payoff": 0.25, "standalone": 0.2, "emotion": 0.15, "pacing": 0.1}
 # Two clips overlapping more than this share of the shorter one are the same clip.
 DUPLICATE_OVERLAP = 0.4
+MAX_PIECES = 4
+MAX_STORY_PIECES = 8
+# A story piece shorter than this is a sliver, not a moment.
+MIN_STORY_PIECE_SECONDS = 1.5
+# A story needs two pieces at least this far apart; closer is one moment.
+MIN_STORY_GAP_SECONDS = 60.0
 
 
 def build_clips(
@@ -56,17 +67,53 @@ def build_clips(
         if clip is not None:
             clips.append(clip)
 
-    clips.sort(key=lambda c: c["score"], reverse=True)
+    kept = _best(clips, max_clips)
+    log.info("Edit plans: %d proposed, %d valid, %d kept", len(plans), len(clips), len(kept))
+    return number_clips(kept)
+
+
+def build_story_clips(
+    plans: list[dict[str, Any]],
+    sentences: list[Sentence],
+    duration: float,
+    min_seconds: float,
+    max_seconds: float,
+    max_clips: int,
+    category: str,
+    jump_cuts: bool = True,
+) -> list[dict[str, Any]]:
+    """Validated story clips, best first, at most ``max_clips``; not yet numbered."""
+    by_id = {s.id: s for s in sentences}
+    clips: list[dict[str, Any]] = []
+    for plan in plans:
+        try:
+            clip = _build_story(plan, by_id, duration, min_seconds, max_seconds, category, jump_cuts)
+        except Exception as exc:
+            log.warning("Dropped a story plan that could not be repaired: %s", exc)
+            continue
+        if clip is not None:
+            clips.append(clip)
+    kept = _best(clips, max_clips)
+    log.info("Story plans: %d proposed, %d valid, %d kept", len(plans), len(clips), len(kept))
+    return kept
+
+
+def number_clips(clips: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Give ``clips`` ids in source order."""
+    for index, clip in enumerate(sorted(clips, key=lambda c: c["start_time"])):
+        clip["id"] = f"highlight_{index}"
+    return clips
+
+
+def _best(clips: list[dict[str, Any]], max_clips: int) -> list[dict[str, Any]]:
+    """The highest-scoring clips, at most ``max_clips``, no two about the same moment."""
     kept: list[dict[str, Any]] = []
-    for clip in clips:
+    for clip in sorted(clips, key=lambda c: c["score"], reverse=True):
         if len(kept) >= max_clips:
             break
         if any(_overlap_share(clip, other) > DUPLICATE_OVERLAP for other in kept):
             continue
         kept.append(clip)
-    for index, clip in enumerate(sorted(kept, key=lambda c: c["start_time"])):
-        clip["id"] = f"highlight_{index}"
-    log.info("Edit plans: %d proposed, %d valid, %d kept", len(plans), len(clips), len(kept))
     return kept
 
 
@@ -83,10 +130,46 @@ def _build_clip(
     ranges = _ranges(plan.get("segments") or [], by_id)
     if not ranges:
         return None
-    ranges = _open_on_a_thought(ranges, by_id)
+    first, last = ranges[0]
+    ranges[0] = (_thought_start(first, by_id), last)
     ranges = _fit_length(ranges, sentences, by_id, min_seconds, max_seconds)
-    ids = [i for first, last in ranges for i in range(first, last + 1)]
+    return _assemble(plan, ranges, by_id, duration, category, jump_cuts, "director", " ")
 
+
+def _build_story(
+    plan: dict[str, Any],
+    by_id: dict[int, Sentence],
+    duration: float,
+    min_seconds: float,
+    max_seconds: float,
+    category: str,
+    jump_cuts: bool,
+) -> dict[str, Any] | None:
+    ranges = _ranges(plan.get("segments") or [], by_id, MAX_STORY_PIECES)
+    floor = 0
+    opened: list[tuple[int, int]] = []
+    for first, last in ranges:
+        opened.append((_thought_start(first, by_id, floor), last))
+        floor = last + 1
+    ranges = [r for r in _merge_ranges(opened) if _seconds([r], by_id) >= MIN_STORY_PIECE_SECONDS]
+    ranges = _fit_story_length(ranges, by_id, max_seconds)
+    if not _is_story(ranges, by_id) or not min_seconds <= _seconds(ranges, by_id) <= max_seconds:
+        return None
+    return _assemble(plan, ranges, by_id, duration, category, jump_cuts, "director_story", STORY_SEPARATOR)
+
+
+def _assemble(
+    plan: dict[str, Any],
+    ranges: list[tuple[int, int]],
+    by_id: dict[int, Sentence],
+    duration: float,
+    category: str,
+    jump_cuts: bool,
+    source: str,
+    separator: str,
+) -> dict[str, Any] | None:
+    """The clip for ``ranges``: word-exact spans, teaser, beats, copy and score."""
+    ids = [i for first, last in ranges for i in range(first, last + 1)]
     spans = [_span(first, last, by_id, duration) for first, last in ranges]
     if jump_cuts:
         spans = _tighten(spans, [w for i in ids for w in by_id[i].words])
@@ -98,7 +181,7 @@ def _build_clip(
     scores = _rubric(plan.get("scores"))
     overall = sum(scores[key] * weight for key, weight in RUBRIC_WEIGHTS.items()) / 10.0
     hook = _hook(plan.get("hook"), ids, by_id, spans)
-    text = " ".join(by_id[i].text for i in ids)
+    text = separator.join(" ".join(by_id[i].text for i in range(first, last + 1)) for first, last in ranges)
     speakers = list(dict.fromkeys(by_id[i].speaker for i in ids if by_id[i].speaker != "-"))
     layout = plan.get("layout") if plan.get("layout") in LAYOUTS else "auto"
 
@@ -119,13 +202,13 @@ def _build_clip(
         "transcript_excerpt": text[:1500],
         "speakers": speakers,
         "content_category": category,
-        "detection_source": "director",
+        "detection_source": source,
         "director_version": DIRECTOR_VERSION,
-        "reasons": ["director"],
+        "reasons": [source],
     }
 
 
-def _ranges(segments: list[Any], by_id: dict[int, Sentence]) -> list[tuple[int, int]]:
+def _ranges(segments: list[Any], by_id: dict[int, Sentence], limit: int = MAX_PIECES) -> list[tuple[int, int]]:
     ranges: list[tuple[int, int]] = []
     for segment in segments:
         try:
@@ -135,9 +218,13 @@ def _ranges(segments: list[Any], by_id: dict[int, Sentence]) -> list[tuple[int, 
         first, last = min(first, last), max(first, last)
         if first in by_id and last in by_id:
             ranges.append((first, last))
-    ranges.sort()
+    return _merge_ranges(sorted(ranges)[:limit])
+
+
+def _merge_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    """Sorted ranges with overlapping and touching ones joined."""
     merged: list[tuple[int, int]] = []
-    for first, last in ranges[:4]:
+    for first, last in ranges:
         if merged and first <= merged[-1][1] + 1:
             merged[-1] = (merged[-1][0], max(merged[-1][1], last))
         else:
@@ -145,14 +232,13 @@ def _ranges(segments: list[Any], by_id: dict[int, Sentence]) -> list[tuple[int, 
     return merged
 
 
-def _open_on_a_thought(ranges: list[tuple[int, int]], by_id: dict[int, Sentence]) -> list[tuple[int, int]]:
-    """Walk the clip's opening back past lines that continue an earlier one."""
-    first, last = ranges[0]
+def _thought_start(first: int, by_id: dict[int, Sentence], floor: int = 0) -> int:
+    """Walk an opening back past lines that continue an earlier one, not below ``floor``."""
     steps = 0
-    while by_id[first].opens_mid_thought and first - 1 in by_id and steps < 2:
+    while by_id[first].opens_mid_thought and first - 1 in by_id and first - 1 >= floor and steps < 2:
         first -= 1
         steps += 1
-    return [(first, last)] + ranges[1:]
+    return first
 
 
 def _seconds(ranges: list[tuple[int, int]], by_id: dict[int, Sentence]) -> float:
@@ -189,6 +275,34 @@ def _fit_length(
             continue
         break
     return ranges
+
+
+def _fit_story_length(
+    ranges: list[tuple[int, int]], by_id: dict[int, Sentence], max_seconds: float,
+) -> list[tuple[int, int]]:
+    """Trim an overlong story from its middle pieces, never its opening or payoff.
+
+    The longest middle piece loses its last sentence; a one-sentence piece is
+    dropped whole, shortest first, once no piece can shrink.
+    """
+    ranges = list(ranges)
+    while _seconds(ranges, by_id) > max_seconds and len(ranges) > 2:
+        middle = range(1, len(ranges) - 1)
+        shrinkable = [i for i in middle if ranges[i][1] > ranges[i][0]]
+        if shrinkable:
+            i = max(shrinkable, key=lambda i: _seconds([ranges[i]], by_id))
+            ranges[i] = (ranges[i][0], ranges[i][1] - 1)
+        else:
+            ranges.pop(min(middle, key=lambda i: _seconds([ranges[i]], by_id)))
+    return ranges
+
+
+def _is_story(ranges: list[tuple[int, int]], by_id: dict[int, Sentence]) -> bool:
+    """Two pieces or more, with at least one real jump through the video between them."""
+    return len(ranges) >= 2 and any(
+        by_id[later[0]].start - by_id[earlier[1]].end >= MIN_STORY_GAP_SECONDS
+        for earlier, later in zip(ranges, ranges[1:])
+    )
 
 
 def _span(first: int, last: int, by_id: dict[int, Sentence], duration: float) -> tuple[float, float]:

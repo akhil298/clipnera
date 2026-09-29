@@ -103,6 +103,8 @@ class BaseConfig(BaseSettings):
     # A running job's message is hidden this long and re-hidden every third of
     # it, so a crashed worker's job reappears within this window.
     JOB_VISIBILITY_TIMEOUT_SECONDS: int = 300
+    # Clips cut (and burned) at once. 0 sizes it to the host's cores.
+    CLIP_CUT_CONCURRENCY: int = 3
 
     # B-roll library. Pixabay stays off until its API caching terms are confirmed.
     BROLL_SOURCES: str = "pexels,nasa,wikimedia"

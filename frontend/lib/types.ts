@@ -296,8 +296,6 @@ export interface VideoProject {
   processingStatus?: 'idle' | 'processing' | 'completed' | 'failed';
   creditsDeducted?: number;
   pipelineSteps?: PipelineStep[];
-  /** AI spend on this video so far, in USD. */
-  aiCostUsd?: number;
 }
 
 export interface AnalyticsMetric {

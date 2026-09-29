@@ -5,7 +5,9 @@ the provider, and answers with what the video is and where the candidate
 moments are, by sentence id. Direct (strong model) reads only those candidates
 with a little context and returns a complete edit plan per clip: which
 sentence ranges to stitch, the teaser line, headline copy, layout, and beats
-for the renderer. Everything the models answer is ids and short strings; code
+for the renderer. An optional Story pass stitches moments from across the
+whole video into one clip, and a Check pass reads each stitched story as a
+viewer would before it is kept. Everything the models answer is ids and short strings; code
 turns ids into word-exact times and enforces every rule the models are asked
 to follow (see :mod:`content_intelligence.edit_plan`).
 """
@@ -25,7 +27,7 @@ log = get_logger(__name__)
 
 # Bump when a prompt, model choice or edit rule changes, so clips made by each
 # version can be compared on how users treat them (see feedback/).
-DIRECTOR_VERSION = "2026-09-27.1"
+DIRECTOR_VERSION = "2026-09-29.1"
 
 LAYOUTS = ("auto", "single_speaker", "two_speaker_stack", "split_gameplay", "screen_with_speaker", "wide")
 BEAT_EFFECTS = ("punch_in", "react_cut", "emphasis")
@@ -33,6 +35,7 @@ RUBRIC = ("hook", "payoff", "standalone", "emotion", "pacing")
 
 MAP_OUTPUT_TOKENS = 3000
 DIRECT_OUTPUT_TOKENS_PER_CLIP = 260
+CHECK_OUTPUT_TOKENS_PER_CLIP = 60
 # Instruction text wrapped around each window, reserved out of the input budget.
 PROMPT_OVERHEAD_TOKENS = 900
 # Sentences shown before and after each candidate so the director can extend it.
@@ -119,6 +122,23 @@ DIRECTOR_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+CHECK_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "verdicts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"clip": _ID, "ok": {"type": "boolean"}, "issue": {"type": "string"}},
+                "required": ["clip", "ok", "issue"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["verdicts"],
+    "additionalProperties": False,
+}
+
 # Shown in the prompt for providers that do not enforce the schema (Groq).
 MAP_EXAMPLE = (
     '{"title":"...","summary":"...","category":"podcast_interview","confidence":0.8,'
@@ -130,6 +150,10 @@ DIRECTOR_EXAMPLE = (
     '"beats":[{"at":18,"fx":"punch_in","word":"..."}],'
     '"scores":{"hook":8,"payoff":7,"standalone":8,"emotion":6,"pacing":7},"why":"..."}]}'
 )
+CHECK_EXAMPLE = '{"verdicts":[{"clip":1,"ok":true,"issue":""},{"clip":2,"ok":false,"issue":"..."}]}'
+
+# Joins a story clip's pieces in its transcript, for the Check pass and for display.
+STORY_SEPARATOR = " … "
 
 TABLE_LEGEND = """Transcript lines read: id start_second speaker flags text.
 Flags: !E louder than the surrounding minute (energy peak), !Q question, !P follows a long pause, !R loud reaction right after (laughter, applause, gasp)."""
@@ -147,6 +171,14 @@ A strong candidate is one complete thought a stranger scrolling past would stop 
 
 !E, !R and !Q often mark the heart of a good moment, but judge the words, not the flags."""
 
+# How every clip's fields are filled in, whether it is one moment or a story.
+CLIP_FIELD_RULES = """- hook: the id of the single most gripping line inside the clip, played first as a teaser: a bold claim, a number, a punchline, an emotional peak. 5-15 words, from the middle or end of the clip, never its first line, and it must make sense heard alone. 0 if no line qualifies.
+- title: one sentence, at most 60 characters, about the payoff, not the setup. It is burned above the captions. Do not quote the transcript. description: 1-2 sentences. hashtags: 3-5.
+- layout: single_speaker (one person talking), two_speaker_stack (a back-and-forth between two people on screen), split_gameplay (gameplay with a facecam), screen_with_speaker (slides or a screen share with a presenter), wide (a group or a scene), or auto if unsure.
+- beats (at most 4, only where they help): punch_in on the line where the peak lands, with the key word; react_cut on a line whose listener's reaction is worth showing; emphasis on a key word or number to highlight in captions.
+- scores: 1-10 per criterion, honestly. A 9 is a clip that would go viral on its own; most good clips are 6-8.
+- why: one short sentence on what makes it work."""
+
 DIRECTOR_SYSTEM = f"""You are the lead editor of a short-form video team. From candidate moments of one long video you choose the clips worth posting and write a complete edit plan for each. Your clips are judged on: hook (the first two seconds stop the scroll), payoff (it lands the answer, reveal or punchline), standalone (a stranger understands it), emotion, and pacing (no dead air, no tangents). You return valid JSON only.
 
 {TABLE_LEGEND}
@@ -158,14 +190,35 @@ How to edit:
 - Start on the sentence that opens the thought: a question, a claim, a surprise, the first line of a story. Never start on a line that continues a previous one ("And...", "So...", "Which...").
 - End right after the payoff. Never end on a setup line that promises what comes next.
 - The stitched length must fall inside the requested range. Estimate it from the start seconds shown: a line lasts until the next line starts.
-- hook: the id of the single most gripping line inside the clip, played first as a teaser: a bold claim, a number, a punchline, an emotional peak. 5-15 words, from the middle or end of the clip, never its first line, and it must make sense heard alone. 0 if no line qualifies.
-- title: one sentence, at most 60 characters, about the payoff, not the setup. It is burned above the captions. Do not quote the transcript. description: 1-2 sentences. hashtags: 3-5.
-- layout: single_speaker (one person talking), two_speaker_stack (a back-and-forth between two people on screen), split_gameplay (gameplay with a facecam), screen_with_speaker (slides or a screen share with a presenter), wide (a group or a scene), or auto if unsure.
-- beats (at most 4, only where they help): punch_in on the line where the peak lands, with the key word; react_cut on a line whose listener's reaction is worth showing; emphasis on a key word or number to highlight in captions.
-- scores: 1-10 per criterion, honestly. A 9 is a clip that would go viral on its own; most good clips are 6-8.
-- why: one short sentence on what makes it work.
+{CLIP_FIELD_RULES}
 
 Choose the best clips, not the most. Fewer excellent clips beat a padded list. Never return two clips about the same moment."""
+
+STORY_SYSTEM = f"""You are the lead editor of a short-form video team. Besides single moments, you cut story clips: one vertical short stitched from moments far apart in the same long video, the way a human editor cuts a recap. Your clips are judged on: hook, payoff, standalone (a stranger understands it), emotion, and pacing. You return valid JSON only.
+
+{TABLE_LEGEND}
+
+{LANGUAGE_RULE}
+
+Story shapes that work:
+- Arc: a question, problem or promise from one part of the video, the struggle or turning point from another, and the answer, result or punchline from a later one.
+- List: 2-4 short points on one theme gathered from across the video, each a complete line.
+- Change: how a view, plan or mood shifts over the video, the early statement then the later one.
+
+How to edit:
+- segments: 2-8 sentence id ranges, in ascending order, inclusive. At least two must be more than a minute apart in the video, or it is not a story clip. Each range is one complete thought: it starts on a line that opens it and ends on a finished sentence. 1-3 sentences per range is typical.
+- Each piece must follow naturally from the one before, as if it had been said in that order. Leave out lines that point outside the clip: "as I said earlier", "that guy", "this one" with nothing to refer to.
+- Keep every speaker's meaning. Never join lines so a claim reads differently than it was said, and never pair a question with the answer to a different question.
+- The stitched length must fall inside the requested range. Estimate it from the start seconds shown: a line lasts until the next line starts.
+{CLIP_FIELD_RULES}
+
+Only return a story when it is clearly worth watching on its own. Return an empty list rather than a forced one, and never two stories built from the same moments."""
+
+CHECK_SYSTEM = f"""You review stitched short-form clips before they are posted. Each clip is the transcript of pieces of one long video joined together; "{STORY_SEPARATOR.strip()}" marks a cut. A viewer sees only the clip.
+
+{LANGUAGE_RULE}
+
+Mark a clip ok false when any of these hold: a line refers to something or someone the clip never shows; a piece begins or ends so it sounds cut off; a join makes a speaker seem to say something they did not mean; the pieces do not add up to one point or story. Otherwise ok true. issue: under 12 words, empty when ok. Return valid JSON only."""
 
 CATEGORY_PLAYBOOKS: dict[str, str] = {
     "podcast_interview": "Podcasts: favour stories with a turn, contrarian opinions with their reasoning, and confessions. A guest's answer usually needs the host's question as its opening line. Use two_speaker_stack when the exchange itself is the point; react_cut when the host's face sells the moment.",
@@ -272,8 +325,7 @@ Transcript:
         log.info("Director pass: %d candidate(s) in %d group(s), up to %d clip(s) each", len(blocks), len(groups), per_group)
 
         async def run(group: list[str]) -> list[dict[str, Any]]:
-            prompt = f"""Video: {map_result.get('title', '')}. Category: {category}.
-Summary: {map_result.get('summary', '')}
+            prompt = f"""{_video_header(map_result, category)}
 
 Choose up to {per_group} clips. Each clip's stitched length must be {min_seconds:.0f}-{max_seconds:.0f} seconds.
 
@@ -282,13 +334,7 @@ JSON shape: {DIRECTOR_EXAMPLE}
 Candidates (with a few lines of context around each; you may use context lines):
 
 {chr(10).join(group)}"""
-            reply = await self._director_client.chat([
-                {"role": "system", "content": system},
-                {"role": "user", "content": prompt},
-            ], temperature=0.3, max_tokens=DIRECT_OUTPUT_TOKENS_PER_CLIP * per_group + 300,
-                json_mode=True, json_schema=DIRECTOR_SCHEMA)
-            clips = _parse_json(reply).get("clips")
-            return [c for c in clips if isinstance(c, dict)] if isinstance(clips, list) else []
+            return await self._plans(system, prompt, per_group)
 
         results = await asyncio.gather(*(run(group) for group in groups), return_exceptions=True)
         plans: list[dict[str, Any]] = []
@@ -298,6 +344,83 @@ Candidates (with a few lines of context around each; you may use context lines):
                 continue
             plans.extend(result)
         return plans
+
+    # ---- Story -----------------------------------------------------------
+
+    async def story(
+        self,
+        sentences: list[Sentence],
+        map_result: dict[str, Any],
+        count: int,
+        min_seconds: float,
+        max_seconds: float,
+    ) -> list[dict[str, Any]]:
+        """Edit plans for clips stitched from moments across the whole video.
+
+        Unlike Direct, one call sees every candidate at once, since a story's
+        pieces can sit anywhere in the video. Candidates are shown without
+        context and, when they overflow the budget, thinned evenly so the
+        whole video stays in view.
+        """
+        candidates = map_result.get("candidates") or []
+        if len(candidates) < 2 or count <= 0:
+            return []
+        by_id = {s.id: s for s in sentences}
+        blocks = [_candidate_block(n + 1, c, sentences, by_id, context=0) for n, c in enumerate(candidates)]
+        blocks = _spread(
+            [b for b in blocks if b],
+            _budget(self._director_client, DIRECT_OUTPUT_TOKENS_PER_CLIP * count + 400),
+        )
+        category = str(map_result.get("category") or "unknown")
+        log.info("Story pass: %d moment(s) shown, up to %d story clip(s)", len(blocks), count)
+        prompt = f"""{_video_header(map_result, category)}
+
+Choose up to {count} story clips. Each clip's stitched length must be {min_seconds:.0f}-{max_seconds:.0f} seconds.
+
+JSON shape: {DIRECTOR_EXAMPLE}
+
+Moments across the video, in order:
+
+{chr(10).join(blocks)}"""
+        return await self._plans(STORY_SYSTEM, prompt, count)
+
+    async def check(self, transcripts: list[str]) -> list[bool]:
+        """Whether each stitched clip reads as one natural clip to a viewer."""
+        if not transcripts:
+            return []
+        clips = "\n\n".join(f"Clip {n + 1}: {text}" for n, text in enumerate(transcripts))
+        reply = await self._map_client.chat([
+            {"role": "system", "content": CHECK_SYSTEM},
+            {"role": "user", "content": f"JSON shape: {CHECK_EXAMPLE}\n\n{clips}"},
+        ], temperature=0.0, max_tokens=CHECK_OUTPUT_TOKENS_PER_CLIP * len(transcripts) + 100,
+            json_mode=True, json_schema=CHECK_SCHEMA)
+        verdicts: dict[int, dict[str, Any]] = {}
+        for verdict in _parse_json(reply).get("verdicts") or []:
+            try:
+                verdicts[int(verdict.get("clip"))] = verdict
+            except (AttributeError, TypeError, ValueError):
+                continue
+        results = []
+        for n in range(1, len(transcripts) + 1):
+            verdict = verdicts.get(n) or {}
+            ok = verdict.get("ok") is True
+            if not ok:
+                log.info("Story clip %d rejected by the check: %s", n, verdict.get("issue") or "no verdict")
+            results.append(ok)
+        return results
+
+    async def _plans(self, system: str, prompt: str, count: int) -> list[dict[str, Any]]:
+        reply = await self._director_client.chat([
+            {"role": "system", "content": system},
+            {"role": "user", "content": prompt},
+        ], temperature=0.3, max_tokens=DIRECT_OUTPUT_TOKENS_PER_CLIP * count + 300,
+            json_mode=True, json_schema=DIRECTOR_SCHEMA)
+        clips = _parse_json(reply).get("clips")
+        return [c for c in clips if isinstance(c, dict)] if isinstance(clips, list) else []
+
+
+def _video_header(map_result: dict[str, Any], category: str) -> str:
+    return f"Video: {map_result.get('title', '')}. Category: {category}.\nSummary: {map_result.get('summary', '')}"
 
 
 def _budget(client: Any, output_tokens: int) -> int:
@@ -345,15 +468,31 @@ def _pack(blocks: list[str], budget: int) -> list[list[str]]:
     return groups
 
 
-def _candidate_block(number: int, candidate: dict[str, Any], sentences: list[Sentence], by_id: dict[int, Sentence]) -> str:
+def _spread(blocks: list[str], budget: int) -> list[str]:
+    """``blocks`` thinned evenly, keeping their order, to fit ``budget``."""
+    total = sum(_tokens(block) + 2 for block in blocks)
+    if total <= budget:
+        return blocks
+    keep = max(1, len(blocks) * budget // total)
+    step = len(blocks) / keep
+    return [blocks[int(i * step)] for i in range(keep)]
+
+
+def _candidate_block(
+    number: int,
+    candidate: dict[str, Any],
+    sentences: list[Sentence],
+    by_id: dict[int, Sentence],
+    context: int = CONTEXT_SENTENCES,
+) -> str:
     try:
         first, last = int(candidate.get("from")), int(candidate.get("to"))
     except (TypeError, ValueError):
         return ""
     if first not in by_id or last not in by_id or last < first:
         return ""
-    lo = max(1, first - CONTEXT_SENTENCES)
-    hi = min(len(sentences), last + CONTEXT_SENTENCES)
+    lo = max(1, first - context)
+    hi = min(len(sentences), last + context)
     lines = [by_id[i].line() for i in range(lo, hi + 1) if i in by_id]
     span = by_id[last].end - by_id[first].start
     return (

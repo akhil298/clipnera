@@ -33,16 +33,6 @@ class UsageRepository:
         )
         return list(result.all())
 
-    async def project_costs(self, project_ids: list[str]) -> dict[str, float]:
-        if not project_ids:
-            return {}
-        result = await self._session.execute(
-            select(LlmUsage.project_id, func.sum(LlmUsage.cost_usd))
-            .where(LlmUsage.project_id.in_(project_ids))
-            .group_by(LlmUsage.project_id)
-        )
-        return {project_id: float(cost or 0.0) for project_id, cost in result.all()}
-
     def _since(self, days: int) -> datetime:
         return datetime.utcnow() - timedelta(days=days)
 

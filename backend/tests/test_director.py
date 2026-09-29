@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 from clip_generation.hook import body_duration, on_output_timeline, parse_spans, trim_spans, Hook
-from content_intelligence.director import DIRECTOR_SCHEMA, MAP_SCHEMA, VideoDirector, _merge_maps, _windows
-from content_intelligence.edit_plan import build_clips
+from content_intelligence.director import CHECK_SCHEMA, DIRECTOR_SCHEMA, MAP_SCHEMA, VideoDirector, _merge_maps, _spread, _windows
+from content_intelligence.edit_plan import build_clips, build_story_clips
+from content_intelligence.service import story_clip_count
+from video_processor.clip_cutter import CutRequest
 from content_intelligence.sentences import Sentence, build_sentences, format_table
 from content_intelligence.signals import AudioSignals, loudness_signals
 
@@ -179,7 +182,7 @@ class _Client:
 
 class TestDirector:
     def test_schemas_are_closed(self):
-        for schema in (MAP_SCHEMA, DIRECTOR_SCHEMA):
+        for schema in (MAP_SCHEMA, DIRECTOR_SCHEMA, CHECK_SCHEMA):
             assert schema["additionalProperties"] is False
 
     def test_windows_overlap_and_cover_everything(self):
@@ -235,3 +238,92 @@ class TestCutToSource:
         from clip_generation.hook import cut_to_source
 
         assert cut_to_source(3.0, 100.0, 130.0, None, None) == pytest.approx(103.0)
+
+
+_SCORES = {"hook": 8, "payoff": 8, "standalone": 8, "emotion": 7, "pacing": 7}
+
+
+class TestStoryClips:
+    """Sentences are 5s each, so sentence n starts at (n - 1) * 5s."""
+
+    def _stories(self, plans, count=200, min_s=15.0, max_s=60.0):
+        sentences = build_sentences(_talk(count))
+        return build_story_clips(plans, sentences, duration=count * 5.0, min_seconds=min_s, max_seconds=max_s,
+                                 max_clips=3, category="podcast_interview", jump_cuts=False)
+
+    def test_far_apart_pieces_become_one_clip_in_source_order(self):
+        clips = self._stories([{"segments": [{"from": 150, "to": 151}, {"from": 10, "to": 11}, {"from": 80, "to": 81}],
+                                "hook": 151, "title": "T", "scores": _SCORES}])
+        assert len(clips) == 1
+        spans = clips[0]["edit_spans"]
+        assert len(spans) == 3 and spans == sorted(spans)
+        assert spans[1][0] - spans[0][1] > 60
+        assert clips[0]["detection_source"] == "director_story"
+        assert clips[0]["transcript_excerpt"].count(" … ") == 2
+
+    def test_pieces_close_together_are_not_a_story(self):
+        assert self._stories([{"segments": [{"from": 10, "to": 12}, {"from": 15, "to": 17}], "scores": _SCORES}]) == []
+
+    def test_a_single_piece_is_not_a_story(self):
+        assert self._stories([{"segments": [{"from": 10, "to": 20}], "scores": _SCORES}]) == []
+
+    def test_too_long_trims_the_middle_and_keeps_the_payoff(self):
+        clips = self._stories([{"segments": [{"from": 10, "to": 11}, {"from": 60, "to": 66}, {"from": 150, "to": 151}],
+                                "scores": _SCORES}], max_s=40.0)
+        assert len(clips) == 1
+        spans = clips[0]["edit_spans"]
+        assert spans[-1][1] == pytest.approx(151 * 5.0 - 0.05 + 0.15, abs=0.5)  # payoff kept whole
+        assert sum(e - s for s, e in spans) <= 40.0 + 3 * 0.25  # plus speech padding at each cut
+
+    def test_too_short_is_refused(self):
+        assert self._stories([{"segments": [{"from": 10, "to": 10}, {"from": 150, "to": 150}], "scores": _SCORES}],
+                             min_s=30.0) == []
+
+    def test_story_count_needs_the_setting_and_skips_news(self):
+        assert story_clip_count({}, 8, "podcast_interview") == 0
+        assert story_clip_count({"story_clips": True}, 8, "podcast_interview") == 2
+        assert story_clip_count({"story_clips": True}, 40, "comedy") == 3
+        assert story_clip_count({"story_clips": True}, 8, "news_politics") == 0
+        assert story_clip_count({"story_clips": True}, 1, "comedy") == 0
+
+    def test_spread_keeps_order_and_covers_the_video(self):
+        blocks = [f"block {i} " + "x" * 400 for i in range(20)]
+        kept = _spread(blocks, budget=1000)
+        assert 1 < len(kept) < 20
+        assert kept == sorted(kept, key=blocks.index)
+        assert kept[0] == blocks[0] and blocks.index(kept[-1]) >= 10
+
+    @pytest.mark.asyncio
+    async def test_story_then_check_end_to_end(self):
+        sentences = build_sentences(_talk(200))
+        video_map = {"title": "T", "summary": "S", "category": "podcast_interview",
+                     "candidates": [{"from": 10, "to": 12, "why": "q"}, {"from": 150, "to": 152, "why": "a"}]}
+        director_client = _Client([{"clips": [{"segments": [{"from": 10, "to": 11}, {"from": 150, "to": 151}],
+                                               "hook": 151, "title": "T", "description": "d", "hashtags": [],
+                                               "layout": "auto", "beats": [], "scores": _SCORES, "why": "w"}]}])
+        map_client = _Client([{"verdicts": [{"clip": 1, "ok": True, "issue": ""}, {"clip": 2, "ok": False, "issue": "x"}]}])
+        director = VideoDirector(map_client, director_client)
+        plans = await director.story(sentences, video_map, 2, 15.0, 60.0)
+        assert "far apart" in director_client.system and "Moment 1" not in director_client.prompts[0]
+        assert "Candidate 2: sentences 150-152" in director_client.prompts[0]
+        clips = build_story_clips(plans, sentences, 1000.0, 15.0, 60.0, 2, "podcast_interview")
+        assert len(clips) == 1
+        assert await director.check([clips[0]["transcript_excerpt"], "other"]) == [True, False]
+
+
+class TestCutWindows:
+    def _request(self, spans, hook=None):
+        return CutRequest(source_path="x.mp4", output_dir=Path("."), clip_id="c", start=spans[0][0], end=spans[-1][1],
+                          aspect_ratios=["9:16"], spans=spans, hook=hook)
+
+    def test_jump_cut_gaps_are_bridged_into_one_window(self):
+        assert self._request([(10.0, 14.0), (14.6, 20.0), (21.0, 30.0)]).windows == [(10.0, 30.0)]
+
+    def test_story_pieces_are_sampled_apart(self):
+        request = self._request([(10.0, 20.0), (900.0, 915.0)], hook=Hook(905.0, 908.0))
+        assert request.windows == [(10.0, 20.0), (900.0, 915.0)]
+        from video_processor.clip_cutter import _tracking_timestamps
+
+        stamps = _tracking_timestamps(request)
+        assert all(10.0 <= t <= 20.0 or 900.0 <= t <= 915.0 for t in stamps)
+        assert len(stamps) < 120

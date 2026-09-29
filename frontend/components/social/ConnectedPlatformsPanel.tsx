@@ -8,9 +8,12 @@ import {
   type SocialConnectionsResponse,
   type SocialPlatform,
 } from '@/lib/api';
-import { formatDate } from '@/lib/utils/dates';
+import { formatDate, formatScheduleTime, parseApiDate } from '@/lib/utils/dates';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { PLATFORM_ORDER, PLATFORM_STYLE, formatAudience } from './platforms';
+
+// Matches EXPIRY_WARNING in backend/social/service.py.
+const EXPIRY_WARNING_MS = 24 * 60 * 60 * 1000;
 
 interface PendingDisconnect {
   account: ConnectedAccountResponse;
@@ -198,6 +201,10 @@ function AccountRow({
 }) {
   const needsReconnect = account.status === 'needs_reconnect';
   const disconnecting = account.status === 'disconnecting';
+  const expiringSoon =
+    account.status === 'active' &&
+    account.expires_at !== null &&
+    parseApiDate(account.expires_at).getTime() - Date.now() < EXPIRY_WARNING_MS;
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
@@ -221,7 +228,7 @@ function AccountRow({
           </div>
         </div>
         <div className="flex gap-1.5 shrink-0">
-          {needsReconnect && (
+          {(needsReconnect || expiringSoon) && (
             <button
               onClick={onReconnect}
               disabled={disabled}
@@ -243,6 +250,12 @@ function AccountRow({
         <p className="flex items-start gap-1.5 text-[10px] text-amber-300 leading-snug">
           <AlertTriangle className="w-3 h-3 mt-px shrink-0" />
           {account.status_reason || 'Access expired. Reconnect to keep publishing.'}
+        </p>
+      )}
+      {account.status === 'active' && account.expires_at && (
+        <p className={`text-[10px] leading-snug ${expiringSoon ? 'text-amber-300' : 'text-neutral-500'}`}>
+          Auto-disconnects: {formatScheduleTime(account.expires_at)}.
+          {expiringSoon && ' Reconnect to keep posting for 7 more days.'}
         </p>
       )}
     </div>

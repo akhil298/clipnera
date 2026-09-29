@@ -240,6 +240,10 @@ class SocialExportRequest(BaseModel):
         default=None,
         description="Bridge between each clip's hook and the clip; omitted means Auto",
     )
+    bundle: bool = Field(
+        default=False,
+        description="Also pack every render into one ZIP, returned as bundle_presigned_url",
+    )
 
 
 class SocialExportClipResponse(BaseModel):
@@ -259,6 +263,8 @@ class SocialExportResponse(BaseModel):
     total_exported: int
     # The watermark actually applied: a free plan gets it whatever was requested.
     watermark_enabled: bool
+    # Set only when the request asked for a bundle.
+    bundle_presigned_url: Optional[str] = None
 
 
 class TranscriptEdits(BaseModel):

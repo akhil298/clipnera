@@ -16,6 +16,7 @@ from core.exceptions import CustomException
 from core.logging_config import get_logger
 from feature_flags.registry import SOCIAL_PUBLISHING, social_platform_flag
 from feature_flags.service import FeatureFlagService
+from notifications.service import notify_social_connection
 from social import audit, quota
 from social.credentials import fresh_tokens
 from social.model import (
@@ -51,6 +52,11 @@ from subscription.service import SubscriptionService, pro_required
 
 log = get_logger(__name__)
 
+# Every connection ends this long after the user connects (or reconnects) it,
+# so no grant is held indefinitely. Users are told a day before in the app.
+CONNECTION_LIFETIME = timedelta(days=7)
+EXPIRY_WARNING = timedelta(days=1)
+
 
 def not_found(what: str = "Account") -> CustomException:
     return CustomException(message=f"{what} not found", code="NOT_FOUND", status_code=404)
@@ -73,6 +79,7 @@ def account_response(account: ConnectedAccount) -> ConnectedAccountResponse:
         status=account.status.value,
         status_reason=account.status_reason,
         connected_at=account.connected_at,
+        expires_at=account.expires_at,
     )
 
 
@@ -85,6 +92,8 @@ def _apply_profile(account: ConnectedAccount, profile: Profile, scopes: str | No
     account.scopes = scopes
     account.status = AccountStatus.ACTIVE
     account.status_reason = None
+    account.expires_at = datetime.utcnow() + CONNECTION_LIFETIME
+    account.expiry_warned_at = None
 
 
 def clear_profile(account: ConnectedAccount, reason: str) -> None:
@@ -130,7 +139,8 @@ class SocialAccountService:
             accounts=[account_response(a) for a in accounts],
             max_accounts=ent.social_max_accounts,
             can_schedule=ent.social_scheduling,
-            max_schedule_days=ent.social_max_schedule_days,
+            # A post cannot outlive the connection it is published through.
+            max_schedule_days=min(ent.social_max_schedule_days, CONNECTION_LIFETIME.days),
             posts_per_day=ent.social_posts_per_day,
         )
 
@@ -259,6 +269,12 @@ class SocialAccountService:
 
     # -- disconnect -------------------------------------------------------------
 
+    _DISCONNECT_REASONS = {
+        "user": (AuditAction.DISCONNECTED, "Account disconnected"),
+        "admin": (AuditAction.FORCE_DISCONNECTED, "Account disconnected by an administrator"),
+        "system": (AuditAction.EXPIRED, f"Connection ended after {CONNECTION_LIFETIME.days} days"),
+    }
+
     async def disconnect(
         self, account: ConnectedAccount, actor_type: str, actor_user_id: str | None
     ) -> int:
@@ -266,13 +282,13 @@ class SocialAccountService:
         Returns how many scheduled posts were cancelled. Commits."""
         if account.status == AccountStatus.DISCONNECTED:
             return 0
-        reason = "Account disconnected" if actor_type == "user" else "Account disconnected by an administrator"
+        action, reason = self._DISCONNECT_REASONS[actor_type]
         cancelled = await self._repo.cancel_pending_posts(account.id, reason)
         account.status = AccountStatus.DISCONNECTING
         account.status_reason = reason
         audit.record(
             self._session,
-            AuditAction.DISCONNECTED if actor_type == "user" else AuditAction.FORCE_DISCONNECTED,
+            action,
             actor_type,
             actor_user_id=actor_user_id,
             user_id=account.user_id,
@@ -288,6 +304,30 @@ class SocialAccountService:
         if not account:
             raise not_found()
         return await self.disconnect(account, "user", user_id)
+
+    async def warn_expiring(self, limit: int = 50) -> int:
+        """In-app notice for connections ending within EXPIRY_WARNING. Commits."""
+        accounts = await self._repo.accounts_expiring_before(datetime.utcnow() + EXPIRY_WARNING, limit, unwarned=True)
+        for account in accounts:
+            account.expiry_warned_at = datetime.utcnow()
+            await self._session.commit()
+            await self._notify_lifetime(account, expired=False)
+        return len(accounts)
+
+    async def expire_connections(self, limit: int = 50) -> int:
+        """Disconnect accounts past their lifetime; the disconnect sweep then revokes
+        the grant and deletes the tokens. Commits."""
+        accounts = await self._repo.accounts_expiring_before(datetime.utcnow(), limit, unwarned=False)
+        for account in accounts:
+            await self.disconnect(account, "system", None)
+            await self._notify_lifetime(account, expired=True)
+        return len(accounts)
+
+    @staticmethod
+    async def _notify_lifetime(account: ConnectedAccount, expired: bool) -> None:
+        label = get_provider(account.platform).label
+        name = account.handle or account.display_name or ""
+        await notify_social_connection(account.user_id, label, name, CONNECTION_LIFETIME.days, expired)
 
     async def finalize_disconnect(self, account: ConnectedAccount) -> None:
         """Revoke the grant (best effort), delete tokens, forget the profile. Commits."""

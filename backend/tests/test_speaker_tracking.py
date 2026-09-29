@@ -254,6 +254,25 @@ class TestSpeakerTimeline:
         assert timeline[-1] is right
         switches = sum(1 for a, b in zip(timeline, timeline[1:]) if a is not b)
         assert switches == 1
+        # The cut lands as the right-hand speaker starts (5s), within one
+        # tracking step, not SWITCH_HOLD_SECONDS later.
+        first_right = ts[timeline.index(right)]
+        assert 4.5 <= first_right <= 5.25
+
+    def test_a_switch_across_the_room_is_a_cut_in_the_crop(self, cutter: ClipCutter) -> None:
+        from video_processor.clip_cutter import CutRequest
+
+        left = track_with(0, self.LEFT, [8.0] * 30 + [0.2] * 30, step=self.STEP)
+        right = track_with(1, self.RIGHT, [0.2] * 30 + [8.0] * 30, step=self.STEP)
+        ts = self.timestamps(9.75)
+        speakers = speaker_timeline(ts, [left, right], [{"start": 0.0, "end": 10.0, "text": "talk"}])
+        request = CutRequest(source_path="", output_dir=None, clip_id="c", start=0.0, end=10.0, aspect_ratios=["9:16"])
+        points = cutter._build_tracking(request, [left, right], ts, speakers, "two_subjects_left_right",
+                                        "9:16", 1920, 1080, [])
+        jumps = [(a["timestamp"], b["timestamp"]) for a, b in zip(points, points[1:])
+                 if abs(a["bbox"]["x"] - b["bbox"]["x"]) > 0.2]
+        assert len(jumps) == 1
+        assert jumps[0][1] - jumps[0][0] <= 0.011
 
     def test_ignores_a_brief_burst_from_the_listener(self) -> None:
         left = track_with(0, self.LEFT, [8.0] * 60, step=self.STEP)

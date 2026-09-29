@@ -24,6 +24,8 @@ const TYPE_BY_KIND: Record<InAppNotificationResponse['kind'], AppNotification['t
   payment_approved: 'credit_update',
   reel_ready: 'render_complete',
   reel_failed: 'render_failed',
+  social_expiring: 'scheduled_post',
+  social_expired: 'scheduled_post',
 };
 
 function toAppNotification(n: InAppNotificationResponse): AppNotification {

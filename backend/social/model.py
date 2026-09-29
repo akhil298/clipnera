@@ -68,6 +68,8 @@ class AuditAction(str, enum.Enum):
     DEAUTHORIZED = "deauthorized"
     DATA_DELETED = "data_deleted"
     NEEDS_RECONNECT = "needs_reconnect"
+    # The connection reached the end of its fixed lifetime (CONNECTION_LIFETIME).
+    EXPIRED = "expired"
     POST_SCHEDULED = "post_scheduled"
     POST_PUBLISHED = "post_published"
     POST_FAILED = "post_failed"
@@ -109,6 +111,10 @@ class ConnectedAccount(Base):
     )
     status_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     connected_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    # When the worker disconnects this account; every connect or reconnect restarts it.
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    # Set once the user has been told the connection is about to end.
+    expiry_warned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )

@@ -98,6 +98,19 @@ class SocialRepository:
         )
         return list(result.scalars().all())
 
+    async def accounts_expiring_before(self, before: datetime, limit: int, unwarned: bool) -> list[ConnectedAccount]:
+        """Connected (or reconnect-pending) accounts whose lifetime ends before ``before``.
+        With ``unwarned``, only those whose user has not been told yet."""
+        query = select(ConnectedAccount).where(
+            ConnectedAccount.status.in_((AccountStatus.ACTIVE, AccountStatus.NEEDS_RECONNECT)),
+            ConnectedAccount.expires_at.is_not(None),
+            ConnectedAccount.expires_at < before,
+        )
+        if unwarned:
+            query = query.where(ConnectedAccount.expiry_warned_at.is_(None))
+        result = await self._session.execute(query.order_by(ConnectedAccount.expires_at).limit(limit))
+        return list(result.scalars().all())
+
     async def user_account_ids(self, user_id: str) -> list[str]:
         result = await self._session.execute(
             select(ConnectedAccount.id).where(

@@ -946,7 +946,9 @@ const VideoEditorStudioContent: React.FC<VideoEditorStudioProps & { clip: ViralC
                 style={{ top: `${captionConfig.titlePositionY}%` }}
               >
                 <p
-                  className="px-2.5 py-1.5 rounded-lg bg-black/45 backdrop-blur-[2px] font-extrabold leading-snug text-white"
+                  // A new key per clip replays the pop entrance.
+                  key={safeClip.id}
+                  className="title-pop px-2.5 py-1.5 rounded-lg bg-black/45 backdrop-blur-[2px] font-extrabold leading-snug text-white"
                   style={{
                     fontFamily: captionConfig.fontFamily,
                     fontSize: `${titleFontPx}px`,

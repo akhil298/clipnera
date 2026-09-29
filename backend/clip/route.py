@@ -7,7 +7,6 @@ from auth.dependencies import CurrentUserDep
 from clip.repository import ClipRepository
 from clip.schema import YouTubeURLRequest, VideoMetadataResponse, AvailableFormatsResponse, YouTubeMetadataResponse, YouTubeDownloadRequest
 from clip.service import ClipService
-from usage.repository import UsageRepository
 from clip_generation.repository import ClipRepository as ClipGenRepository
 from core.database import get_db
 
@@ -15,7 +14,7 @@ clip = APIRouter(prefix="/clips", tags=["clips"])
 
 
 async def get_clip_service(session: Annotated[AsyncSession, Depends(get_db)]) -> ClipService:
-    return ClipService(ClipRepository(session), ClipGenRepository(session), UsageRepository(session))
+    return ClipService(ClipRepository(session), ClipGenRepository(session))
 
 
 ClipServiceDep = Annotated[ClipService, Depends(get_clip_service)]

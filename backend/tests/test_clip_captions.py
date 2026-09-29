@@ -41,41 +41,41 @@ SEGMENTS = [
 
 class TestClipTranscript:
     def test_keeps_absolute_timestamps(self):
-        sliced = ClipService._clip_transcript(SEGMENTS, 99.0, 111.0)
+        sliced = ClipService._clip_transcript(SEGMENTS, [(99.0, 111.0)])
         assert [s["start"] for s in sliced] == [100.0, 108.0]
 
     def test_preserves_word_timings(self):
-        sliced = ClipService._clip_transcript(SEGMENTS, 99.0, 111.0)
+        sliced = ClipService._clip_transcript(SEGMENTS, [(99.0, 111.0)])
         assert sliced[0]["words"][2] == {"start": 101.0, "end": 102.0, "word": "money"}
 
     def test_excludes_segments_outside_the_clip(self):
-        sliced = ClipService._clip_transcript(SEGMENTS, 99.0, 104.0)
+        sliced = ClipService._clip_transcript(SEGMENTS, [(99.0, 104.0)])
         assert len(sliced) == 1
 
     def test_drops_words_outside_the_clip(self):
-        sliced = ClipService._clip_transcript(SEGMENTS, 99.0, 101.5)
+        sliced = ClipService._clip_transcript(SEGMENTS, [(99.0, 101.5)])
         assert [w["word"] for w in sliced[0]["words"]] == ["we", "made", "money"]
 
     def test_keeps_speaker(self):
-        sliced = ClipService._clip_transcript(SEGMENTS, 99.0, 111.0)
+        sliced = ClipService._clip_transcript(SEGMENTS, [(99.0, 111.0)])
         assert sliced[0]["speaker"] == "A"
 
 
 class TestClipCaptions:
     def test_rebases_onto_the_clip_timeline(self):
-        transcript = ClipService._clip_transcript(SEGMENTS, 100.0, 110.0)
+        transcript = ClipService._clip_transcript(SEGMENTS, [(100.0, 110.0)])
         captions = ClipService._clip_captions(transcript, 100.0, 110.0)
         assert captions[0]["start"] == 0.0
         assert captions[0]["text"] == "we"
         assert captions[-1]["end"] == 10.0
 
     def test_never_exceeds_the_clip_duration(self):
-        transcript = ClipService._clip_transcript(SEGMENTS, 100.0, 110.0)
+        transcript = ClipService._clip_transcript(SEGMENTS, [(100.0, 110.0)])
         captions = ClipService._clip_captions(transcript, 100.0, 110.0)
         assert all(0.0 <= c["start"] <= c["end"] <= 10.0 for c in captions)
 
     def test_sorted_by_start(self):
-        transcript = ClipService._clip_transcript(SEGMENTS, 100.0, 110.0)
+        transcript = ClipService._clip_transcript(SEGMENTS, [(100.0, 110.0)])
         captions = ClipService._clip_captions(transcript, 100.0, 110.0)
         assert captions == sorted(captions, key=lambda c: c["start"])
 
@@ -89,18 +89,18 @@ class TestClipCaptions:
     def test_words_carry_their_source_start_for_transcript_edits(self):
         """The editor keys cut/highlighted words on this; it must stay in source
         time even though caption timings are rebased onto the clip."""
-        transcript = ClipService._clip_transcript(SEGMENTS, 100.0, 110.0)
+        transcript = ClipService._clip_transcript(SEGMENTS, [(100.0, 110.0)])
         captions = ClipService._clip_captions(transcript, 100.0, 110.0)
         assert all(c["source_start"] >= 100.0 for c in captions)
         assert all(c["source_start"] - c["start"] == pytest.approx(100.0) for c in captions)
 
     def test_annotates_emoji_from_the_catalog(self):
-        transcript = ClipService._clip_transcript(SEGMENTS, 100.0, 110.0)
+        transcript = ClipService._clip_transcript(SEGMENTS, [(100.0, 110.0)])
         captions = ClipService._clip_captions(transcript, 100.0, 110.0)
         assert any(c.get("emoji") for c in captions)
 
     def test_ai_cues_override_the_static_map(self):
-        transcript = ClipService._clip_transcript(SEGMENTS, 100.0, 110.0)
+        transcript = ClipService._clip_transcript(SEGMENTS, [(100.0, 110.0)])
         captions = ClipService._clip_captions(
             transcript, 100.0, 110.0, [{"keyword": "money", "emoji": "gem"}]
         )
@@ -108,7 +108,7 @@ class TestClipCaptions:
         assert money["emoji"] == "\U0001F48E"
 
     def test_ignores_ai_cues_outside_the_catalog(self):
-        transcript = ClipService._clip_transcript(SEGMENTS, 100.0, 110.0)
+        transcript = ClipService._clip_transcript(SEGMENTS, [(100.0, 110.0)])
         captions = ClipService._clip_captions(
             transcript, 100.0, 110.0, [{"keyword": "money", "emoji": "\U0001F984"}]
         )

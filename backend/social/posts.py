@@ -101,6 +101,11 @@ class SocialPostService:
                 raise pro_required(f"social_{account.platform.value}")
             elif account.status != AccountStatus.ACTIVE:
                 problems.append(f"Reconnect your {provider.label} account before posting to it.")
+            elif account.expires_at and scheduled_at >= account.expires_at:
+                problems.append(
+                    f"Your {provider.label} connection ends on {account.expires_at:%d %b %Y at %H:%M} UTC. "
+                    "Schedule before then, or reconnect the account to extend it."
+                )
             else:
                 problems += provider.precheck(clip.duration_seconds, target.caption, target.options)
             accounts.append(account)

@@ -48,6 +48,8 @@ class ConnectedAccountResponse(BaseModel):
     status: AccountStatusName
     status_reason: Optional[str] = None
     connected_at: UtcDateTime
+    # When Clipnera disconnects the account on its own; reconnecting restarts it.
+    expires_at: Optional[UtcDateTime] = None
 
 
 class ConnectionsResponse(BaseModel):

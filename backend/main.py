@@ -21,6 +21,7 @@ from feature_flags.route import features as features_router, admin_features as a
 from usage.route import usage as usage_router, admin_usage as admin_usage_router
 from feedback.route import admin_quality as admin_quality_router
 from social.route import social as social_router, social_webhooks as social_webhooks_router, admin_social as admin_social_router
+from social.worker import running_in_background as social_worker
 from uploads.route import uploads as uploads_router
 from broll.route import admin_broll as admin_broll_router, broll as broll_router
 from reels.route import reels_router
@@ -54,8 +55,10 @@ async def lifespan(app: FastAPI):
         await FFmpegService.require_caption_support()
     except CustomException as exc:
         log.error(f"{exc.message} Exports will fail until FFmpeg with libass is installed.")
-    yield
-    log.info("Shutting down")
+    # Publishes posts and ends connections past their 7-day lifetime.
+    async with social_worker():
+        yield
+        log.info("Shutting down")
 
 
 app = FastAPI(

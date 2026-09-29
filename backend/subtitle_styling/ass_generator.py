@@ -40,6 +40,9 @@ CAPTION_WIDTH_MARGIN = 1.15
 # Bundled caption faces (SIL OFL / Apache 2.0), so styles render identically on
 # any host instead of depending on what fontconfig happens to have installed.
 FONTS_DIR = Path(__file__).resolve().parent.parent / "static" / "fonts"
+# The headline pops in: it fades up from 70% size, overshoots, then settles.
+# Mirrored by the ``title-pop`` keyframes in the frontend preview.
+TITLE_ENTRANCE = r"{\fad(150,0)\fscx70\fscy70\t(0,180,\fscx106\fscy106)\t(180,300,\fscx100\fscy100)}"
 WATERMARK_PATH = Path(__file__).resolve().parent.parent / "static" / "watermark.png"
 # Display faces carry Latin glyphs only; captions in these scripts switch to a
 # bundled Noto face instead of rendering as empty boxes. Covers every script the
@@ -470,7 +473,7 @@ class AssGenerator:
             # four seconds, which read as a glitch rather than a headline.
             lines.append(
                 f"Dialogue: 1,{ass_time(0)},{ass_time(max(0.0, clip_duration))},Title,,0,0,0,,"
-                f"{{\\fad(200,0)}}{escape_ass(styled_title)}"
+                f"{TITLE_ENTRANCE}{escape_ass(styled_title)}"
             )
 
         if not transcript_words:

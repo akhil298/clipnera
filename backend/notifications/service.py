@@ -112,6 +112,26 @@ async def notify_reel_outcome(user_id: str, title: str, success: bool) -> None:
         log.warning(f"In-app notification failed: reel user={user_id} error={type(exc).__name__}")
 
 
+async def notify_social_connection(user_id: str, label: str, name: str, lifetime_days: int, expired: bool) -> None:
+    """Tell the user a connected account is about to be, or has been, disconnected
+    at the end of its lifetime. Best effort; the disconnect happens either way."""
+    account = f"{label} account {name}" if name else f"{label} account"
+    if expired:
+        kind, heading = NotificationKind.SOCIAL_EXPIRED, f"{label} disconnected"
+        message = f"Your {account} was disconnected after {lifetime_days} days. Reconnect it in Settings to post again."
+    else:
+        kind, heading = NotificationKind.SOCIAL_EXPIRING, f"{label} disconnects soon"
+        message = (
+            f"Your {account} will be disconnected within a day. "
+            f"Reconnect it in Settings to keep posting for another {lifetime_days} days."
+        )
+    try:
+        async with AsyncSessionLocal() as session:
+            await _deliver(session, user_id, kind, heading, message)
+    except Exception as exc:
+        log.warning(f"In-app notification failed: social user={user_id} error={type(exc).__name__}")
+
+
 async def _deliver(
     session: AsyncSession,
     user_id: str,

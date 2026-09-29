@@ -286,12 +286,6 @@ export const ClipGeneratorView: React.FC<ClipGeneratorViewProps> = ({
                 </span>
               </>
             )}
-            {typeof safeProject.aiCostUsd === 'number' && safeProject.aiCostUsd > 0 && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="tabular-nums">AI cost ${safeProject.aiCostUsd.toFixed(2)}</span>
-              </>
-            )}
             {safeProject.sourceUrl && (
               <a
                 href={safeProject.sourceUrl}

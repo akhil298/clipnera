@@ -1,6 +1,7 @@
 import React from 'react';
 import Link from 'next/link';
-import { CalendarDays, Captions, Film, Scissors } from 'lucide-react';
+import { CalendarDays, Captions, Scissors } from 'lucide-react';
+import { LogoMark } from '@/components/ui/LogoMark';
 
 interface AuthShellProps {
   mode: 'login' | 'register';
@@ -30,9 +31,7 @@ export function AuthShell({ mode, children }: AuthShellProps) {
       {/* Showcase */}
       <aside className="relative overflow-hidden order-2 lg:order-1 border-t lg:border-t-0 lg:border-r border-neutral-800 bg-[radial-gradient(70%_60%_at_20%_20%,rgba(245,158,11,0.16),transparent_60%),radial-gradient(60%_60%_at_90%_100%,rgba(139,92,246,0.14),transparent_60%)] px-6 py-10 sm:px-10 lg:p-12 flex flex-col gap-10">
         <Link href="/" className="hidden lg:flex items-center gap-2.5 w-fit">
-          <span className="flex items-center justify-center w-9 h-9 rounded-[11px] bg-gradient-to-br from-amber-300 via-amber-500 to-amber-600 text-neutral-950">
-            <Film className="w-[18px] h-[18px] stroke-[2.4]" />
-          </span>
+          <LogoMark size={36} />
           <span className="font-extrabold text-lg tracking-tight">
             Clip<span className="text-amber-400">nera</span>
           </span>
@@ -78,9 +77,7 @@ export function AuthShell({ mode, children }: AuthShellProps) {
       <main className="order-1 lg:order-2 flex flex-col items-center justify-center px-4 py-12 sm:px-8">
         <div className="w-full max-w-sm space-y-5">
           <Link href="/" className="lg:hidden flex items-center justify-center gap-2.5">
-            <span className="flex items-center justify-center w-9 h-9 rounded-[11px] bg-gradient-to-br from-amber-300 via-amber-500 to-amber-600 text-neutral-950">
-              <Film className="w-[18px] h-[18px] stroke-[2.4]" />
-            </span>
+            <LogoMark size={36} />
             <span className="font-extrabold text-lg tracking-tight">
               Clip<span className="text-amber-400">nera</span>
             </span>

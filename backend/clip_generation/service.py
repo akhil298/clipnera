@@ -8,6 +8,7 @@ import re
 import shutil
 import tempfile
 import time
+import zipfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable
@@ -46,10 +47,11 @@ from video_processor.geometry import SUPPORTED_ASPECT_RATIOS, output_dimensions
 settings = get_settings()
 log = get_logger(__name__)
 
-# How many clips may be cut or burned at once. Each runs its own FFmpeg encode,
-# which is already multi-threaded, so one worker per two cores keeps a large
-# host busy without a small one (2 vCPU) thrashing seven encodes at a time.
-MAX_CONCURRENT_CUTS = max(1, min(4, (os.cpu_count() or 2) // 2))
+# How many clips may be cut or burned at once. A cut spends much of its time
+# in single-threaded work (frame sampling, face detection, short encodes), so
+# half the cores left CPU idle: a 2 vCPU host cut one clip at a time at ~30%.
+# One per core keeps it busy; CLIP_CUT_CONCURRENCY overrides for a given host.
+MAX_CONCURRENT_CUTS = settings.CLIP_CUT_CONCURRENCY or max(2, min(8, os.cpu_count() or 2))
 # URLs are re-signed on every read, so this only needs to outlive one page view.
 PRESIGN_EXPIRES_SECONDS = 6 * 3600
 LOG_RULE = "=" * 78
@@ -128,6 +130,11 @@ class _CutProgress:
 
 def _mb(path: str | Path) -> float:
     return Path(path).stat().st_size / (1024 * 1024)
+
+
+def _primary_cut(output_files: dict[str, str]) -> str | None:
+    """The cut a clip is stored and previewed as: 9:16, else the first rendered."""
+    return output_files.get("9:16") or next((path for path in output_files.values() if path), None)
 
 
 @asynccontextmanager
@@ -423,12 +430,14 @@ class ClipService:
         progress_callback: Callable[[str, int, str | None], None] | None = None,
         animation_speed: float | None = None,
         hook_transition: HookTransitionConfig | None = None,
+        bundle: bool = False,
     ) -> dict:
         """Render the chosen clips at the chosen size, captioned and watermarked as asked.
 
         Each render starts from the cut the pipeline already stored in S3 for
         that aspect ratio; only a size the pipeline never rendered is re-cut
-        from the source video.
+        from the source video. With ``bundle`` the renders are also packed into
+        one ZIP, since browsers block a page from saving many files at once.
         """
         project = await self._get_project(project_id, user_id)
         clips = await self._export_selection(project_id, user_id, clip_ids, max_clips)
@@ -453,6 +462,8 @@ class ClipService:
         recuts = await self._recut_missing_ratios(project, clips, {ratio for _, ratio in targets}, progress_callback)
         exported_clips: list[dict] = []
         total_exports = len(clips) * len(targets)
+        bundle_dir = Path(tempfile.mkdtemp(prefix="clipnera-bundle-")) if bundle else None
+        archive = zipfile.ZipFile(bundle_dir / "clips.zip", "w", zipfile.ZIP_STORED) if bundle_dir else None
         try:
             for clip in clips:
                 for platform, ratio in targets:
@@ -483,10 +494,17 @@ class ClipService:
                             max_duration=max_duration_override,
                             transition=transition,
                         )
+                    download_name = _download_name(clip.title, platform.value, ratio)
+                    if archive:
+                        # MP4 is already compressed, so the ZIP only stores it.
+                        # The index keeps clips with the same title apart.
+                        await asyncio.to_thread(
+                            archive.write, rendered_path, f"{len(exported_clips) + 1:02d}-{download_name}",
+                        )
                     presigned_url = await self._store_render(
                         rendered_path, s3_key,
                         label=f"export clip={clip.id} platform={platform.value} ratio={ratio}",
-                        download_name=_download_name(clip.title, platform.value, ratio),
+                        download_name=download_name,
                     )
 
                     async with AsyncSessionLocal() as session:
@@ -506,10 +524,14 @@ class ClipService:
                         "s3_key": s3_key,
                         "hook_transition": transition.to_dict() if transition else None,
                     })
+            bundle_url = await self._store_bundle(archive, project, user_id) if archive else None
         finally:
             # Re-cuts are scratch; the exported renders are in S3.
             for path in recuts.values():
                 Path(path).unlink(missing_ok=True)
+            if archive:
+                archive.close()
+                shutil.rmtree(bundle_dir, ignore_errors=True)
 
         await self._notify(progress_callback, "Social export completed", 100)
         await record_clip_event(
@@ -522,7 +544,17 @@ class ClipService:
             "platforms": [platform.value for platform, _ in targets],
             "total_exported": len(exported_clips),
             "watermark_enabled": watermark_enabled,
+            "bundle_presigned_url": bundle_url,
         }
+
+    async def _store_bundle(self, archive: zipfile.ZipFile, project: Any, user_id: str) -> str | None:
+        """Close the export ZIP, upload it and return a URL that saves it."""
+        await asyncio.to_thread(archive.close)
+        path = str(archive.filename)
+        slug = re.sub(r"[^a-z0-9]+", "-", (project.title or "project").lower()).strip("-")[:60] or "project"
+        s3_key = f"social/{user_id}/{project.id}/{slug}-clips.zip"
+        await asyncio.to_thread(self._s3.upload_file, self._bucket, s3_key, path, "application/zip")
+        return self._presign(self._bucket, s3_key, f"{slug}-clips.zip")
 
     async def _export_selection(
         self, project_id: str, user_id: str, clip_ids: list[str] | None, max_clips: int | None,
@@ -804,6 +836,7 @@ class ClipService:
                 transcript_segments=transcript_segments,
                 output_aspect_ratios=output_aspect_ratios,
                 clip_settings=clip_settings,
+                user_id=user_id,
             )
 
         if progress_callback:
@@ -871,8 +904,14 @@ class ClipService:
         output_aspect_ratios: list[str] | None = None,
         progress_callback: Any | None = None,
         clip_settings: dict[str, Any] | None = None,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Cut every clip, delegating framing and rendering to ClipCutter."""
+        """Cut every clip, delegating framing and rendering to ClipCutter.
+
+        With ``user_id`` each clip is uploaded to S3 the moment its cut
+        finishes, under ``s3_upload``, so uploads overlap the remaining cuts
+        instead of all waiting for the last one.
+        """
         transcript_segments = list(transcript_segments or [])
         if isinstance(output_aspect_ratios, str):
             output_aspect_ratios = [item.strip() for item in output_aspect_ratios.split(",") if item.strip()]
@@ -977,7 +1016,7 @@ class ClipService:
 
             render_errors.extend(f"clip={clip_id} {err}" for err in result.errors)
 
-            clip_copy["transcript"] = self._clip_transcript(transcript_segments, start, end)
+            clip_copy["transcript"] = self._clip_transcript(transcript_segments, request.body_spans)
             clip_copy["scores"] = self._clip_scores(clip_copy, [])
             clip_copy["visual_analysis"] = result.faces
             clip_copy["bounding_boxes"] = result.faces
@@ -1000,6 +1039,11 @@ class ClipService:
             clip_copy["edit_spans"] = request.spans
             clip_copy["layout"] = result.layout
             clip_copy["reason"] = str(clip_copy.get("reason") or clip_copy.get("description") or "")
+            # Outside the semaphore: the next cut starts while this one uploads.
+            if user_id and result.rendered:
+                clip_copy["s3_upload"] = await self._upload_clip_and_thumbnail(
+                    clip_id, user_id, project_id, result.output_files, tag=f"[S3 {index + 1}/{total}]",
+                )
             return clip_copy
 
         # gather preserves input order regardless of completion order, so the
@@ -1048,8 +1092,9 @@ class ClipService:
         upload_started = time.monotonic()
         log.info(LOG_RULE)
         log.info(
-            "CLIP S3 UPLOAD START | project=%s | %d clip(s) -> s3://%s/clips/%s/%s/",
-            project_id, len(clips), self._bucket, user_id, project_id,
+            "CLIP SAVE START | project=%s | %d clip(s), %d already in s3://%s/clips/%s/%s/",
+            project_id, len(clips), sum(1 for clip in clips if clip.get("s3_upload")),
+            self._bucket, user_id, project_id,
         )
         log.info(LOG_RULE)
         async with AsyncSessionLocal() as session:
@@ -1060,8 +1105,10 @@ class ClipService:
                 start = float(clip.get("start_time", clip.get("start", 0.0)))
                 end = float(clip.get("end_time", clip.get("end", start)))
                 output_files = clip.get("output_files", {})
-                local_path = output_files.get("9:16") or next((path for path in output_files.values() if path), None)
-                transcript = self._clip_transcript(transcript_segments, start, end)
+                local_path = _primary_cut(output_files)
+                transcript = self._clip_transcript(
+                    transcript_segments, parse_spans(clip.get("edit_spans")) or [(start, end)],
+                )
                 visual_analysis = clip.get("visual_analysis", [])
                 clip_analysis = {
                     "clip": clip,
@@ -1070,15 +1117,14 @@ class ClipService:
                     "video": video_metadata,
                     "analysis": analysis,
                 }
-                presigned_url = None
-                s3_key = None
-                poster_url = None
-                s3_keys: dict[str, str] = {}
-                if local_path and Path(local_path).exists():
-                    presigned_url, s3_key, poster_url, s3_keys = await self._upload_clip_and_thumbnail(
-                        local_path, clip_id, user_id, project_id, output_files,
-                        tag=f"[S3 {index + 1}/{len(clips)}]",
+                # Cuts are normally uploaded as they finish; only a caller that
+                # cut without a user (or an older resumed run) uploads here.
+                stored = clip.get("s3_upload") or {}
+                if not stored and local_path and Path(local_path).exists():
+                    stored = await self._upload_clip_and_thumbnail(
+                        clip_id, user_id, project_id, output_files, tag=f"[S3 {index + 1}/{len(clips)}]",
                     )
+                s3_key = stored.get("s3_key")
                 saved_clip = await repo.create_clip(
                     project_id=project_id,
                     user_id=user_id,
@@ -1099,22 +1145,22 @@ class ClipService:
                     local_path=local_path if s3_key else None,
                     s3_key=s3_key,
                     s3_bucket=self._bucket if s3_key else None,
-                    presigned_url=presigned_url,
-                    poster_url=poster_url,
+                    presigned_url=stored.get("presigned_url"),
+                    poster_url=stored.get("poster_url"),
                     transcript=_json_dumps(transcript),
                     visual_analysis=_json_dumps(visual_analysis),
                     bounding_boxes=_json_dumps(clip.get("bounding_boxes", [])),
                     crop_tracking=_json_dumps(clip.get("crop_tracking", {})),
                     output_formats=_json_dumps(clip.get("output_formats", {})),
                     output_files=_json_dumps(output_files),
-                    analysis_json=_json_dumps({**clip_analysis, "s3_keys": s3_keys}),
+                    analysis_json=_json_dumps({**clip_analysis, "s3_keys": stored.get("s3_keys", {})}),
                 )
                 saved.append(saved_clip)
 
         stored = sum(1 for clip in saved if clip.s3_key)
         log.info(LOG_RULE)
         log.info(
-            "CLIP S3 UPLOAD DONE  | project=%s | %d/%d clip(s) stored | %d failed | %.1fs total",
+            "CLIP SAVE DONE  | project=%s | %d/%d clip(s) stored | %d failed | %.1fs total",
             project_id, stored, len(saved), len(saved) - stored, time.monotonic() - upload_started,
         )
         log.info(LOG_RULE)
@@ -1126,38 +1172,32 @@ class ClipService:
 
     async def _upload_clip_and_thumbnail(
         self,
-        local_path: str,
         clip_id: str,
         user_id: str,
         project_id: str,
-        output_files: dict[str, str] | None = None,
+        output_files: dict[str, str],
         tag: str = "[S3]",
-    ) -> tuple[str | None, str | None, str | None, dict[str, str]]:
+    ) -> dict[str, Any]:
         """Upload every rendered aspect ratio plus a poster frame to S3.
 
-        Returns ``(presigned_url, s3_key, poster_url, s3_keys_by_ratio)`` where
-        the presigned url and key refer to ``local_path`` (the primary ratio).
-        Previously only the primary ratio was uploaded, so the other ratios
-        existed solely on the local disk and were lost with it.
+        Returns ``presigned_url``, ``s3_key`` and ``poster_url`` for the
+        primary cut (9:16 when rendered) and ``s3_keys`` by ratio. Plain JSON,
+        so it survives in the pipeline's step artifact for a resumed run.
         """
         prefix = self._clip_s3_prefix(user_id, project_id, clip_id)
         s3_bucket = self._bucket
+        local_path = _primary_cut(output_files)
         try:
-            self._s3.create_bucket(s3_bucket)
+            await asyncio.to_thread(self._s3.create_bucket, s3_bucket)
         except Exception:
             pass
 
         # Upload every rendered ratio, not just the primary one. Keyed by ratio
         # so one clip's folder holds 9x16.mp4, 1x1.mp4 and so on side by side.
-        uploads: dict[str, str] = dict(output_files or {})
-        if local_path and not any(
-            path == local_path for path in uploads.values()
-        ):
-            uploads.setdefault("primary", local_path)
+        uploads: dict[str, str] = dict(output_files)
 
         s3_keys: dict[str, str] = {}
         primary_key: str | None = None
-        presigned_url: str | None = None
 
         for ratio, path in uploads.items():
             if not path or not Path(path).exists():
@@ -1205,7 +1245,7 @@ class ClipService:
             if ratio in s3_keys and path and path != local_path:
                 Path(path).unlink(missing_ok=True)
 
-        return presigned_url, primary_key, poster_url, s3_keys
+        return {"presigned_url": presigned_url, "s3_key": primary_key, "poster_url": poster_url, "s3_keys": s3_keys}
 
     async def _video_metadata(self, video_path: str) -> dict[str, Any]:
         info = await self._ffmpeg.get_video_info(video_path)
@@ -1245,21 +1285,26 @@ class ClipService:
         return "".join(character if character.isalnum() or character in ("-", "_") else "_" for character in value)
 
     @staticmethod
-    def _clip_transcript(transcript_segments: list[dict[str, Any]], start: float, end: float) -> list[dict[str, Any]]:
-        """Slice the transcript to a clip, keeping absolute source timestamps.
+    def _clip_transcript(transcript_segments: list[dict[str, Any]], spans: list[Span]) -> list[dict[str, Any]]:
+        """Slice the transcript to the source ``spans`` a clip plays, keeping absolute source timestamps.
 
         Timings stay absolute because the ASS generator rebases them against
         clip_start itself; rebasing here would double-subtract the offset.
+        Slicing by spans rather than first start to last end matters for a
+        story clip, whose pieces can be many minutes apart.
 
         Word timings are carried through. Dropping them (as this used to) made
         every downstream consumer fall back to whole-segment lines: the burner
         lost word-level karaoke, and the editor had nothing to sync against.
         """
+        def played(start: float, end: float) -> bool:
+            return any(end > span_start and start < span_end for span_start, span_end in spans)
+
         sliced: list[dict[str, Any]] = []
         for segment in transcript_segments:
             seg_start = float(segment.get("start", 0.0))
             seg_end = float(segment.get("end", 0.0))
-            if seg_end <= start or seg_start >= end:
+            if not played(seg_start, seg_end):
                 continue
 
             entry: dict[str, Any] = {
@@ -1274,7 +1319,7 @@ class ClipService:
             for word in segment.get("words") or []:
                 w_start = float(word.get("start", 0.0))
                 w_end = float(word.get("end", w_start))
-                if w_end <= start or w_start >= end:
+                if not played(w_start, w_end):
                     continue
                 text = str(word.get("word", word.get("text", ""))).strip()
                 if not text:

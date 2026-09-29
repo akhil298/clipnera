@@ -868,6 +868,7 @@ class PipelineOrchestrator:
                 step=PipelineStepType.ASPECT_RATIO_RENDER.value,
                 step_status="running",
             ),
+            user_id=self.user_id,
         )
         self._notify("Aspect-ratio crops calculated", 100)
         return {"rendered_clips": rendered_clips}
@@ -1342,6 +1343,7 @@ def _clamp_clip_settings(entitlements: Entitlements, clip_settings: dict | None)
     if settings.get("caption_script") not in CAPTION_SCRIPTS:
         settings["caption_script"] = "auto"
     settings["broll"] = settings.get("broll") is True
+    settings["story_clips"] = settings.get("story_clips") is True
     return settings
 
 
@@ -1928,4 +1930,5 @@ class PipelineRunService:
             burn_subtitles=request.burn_subtitles,
             animation_speed=request.animation_speed,
             hook_transition=request.hook_transition,
+            bundle=request.bundle,
         )

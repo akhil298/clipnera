@@ -3,7 +3,6 @@ import React from 'react';
 import {
   Sparkles,
   Scissors,
-  Film,
   CalendarDays,
   Plus,
   Zap,
@@ -30,6 +29,7 @@ import { Skeleton } from '@/components/skeletons';
 import { useEntitlements, planLabel, creditResetLabel } from '@/hooks/useEntitlements';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { projectStatus, statusDotClass } from '@/components/ui/StatusPill';
+import { LogoMark } from '@/components/ui/LogoMark';
 import { Avatar } from './Avatar';
 
 interface SidebarProps {
@@ -191,9 +191,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             className="flex items-center gap-2.5 group"
             title="Clipnera home"
           >
-            <span className="flex items-center justify-center w-8 h-8 rounded-[10px] bg-gradient-to-br from-amber-300 via-amber-500 to-amber-600 text-neutral-950 shadow-md shadow-amber-500/20 group-hover:scale-105 transition-transform shrink-0">
-              <Film className="w-4 h-4 stroke-[2.4]" />
-            </span>
+            <LogoMark className="shadow-md shadow-amber-500/20 rounded-[9px] group-hover:scale-105 transition-transform" />
             {!collapsed && (
               <span className="flex items-center gap-1.5">
                 <span className="font-extrabold text-[17px] tracking-tight text-white">

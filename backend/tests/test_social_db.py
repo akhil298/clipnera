@@ -26,6 +26,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import main
+import notifications.service
 import social.notify
 import social.posts
 import social.publisher
@@ -41,13 +42,16 @@ from core.config import get_settings
 from core.database import Base, get_db
 from core.exceptions import CustomException
 from feature_flags.service import FeatureFlagService
+from notifications.model import Notification
 from social.credentials import MAX_REFRESH_FAILURES, fresh_tokens
 from social.model import (
     AccountStatus,
+    AuditAction,
     ConnectedAccount,
     OAuthState,
     OAuthToken,
     PostStatus,
+    PublishAuditLog,
     ScheduledPost,
     SocialPlatform,
 )
@@ -67,7 +71,7 @@ from social.providers.base import (
 from social.publisher import MAX_ATTEMPTS, Publisher
 from social.repository import SocialRepository
 from social.schema import CreatePostsRequest, PostTarget
-from social.service import SocialAccountService
+from social.service import CONNECTION_LIFETIME, SocialAccountService
 from social.tokens import TokenStore, seal_text
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
@@ -677,6 +681,89 @@ async def test_disconnect_cancels_posts_revokes_and_deletes_tokens(db, monkeypat
     assert ("revoke", "refresh-code-1") in FAKE.calls
     # Once fully disconnected, the platform account may be linked by someone else.
     await _connect(db.maker, bob, code="code-2")
+
+
+async def _notification_kinds(maker, user_id: str) -> list[str]:
+    async with maker() as session:
+        rows = await session.execute(select(Notification.kind).where(Notification.user_id == user_id))
+        return sorted(rows.scalars().all())
+
+
+async def _set_expiry(maker, account_id: str, expires_at: datetime) -> None:
+    async with maker() as session:
+        await session.execute(
+            update(ConnectedAccount).where(ConnectedAccount.id == account_id).values(expires_at=expires_at)
+        )
+        await session.commit()
+
+
+async def test_connection_lasts_seven_days_then_warns_expires_and_revokes(db, monkeypatch):
+    monkeypatch.setattr(notifications.service, "AsyncSessionLocal", db.maker)
+    await _flags(db.maker)
+    alice = await _user(db.maker)
+    _plan(monkeypatch, {alice: "pro"})
+    account, clip = await _connect(db.maker, alice), await _clip(db.maker, alice)
+    async with db.maker() as session:
+        row = await session.get(ConnectedAccount, account)
+        assert abs(row.expires_at - (datetime.utcnow() + CONNECTION_LIFETIME)) < timedelta(minutes=1)
+    post_id = (await _post(
+        db.maker, alice, clip, account, scheduled_at=datetime.now().astimezone() + timedelta(days=1)
+    )).posts[0].id
+
+    # Nothing happens while the end is more than a day away.
+    assert await social.worker.expire_connections() == 0
+
+    await _set_expiry(db.maker, account, datetime.utcnow() + timedelta(hours=12))
+    assert await social.worker.expire_connections() == 1
+    assert await social.worker.expire_connections() == 0  # warned once only
+    assert await _notification_kinds(db.maker, alice) == ["social_expiring"]
+    assert db.sent == []  # in-app only, no email
+
+    await _set_expiry(db.maker, account, datetime.utcnow() - timedelta(minutes=1))
+    async with db.maker() as session:
+        with pytest.raises(PlatformError):  # nothing can post between expiry and the sweep
+            await fresh_tokens(session, await session.get(ConnectedAccount, account), FakeProvider())
+    assert await social.worker.expire_connections() == 1
+    assert (await _get_post(db.maker, post_id)).status == PostStatus.CANCELLED
+    assert await _notification_kinds(db.maker, alice) == ["social_expired", "social_expiring"]
+
+    await social.worker.finish_disconnects()
+    async with db.maker() as session:
+        row = await session.get(ConnectedAccount, account)
+        assert row.status == AccountStatus.DISCONNECTED and row.handle is None
+        assert await session.get(OAuthToken, account) is None
+        actions = (await session.execute(
+            select(PublishAuditLog.action).where(PublishAuditLog.account_id == account)
+        )).scalars().all()
+        assert AuditAction.EXPIRED in actions
+    assert ("revoke", "refresh-code-1") in FAKE.calls
+
+
+async def test_reconnecting_restarts_the_seven_days(db, monkeypatch):
+    monkeypatch.setattr(notifications.service, "AsyncSessionLocal", db.maker)
+    await _flags(db.maker)
+    alice = await _user(db.maker)
+    account = await _connect(db.maker, alice)
+    await _set_expiry(db.maker, account, datetime.utcnow() + timedelta(hours=2))
+    await social.worker.expire_connections()
+
+    assert await _connect(db.maker, alice, code="code-2") == account
+    async with db.maker() as session:
+        row = await session.get(ConnectedAccount, account)
+        assert row.expires_at > datetime.utcnow() + CONNECTION_LIFETIME - timedelta(minutes=1)
+        assert row.expiry_warned_at is None
+
+
+async def test_posts_cannot_be_scheduled_past_the_connection(db, monkeypatch):
+    await _flags(db.maker)
+    alice = await _user(db.maker)
+    _plan(monkeypatch, {alice: "pro"})
+    account, clip = await _connect(db.maker, alice), await _clip(db.maker, alice)
+    async with db.maker() as session:
+        assert (await SocialAccountService(session).connections(alice)).max_schedule_days == CONNECTION_LIFETIME.days
+    with pytest.raises(CustomException) as exc:
+        await _post(db.maker, alice, clip, account, scheduled_at=datetime.now().astimezone() + timedelta(days=8))
+    assert "connection ends" in exc.value.message
 
 
 async def test_platform_data_deletion_removes_tokens_posts_and_ids(db):

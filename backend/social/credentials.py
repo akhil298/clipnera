@@ -50,7 +50,8 @@ async def fresh_tokens(
     session: AsyncSession, account: ConnectedAccount, provider: PlatformProvider, force: bool = False
 ) -> TokenSet:
     """Decrypted tokens for ``account``, refreshed first when close to expiry."""
-    if account.status != AccountStatus.ACTIVE:
+    expired = account.expires_at is not None and account.expires_at <= datetime.utcnow()
+    if account.status != AccountStatus.ACTIVE or expired:
         raise reconnect_required(provider.label)
     store = TokenStore(session)
     tokens = await store.load(account.id)

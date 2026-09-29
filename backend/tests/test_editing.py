@@ -8,13 +8,17 @@ import pytest
 
 from video_processor.editing import (
     PUNCH_IN_ZOOM,
+    RHYTHM_ZOOM,
     Layout,
     Part,
+    Turn,
     choose_layout,
+    framing_stretches,
     plan_parts,
     region_around,
     shot_cuts,
     shot_windows,
+    speaker_turns,
     tracks_in_shot,
 )
 from video_processor.face_detection import Face
@@ -47,13 +51,20 @@ class TestLayout:
 
     def test_two_speakers_stack_left_on_top(self):
         left, right = _track(1, Box(0.15, 0.3, 0.12, 0.2)), _track(2, Box(0.7, 0.3, 0.12, 0.2))
-        layout = choose_layout("two_speaker_stack", "two_subjects_left_right", [right, left], "9:16", 1920, 1080, 1080, 1920)
+        layout = choose_layout("auto", "two_subjects_left_right", [right, left], "9:16", 1920, 1080, 1080, 1920,
+                               pair=[right, left])
         assert layout.kind == "two_speaker_stack"
         assert layout.cells[0].box.center[0] < layout.cells[1].box.center[0]
 
     def test_other_shapes_always_follow(self):
         facecam = _track(1, Box(0.82, 0.05, 0.1, 0.15))
         assert choose_layout("split_gameplay", "gaming_with_facecam", [facecam], "1:1", 1920, 1080, 1080, 1080).kind == "follow"
+
+    def test_the_directors_hint_alone_never_splits(self):
+        """Two faces on screen through a monologue: one screen, on the speaker."""
+        left, right = _track(1, Box(0.15, 0.3, 0.12, 0.2)), _track(2, Box(0.7, 0.3, 0.12, 0.2))
+        assert choose_layout("two_speaker_stack", "two_subjects_left_right", [left, right],
+                             "9:16", 1920, 1080, 1080, 1920).kind == "follow"
 
     def test_missing_faces_fall_back_to_follow(self):
         assert choose_layout("two_speaker_stack", "single_subject", [_track(1, Box(0.4, 0.3, 0.2, 0.3))],
@@ -67,8 +78,8 @@ class TestLayout:
 
     def test_stacked_speaker_sits_above_the_cell_centre(self):
         left, right = _track(1, Box(0.15, 0.3, 0.12, 0.2)), _track(2, Box(0.7, 0.3, 0.12, 0.2))
-        top = choose_layout("two_speaker_stack", "two_subjects_left_right", [left, right],
-                            "9:16", 1920, 1080, 1080, 1920).cells[0].box
+        top = choose_layout("auto", "two_subjects_left_right", [left, right],
+                            "9:16", 1920, 1080, 1080, 1920, pair=[left, right]).cells[0].box
         face_cy = 0.3 + 0.1
         assert top.x < 0.21 < top.x + top.width
         assert face_cy < top.y + top.height / 2
@@ -96,8 +107,8 @@ class TestShots:
         kinds = []
         for start, end in shot_windows(0.0, 12.0, [4.0, 8.0]):
             present = tracks_in_shot([left, right], start, end, 0.1)
-            kinds.append(choose_layout("two_speaker_stack", "two_subjects_left_right", present,
-                                       "9:16", 1920, 1080, 1080, 1920).kind)
+            kinds.append(choose_layout("auto", "two_subjects_left_right", present, "9:16", 1920, 1080, 1080, 1920,
+                                       pair=present if len(present) == 2 else None).kind)
         assert kinds == ["two_speaker_stack", "follow", "fit"]
 
     def test_the_stack_frames_the_shot_not_the_clip_average(self):
@@ -109,9 +120,90 @@ class TestShots:
         left = _track(1, Box(0.15, 0.3, 0.1, 0.18), samples=40)
         left.samples = [FaceSample(t / 10, left.samples[0].face) for t in range(0, 40)]
         present = tracks_in_shot([left, right], 0.0, 4.0, 0.1)
-        bottom = choose_layout("two_speaker_stack", "two_subjects_left_right", present,
-                               "9:16", 1920, 1080, 1080, 1920).cells[1].box
+        bottom = choose_layout("auto", "two_subjects_left_right", present,
+                               "9:16", 1920, 1080, 1080, 1920, pair=present).cells[1].box
         assert bottom.x < 0.85 < bottom.x + bottom.width
+
+
+def _person(track_id: int, box: Box, start: float, end: float, step: float = 0.1) -> SpeakerTrack:
+    face = Face(box=box, confidence=0.9, mouth=box)
+    return SpeakerTrack(track_id, [FaceSample(round(start + i * step, 3), face) for i in range(round((end - start) / step))])
+
+
+def _timeline(schedule: list[tuple[float, SpeakerTrack | None]], end: float, step: float = 0.25):
+    """Timestamps and who holds the frame at each, from (from_second, person) changes."""
+    timestamps = [i * step for i in range(round(end / step) + 1)]
+    speakers = [next(p for t0, p in reversed(schedule) if t0 <= t) for t in timestamps]
+    return timestamps, speakers
+
+
+class TestExchanges:
+    """When two people get the screen together, decided from what the video shows."""
+
+    HOST, GUEST = Box(0.15, 0.3, 0.12, 0.2), Box(0.7, 0.3, 0.12, 0.2)
+
+    def stretches(self, schedule, end=20.0, host=None, guest=None, segments=()):
+        host = host or _person(1, self.HOST, 0.0, end)
+        guest = guest or _person(2, self.GUEST, 0.0, end)
+        order = {1: host, 2: guest}
+        timestamps, speakers = _timeline([(t, order.get(who)) for t, who in schedule], end)
+        return framing_stretches(0.0, end, speaker_turns(timestamps, speakers), 0.1, list(segments))
+
+    def test_a_monologue_stays_on_one_screen(self):
+        """The guest listens on screen the whole time; the host holds the frame."""
+        assert [pair for *_, pair in self.stretches([(0.0, 1)])] == [[]]
+
+    def test_long_answers_are_cut_between_not_split(self):
+        stretches = self.stretches([(0.0, 1), (6.0, 2), (13.0, 1)])
+        assert all(not pair for *_, pair in stretches)
+
+    def test_a_quick_back_and_forth_is_split_only_while_it_lasts(self):
+        # A 6s question, then replies of 1.5-2s each, then a 6s answer.
+        stretches = self.stretches([(0.0, 1), (6.0, 2), (8.0, 1), (9.5, 2), (11.5, 1), (13.0, 2)])
+        split = [(round(a, 2), round(b, 2)) for a, b, pair in stretches if pair]
+        assert split == [(6.0, 13.0)]
+        assert stretches[0][:2] == (0.0, 6.0) and stretches[-1][1] == 20.0
+
+    def test_one_face_tracked_twice_is_never_split(self):
+        """A close-up whose track broke in two sits in one place: one person."""
+        near = Box(0.44, 0.3, 0.2, 0.3)
+        stretches = self.stretches([(0.0, 1), (4.0, 2), (6.0, 1), (8.0, 2), (10.0, 1)],
+                                   host=_person(1, Box(0.4, 0.3, 0.2, 0.3), 0.0, 20.0),
+                                   guest=_person(2, near, 0.0, 20.0))
+        assert all(not pair for *_, pair in stretches)
+
+    def test_an_exchange_across_camera_angles_is_not_split(self):
+        """Each face comes from a different shot, never the same picture."""
+        stretches = self.stretches([(0.0, 1), (4.0, 2), (6.0, 1), (8.0, 2), (10.0, 1)],
+                                   host=_person(1, self.HOST, 0.0, 10.0), guest=_person(2, self.GUEST, 10.0, 20.0))
+        assert all(not pair for *_, pair in stretches)
+
+    def test_one_voice_heard_is_not_an_exchange(self):
+        """Diarization hears only one person: the lips flickering is not a reply."""
+        segments = [{"start": 0.0, "end": 20.0, "text": "talk", "speaker": "SPEAKER_00"},
+                    {"start": 0.0, "end": 0.5, "text": "hi", "speaker": "SPEAKER_01"}]
+        stretches = self.stretches([(0.0, 1), (5.0, 2), (7.0, 1), (9.0, 2), (11.0, 1)], segments=segments)
+        assert all(not pair for *_, pair in stretches)
+
+    def test_turns_follow_the_timeline(self):
+        a, b = _person(1, self.HOST, 0, 1), _person(2, self.GUEST, 0, 1)
+        timestamps, speakers = _timeline([(0.0, a), (1.0, b), (2.0, None)], 3.0)
+        assert speaker_turns(timestamps, speakers) == [Turn(0.0, 1.0, a), Turn(1.0, 2.0, b), Turn(2.0, 3.0, None)]
+
+
+class TestRhythm:
+    def test_new_sentences_alternate_wide_and_tight(self):
+        parts = plan_parts(0.0, 12.0, [], lambda t: None, [0.0, 1.0, 4.0, 5.0, 8.0, 10.5])
+        assert [(p.start, p.end, p.zoom) for p in parts] == [(0.0, 4.0, 1.0), (4.0, 8.0, RHYTHM_ZOOM), (8.0, 12.0, 1.0)]
+        assert not parts[1].ease
+
+    def test_a_punch_in_is_entered_from_the_wide_frame(self):
+        parts = plan_parts(0.0, 20.0, [{"t": 13.0, "fx": "punch_in"}], lambda t: None, [3.5, 7.0, 10.0])
+        punch = next(i for i, p in enumerate(parts) if p.zoom == PUNCH_IN_ZOOM)
+        assert parts[punch - 1].zoom == 1.0 and parts[punch].ease
+
+    def test_no_transcript_keeps_one_part(self):
+        assert plan_parts(0.0, 10.0, [], lambda t: None) == [Part(0.0, 10.0)]
 
 
 class TestBeats:
@@ -219,6 +311,20 @@ class TestRenders:
         diff = [float(np.abs(x - y).mean()) for x, y in zip(a, b)]
         # Starts at 1x, so the first frame matches; half a second in it is fully zoomed.
         assert diff[0] < 3.0 < diff[12]
+
+    @pytest.mark.asyncio
+    async def test_a_rhythm_zoom_is_tight_from_the_first_frame(self, source, tmp_path):
+        import cv2
+
+        from video_processor.ffmpeg_service import FFmpegService
+
+        out = tmp_path / "tight.mp4"
+        await FFmpegService().crop_with_tracking(
+            input_path=str(source), output_path=str(out), start_time=1.0, duration=1.0, crop_tracking=[],
+            target_width=360, target_height=640, source_width=640, source_height=360, zoom=RHYTHM_ZOOM, ease=False,
+        )
+        assert self._size(out) == "360x640"
+        assert int(cv2.VideoCapture(str(out)).get(cv2.CAP_PROP_FRAME_COUNT)) == 25
 
     @pytest.mark.asyncio
     async def test_zoomed_and_plain_parts_join_by_copy(self, source, tmp_path):

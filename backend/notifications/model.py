@@ -21,6 +21,8 @@ class NotificationKind(str, enum.Enum):
     PAYMENT_APPROVED = "payment_approved"
     REEL_READY = "reel_ready"
     REEL_FAILED = "reel_failed"
+    SOCIAL_EXPIRING = "social_expiring"
+    SOCIAL_EXPIRED = "social_expired"
 
 
 class Notification(Base):

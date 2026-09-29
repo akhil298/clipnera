@@ -11,7 +11,7 @@ from core.logging_config import get_logger
 from content_intelligence.analyzer import FrameAnalyzer
 from content_intelligence.classifier import ContentClassifier
 from content_intelligence.director import VideoDirector
-from content_intelligence.edit_plan import build_clips
+from content_intelligence.edit_plan import build_clips, build_story_clips, number_clips
 from content_intelligence.highlighter import (
     MAX_CLIP_DURATION,
     MAX_CLIPS_PER_HOUR,
@@ -21,7 +21,7 @@ from content_intelligence.highlighter import (
 from content_intelligence.metadata_gen import MetadataGenerator
 from content_intelligence.research import TopicResearcher
 from content_intelligence.scorer import ClipScorer
-from content_intelligence.sentences import build_sentences, speaker_legend
+from content_intelligence.sentences import Sentence, build_sentences, speaker_legend
 from content_intelligence.signals import AudioSignals, extract_audio_signals
 from video_processor.ffmpeg_service import FFmpegService
 
@@ -53,6 +53,20 @@ CATEGORY_ASPECT_RATIOS: dict[str, tuple[str, ...]] = {
 }
 
 FALLBACK_ASPECT_RATIOS: tuple[str, ...] = ("9:16",)
+
+# Story clips (moments from across the video in one clip) take up to a quarter
+# of a run's clips, and never more than this many.
+MAX_STORY_CLIPS = 3
+# Stitching lines from different parts of a news video risks changing what was
+# said, so these categories only ever get single-moment clips.
+NO_STORY_CATEGORIES = frozenset({"news_politics"})
+
+
+def story_clip_count(settings: dict[str, Any], max_clips: int, category: str) -> int:
+    """How many of a run's clips may be stories: none unless the run asked for them."""
+    if settings.get("story_clips") is not True or category in NO_STORY_CATEGORIES or max_clips < 2:
+        return 0
+    return min(MAX_STORY_CLIPS, max(1, max_clips // 4))
 
 
 class ContentIntelligenceService:
@@ -206,16 +220,49 @@ class ContentIntelligenceService:
         # rebuilding it from the transcript is instant. Loudness flags only
         # matter to the models, which already read them in the Map pass.
         sentences = build_sentences(transcript_segments, None)
-        try:
-            plans = await self._director.direct(sentences, video_map, max_clips, min_seconds, max_seconds)
-        except Exception as exc:
-            log.warning("Director pass failed, falling back to highlight detection: %s", exc)
-            return []
-        return build_clips(
-            plans, sentences, duration, min_seconds, max_seconds, max_clips,
-            category=str(video_map.get("category") or "unknown"),
-            jump_cuts=bool(settings.get("jump_cuts", True)),
+        category = str(video_map.get("category") or "unknown")
+        jump_cuts = bool(settings.get("jump_cuts", True))
+        story_count = story_clip_count(settings, max_clips, category)
+        plans, stories = await asyncio.gather(
+            self._director.direct(sentences, video_map, max_clips, min_seconds, max_seconds),
+            self._stories(sentences, video_map, story_count, duration, min_seconds, max_seconds, category, jump_cuts),
+            return_exceptions=True,
         )
+        if isinstance(plans, BaseException):
+            log.warning("Director pass failed, falling back to highlight detection: %s", plans)
+            return []
+        if isinstance(stories, BaseException):
+            log.warning("Story pass failed; this run gets moment clips only: %s", stories)
+            stories = []
+        clips = build_clips(
+            plans, sentences, duration, min_seconds, max_seconds, max_clips - len(stories),
+            category=category, jump_cuts=jump_cuts,
+        )
+        return number_clips(clips + stories) if clips else []
+
+    async def _stories(
+        self,
+        sentences: list[Sentence],
+        video_map: dict[str, Any],
+        count: int,
+        duration: float,
+        min_seconds: float,
+        max_seconds: float,
+        category: str,
+        jump_cuts: bool,
+    ) -> list[dict]:
+        """Story clips that passed the viewer check, at most ``count``.
+
+        One spare is planned so a clip the check refuses can be replaced.
+        """
+        if not count:
+            return []
+        plans = await self._director.story(sentences, video_map, count + 1, min_seconds, max_seconds)
+        clips = build_story_clips(
+            plans, sentences, duration, min_seconds, max_seconds, count + 1, category, jump_cuts,
+        )
+        verdicts = await self._director.check([clip["transcript_excerpt"] for clip in clips])
+        return [clip for clip, ok in zip(clips, verdicts) if ok][:count]
 
     async def score_highlights(self, highlights: list[dict], analysis: dict, clip_settings: dict[str, Any] | None = None) -> list[dict]:
         return await self._scorer.score(highlights, analysis, clip_settings=clip_settings)

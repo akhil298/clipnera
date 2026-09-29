@@ -28,6 +28,15 @@ BACKDROP_SCALE = 4
 # A punch-in eases to full zoom over this long (ease-out cubic), then holds.
 # A hard jump read as a glitch; a slow drift reads as a camera move.
 PUNCH_IN_RAMP_SECONDS = 0.25
+# Every rendered part fades its audio in and out this fast. Parts are joined by
+# stream copy, and a waveform cut mid-cycle clicks; this is too short to hear.
+SEAM_FADE_SECONDS = 0.02
+
+
+def seam_fade_filter(duration: float) -> str:
+    """Audio filter fading a part of ``duration`` seconds in and out, so joins do not click."""
+    fade_out = max(0.0, duration - SEAM_FADE_SECONDS)
+    return f"afade=t=in:d={SEAM_FADE_SECONDS},afade=t=out:st={fade_out:.3f}:d={SEAM_FADE_SECONDS}"
 
 
 def punch_in_filter(zoom: float, width: int, height: int, fps: float) -> str:
@@ -41,6 +50,14 @@ def punch_in_filter(zoom: float, width: int, height: int, fps: float) -> str:
     return (
         f"zoompan=z='{eased}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
         f":d=1:s={width}x{height}:fps={fps:.3f}"
+    )
+
+
+def zoom_filter(zoom: float, width: int, height: int) -> str:
+    """Centred ``zoom`` held for the whole render, at a fixed ``width``x``height``."""
+    return (
+        f"crop=trunc(iw/{zoom:.4f}/2)*2:trunc(ih/{zoom:.4f}/2)*2,"
+        f"scale={width}:{height}:flags=lanczos,setsar=1"
     )
 
 
@@ -281,12 +298,13 @@ class FFmpegService:
         source_width: int | None = None,
         source_height: int | None = None,
         zoom: float = 1.0,
+        ease: bool = True,
     ) -> None:
         """Cut [start_time, start_time+duration] and pan-crop to the target size.
 
-        ``zoom`` above 1 is a punch-in: the tracked crop is rendered as usual
-        and then eased in to ``zoom`` over the first quarter second, centred on
-        the tracked subject; the output size is unchanged.
+        ``zoom`` above 1 tightens on the tracked subject at the same output
+        size: eased in over the first quarter second for a punch-in, or held
+        from the first frame (``ease=False``) for a rhythm cut.
 
         Emits one INFO line per render; the filter graph and full command are
         DEBUG, since a tracked crop expression runs to several thousand
@@ -334,9 +352,11 @@ class FFmpegService:
             f"crop={crop_width}:{crop_height}:{start_x}:{start_y},"
             f"{scale},setsar=1"
         )
-        if zoom > 1.0:
+        if zoom > 1.0 and ease:
             fps = await self.probe_fps(input_path)
             video_filter += "," + punch_in_filter(zoom, target_width, target_height, fps)
+        elif zoom > 1.0:
+            video_filter += "," + zoom_filter(zoom, target_width, target_height)
         log.debug("Crop filter graph", extra={"video_filter": video_filter})
 
         # A crop that covers the whole frame at the source's own size changes
@@ -510,6 +530,7 @@ class FFmpegService:
             "-t", str(duration),
             "-filter_complex", graph,
             "-map", "[v]", "-map", "0:a?",
+            "-af", seam_fade_filter(duration),
             *encoder_args,
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
@@ -569,6 +590,7 @@ class FFmpegService:
             "-ss", str(start_time), "-i", input_path,
             "-t", str(duration),
             "-vf", video_filter,
+            "-af", seam_fade_filter(duration),
             *encoder_args,
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",

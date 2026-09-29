@@ -4,7 +4,6 @@ import asyncio
 import math
 
 from clip.repository import ClipRepository
-from usage.repository import UsageRepository
 from clip.schema import (
     AvailableFormatsResponse,
     YouTubeURLRequest,
@@ -41,11 +40,9 @@ class ClipService:
         self,
         repository: ClipRepository,
         clip_gen_repository: ClipGenRepository | None = None,
-        usage_repository: UsageRepository | None = None,
     ) -> None:
         self._repo = repository
         self._clip_gen_repo = clip_gen_repository
-        self._usage_repo = usage_repository
         self._youtube = YouTubeService()
 
     async def _prefetch(self, url: str):
@@ -86,7 +83,6 @@ class ClipService:
         clip_gen_service = ClipGenService()
         projects = await self._repo.list_projects(user_id)
         clips_by_project = await self._clip_gen_repo.list_clips_for_projects([p.id for p in projects], user_id)
-        costs = await self._usage_repo.project_costs([p.id for p in projects]) if self._usage_repo else {}
 
         result = []
         for p in projects:
@@ -99,8 +95,6 @@ class ClipService:
                 "status": p.status.value if hasattr(p.status, "value") else p.status,
                 "duration_seconds": p.duration_seconds or 0,
                 "created_at": p.created_at.isoformat() if p.created_at else None,
-                # AI spend on this video so far, in USD, from the usage ledger.
-                "ai_cost_usd": round(costs.get(p.id, 0.0), 4),
                 "clips": [
                     {
                         "id": c.id,

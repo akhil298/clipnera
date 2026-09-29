@@ -1,9 +1,10 @@
 "use client";
 import React from 'react';
-import { Bell, Plus, Film, Briefcase, ChevronRight, Crown, Clock, Search, Loader2 } from 'lucide-react';
+import { Bell, Plus, Briefcase, ChevronRight, Crown, Clock, Search, Loader2 } from 'lucide-react';
 import { useEntitlements, planLabel, isPaidPlan } from '@/hooks/useEntitlements';
 import { Skeleton } from '@/components/skeletons';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
+import { LogoMark } from '@/components/ui/LogoMark';
 import { Avatar } from './Avatar';
 import { CreditsPopover } from './CreditsPopover';
 
@@ -84,10 +85,10 @@ export const Header: React.FC<HeaderProps> = ({
       <button
         type="button"
         onClick={() => onNavigateTab('dashboard')}
-        className="md:hidden flex items-center justify-center w-8 h-8 rounded-[10px] bg-gradient-to-br from-amber-300 via-amber-500 to-amber-600 text-neutral-950 shrink-0"
+        className="md:hidden flex shrink-0"
         aria-label="Clipnera home"
       >
-        <Film className="w-4 h-4 stroke-[2.4]" />
+        <LogoMark />
       </button>
 
       {/* Where you are */}

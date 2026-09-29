@@ -1,13 +1,15 @@
-"""The publisher worker: a separate process from the API.
+"""The publisher worker. The API starts it on startup and stops it on shutdown
+(``running_in_background``); it can also run as its own process:
 
     cd backend && venv/bin/python -m social.worker
 
 Each tick it claims due posts (row locks, so several workers can run side by
 side), publishes them, and runs the housekeeping sweeps on their own
-intervals: finishing disconnects, renewing tokens, refreshing follower counts,
+intervals: ending connections past their 7-day lifetime, finishing
+disconnects, renewing tokens, refreshing follower counts,
 re-encrypting tokens after a key rotation and purging old OAuth states.
 
-It is the only process that decrypts platform tokens for publishing.
+It is the only code that decrypts platform tokens for publishing.
 """
 
 from __future__ import annotations
@@ -16,9 +18,11 @@ import argparse
 import asyncio
 import signal
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
-from typing import Awaitable, Callable
+from typing import AsyncIterator, Awaitable, Callable
 
+from core.crypto import CipherError, get_token_cipher
 from core.database import AsyncSessionLocal
 from core.logging_config import get_logger, setup_logging
 from feature_flags.registry import SOCIAL_PUBLISHING, social_platform_flag
@@ -42,6 +46,9 @@ CLAIM_LEASE = timedelta(minutes=15)
 # Refresh every token expiring within this window; providers decide exactly when.
 REFRESH_HORIZON = timedelta(days=11)
 PROFILE_MAX_AGE = timedelta(hours=24)
+# On API shutdown, how long a publish in progress may take to finish. A post cut
+# off after this is picked up again once its claim lease runs out.
+SHUTDOWN_GRACE_SECONDS = 30
 
 
 async def publish_due() -> int:
@@ -129,6 +136,13 @@ async def rotate_keys() -> int:
     return len(account_ids)
 
 
+async def expire_connections() -> int:
+    """Warn a day ahead, then disconnect accounts that reached their lifetime."""
+    async with AsyncSessionLocal() as session:
+        service = SocialAccountService(session)
+        return await service.warn_expiring() + await service.expire_connections()
+
+
 async def purge_states() -> int:
     async with AsyncSessionLocal() as session:
         return await OAuthStateStore(session).purge()
@@ -158,6 +172,7 @@ class Periodic:
 
 JOBS = (
     Periodic("publish", timedelta(seconds=0), publish_due),
+    Periodic("connection_expiry", timedelta(minutes=5), expire_connections),
     Periodic("disconnects", timedelta(seconds=0), finish_disconnects),
     Periodic("token_refresh", timedelta(minutes=5), refresh_tokens),
     Periodic("profiles", timedelta(minutes=30), refresh_profiles),
@@ -166,11 +181,7 @@ JOBS = (
 )
 
 
-async def run(once: bool = False) -> None:
-    stop = asyncio.Event()
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, stop.set)
+async def run(stop: asyncio.Event, once: bool = False) -> None:
     log.info("Social publisher worker started")
     while not stop.is_set():
         for job in JOBS:
@@ -184,13 +195,41 @@ async def run(once: bool = False) -> None:
     log.info("Social publisher worker stopped")
 
 
+@asynccontextmanager
+async def running_in_background() -> AsyncIterator[None]:
+    """Run the worker in the current event loop while the context is open.
+    Without an encryption key ring it logs why and does not start."""
+    try:
+        get_token_cipher()
+    except CipherError as exc:
+        log.warning(f"Social publisher worker not started: {exc}")
+        yield
+        return
+    stop = asyncio.Event()
+    task = asyncio.create_task(run(stop))
+    try:
+        yield
+    finally:
+        stop.set()
+        try:
+            await asyncio.wait_for(task, SHUTDOWN_GRACE_SECONDS)
+        except asyncio.TimeoutError:
+            log.warning("Social publisher worker cancelled at shutdown; unfinished posts resume after their lease")
+
+
+async def _run_standalone(once: bool) -> None:
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, stop.set)
+    await run(stop, once=once)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Clipnera social publisher worker")
     parser.add_argument("--once", action="store_true", help="run every job once and exit")
     args = parser.parse_args()
     setup_logging()
     # Fail at startup, not on the first post, when the key ring is missing.
-    from core.crypto import get_token_cipher
-
     get_token_cipher()
-    asyncio.run(run(once=args.once))
+    asyncio.run(_run_standalone(args.once))
