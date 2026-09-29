@@ -427,6 +427,7 @@ class ClipService:
         enable_emoji: bool = True,
         watermark_enabled: bool = True,
         burn_subtitles: bool = True,
+        show_title: bool = True,
         progress_callback: Callable[[str, int, str | None], None] | None = None,
         animation_speed: float | None = None,
         hook_transition: HookTransitionConfig | None = None,
@@ -488,6 +489,7 @@ class ClipService:
                             style_type=style_type or SOCIAL_PLATFORM_DEFAULTS[platform.value]["subtitle_style"],
                             caption_config=caption_config,
                             burn_subtitles=burn_subtitles,
+                            show_title=show_title,
                             watermark_enabled=watermark_enabled,
                             enable_emoji=enable_emoji,
                             transcript=transcripts[clip.id],
@@ -653,6 +655,7 @@ class ClipService:
         style_type: str,
         caption_config: dict[str, Any],
         burn_subtitles: bool,
+        show_title: bool,
         watermark_enabled: bool,
         enable_emoji: bool,
         transcript: list[dict[str, Any]],
@@ -673,13 +676,13 @@ class ClipService:
         async with with_broll(cut_path, clip, hook) as source_path:
             return await self._render_export_from(
                 clip, source_path, styling, hook, spans, clip_end, style_type, caption_config,
-                burn_subtitles, watermark_enabled, enable_emoji, transcript, transition,
+                burn_subtitles, show_title, watermark_enabled, enable_emoji, transcript, transition,
             )
 
     async def _render_export_from(
         self, clip: GeneratedClip, cut_path: str, styling: Any, hook: Hook | None, spans: list | None,
         clip_end: float, style_type: str, caption_config: dict[str, Any], burn_subtitles: bool,
-        watermark_enabled: bool, enable_emoji: bool, transcript: list[dict[str, Any]],
+        show_title: bool, watermark_enabled: bool, enable_emoji: bool, transcript: list[dict[str, Any]],
         transition: TransitionSpec | None,
     ) -> str:
         if not burn_subtitles:
@@ -697,7 +700,7 @@ class ClipService:
             clip_end=clip_end,
             style_type=style_type,
             custom_config=caption_config,
-            title_text=clip.title,
+            title_text=clip.title if show_title else None,
             enable_watermark=watermark_enabled,
             transcript_segments=transcript,
             ai_cues=ai_cues if enable_emoji else None,

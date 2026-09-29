@@ -304,6 +304,10 @@ export interface ExportProjectOptions {
   captionConfig?: CaptionConfig;
   /** Only paid plans can turn the watermark off; the server forces it otherwise. */
   watermarkEnabled?: boolean;
+  /** Burn captions in; off renders the clip without captions or title. */
+  burnSubtitles?: boolean;
+  /** Overlay the clip title; applies only with `burnSubtitles`. */
+  showTitle?: boolean;
   /** Omitted means Auto. */
   hookTransition?: HookTransitionConfig;
   /** Also pack every render into one ZIP (`bundle_presigned_url`). */
@@ -462,6 +466,8 @@ export function mapBackendClip(clip: BackendClip): ViralClip {
     captionConfig: { ...DEFAULT_CAPTION_CONFIG, ...settings.caption_config },
     hookTransition: settings.hook_transition,
     watermarkEnabled: settings.watermark_enabled,
+    captionsEnabled: settings.captions_enabled,
+    titleEnabled: settings.title_enabled,
     removedWords: settings.transcript_edits?.removed ?? [],
     hasSavedSettings: clip.editor_settings != null,
     // Off by default: the render pipeline applies no zoom, so leaving it on
@@ -625,7 +631,7 @@ export const clipApi = {
   }),
   exportProject: (
     projectId: string,
-    { clipIds, maxClips, aspectRatio, captionConfig, watermarkEnabled = true, hookTransition, bundle }: ExportProjectOptions = {},
+    { clipIds, maxClips, aspectRatio, captionConfig, watermarkEnabled = true, burnSubtitles = true, showTitle = true, hookTransition, bundle }: ExportProjectOptions = {},
   ) => authedRequest<SocialExportResponse>(`/pipeline/export/${projectId}`, {
     method: 'POST',
     body: JSON.stringify({
@@ -633,7 +639,8 @@ export const clipApi = {
       ...(clipIds?.length ? { clip_ids: clipIds } : {}),
       ...(aspectRatio ? { aspect_ratio: aspectRatio } : {}),
       max_clips: maxClips,
-      burn_subtitles: true,
+      burn_subtitles: burnSubtitles,
+      show_title: showTitle,
       enable_emoji: captionConfig?.emojisEnabled ?? true,
       watermark_enabled: watermarkEnabled,
       ...(hookTransition ? { hook_transition: hookTransition } : {}),

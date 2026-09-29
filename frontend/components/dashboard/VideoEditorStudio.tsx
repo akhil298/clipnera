@@ -68,6 +68,8 @@ const initialDoc = (clip: ViralClip): StudioDoc => ({
   captionConfig: clip.captionConfig,
   hookTransition: clip.hookTransition ?? { mode: 'auto' },
   watermarkEnabled: clip.watermarkEnabled ?? true,
+  captionsEnabled: clip.captionsEnabled ?? true,
+  titleEnabled: clip.titleEnabled ?? true,
   removedWords: clip.removedWords ?? [],
   transcriptSegments: clip.transcriptSegments || [],
   bRollOverlays: clip.bRollOverlays || [],
@@ -82,6 +84,8 @@ const editorSettingsFor = (doc: StudioDoc): ClipEditorSettings => ({
   caption_config: doc.captionConfig,
   hook_transition: doc.hookTransition,
   watermark_enabled: doc.watermarkEnabled,
+  captions_enabled: doc.captionsEnabled,
+  title_enabled: doc.titleEnabled,
   transcript_edits: {
     removed: doc.removedWords,
     highlighted: doc.transcriptSegments
@@ -387,7 +391,7 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
           setSaveState('error');
         });
     }, 1000);
-  }, [doc.aspectRatio, doc.captionConfig, doc.hookTransition, doc.watermarkEnabled, doc.transcriptSegments, doc.removedWords, saveNow]);
+  }, [doc.aspectRatio, doc.captionConfig, doc.hookTransition, doc.watermarkEnabled, doc.captionsEnabled, doc.titleEnabled, doc.transcriptSegments, doc.removedWords, saveNow]);
 
   // Leaving within the autosave delay (another clip, back to the list) still saves.
   useEffect(
@@ -419,6 +423,8 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
       audioEnhancement: doc.audioEnhancement,
       hookTransition: doc.hookTransition,
       watermarkEnabled: doc.watermarkEnabled,
+      captionsEnabled: doc.captionsEnabled,
+      titleEnabled: doc.titleEnabled,
       removedWords: doc.removedWords,
     });
   }, [doc]);
@@ -543,11 +549,13 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
         captionConfig: current.captionConfig,
         hookTransition: current.hookTransition,
         watermarkEnabled: current.watermarkEnabled,
+        burnSubtitles: current.captionsEnabled,
+        showTitle: current.titleEnabled,
       });
 
       const burned = result?.exported_clips?.find((item) => item.burned_presigned_url)?.burned_presigned_url;
       if (!burned) throw new Error('The export finished without producing a file.');
-      // The editor keeps previewing the raw cut: the export has captions and
+      // The editor keeps previewing the raw cut: the export may have captions and
       // the hook bridge baked in, so playing it under the live caption overlay
       // would show captions twice.
       setExportedUrl(burned);
@@ -568,7 +576,7 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
     setIsExporting(false);
     // The URL is signed to download as an attachment, so a same-tab click
     // saves the file without leaving the editor. Never fall back to the raw
-    // cut: it has no captions.
+    // cut: it skips the watermark and hook the export applies.
     const link = document.createElement('a');
     link.href = exportedUrl;
     link.download = `${clip.title.replace(/\s+/g, '_')}_Clipnera.mp4`;
@@ -668,6 +676,10 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
       onMenuOpenChange={setExportMenuOpen}
       onExport={() => void handleStartExport()}
       onSchedule={() => onScheduleClip(clip)}
+      captionsOn={doc.captionsEnabled}
+      onToggleCaptions={() => patch({ captionsEnabled: !doc.captionsEnabled })}
+      titleOn={doc.titleEnabled}
+      onToggleTitle={() => patch({ titleEnabled: !doc.titleEnabled })}
       watermarkOn={doc.watermarkEnabled}
       watermarkForced={entitlements.watermark_forced}
       onToggleWatermark={handleWatermarkToggle}
@@ -686,6 +698,8 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
       }}
       aspectRatio={doc.aspectRatio}
       config={doc.captionConfig}
+      showCaptions={doc.captionsEnabled}
+      showTitle={doc.captionsEnabled && doc.titleEnabled}
       captionWords={activeCaptionGroup ?? []}
       hasTranscript={allWords.length > 0}
       currentTime={currentTime}
@@ -822,8 +836,10 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
           complete={exportComplete}
           error={exportError}
           summary={[
-            `${getAllCaptionStyles().find((s) => s.id === doc.captionConfig.preset)?.name ?? 'Styled'} captions`,
-            'title',
+            doc.captionsEnabled
+              ? `${getAllCaptionStyles().find((s) => s.id === doc.captionConfig.preset)?.name ?? 'Styled'} captions`
+              : 'no captions',
+            doc.captionsEnabled && doc.titleEnabled ? 'title' : 'no title',
             doc.watermarkEnabled || entitlements.watermark_forced ? 'Clipnera watermark' : 'no watermark',
             `${doc.aspectRatio} HD`,
           ].join(' · ')}

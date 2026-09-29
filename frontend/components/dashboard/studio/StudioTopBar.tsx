@@ -40,6 +40,10 @@ interface StudioTopBarProps {
   onMenuOpenChange: (open: boolean) => void;
   onExport: () => void;
   onSchedule: () => void;
+  captionsOn: boolean;
+  onToggleCaptions: () => void;
+  titleOn: boolean;
+  onToggleTitle: () => void;
   watermarkOn: boolean;
   watermarkForced: boolean;
   onToggleWatermark: () => void;
@@ -70,6 +74,29 @@ function SaveIndicator({ state }: { state: SaveState }) {
   );
 }
 
+/** One on/off choice for what the exported video includes. */
+function IncludeToggle({ label, hint, checked, disabled, badge, onToggle }: {
+  label: string;
+  hint: string;
+  checked: boolean;
+  disabled?: boolean;
+  badge?: React.ReactNode;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-2.5 py-2 text-[12.5px] text-white">
+      <span>
+        <span className="flex items-center gap-1.5">
+          {label}
+          {badge}
+        </span>
+        <small className="block text-[11px] text-neutral-500">{hint}</small>
+      </span>
+      <Switch checked={checked} disabled={disabled} onChange={onToggle} label={label} />
+    </div>
+  );
+}
+
 const iconButton =
   'w-8 h-8 shrink-0 rounded-[9px] inline-flex items-center justify-center text-neutral-400 hover:bg-neutral-800 hover:text-white disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-neutral-400';
 
@@ -77,7 +104,7 @@ export function StudioTopBar(props: StudioTopBarProps) {
   const {
     layout, title, subtitle, score, aspectRatio, saveState, canUndo, canRedo, onUndo, onRedo, onBack,
     onOpenClips, clipCount, onShowShortcuts, menuOpen, onMenuOpenChange, onExport, onSchedule,
-    watermarkOn, watermarkForced, onToggleWatermark,
+    captionsOn, onToggleCaptions, titleOn, onToggleTitle, watermarkOn, watermarkForced, onToggleWatermark,
   } = props;
   const menuRef = useRef<HTMLDivElement>(null);
   const phone = layout === 'phone';
@@ -96,6 +123,28 @@ export function StudioTopBar(props: StudioTopBarProps) {
       role="menu"
       className="absolute right-0 top-[42px] z-40 w-[290px] rounded-2xl border border-neutral-700 bg-neutral-900 p-1.5 shadow-2xl shadow-black/60"
     >
+      <p className="px-2.5 pt-1.5 pb-0.5 text-[10.5px] font-bold uppercase tracking-wider text-neutral-500">In the video</p>
+      <IncludeToggle
+        label="Captions"
+        hint={captionsOn ? 'Burned into the exported video' : 'Exported without captions'}
+        checked={captionsOn}
+        onToggle={onToggleCaptions}
+      />
+      <IncludeToggle
+        label="Title text"
+        hint={captionsOn ? 'The headline at the top of the video' : 'Needs captions on'}
+        checked={captionsOn && titleOn}
+        disabled={!captionsOn}
+        onToggle={onToggleTitle}
+      />
+      <IncludeToggle
+        label="Clipnera watermark"
+        hint={watermarkForced ? 'Paid plans can turn it off' : 'Shown in the exported video'}
+        checked={watermarkOn || watermarkForced}
+        badge={watermarkForced && <ProLockBadge feature="Removing the watermark" />}
+        onToggle={onToggleWatermark}
+      />
+      <div className="my-1.5 mx-1 h-px bg-neutral-800" />
       <button
         type="button"
         role="menuitem"
@@ -130,49 +179,24 @@ export function StudioTopBar(props: StudioTopBarProps) {
           <small className="text-[11.5px] text-neutral-400">Pick a time and platforms</small>
         </span>
       </button>
-      <div className="my-1.5 mx-1 h-px bg-neutral-800" />
-      <div className="flex items-center justify-between gap-3 px-2.5 py-2 text-[12.5px] text-white">
-        <span>
-          <span className="flex items-center gap-1.5">
-            Clipnera watermark
-            {watermarkForced && <ProLockBadge feature="Removing the watermark" />}
-          </span>
-          <small className="block text-[11px] text-neutral-500">
-            {watermarkForced ? 'Paid plans can turn it off' : 'Shown in the exported video'}
-          </small>
-        </span>
-        <Switch checked={watermarkOn || watermarkForced} onChange={onToggleWatermark} label="Clipnera watermark" />
-      </div>
     </div>
   );
 
   const exportControl = (
     <div ref={menuRef} className="relative flex shrink-0">
+      {/* Opens the options first, so captions, title and watermark are chosen before exporting. */}
       <button
         type="button"
-        onClick={phone ? () => onMenuOpenChange(!menuOpen) : onExport}
-        aria-haspopup={phone ? 'menu' : undefined}
-        aria-expanded={phone ? menuOpen : undefined}
-        title={phone ? undefined : 'Export HD (⌘E)'}
-        className={`h-[34px] px-3.5 inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-neutral-950 text-[13px] font-extrabold ${
-          phone ? 'rounded-[10px]' : 'rounded-l-[10px]'
-        }`}
+        onClick={() => onMenuOpenChange(!menuOpen)}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        title={phone ? undefined : 'Export options (⌘E exports right away)'}
+        className="h-[34px] px-3.5 inline-flex items-center gap-1.5 rounded-[10px] bg-amber-500 hover:bg-amber-400 text-neutral-950 text-[13px] font-extrabold"
       >
         <Download className="w-[15px] h-[15px]" aria-hidden />
         Export
+        <ChevronDown className="w-4 h-4 -mr-1" aria-hidden />
       </button>
-      {!phone && (
-        <button
-          type="button"
-          onClick={() => onMenuOpenChange(!menuOpen)}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          aria-label="More export options"
-          className="h-[34px] w-[30px] rounded-r-[10px] inline-flex items-center justify-center bg-amber-500 hover:bg-amber-400 text-neutral-950 border-l border-black/25"
-        >
-          <ChevronDown className="w-4 h-4" aria-hidden />
-        </button>
-      )}
       {menu}
     </div>
   );

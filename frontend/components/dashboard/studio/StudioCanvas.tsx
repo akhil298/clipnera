@@ -40,6 +40,9 @@ interface StudioCanvasProps {
   onEnded: () => void;
   aspectRatio: AspectRatio;
   config: CaptionConfig;
+  /** Off previews the clip as it exports without captions. */
+  showCaptions: boolean;
+  showTitle: boolean;
   captionWords: WordTimestamp[];
   hasTranscript: boolean;
   currentTime: number;
@@ -68,8 +71,8 @@ function useWidth() {
 
 export function StudioCanvas(props: StudioCanvasProps) {
   const {
-    clip, videoRef, onLoadedMetadata, onPlayingChange, onEnded, aspectRatio, config, captionWords,
-    hasTranscript, currentTime, zoomScale, activeBRoll, preview, showSafeZones, onCaptionYChange, onCyclePreview,
+    clip, videoRef, onLoadedMetadata, onPlayingChange, onEnded, aspectRatio, config, showCaptions, showTitle,
+    captionWords, hasTranscript, currentTime, zoomScale, activeBRoll, preview, showSafeZones, onCaptionYChange, onCyclePreview,
   } = props;
   const { ref: stageRef, width: stageWidth } = useWidth();
   const [dragging, setDragging] = useState(false);
@@ -163,7 +166,7 @@ export function StudioCanvas(props: StudioCanvasProps) {
         )}
 
         {/* The clip's headline, pinned near the top; mirrors the ASS "Title" style. */}
-        {clip.title?.trim() && (
+        {showTitle && clip.title?.trim() && (
           <div
             className="absolute inset-x-4 z-30 pointer-events-none flex justify-center text-center"
             style={{ top: `${config.titlePositionY}%` }}
@@ -179,67 +182,69 @@ export function StudioCanvas(props: StudioCanvasProps) {
         )}
 
         {/* Captions: drag them up or down on the video. */}
-        <div
-          className="absolute inset-x-4 z-30 pointer-events-none flex flex-col items-center justify-center text-center"
-          style={{ top: `${config.positionY}%`, transform: 'translateY(-50%)' }}
-        >
-          {captionWords.length > 0 ? (
-            <div
-              role="slider"
-              aria-label="Caption position"
-              aria-valuemin={CAPTION_Y_MIN}
-              aria-valuemax={CAPTION_Y_MAX}
-              aria-valuenow={config.positionY}
-              aria-valuetext={`${config.positionY}% from the top`}
-              tabIndex={0}
-              title="Drag to move the captions"
-              onKeyDown={(e) => {
-                if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
-                e.preventDefault();
-                const step = e.key === 'ArrowUp' ? -1 : 1;
-                onCaptionYChange(Math.max(CAPTION_Y_MIN, Math.min(CAPTION_Y_MAX, config.positionY + step)));
-              }}
-              onPointerDown={(e) => {
-                e.preventDefault();
-                e.currentTarget.setPointerCapture(e.pointerId);
-                setDragging(true);
-              }}
-              onPointerMove={(e) => dragging && moveCaption(e.clientY)}
-              onPointerUp={() => setDragging(false)}
-              onPointerCancel={() => setDragging(false)}
-              className={`pointer-events-auto touch-none inline-block p-2 rounded-xl outline-offset-4 ${
-                dragging ? 'cursor-grabbing outline-dashed outline-[1.5px] outline-sky-400' : 'cursor-grab hover:outline-dashed hover:outline-[1.5px] hover:outline-sky-400/70'
-              } ${config.hasBgBox ? 'shadow-2xl border border-neutral-700/50' : ''}`}
-              style={{ backgroundColor: config.hasBgBox ? config.bgBoxColor : 'transparent' }}
-            >
-              <p
-                key={captionWords[0]?.id}
-                className={`font-black tracking-tight leading-tight ${config.uppercase ? 'uppercase' : ''}`}
-                style={{
-                  animation: captionEntrance(config.animation, config.animationSpeed),
-                  fontFamily: config.fontFamily,
-                  fontSize: `${captionFontPx}px`,
-                  color: config.textColor,
-                  textShadow: config.shadowIntensity > 0 ? `0 2px ${config.shadowIntensity * 10}px rgba(0,0,0,0.9)` : 'none',
+        {showCaptions && (
+          <div
+            className="absolute inset-x-4 z-30 pointer-events-none flex flex-col items-center justify-center text-center"
+            style={{ top: `${config.positionY}%`, transform: 'translateY(-50%)' }}
+          >
+            {captionWords.length > 0 ? (
+              <div
+                role="slider"
+                aria-label="Caption position"
+                aria-valuemin={CAPTION_Y_MIN}
+                aria-valuemax={CAPTION_Y_MAX}
+                aria-valuenow={config.positionY}
+                aria-valuetext={`${config.positionY}% from the top`}
+                tabIndex={0}
+                title="Drag to move the captions"
+                onKeyDown={(e) => {
+                  if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                  e.preventDefault();
+                  const step = e.key === 'ArrowUp' ? -1 : 1;
+                  onCaptionYChange(Math.max(CAPTION_Y_MIN, Math.min(CAPTION_Y_MAX, config.positionY + step)));
                 }}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  setDragging(true);
+                }}
+                onPointerMove={(e) => dragging && moveCaption(e.clientY)}
+                onPointerUp={() => setDragging(false)}
+                onPointerCancel={() => setDragging(false)}
+                className={`pointer-events-auto touch-none inline-block p-2 rounded-xl outline-offset-4 ${
+                  dragging ? 'cursor-grabbing outline-dashed outline-[1.5px] outline-sky-400' : 'cursor-grab hover:outline-dashed hover:outline-[1.5px] hover:outline-sky-400/70'
+                } ${config.hasBgBox ? 'shadow-2xl border border-neutral-700/50' : ''}`}
+                style={{ backgroundColor: config.hasBgBox ? config.bgBoxColor : 'transparent' }}
               >
-                {captionWords.map((word) => {
-                  const isActive = config.animation !== 'none' && currentTime >= word.start && currentTime <= word.end;
-                  return (
-                    <span key={word.id} className="inline-block mx-1 transition-all" style={activeWordStyle(config, isActive, Boolean(word.highlighted))}>
-                      {word.text}
-                      {word.emoji && config.emojisEnabled && <span className="ml-1 inline-block animate-pulse">{word.emoji}</span>}
-                    </span>
-                  );
-                })}
-              </p>
-            </div>
-          ) : !hasTranscript ? (
-            <div className="inline-block px-3 py-1.5 rounded-lg bg-black/70 border border-neutral-700/50 text-[10px] text-neutral-400">
-              No transcript yet for this clip
-            </div>
-          ) : null}
-        </div>
+                <p
+                  key={captionWords[0]?.id}
+                  className={`font-black tracking-tight leading-tight ${config.uppercase ? 'uppercase' : ''}`}
+                  style={{
+                    animation: captionEntrance(config.animation, config.animationSpeed),
+                    fontFamily: config.fontFamily,
+                    fontSize: `${captionFontPx}px`,
+                    color: config.textColor,
+                    textShadow: config.shadowIntensity > 0 ? `0 2px ${config.shadowIntensity * 10}px rgba(0,0,0,0.9)` : 'none',
+                  }}
+                >
+                  {captionWords.map((word) => {
+                    const isActive = config.animation !== 'none' && currentTime >= word.start && currentTime <= word.end;
+                    return (
+                      <span key={word.id} className="inline-block mx-1 transition-all" style={activeWordStyle(config, isActive, Boolean(word.highlighted))}>
+                        {word.text}
+                        {word.emoji && config.emojisEnabled && <span className="ml-1 inline-block animate-pulse">{word.emoji}</span>}
+                      </span>
+                    );
+                  })}
+                </p>
+              </div>
+            ) : !hasTranscript ? (
+              <div className="inline-block px-3 py-1.5 rounded-lg bg-black/70 border border-neutral-700/50 text-[10px] text-neutral-400">
+                No transcript yet for this clip
+              </div>
+            ) : null}
+          </div>
+        )}
 
         {preview !== 'none' && vertical && (
           <PlatformOverlay platform={preview} title={clip.title} hashtags={clip.socialOptimization.hashtags} />

@@ -157,6 +157,10 @@ export interface ViralClip {
   hookTransition?: HookTransitionConfig;
   /** The user's watermark choice; paid plans only can turn it off. */
   watermarkEnabled?: boolean;
+  /** Burn captions into the export; off downloads the video without them. */
+  captionsEnabled?: boolean;
+  /** Overlay the clip title; applies only with captions on. */
+  titleEnabled?: boolean;
   /** Words cut in the Transcript tab, by source start time. */
   removedWords?: number[];
   /** Whether the server has saved editor settings for this clip. */
@@ -177,6 +181,8 @@ export interface ClipEditorSettings {
   caption_config?: CaptionConfig;
   hook_transition?: HookTransitionConfig;
   watermark_enabled?: boolean;
+  captions_enabled?: boolean;
+  title_enabled?: boolean;
   transcript_edits?: TranscriptEdits;
 }
 

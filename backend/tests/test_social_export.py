@@ -56,6 +56,7 @@ class TestSocialExportRequest:
         assert req.enable_emoji is True
         assert req.watermark_enabled is True
         assert req.burn_subtitles is True
+        assert req.show_title is True
 
     def test_custom_platforms(self):
         req = SocialExportRequest(platforms=["tiktok", "youtube_shorts", "linkedin"])
@@ -68,6 +69,10 @@ class TestSocialExportRequest:
     def test_disable_burn(self):
         req = SocialExportRequest(burn_subtitles=False)
         assert req.burn_subtitles is False
+
+    def test_hide_title(self):
+        req = SocialExportRequest(show_title=False)
+        assert req.show_title is False
 
     def test_disable_emoji(self):
         req = SocialExportRequest(enable_emoji=False)

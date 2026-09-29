@@ -1928,6 +1928,7 @@ class PipelineRunService:
             enable_emoji=request.enable_emoji,
             watermark_enabled=watermark_enabled,
             burn_subtitles=request.burn_subtitles,
+            show_title=request.show_title,
             animation_speed=request.animation_speed,
             hook_transition=request.hook_transition,
             bundle=request.bundle,

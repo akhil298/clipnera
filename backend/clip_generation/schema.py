@@ -232,6 +232,10 @@ class SocialExportRequest(BaseModel):
         description="Overlay the Clipnera watermark; only paid plans may turn it off",
     )
     burn_subtitles: bool = True
+    show_title: bool = Field(
+        default=True,
+        description="Overlay the clip title; applies only when burn_subtitles is on",
+    )
     animation_speed: Optional[float] = Field(
         default=None,
         description="Caption animation speed; custom_config.animation_speed wins when both are set",
@@ -285,4 +289,6 @@ class ClipEditorSettings(BaseModel):
     caption_config: Optional[dict[str, Any]] = None
     hook_transition: Optional[HookTransitionConfig] = None
     watermark_enabled: Optional[bool] = None
+    captions_enabled: Optional[bool] = None
+    title_enabled: Optional[bool] = None
     transcript_edits: Optional[TranscriptEdits] = None

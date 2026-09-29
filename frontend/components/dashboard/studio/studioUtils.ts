@@ -19,6 +19,10 @@ export interface StudioDoc {
   captionConfig: CaptionConfig;
   hookTransition: HookTransitionConfig;
   watermarkEnabled: boolean;
+  /** Burn captions into the export. */
+  captionsEnabled: boolean;
+  /** Overlay the clip title; only exported with captions on. */
+  titleEnabled: boolean;
   /** Cut words by source start time; the words stay in the transcript, struck through. */
   removedWords: number[];
   transcriptSegments: TranscriptSegment[];
