@@ -68,7 +68,7 @@ class BaseConfig(BaseSettings):
     # set (no GPU needed) and falls back to local faster-whisper; "local"
     # always transcribes on this machine.
     TRANSCRIPTION_PROVIDER: str = "auto"
-    GROQ_WHISPER_MODEL: str = "whisper-large-v3-turbo"
+    GROQ_WHISPER_MODEL: str = "whisper-large-v3"
     # Noise cancellation is skipped when the extracted audio's estimated
     # signal-to-noise ratio is at least this many dB (studio-clean speech).
     NOISE_CANCEL_SKIP_SNR_DB: float = 30.0

@@ -23,7 +23,7 @@ from usage.recorder import record_llm_call
 
 log = get_logger(__name__)
 
-DEFAULT_MODEL = "whisper-large-v3-turbo"
+DEFAULT_MODEL = "whisper-large-v3"
 # Ten minutes of 64 kbps mono MP3 is about 4.8 MB, far under the upload limit.
 CHUNK_SECONDS = 600.0
 OVERLAP_SECONDS = 2.0
