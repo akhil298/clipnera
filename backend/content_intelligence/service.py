@@ -11,6 +11,7 @@ from core.logging_config import get_logger
 from content_intelligence.analyzer import FrameAnalyzer
 from content_intelligence.classifier import ContentClassifier
 from content_intelligence.director import VideoDirector
+from visual_timeline import attach_scenes, describe_video
 from content_intelligence.edit_plan import build_clips, build_story_clips, number_clips
 from content_intelligence.highlighter import (
     MAX_CLIP_DURATION,
@@ -105,8 +106,9 @@ class ContentIntelligenceService:
         if progress_callback:
             await self._notify(progress_callback, "Listening for peaks and reactions...", 10)
         duration = await self._ffmpeg.probe_duration(video_path)
-        audio = await extract_audio_signals(video_path)
+        audio, scenes = await asyncio.gather(extract_audio_signals(video_path), describe_video(video_path, duration))
         sentences = build_sentences(transcript_segments, audio)
+        attach_scenes(sentences, scenes)
 
         if progress_callback:
             await self._notify(progress_callback, "Mapping the video...", 30)
@@ -132,6 +134,7 @@ class ContentIntelligenceService:
                 "frame_analysis": self._signal_summary(audio),
             }
 
+        analysis["visual_timeline"] = scenes
         await self._persist_analysis(project_id, analysis)
         return analysis
 
@@ -220,6 +223,7 @@ class ContentIntelligenceService:
         # rebuilding it from the transcript is instant. Loudness flags only
         # matter to the models, which already read them in the Map pass.
         sentences = build_sentences(transcript_segments, None)
+        attach_scenes(sentences, analysis.get("visual_timeline") or [])
         category = str(video_map.get("category") or "unknown")
         jump_cuts = bool(settings.get("jump_cuts", True))
         story_count = story_clip_count(settings, max_clips, category)

@@ -47,6 +47,8 @@ class Sentence:
     speaker: str = "-"
     flags: str = ""
     words: list[dict[str, Any]] = field(default_factory=list)
+    # What is on screen while it is spoken, when a visual pass supplied it.
+    scene: str = ""
 
     @property
     def duration(self) -> float:
@@ -59,7 +61,10 @@ class Sentence:
 
     def line(self) -> str:
         flags = "".join(f"!{flag}" for flag in self.flags)
-        return " ".join(part for part in (str(self.id), f"{self.start:.1f}", self.speaker, flags, self.text) if part)
+        scene = f"[sees: {self.scene}]" if self.scene else ""
+        return " ".join(
+            part for part in (str(self.id), f"{self.start:.1f}", self.speaker, flags, scene, self.text) if part
+        )
 
 
 def build_sentences(segments: list[dict[str, Any]], audio: AudioSignals | None = None) -> list[Sentence]:

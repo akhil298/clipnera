@@ -74,6 +74,13 @@ class BaseConfig(BaseSettings):
     NOISE_CANCEL_SKIP_SNR_DB: float = 30.0
     GEMINI_API_KEY: str = ""
     GEMINI_MODEL: str = "gemini-2.0-flash"
+    # Visual timeline (backend/visual_timeline/): a Gemini pass that tells the
+    # AI director what is on screen. Skipped without GEMINI_API_KEY.
+    VISUAL_TIMELINE_ENABLED: bool = True
+    VISUAL_TIMELINE_MODEL: str = "gemini-3.1-flash-lite"
+    VISUAL_TIMELINE_MEDIA_RESOLUTION: Literal[
+        "MEDIA_RESOLUTION_LOW", "MEDIA_RESOLUTION_MEDIUM", "MEDIA_RESOLUTION_HIGH"
+    ] = "MEDIA_RESOLUTION_MEDIUM"
 
     # Pins every clip to these shapes regardless of content. Left empty -- the
     # default -- the content category decides (see CATEGORY_ASPECT_RATIOS), so

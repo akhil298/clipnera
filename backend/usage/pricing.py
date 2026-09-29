@@ -35,6 +35,9 @@ TOKEN_PRICES: dict[tuple[str, str], TokenPrice] = {
     ("anthropic", "claude-haiku-4-5"): TokenPrice(1.00, 5.00),
     ("groq", "openai/gpt-oss-20b"): TokenPrice(0.075, 0.30),
     ("groq", "openai/gpt-oss-120b"): TokenPrice(0.15, 0.60),
+    # Gemini paid-tier rates for text, image and video input (ai.google.dev/gemini-api/docs/pricing).
+    ("gemini", "gemini-3.1-flash-lite"): TokenPrice(0.25, 1.50),
+    ("gemini", "gemini-3.5-flash-lite"): TokenPrice(0.30, 2.50),
 }
 
 # Speech-to-text, per hour of audio.

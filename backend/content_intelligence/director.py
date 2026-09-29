@@ -156,7 +156,8 @@ CHECK_EXAMPLE = '{"verdicts":[{"clip":1,"ok":true,"issue":""},{"clip":2,"ok":fal
 STORY_SEPARATOR = " … "
 
 TABLE_LEGEND = """Transcript lines read: id start_second speaker flags text.
-Flags: !E louder than the surrounding minute (energy peak), !Q question, !P follows a long pause, !R loud reaction right after (laughter, applause, gasp)."""
+Flags: !E louder than the surrounding minute (energy peak), !Q question, !P follows a long pause, !R loud reaction right after (laughter, applause, gasp).
+[sees: ...], when present, is what is on screen during the line. Favour moments that are strong to watch as well as to hear, and never pick a line whose words point at something the picture does not show."""
 
 # Shared by every prompt that reads a transcript or writes viewer-facing copy.
 LANGUAGE_RULE = """The transcript may be in any language or a mix, including Hindi, Telugu, Hinglish and Tenglish, in native or Roman script. Judge meaning, hooks and humour in the language actually spoken, never through a literal English reading. Write every title, description and hashtag in the language mix the speaker uses, in the transcript's script: Roman script for a Roman-script transcript."""
