@@ -82,7 +82,7 @@ class CreatorIntroService:
         intro.tagline = " ".join((request.tagline or "").split()) or None
         intro.theme = request.theme
         intro.enabled = request.enabled
-        await self._session.commit()
+        await self._commit(intro)
         return self.response(intro)
 
     async def render(self, user_id: str) -> CreatorIntroResponse:
@@ -94,9 +94,14 @@ class CreatorIntroService:
             raise CustomException(message="The intro is already rendering", code="INTRO_BUSY", status_code=409)
         await SubscriptionService.for_session(self._session).consume_daily_quota(user_id, "intro_renders")
         intro.status, intro.error = IntroStatus.RENDERING, None
-        await self._session.commit()
+        await self._commit(intro)
         await get_queue().enqueue(Job(RENDER_JOB, {"user_id": user_id}))
         return self.response(intro)
+
+    async def _commit(self, intro: CreatorIntro) -> None:
+        # updated_at is set by the database, so reload it rather than lazy-load it later.
+        await self._session.commit()
+        await self._session.refresh(intro)
 
     def response(self, intro: CreatorIntro) -> CreatorIntroResponse:
         files: dict[str, str] = json.loads(intro.files)
