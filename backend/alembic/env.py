@@ -34,6 +34,7 @@ from feedback import model as feedback_model
 from broll import model as broll_model
 from reels import model as reels_model
 from edit_engine import model as edit_engine_model
+from creator_intro import model as creator_intro_model
 
 target_metadata = Base.metadata
 

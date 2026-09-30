@@ -118,6 +118,7 @@ class PlanCapabilities(BaseModel):
     social_max_schedule_days: int
     social_posts_per_day: int
     custom_aspect_ratios: bool
+    creator_intro: bool
     # Every boolean capability by name, as checked by require_feature.
     features: Dict[str, bool]
 

@@ -17,7 +17,8 @@ import { getAllCaptionStyles, getCaptionConfig } from '@/lib/utils/captionStyles
 import { useEntitlements, canUseAspectRatio, canUseCaptionStyle } from '@/hooks/useEntitlements';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { sfxEngine } from '@/lib/utils/audioSynth';
-import { brandKitApi, clipApi } from '@/lib/api';
+import { brandKitApi, clipApi, creatorIntroApi } from '@/lib/api';
+import { FEATURE_LABELS } from '@/hooks/usePlan';
 import { AudioEnhancerPanel } from './AudioEnhancerPanel';
 import { StudioTopBar, type SaveState } from './studio/StudioTopBar';
 import { ClipDrawer, ClipRail } from './studio/ClipRail';
@@ -510,6 +511,34 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
     patch({ watermarkEnabled: !doc.watermarkEnabled });
   };
 
+  // The creator's channel intro plays before the export once it is ready; the
+  // switch skips it for this clip only.
+  const [introReady, setIntroReady] = useState(false);
+  const [channelIntroOn, setChannelIntroOn] = useState(true);
+  useEffect(() => {
+    if (!entitlements.creator_intro) return;
+    let cancelled = false;
+    creatorIntroApi
+      .get()
+      .then((intro) => {
+        if (!cancelled) setIntroReady(intro?.status === 'ready' && intro.enabled);
+      })
+      .catch(() => {
+        // Could not tell: export without it rather than promise one.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [entitlements.creator_intro]);
+
+  const handleChannelIntroToggle = () => {
+    if (!entitlements.creator_intro) {
+      promptUpgrade(FEATURE_LABELS.creator_intro);
+      return;
+    }
+    setChannelIntroOn((on) => !on);
+  };
+
   // --- Export ----------------------------------------------------------------
 
   // The request answers once, when the file is ready, so the bar is paced by
@@ -552,6 +581,7 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
         watermarkEnabled: current.watermarkEnabled,
         burnSubtitles: current.captionsEnabled,
         showTitle: current.titleEnabled,
+        channelIntro: introReady && channelIntroOn,
       });
 
       const burned = result?.exported_clips?.find((item) => item.burned_presigned_url)?.burned_presigned_url;
@@ -683,6 +713,10 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
       watermarkOn={doc.watermarkEnabled}
       watermarkForced={entitlements.watermark_forced}
       onToggleWatermark={handleWatermarkToggle}
+      channelIntroOn={introReady && channelIntroOn}
+      channelIntroReady={introReady}
+      channelIntroLocked={!entitlements.creator_intro}
+      onToggleChannelIntro={handleChannelIntroToggle}
     />
   );
 

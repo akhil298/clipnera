@@ -290,6 +290,8 @@ export interface SocialExportResponse {
   total_exported: number;
   /** The watermark actually applied: always true on plans that force it. */
   watermark_enabled: boolean;
+  /** Whether the creator's channel intro was put in front of the renders. */
+  channel_intro: boolean;
   /** One ZIP of every render; set only when the request asked for `bundle`. */
   bundle_presigned_url?: string | null;
 }
@@ -312,6 +314,8 @@ export interface ExportProjectOptions {
   hookTransition?: HookTransitionConfig;
   /** Also pack every render into one ZIP (`bundle_presigned_url`). */
   bundle?: boolean;
+  /** Play the channel intro first; the server applies it only on Pro with a ready intro. */
+  channelIntro?: boolean;
 }
 
 // New clips start on Clean Dark: animated white captions on a dark plate.
@@ -631,7 +635,7 @@ export const clipApi = {
   }),
   exportProject: (
     projectId: string,
-    { clipIds, maxClips, aspectRatio, captionConfig, watermarkEnabled = true, burnSubtitles = true, showTitle = true, hookTransition, bundle }: ExportProjectOptions = {},
+    { clipIds, maxClips, aspectRatio, captionConfig, watermarkEnabled = true, burnSubtitles = true, showTitle = true, hookTransition, bundle, channelIntro = true }: ExportProjectOptions = {},
   ) => authedRequest<SocialExportResponse>(`/pipeline/export/${projectId}`, {
     method: 'POST',
     body: JSON.stringify({
@@ -643,6 +647,7 @@ export const clipApi = {
       show_title: showTitle,
       enable_emoji: captionConfig?.emojisEnabled ?? true,
       watermark_enabled: watermarkEnabled,
+      channel_intro: channelIntro,
       ...(hookTransition ? { hook_transition: hookTransition } : {}),
       ...(bundle ? { bundle } : {}),
       style_type: captionConfig?.preset || 'bold_captions',
@@ -1052,9 +1057,10 @@ export type PlanFeature =
   | 'batch_processing'
   | 'team_members'
   | 'social_scheduling'
-  | 'custom_aspect_ratios';
+  | 'custom_aspect_ratios'
+  | 'creator_intro';
 
-export type UsageKey = 'exports' | 'audio_enhancements' | 'reel_renders' | 'ai_shots' | 'auto_edits';
+export type UsageKey = 'exports' | 'audio_enhancements' | 'reel_renders' | 'ai_shots' | 'auto_edits' | 'intro_renders';
 
 export type BillingPeriod = 'monthly' | 'yearly';
 
@@ -1085,6 +1091,8 @@ export interface PlanCapabilities {
   social_posts_per_day: number;
   /** Picking output ratios at upload; without it every run renders 9:16. */
   custom_aspect_ratios: boolean;
+  /** A channel intro played before every export (backend creator_intro/). */
+  creator_intro: boolean;
   features: Record<PlanFeature, boolean>;
 }
 
@@ -2196,6 +2204,77 @@ export const reelsApi = {
       }),
     );
     return reelsApi.completeAssets(reelId, uploads.map((u) => u.key));
+  },
+};
+
+// -- Channel intro (backend creator_intro/) --------------------------------------------
+// Mirrors backend/creator_intro/schema.py.
+
+export type IntroPlatform = 'youtube' | 'tiktok' | 'instagram' | 'twitch' | 'x' | 'facebook' | 'kick' | 'linkedin' | 'other';
+export type IntroTheme = 'auto' | 'light' | 'dark';
+export type IntroStatus = 'draft' | 'rendering' | 'ready' | 'failed';
+export type IntroAvatarType = 'image/jpeg' | 'image/png' | 'image/webp';
+/** Rendition names: 9:16, 16:9 and 1:1. */
+export type IntroRendition = '9x16' | '16x9' | '1x1';
+
+export interface CreatorIntroSaveRequest {
+  platform: IntroPlatform;
+  niche?: string | null;
+  channel_name: string;
+  handle?: string | null;
+  about: string;
+  /** Empty lets the AI write the line from `about`. */
+  tagline?: string | null;
+  theme: IntroTheme;
+  /** A key from `uploadAvatar`; omitted keeps the current picture. */
+  avatar_key?: string | null;
+  remove_avatar?: boolean;
+  enabled: boolean;
+}
+
+export interface CreatorIntroAvatarUpload {
+  key: string;
+  url: string;
+  content_type: string;
+}
+
+export interface CreatorIntro {
+  status: IntroStatus;
+  platform: IntroPlatform;
+  niche: string | null;
+  channel_name: string;
+  handle: string | null;
+  about: string;
+  tagline: string | null;
+  theme: IntroTheme;
+  theme_used: 'light' | 'dark' | null;
+  avatar_url: string | null;
+  enabled: boolean;
+  /** Empty until the first render finishes. */
+  preview_urls: Partial<Record<IntroRendition, string>>;
+  duration_s: number;
+  error: string | null;
+  updated_at: string;
+}
+
+export const INTRO_AVATAR_TYPES: readonly IntroAvatarType[] = ['image/jpeg', 'image/png', 'image/webp'];
+
+export const creatorIntroApi = {
+  /** null until the user saves one; readable on every plan. */
+  get: () => envelopeRequest<CreatorIntro | null>('/creator-intro'),
+  save: (payload: CreatorIntroSaveRequest) =>
+    envelopeRequest<CreatorIntro>('/creator-intro', { method: 'PUT', body: JSON.stringify(payload) }),
+  render: () => envelopeRequest<CreatorIntro>('/creator-intro/render', post({})),
+
+  /** Uploads the picture straight to S3; pass the returned key as `avatar_key` when saving. */
+  async uploadAvatar(file: File): Promise<string> {
+    const upload = await envelopeRequest<CreatorIntroAvatarUpload>(
+      '/creator-intro/avatar',
+      post({ content_type: file.type as IntroAvatarType, size_bytes: file.size }),
+    );
+    const res = await fetch(upload.url, { method: 'PUT', body: file, headers: { 'Content-Type': upload.content_type } });
+    if (!res.ok) throw new Error(`Upload of ${file.name} failed (${res.status})`);
+    return upload.key;
   },
 };
 

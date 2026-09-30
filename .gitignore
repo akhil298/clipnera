@@ -81,3 +81,6 @@ backend/models/retinaface_r50.onnx
 
 # Local B-roll downloads (python -m broll.collect)
 broll_library/
+
+# Asset harvester output (tools/asset_harvester)
+asset_library/

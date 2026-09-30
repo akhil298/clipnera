@@ -6,6 +6,7 @@ import { brandKitApi } from '@/lib/api';
 import { FEATURE_LABELS, usePlan } from '@/hooks/usePlan';
 import { ProLockBadge } from './ProLockBadge';
 import { CaptionStylePreview } from './CaptionStylePreview';
+import { ChannelIntroPanel } from './ChannelIntroPanel';
 import { BrandKitSkeleton } from '@/components/skeletons';
 import { CAPTION_PRESETS } from '@/lib/data/captionPresets';
 import { getCaptionConfig } from '@/lib/utils/captionStyles';
@@ -165,6 +166,8 @@ export const BrandKitView: React.FC = () => {
           {error}
         </div>
       )}
+
+      <ChannelIntroPanel brandName={savedKit.isCustomized ? savedKit.brandName : ''} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         <div className="lg:col-span-7 min-w-0 space-y-5">

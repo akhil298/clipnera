@@ -100,6 +100,7 @@ def load_handlers() -> None:
     import broll.service  # noqa: F401
     import pipeline.service  # noqa: F401
     import reels.jobs  # noqa: F401
+    import creator_intro.jobs  # noqa: F401
 
 
 async def main() -> None:

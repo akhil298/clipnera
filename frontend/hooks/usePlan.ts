@@ -18,6 +18,7 @@ export const FEATURE_LABELS: Record<PlanFeature, string> = {
   team_members: 'Adding team members',
   social_scheduling: 'Scheduling social posts',
   custom_aspect_ratios: 'Choosing output formats',
+  creator_intro: 'Your channel intro',
 };
 
 const USAGE_LABELS: Record<UsageKey, string> = {
@@ -26,6 +27,7 @@ const USAGE_LABELS: Record<UsageKey, string> = {
   reel_renders: 'reel render',
   ai_shots: 'AI shot',
   auto_edits: 'footage edit',
+  intro_renders: 'channel intro render',
 };
 
 /** The upgrade-prompt reason for a plan error returned by the API. */

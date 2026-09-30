@@ -1,0 +1,5 @@
+# Python 3.9+ (tested on 3.12)
+aiohttp>=3.9,<4
+beautifulsoup4>=4.12,<5
+yt-dlp>=2025.1.1
+playwright>=1.45,<2   # optional: only for --verify-pages --use-browser; run `playwright install chromium`

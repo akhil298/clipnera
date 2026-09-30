@@ -248,6 +248,10 @@ class SocialExportRequest(BaseModel):
         default=False,
         description="Also pack every render into one ZIP, returned as bundle_presigned_url",
     )
+    channel_intro: bool = Field(
+        default=True,
+        description="Play the creator's channel intro first; applies on plans with creator_intro once one is ready",
+    )
 
 
 class SocialExportClipResponse(BaseModel):
@@ -267,6 +271,8 @@ class SocialExportResponse(BaseModel):
     total_exported: int
     # The watermark actually applied: a free plan gets it whatever was requested.
     watermark_enabled: bool
+    # Whether the creator's channel intro was put in front of the renders.
+    channel_intro: bool = False
     # Set only when the request asked for a bundle.
     bundle_presigned_url: Optional[str] = None
 

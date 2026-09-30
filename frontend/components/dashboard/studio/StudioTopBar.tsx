@@ -46,6 +46,11 @@ interface StudioTopBarProps {
   watermarkOn: boolean;
   watermarkForced: boolean;
   onToggleWatermark: () => void;
+  channelIntroOn: boolean;
+  /** A rendered, enabled intro exists (Brand kit > Channel intro). */
+  channelIntroReady: boolean;
+  channelIntroLocked: boolean;
+  onToggleChannelIntro: () => void;
 }
 
 function SaveIndicator({ state }: { state: SaveState }) {
@@ -104,6 +109,7 @@ export function StudioTopBar(props: StudioTopBarProps) {
     layout, title, subtitle, score, aspectRatio, saveState, canUndo, canRedo, onUndo, onRedo, onBack,
     onOpenClips, clipCount, onShowShortcuts, menuOpen, onMenuOpenChange, onExport, onSchedule,
     captionsOn, titleOn, onToggleTitle, watermarkOn, watermarkForced, onToggleWatermark,
+    channelIntroOn, channelIntroReady, channelIntroLocked, onToggleChannelIntro,
   } = props;
   const menuRef = useRef<HTMLDivElement>(null);
   const phone = layout === 'phone';
@@ -136,6 +142,14 @@ export function StudioTopBar(props: StudioTopBarProps) {
         checked={watermarkOn || watermarkForced}
         badge={watermarkForced && <ProLockBadge feature="Removing the watermark" />}
         onToggle={onToggleWatermark}
+      />
+      <IncludeToggle
+        label="Channel intro"
+        hint={channelIntroLocked ? 'Your intro before every clip' : channelIntroReady ? 'Plays before the clip' : 'Create it in Brand kit first'}
+        checked={channelIntroOn}
+        disabled={!channelIntroLocked && !channelIntroReady}
+        badge={channelIntroLocked && <ProLockBadge feature="Your channel intro" />}
+        onToggle={onToggleChannelIntro}
       />
       <div className="my-1.5 mx-1 h-px bg-neutral-800" />
       <button

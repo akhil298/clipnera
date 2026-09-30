@@ -28,11 +28,12 @@ Feature = Literal[
     "team_members",
     "social_scheduling",
     "custom_aspect_ratios",
+    "creator_intro",
 ]
 
 # Actions metered per UTC day with ``check_limit``. None in a plan's limits
 # means unlimited.
-UsageKey = Literal["exports", "audio_enhancements", "reel_renders", "ai_shots", "auto_edits"]
+UsageKey = Literal["exports", "audio_enhancements", "reel_renders", "ai_shots", "auto_edits", "intro_renders"]
 
 # Hook transition modes every plan may use.
 _FREE_HOOK_TRANSITION_MODES = frozenset({"auto", "off"})
@@ -119,6 +120,8 @@ class Entitlements:
     social_posts_per_day: int
     # Picking output ratios at upload; without it the content category decides.
     custom_aspect_ratios: bool
+    # A channel intro (creator_intro/) made once and played before every export.
+    creator_intro: bool
 
     def allows_caption_style(self, style: str) -> bool:
         return self.caption_styles is None or style in self.caption_styles
@@ -142,6 +145,7 @@ class Entitlements:
             "team_members": self.team_members,
             "social_scheduling": self.social_scheduling,
             "custom_aspect_ratios": self.custom_aspect_ratios,
+            "creator_intro": self.creator_intro,
         }
 
     def allows(self, feature: Feature) -> bool:
@@ -178,13 +182,14 @@ _PRO_FEATURES: dict[str, Any] = {
     "team_members": True,
     # Pro is unlimited where a run costs little; reels and AI shots have fair-use
     # caps so one account cannot spend a month's compute in a day.
-    "daily_limits": {"exports": None, "audio_enhancements": None, "reel_renders": 20, "ai_shots": 10, "auto_edits": 15},
+    "daily_limits": {"exports": None, "audio_enhancements": None, "reel_renders": 20, "ai_shots": 10, "auto_edits": 15, "intro_renders": 5},
     "social_max_accounts": 4,
     "social_platforms": ("youtube", "tiktok", "instagram", "x"),
     "social_scheduling": True,
     "social_max_schedule_days": 30,
     "social_posts_per_day": 25,
     "custom_aspect_ratios": True,
+    "creator_intro": True,
 }
 
 ENTITLEMENTS: dict[str, Entitlements] = {
@@ -203,7 +208,7 @@ ENTITLEMENTS: dict[str, Entitlements] = {
         depth_captions=False,
         batch_processing=False,
         team_members=False,
-        daily_limits={"exports": 10, "audio_enhancements": 3, "reel_renders": 2, "ai_shots": 0, "auto_edits": 1},
+        daily_limits={"exports": 10, "audio_enhancements": 3, "reel_renders": 2, "ai_shots": 0, "auto_edits": 1, "intro_renders": 0},
         # X bills every post, so it is paid-only.
         social_max_accounts=1,
         social_platforms=("youtube", "tiktok", "instagram"),
@@ -211,6 +216,7 @@ ENTITLEMENTS: dict[str, Entitlements] = {
         social_max_schedule_days=0,
         social_posts_per_day=3,
         custom_aspect_ratios=False,
+        creator_intro=False,
     ),
     PlanSlug.PRO.value: Entitlements(
         plan=PlanSlug.PRO.value,

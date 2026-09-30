@@ -9,7 +9,7 @@ import shutil
 import tempfile
 import time
 import zipfile
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable
 
@@ -37,6 +37,7 @@ from core.config import get_settings
 from core.database import AsyncSessionLocal
 from core.exceptions import CustomException
 from core.logging_config import get_logger
+from creator_intro.service import ExportIntro, export_intro
 from feedback.model import ClipEventKind
 from feedback.service import record_clip_event
 from video_processor.clip_cutter import ClipCutter, CutRequest
@@ -432,6 +433,7 @@ class ClipService:
         animation_speed: float | None = None,
         hook_transition: HookTransitionConfig | None = None,
         bundle: bool = False,
+        channel_intro: bool = False,
     ) -> dict:
         """Render the chosen clips at the chosen size, captioned and watermarked as asked.
 
@@ -465,6 +467,8 @@ class ClipService:
         total_exports = len(clips) * len(targets)
         bundle_dir = Path(tempfile.mkdtemp(prefix="clipnera-bundle-")) if bundle else None
         archive = zipfile.ZipFile(bundle_dir / "clips.zip", "w", zipfile.ZIP_STORED) if bundle_dir else None
+        scope = AsyncExitStack()
+        intro = await scope.enter_async_context(export_intro(user_id)) if channel_intro else None
         try:
             for clip in clips:
                 for platform, ratio in targets:
@@ -496,6 +500,8 @@ class ClipService:
                             max_duration=max_duration_override,
                             transition=transition,
                         )
+                    if intro:
+                        rendered_path = await self._with_intro(intro, rendered_path)
                     download_name = _download_name(clip.title, platform.value, ratio)
                     if archive:
                         # MP4 is already compressed, so the ZIP only stores it.
@@ -534,6 +540,7 @@ class ClipService:
             if archive:
                 archive.close()
                 shutil.rmtree(bundle_dir, ignore_errors=True)
+            await scope.aclose()
 
         await self._notify(progress_callback, "Social export completed", 100)
         await record_clip_event(
@@ -546,8 +553,21 @@ class ClipService:
             "platforms": [platform.value for platform, _ in targets],
             "total_exported": len(exported_clips),
             "watermark_enabled": watermark_enabled,
+            "channel_intro": intro is not None,
             "bundle_presigned_url": bundle_url,
         }
+
+    @staticmethod
+    async def _with_intro(intro: ExportIntro, path: str) -> str:
+        """The render at ``path`` with the creator's channel intro in front; the plain one is removed."""
+        out = Path(path).with_name(f"intro_{Path(path).name}")
+        try:
+            await intro.prepend(Path(path), out)
+        except RuntimeError as exc:
+            raise CustomException(message=f"Adding the channel intro failed: {exc}", code="EXPORT_FAILED", status_code=500)
+        finally:
+            Path(path).unlink(missing_ok=True)
+        return str(out)
 
     async def _store_bundle(self, archive: zipfile.ZipFile, project: Any, user_id: str) -> str | None:
         """Close the export ZIP, upload it and return a URL that saves it."""

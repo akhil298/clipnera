@@ -29,6 +29,8 @@ import { CaptionScript, clipApi, pipelineApi, uploadApi, VIDEO_UPLOAD_TYPES, Vid
 type SourceMode = 'youtube' | 'upload';
 import { PipelineProgressTracker } from './PipelineProgressTracker';
 import { OutputFormatPicker } from './OutputFormatPicker';
+import { ChannelIntroNudge } from './ChannelIntroNudge';
+import { CHANNEL_INTRO_ANCHOR } from './ChannelIntroPanel';
 import { NotWiredBadge } from '@/components/ui/NotWiredBadge';
 
 /** A numbered section title, so the form reads as a short sequence. */
@@ -479,6 +481,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         <div className="p-4 sm:p-6 overflow-y-auto space-y-6 overscroll-contain">
           {!isProcessing ? (
             <>
+              <ChannelIntroNudge onCreate={() => { onClose(); router.push(`/dashboard/brand-kit#${CHANNEL_INTRO_ANCHOR}`); }} />
+
               <StepHeading number={1} title="Source" />
 
               {/* Source picker: YouTube link or a video from this device (while uploads are switched on) */}

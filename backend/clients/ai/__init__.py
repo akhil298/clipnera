@@ -73,6 +73,8 @@ STEP_MODELS: dict[str, tuple[ModelChoice, ModelChoice]] = {
     "reel_chat": (GROQ_SMALL, SONNET_LOW),
     # Captions for a contact sheet of shots, and the Instagram caption.
     "reel_copy": (GROQ_SMALL, SONNET_LOW),
+    # The one line about the channel in a creator's intro.
+    "intro_copy": (GROQ_SMALL, SONNET_LOW),
 }
 
 REEL_DIRECTOR_OPUS = OPUS_MEDIUM

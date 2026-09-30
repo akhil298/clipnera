@@ -1932,4 +1932,5 @@ class PipelineRunService:
             animation_speed=request.animation_speed,
             hook_transition=request.hook_transition,
             bundle=request.bundle,
+            channel_intro=request.channel_intro and entitlements.creator_intro,
         )
