@@ -176,8 +176,6 @@ class BaseConfig(BaseSettings):
 
     TRANSCRIPTION_OUTPUT_DIR: str = "./transcription_outputs"
     HF_TOKEN: str = ""
-    WATERMARK_ENABLED: bool = True
-    WATERMARK_PATH: str = "./backend/static/watermark.png"
 
     # yt-dlp cookies. A browser name ("chrome", "firefox") reads them live from
     # that browser and wins over the file; for servers, update_ec2.sh exports

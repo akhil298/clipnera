@@ -7,8 +7,8 @@
    so cuts never click) through a cleanup chain, the music ducked under the
    voice, the sound effects placed so their peak lands on the cut, and the
    lot mastered to -14 LUFS, Instagram's loudness.
-3. Captions, the hook, pop-ups and script lines are burned in one last pass,
-   with the watermark on Free.
+3. Captions, the hook, pop-ups and script lines are burned in one last pass;
+   on Free the Clipnera intro, watermark and end card are added on top.
 
 Every function takes local paths; nothing here touches the database or S3.
 """
@@ -20,6 +20,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from branding.service import added_seconds
 from broll.renditions import run
 from core.logging_config import get_logger
 from edit_engine.looks import exposure_filter, look_filter
@@ -243,9 +244,8 @@ async def render(timeline: dict[str, Any], sources: dict[int, Path], music: Path
     if ass_text:
         ass_file = work / "captions.ass"
         ass_file.write_text(ass_text, encoding="utf-8")
-    size = (timeline["width"], timeline["height"])
-    final = await reel_render.finish(joined, ass_file, watermark, work / "reel.mp4", size=size, preset="veryfast")
-    await check(final, timeline["duration"])
+    final = await reel_render.finish(joined, ass_file, watermark, work / "reel.mp4", preset="veryfast")
+    await check(final, timeline["duration"] + (added_seconds() if watermark else 0.0))
     return final
 
 

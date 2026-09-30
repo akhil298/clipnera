@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Clipnera signature motion · render harness</title>
+<!-- render.mjs loads this page in headless Chrome and asks for frames. -->
+<link rel="stylesheet" href="fonts.css">
+<script src="kit.js"></script>
+<script>
+const DRAW = { F1, F2, F3, F4, W1, W2, W3, W4, W5, W6 };
+const FACES = ['800 40px Syne', '800 20px "Plus Jakarta Sans"', '600 20px "Plus Jakarta Sans"', '500 20px "JetBrains Mono"'];
+Promise.all(FACES.map(f => document.fonts.load(f))).then(found => {
+  const missing = FACES.filter((_, i) => !found[i].length);
+  if (missing.length) window.harnessError = `Fonts not loaded: ${missing.join(', ')}`;
+  else window.harnessReady = true;
+});
+const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+window.Harness = {
+  /** One frame as a data URL. ``backdrop`` is a hue for the sample clip behind a watermark. */
+  frame({ id, t, W, H, layer = false, backdrop = null, alpha = false }) {
+    canvas.width = W; canvas.height = H;
+    if (backdrop !== null) scene(ctx, 0, 0, W, H, backdrop, t);
+    DRAW[id](ctx, W, H, t, t, { layer });
+    return canvas.toDataURL(alpha ? 'image/png' : 'image/jpeg', .95);
+  },
+  sparkSprites,
+};
+</script>

@@ -56,6 +56,10 @@ backend/transcription_outputs/
 *.mkv
 *.mov
 *.part
+# Brand motion ships with the repo: exports are rendered with these files.
+!backend/static/branding/**/*.mp4
+!backend/static/branding/**/*.mov
+!branding/motion-library/**/*.mp4
 
 # Logs
 logs/

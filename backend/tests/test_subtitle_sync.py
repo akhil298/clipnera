@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-from subtitle_styling import ass_generator
 from subtitle_styling.ass_generator import ass_filter, AssGenerator, ass_time, burn_filter_args
 from subtitle_styling.service import SubtitleStylingService
 
@@ -86,13 +85,12 @@ class TestAssTimebase:
 
 class TestBurnCommand:
     @staticmethod
-    def _cmd(tmp_path, duration: float = 5.0, enable_watermark: bool = False, timeline=None) -> list[str]:
+    def _cmd(tmp_path, duration: float = 5.0, timeline=None) -> list[str]:
         return SubtitleStylingService._encode_cmd(
             video_path="clip.mp4",
             output_path=str(tmp_path / "out.mp4"),
             video_filters=[ass_filter(str(tmp_path / "captions.ass"))],
             duration=duration,
-            enable_watermark=enable_watermark,
             timeline=timeline,
         )
 
@@ -109,39 +107,22 @@ class TestBurnCommand:
         assert "ass=captions.ass" in graph
         assert str(tmp_path) not in graph
 
-    def test_watermark_overlays_onto_the_video(self, tmp_path) -> None:
-        """Regression: ``ass=...,[1:v]overlay`` made the watermark the base
-        layer, so the burned clip came out at the watermark's 300x60 size."""
-        cmd = self._cmd(tmp_path, enable_watermark=True)
-        assert cmd[cmd.index("-i") + 1] == "clip.mp4"
-        graph = cmd[cmd.index("-filter_complex") + 1]
-        assert graph.startswith("[0:v]ass=captions.ass")
-        assert "[1:v]scale=" in graph and "[base][wm]overlay=" in graph
-        assert cmd[cmd.index("-map") + 1] == "[v]"
-        assert "0:a?" in cmd
+    def test_burn_reads_only_the_clip(self, tmp_path) -> None:
+        """The watermark is added by the branding pass, not burned here."""
+        cmd = self._cmd(tmp_path)
+        assert cmd.count("-i") == 1 and cmd[cmd.index("-i") + 1] == "clip.mp4"
 
-    def test_captions_and_watermark_ride_on_the_bridge_timeline(self, tmp_path) -> None:
+    def test_captions_ride_on_the_bridge_timeline(self, tmp_path) -> None:
         """With a hook transition the captions apply to the re-laid clip and
         its rebuilt audio is mapped, not the input's."""
         timeline = (["[0:v]null[vcat]", "[0:a]anull[acat]"], "vcat", "acat")
-        cmd = self._cmd(tmp_path, enable_watermark=True, timeline=timeline)
+        cmd = self._cmd(tmp_path, timeline=timeline)
         graph = cmd[cmd.index("-filter_complex") + 1]
-        assert graph.startswith("[0:v]null[vcat];[0:a]anull[acat];[vcat]ass=captions.ass")
-        assert "[acat]" in cmd and "0:a?" not in cmd
+        assert graph.startswith("[0:v]null[vcat];[0:a]anull[acat];[vcat]ass=captions.ass") and graph.endswith("[v]")
+        assert cmd[cmd.index("-map") + 1] == "[v]" and "[acat]" in cmd
 
-    def test_watermark_scales_with_the_frame(self) -> None:
-        """A fixed-size mark was easy to miss; it now tracks the short side."""
-        vertical = ";".join(burn_filter_args(["null"], True, frame_size=(1080, 1920)))
-        landscape = ";".join(burn_filter_args(["null"], True, frame_size=(1920, 1080)))
-        small = ";".join(burn_filter_args(["null"], True, frame_size=(540, 960)))
-        assert "[1:v]scale=281:-2[wm]" in vertical and "overlay=x=W-w-38:y=38" in vertical
-        assert "[1:v]scale=281:-2[wm]" in landscape
-        assert "[1:v]scale=140:-2[wm]" in small
-
-    def test_missing_watermark_falls_back_to_plain_burn(self, tmp_path, monkeypatch) -> None:
-        monkeypatch.setattr(ass_generator, "WATERMARK_PATH", tmp_path / "missing.png")
-        args = burn_filter_args(["ass=captions.ass"], enable_watermark=True)
-        assert args == ["-vf", "ass=captions.ass"]
+    def test_plain_burn_is_a_simple_filter(self) -> None:
+        assert burn_filter_args(["ass=captions.ass"]) == ["-vf", "ass=captions.ass"]
 
 
 class TestStaticTitle:

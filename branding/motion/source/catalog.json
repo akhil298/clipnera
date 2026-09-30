@@ -1,0 +1,163 @@
+{
+  "fps": 30,
+  "library_size": [1080, 1920],
+  "types": {
+    "intro": { "dir": "intros", "label": "Intro" },
+    "transition": { "dir": "transitions", "label": "Transition" },
+    "end-card": { "dir": "end-cards", "label": "End card" },
+    "watermark": { "dir": "watermarks", "label": "Watermark" }
+  },
+  "production": {
+    "sizes": { "9x16": [1080, 1920], "16x9": [1920, 1080], "1x1": [1080, 1080] },
+    "intro": { "slug": "the-moment", "id": "F1", "segments": [[0, 6.0], [6.5, 7.1]], "speed": 1.25 },
+    "outro": { "slug": "caption-beat", "id": "F4", "segments": [[0, 4.4], [6.0, 6.5]], "speed": 1, "blur_in_s": 0.9 },
+    "watermark": { "slug": "listening-spark", "id": "W1", "levels": 16 }
+  },
+  "motions": [
+    {
+      "slug": "the-moment", "name": "The Moment", "type": "intro", "round": 2, "page": "signature", "id": "F1",
+      "render_s": 7.2, "status": "In use: intro before every branded video",
+      "what": "A 1 h 24 m podcast appears as its sound wave. An amber scan line reads it end to end and comes back to the peak. Brackets snap around the best 29 seconds, everything else falls away, and those bars fold into the amber tile. The sparkle draws itself, a ring bursts, and the name slides out with the line \"Every long video has a moment.\"",
+      "why": "The whole product in one shot: long video in, the AI finds the moment, a clip comes out, and that clip is the logo.",
+      "beats": [["0.0 s", "The sound wave grows in, timecodes at both ends"], ["1.0 s", "Scan line sweeps the whole video"], ["2.3 s", "Scan line returns to the peak"], ["2.8 s", "Brackets snap around \"BEST MOMENT · 0:29\""], ["3.2 s", "The rest falls away; the moment folds into the tile"], ["4.1 s", "Sparkle draws itself, ring burst"], ["4.6 s", "Name slides out, tagline fades in"]]
+    },
+    {
+      "slug": "reframe", "name": "Reframe", "type": "intro", "round": 2, "page": "signature", "id": "F2",
+      "render_s": 7.0, "status": "Library",
+      "what": "A wide video with a face-tracking box on the speaker. A 9:16 crop window follows them, then shrinks into the tile, and the name pops in word by word like Clipnera's karaoke captions. Tagline: \"Landscape in. Shorts out.\"",
+      "why": "Shows reframing to vertical, the other half of the product. The crop window literally becomes the logo."
+    },
+    {
+      "slug": "thousand-frames", "name": "Thousand Frames", "type": "intro", "round": 2, "page": "signature", "id": "F3",
+      "render_s": 7.5, "status": "Library",
+      "what": "Hundreds of tiny video frames swirl like a galaxy, gather into the sparkle shape, turn amber, collapse into the tile and burst out as glitter. The letters fade in as their spacing tightens. Tagline: \"Hours of footage. One spark.\"",
+      "why": "All of a creator's footage, and the AI's one spark that picks what matters."
+    },
+    {
+      "slug": "caption-beat", "name": "Caption Beat", "type": "end-card", "round": 2, "page": "signature", "id": "F4",
+      "render_s": 6.5, "status": "In use: end card after every branded video",
+      "what": "The last frame blurs and darkens. \"MADE\" and \"WITH\" pop in on the beat with a karaoke highlight, the logo slams in and pulses with the beat, a sound line moves along the bottom, and a \"Turn long videos into shorts\" pill appears. In real exports the blurred frame is the clip's own last frame.",
+      "why": "Ends every video in Clipnera's own caption style, with a clear call to action."
+    },
+    {
+      "slug": "listening-spark", "name": "Listening Spark", "type": "watermark", "round": 2, "page": "signature", "id": "W1", "backdrop": 210,
+      "render_s": 8.0, "status": "In use: top-right watermark on every branded video",
+      "what": "The sparkle swells and glows with the voice in the clip, and three small level bars move with it. It goes quiet when nobody is speaking. In real exports it follows the clip's actual loudness; this preview uses a sample voice.",
+      "why": "The mark listens to the video like the AI does, so the watermark feels alive without distracting."
+    },
+    {
+      "slug": "foil-flip", "name": "Foil Flip", "type": "watermark", "round": 2, "page": "signature", "id": "W2", "backdrop": 330,
+      "render_s": 5.0, "status": "Library",
+      "what": "Every 5 seconds the tile flips like a card and a light glints across the name, like a foil sticker. Still the rest of the time.",
+      "why": "Premium, collectible feel."
+    },
+    {
+      "slug": "viewfinder", "name": "Viewfinder", "type": "watermark", "round": 2, "page": "signature", "id": "W3", "backdrop": 20,
+      "render_s": 8.0, "status": "Library",
+      "what": "Camera corners that breathe around the name, a blinking REC dot and a running timecode.",
+      "why": "Reads as \"this was clipped\" at a glance."
+    },
+    {
+      "slug": "ai-scan", "name": "AI Scan", "type": "watermark", "round": 2, "page": "signature", "id": "W4", "backdrop": 150,
+      "render_s": 6.0, "status": "Library",
+      "what": "An amber scan line reads across the name, each letter lifts as it passes, then the sparkle flashes.",
+      "why": "The AI at work, in miniature."
+    },
+    {
+      "slug": "caption-pop", "name": "Caption Pop", "type": "watermark", "round": 2, "page": "signature", "id": "W5", "backdrop": 280,
+      "render_s": 5.0, "status": "Library",
+      "what": "The name plays like karaoke captions: a highlight jumps from \"clip\" to \"nera\" and each word bounces.",
+      "why": "The caption feature, inside the logo."
+    },
+    {
+      "slug": "comet", "name": "Comet", "type": "watermark", "round": 2, "page": "signature", "id": "W6", "backdrop": 260,
+      "render_s": 6.0, "status": "Library",
+      "what": "A spark circles the name with a short tail and dives into the tile, which flashes. Calm between passes.",
+      "why": "A spark of attention that always lands on the brand."
+    },
+    {
+      "slug": "sparkle-ignite", "name": "Sparkle Ignite", "type": "intro", "round": 1, "page": "reel", "id": "F1",
+      "render_s": 5.5, "status": "Library",
+      "what": "The tile spins in, the sparkle draws itself and bursts, then the name wipes out from behind it. Tagline: \"Long videos in. Clips out.\"",
+      "why": "A clean logo reveal built on the sparkle."
+    },
+    {
+      "slug": "timeline-cut", "name": "Timeline Cut", "type": "intro", "round": 1, "page": "reel", "id": "F2",
+      "render_s": 6.0, "status": "Library",
+      "what": "Clip frames slide past a playhead, the playhead cuts, and everything collapses into the logo.",
+      "why": "Editing, then the brand."
+    },
+    {
+      "slug": "letter-drop", "name": "Letter Drop", "type": "intro", "round": 1, "page": "reel", "id": "F3",
+      "render_s": 5.5, "status": "Library",
+      "what": "The letters drop in with a bounce, the tile rolls in beside them, and an amber underline draws.",
+      "why": "Playful and quick; works as an intro or outro."
+    },
+    {
+      "slug": "amber-wipe", "name": "Amber Wipe", "type": "transition", "round": 1, "page": "reel", "id": "F4",
+      "render_s": 5.0, "status": "Library",
+      "what": "An amber wipe carries the logo across, then clears to the next clip.",
+      "why": "Made for the cut between two clips in a reel."
+    },
+    {
+      "slug": "scissor-split", "name": "Scissor Split", "type": "transition", "round": 1, "page": "reel", "id": "F5",
+      "render_s": 6.0, "status": "Library",
+      "what": "An amber line slices the frame, the halves part to show the logo, then close again.",
+      "why": "A literal clip: the frame is cut open."
+    },
+    {
+      "slug": "made-with-end-card", "name": "End Card", "type": "end-card", "round": 1, "page": "reel", "id": "F6",
+      "render_s": 6.0, "status": "Library",
+      "what": "The last frame blurs and darkens, then \"made with clipnera\" and a tagline pill settle in.",
+      "why": "A calm sign-off for Free-plan exports."
+    },
+    {
+      "slug": "sparkle-twinkle", "name": "Sparkle Twinkle", "type": "watermark", "round": 1, "page": "reel", "id": "W1",
+      "render_s": 8.0, "status": "Library",
+      "what": "The name stays still; the sparkle spins and flashes every 4 seconds.",
+      "why": "Quiet, and it reads as the brand."
+    },
+    {
+      "slug": "sheen-sweep", "name": "Sheen Sweep", "type": "watermark", "round": 1, "page": "reel", "id": "W2",
+      "render_s": 9.0, "status": "Library",
+      "what": "The dark pill watermark with a light sweep across it every 4.5 seconds.",
+      "why": "Closest to the old still watermark."
+    },
+    {
+      "slug": "letter-rise", "name": "Letter Rise", "type": "watermark", "round": 1, "page": "reel", "id": "W3",
+      "render_s": 6.0, "status": "Library",
+      "what": "The tile pops in, the letters rise one at a time, hold, then clear and start again.",
+      "why": "Draws the eye to the name once per loop."
+    },
+    {
+      "slug": "corner-hop", "name": "Corner Hop", "type": "watermark", "round": 1, "page": "reel", "id": "W4",
+      "render_s": 12.0, "status": "Library",
+      "what": "Moves corner to corner every 3 seconds.",
+      "why": "The hardest watermark to crop or blur out."
+    },
+    {
+      "slug": "unfold", "name": "Unfold", "type": "watermark", "round": 1, "page": "reel", "id": "W5",
+      "render_s": 7.0, "status": "Library",
+      "what": "The tile spins and the name slides out from behind it, holds, then folds back in.",
+      "why": "Small most of the time, the full name on a rhythm."
+    },
+    {
+      "slug": "clip-cut", "name": "Clip Cut", "type": "watermark", "round": 1, "page": "reel", "id": "W6",
+      "render_s": 5.0, "status": "Library",
+      "what": "A cut line splits \"clip\" from \"nera\" and they snap back together.",
+      "why": "Plays on what Clipnera does."
+    },
+    {
+      "slug": "playhead", "name": "Playhead", "type": "watermark", "round": 1, "page": "reel", "id": "W7",
+      "render_s": 10.0, "status": "Library",
+      "what": "An amber bar under the name fills as the clip plays, like an editor timeline.",
+      "why": "Doubles as a progress bar."
+    },
+    {
+      "slug": "breathe", "name": "Breathe", "type": "watermark", "round": 1, "page": "reel", "id": "W8",
+      "render_s": 8.0, "status": "Library",
+      "what": "Fades slowly between 35% and 85% visible.",
+      "why": "The least distracting option."
+    }
+  ]
+}

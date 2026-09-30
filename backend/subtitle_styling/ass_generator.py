@@ -43,7 +43,6 @@ FONTS_DIR = Path(__file__).resolve().parent.parent / "static" / "fonts"
 # The headline pops in: it fades up from 70% size, overshoots, then settles.
 # Mirrored by the ``title-pop`` keyframes in the frontend preview.
 TITLE_ENTRANCE = r"{\fad(150,0)\fscx70\fscy70\t(0,180,\fscx106\fscy106)\t(180,300,\fscx100\fscy100)}"
-WATERMARK_PATH = Path(__file__).resolve().parent.parent / "static" / "watermark.png"
 # Display faces carry Latin glyphs only; captions in these scripts switch to a
 # bundled Noto face instead of rendering as empty boxes. Covers every script the
 # transcriber can emit (see transcription.language._LANGUAGE_CODES).
@@ -58,11 +57,6 @@ SCRIPT_FONT_FILES = {
     "gurmukhi": ("Noto Sans Gurmukhi", "NotoSansGurmukhi-Bold.ttf"),
     "arabic": ("Noto Naskh Arabic", "NotoNaskhArabic-Bold.ttf"),
 }
-# Watermark width and corner inset as fractions of the frame's shorter side, so
-# it reads the same on every export size. A fixed 300px mark was easy to miss
-# on a 1080px-wide reel.
-WATERMARK_WIDTH_RATIO = 0.26
-WATERMARK_MARGIN_RATIO = 0.035
 
 
 # The server's static FFmpeg has no fontconfig, so libass sees only FONTS_DIR. A
@@ -103,43 +97,24 @@ def ass_filter(ass_path: str) -> str:
 
 def burn_filter_args(
     video_filters: list[str],
-    enable_watermark: bool,
     timeline: tuple[list[str], str, str] | None = None,
-    frame_size: tuple[int, int] | None = None,
 ) -> list[str]:
-    """FFmpeg args applying ``video_filters`` to input 0, plus the watermark.
+    """FFmpeg args applying ``video_filters`` to input 0.
 
     Place them after the source video's ``-i``. ``timeline`` is
     ``(chains, video_label, audio_label)`` from
-    ``hook_transitions.graph.timeline_graph``: when given, the filters and
-    watermark apply to its re-laid output instead of the raw input. The graph
-    is labelled explicitly: chaining ``...,[1:v]overlay`` bound the watermark
-    as the base layer, so the burned clip came out at the watermark's 300x60 size.
-    ``frame_size`` is the output ``(width, height)``; the watermark scales to it.
+    ``hook_transitions.graph.timeline_graph``: when given, the filters apply to
+    its re-laid output instead of the raw input, and its rebuilt audio is
+    mapped. The watermark is not burned here: ``branding.service`` adds it,
+    with the intro and end card, to the finished file.
     """
     chain = ",".join(video_filters)
-    if enable_watermark and not WATERMARK_PATH.exists():
-        log.warning("Watermark requested but file not found: %s", WATERMARK_PATH)
-        enable_watermark = False
-    if timeline is None and not enable_watermark:
+    if timeline is None:
         return ["-vf", chain]
-
-    chains, video_in, audio_out = timeline if timeline else ([], "0:v", None)
-    graph = [*chains, f"[{video_in}]{chain}[base]"]
-    inputs: list[str] = []
-    if enable_watermark:
-        inputs = ["-i", str(WATERMARK_PATH)]
-        short_side = min(frame_size) if frame_size else 1080
-        width = round(short_side * WATERMARK_WIDTH_RATIO)
-        margin = round(short_side * WATERMARK_MARGIN_RATIO)
-        graph.append(f"[1:v]scale={width}:-2[wm]")
-        graph.append(f"[base][wm]overlay=x=W-w-{margin}:y={margin}[v]")
-    else:
-        graph.append("[base]null[v]")
+    chains, video_in, audio_out = timeline
     return [
-        *inputs,
-        "-filter_complex", ";".join(graph),
-        "-map", "[v]", "-map", f"[{audio_out}]" if audio_out else "0:a?",
+        "-filter_complex", ";".join([*chains, f"[{video_in}]{chain}[v]"]),
+        "-map", "[v]", "-map", f"[{audio_out}]",
     ]
 
 
@@ -620,80 +595,6 @@ class AssGenerator:
                 parts.append(f"{{\\c{primary_color}}}{text}{{{reset}}}")
 
         return " ".join(parts)
-
-    def burn_subtitles_ass(
-        self,
-        video_path: str,
-        output_path: str,
-        ass_path: str,
-        clip_start: float = 0.0,
-        duration: float | None = None,
-        enable_watermark: bool = True,
-    ) -> str:
-        ffmpeg = _FFmpegHelper()
-        return ffmpeg.burn_ass(
-            video_path=video_path,
-            output_path=output_path,
-            ass_path=ass_path,
-            clip_start=clip_start,
-            duration=duration,
-            enable_watermark=enable_watermark,
-        )
-
-
-class _FFmpegHelper:
-    """Wraps FFmpeg ASS-based burn-in with the standard encoding params used
-    elsewhere in the codebase."""
-
-    def burn_ass(
-        self,
-        video_path: str,
-        output_path: str,
-        ass_path: str,
-        clip_start: float = 0.0,
-        duration: float | None = None,
-        enable_watermark: bool = True,
-    ) -> str:
-        import asyncio
-        from pathlib import Path
-
-        cmd = self._build_cmd(video_path, output_path, ass_path, clip_start, duration, enable_watermark)
-
-        async def _run() -> None:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
-            )
-            _, stderr = await proc.communicate()
-            if proc.returncode != 0:
-                err = stderr.decode("utf-8", errors="ignore")[-500:]
-                log.error(f"FFmpeg ASS burn-in failed: {err}")
-                raise RuntimeError(f"FFmpeg ASS burn-in failed: {err}")
-
-        asyncio.run(_run())
-        if not os.path.exists(output_path):
-            raise FileNotFoundError(f"Burned output not created: {output_path}")
-        return output_path
-
-    def _build_cmd(
-        self,
-        video_path: str,
-        output_path: str,
-        ass_path: str,
-        clip_start: float,
-        duration: float | None,
-        enable_watermark: bool,
-    ) -> list[str]:
-        time_args: list[str] = ["-t", str(duration)] if duration else []
-        return [
-            "ffmpeg", "-y",
-            "-ss", str(clip_start), "-i", video_path,
-            *burn_filter_args([ass_filter(ass_path)], enable_watermark),
-            *time_args,
-            "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-b:a", "128k",
-            "-movflags", "+faststart",
-            output_path,
-        ]
 
 
 def build_ass_file(

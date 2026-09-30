@@ -1,0 +1,26 @@
+{
+  "fps": 30,
+  "intro": {
+    "slug": "the-moment",
+    "duration": 5.266666666666667,
+    "files": {
+      "9x16": "intro/the-moment_9x16.mp4",
+      "16x9": "intro/the-moment_16x9.mp4",
+      "1x1": "intro/the-moment_1x1.mp4"
+    }
+  },
+  "outro": {
+    "slug": "caption-beat",
+    "duration": 4.9,
+    "files": {
+      "9x16": "outro/caption-beat_9x16.mov",
+      "16x9": "outro/caption-beat_16x9.mov",
+      "1x1": "outro/caption-beat_1x1.mov"
+    },
+    "blur_in_s": 0.9
+  },
+  "watermark": {
+    "slug": "listening-spark",
+    "layout": "watermark/listening-spark/layout.json"
+  }
+}

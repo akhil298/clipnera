@@ -2,7 +2,7 @@
 
 The cut clip on disk is ``[hook][clip]`` back to back. At render time it is
 split at the hook boundary and re-laid as ``[hook][bridge][clip]`` in the same
-pass that burns captions and the watermark, so a transition never costs an
+pass that burns captions, so a transition never costs an
 extra encode and switching transitions never needs a re-cut.
 
 Every id in ``catalog.py`` has a builder here. Builders return filter-chain
@@ -385,7 +385,7 @@ def timeline_graph(plan: BridgePlan, text_filter: str | None = None) -> tuple[li
     """Filter chains that lay input 0 out as ``[hook][bridge][clip]``.
 
     Returns ``(chains, video_label, audio_label)``; the caller appends captions
-    and the watermark to ``video_label`` and maps ``audio_label``.
+    to ``video_label`` and maps ``audio_label``.
     ``text_filter`` (e.g. an ``ass`` filter) is drawn over the bridge only.
     """
     spec = plan.spec

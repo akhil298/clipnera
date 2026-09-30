@@ -1,0 +1,187 @@
+{
+  "ref": 1080,
+  "levels": 16,
+  "bar_lag_s": 0.09,
+  "box": {
+    "w": 649,
+    "h": 245
+  },
+  "anchor": {
+    "right": 621,
+    "top": -28
+  },
+  "word": {
+    "file": "word.png",
+    "x": 133,
+    "y": 24
+  },
+  "tiles": [
+    {
+      "file": "tile_00.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_01.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_02.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_03.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_04.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_05.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_06.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_07.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_08.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_09.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_10.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_11.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_12.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_13.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_14.png",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "file": "tile_15.png",
+      "x": 0,
+      "y": 0
+    }
+  ],
+  "bars": [
+    {
+      "file": "bar_00.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_01.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_02.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_03.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_04.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_05.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_06.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_07.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_08.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_09.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_10.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_11.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_12.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_13.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_14.png",
+      "x": 487,
+      "y": 55
+    },
+    {
+      "file": "bar_15.png",
+      "x": 487,
+      "y": 55
+    }
+  ],
+  "bar_x": [
+    487,
+    499,
+    511
+  ]
+}

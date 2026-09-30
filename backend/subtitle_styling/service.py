@@ -16,6 +16,7 @@ from core.database import AsyncSessionLocal
 from core.logging_config import get_logger
 from core.exceptions import CustomException
 from video_processor.ffmpeg_service import FFmpegService
+from branding.service import apply_branding
 from subtitle_styling.ass_generator import (
     CAPTION_ANIMATIONS, DEFAULT_FONT_FILE, FONTS_DIR, AssGenerator, ass_filter, build_ass_file, bundled_family, burn_filter_args,
     escape_filter_value, script_font,
@@ -169,7 +170,7 @@ class SubtitleStylingService:
         transition: Optional[TransitionSpec] = None,
         spans: Optional[list[Span]] = None,
     ) -> str:
-        """Burn captions (and the watermark) into a cut clip.
+        """Burn captions into a cut clip, with Clipnera branding when ``enable_watermark``.
 
         ``transition`` re-lays the clip as ``[hook][bridge][clip]`` in the same
         pass; it only applies when the clip has a ``hook`` to bridge from.
@@ -212,7 +213,7 @@ class SubtitleStylingService:
         transition: Optional[TransitionSpec] = None,
         spans: Optional[list[Span]] = None,
     ) -> str:
-        """Re-encode a cut clip without captions: watermark and transition only.
+        """Re-encode a cut clip without captions: branding and transition only.
 
         Returns a new file the caller owns; ``video_path`` is left untouched.
         """
@@ -224,7 +225,7 @@ class SubtitleStylingService:
             origin, _ = on_output_timeline([], clip_start, clip_end, hook, gap)
             return await self._encode(
                 video_path, ["null"], enable_watermark, clip_end - origin, tmpdir, timeline,
-                label="plain", media=media, error_code="EXPORT_FAILED",
+                label="plain", error_code="EXPORT_FAILED",
             )
 
     async def _media(self, video_path: str) -> MediaInfo:
@@ -256,15 +257,11 @@ class SubtitleStylingService:
         work_dir: str,
         timeline: Optional[tuple[list[str], str, str]],
         label: str,
-        media: MediaInfo,
         error_code: str = "BURN_IN_FAILED",
     ) -> str:
         """Run one render in ``work_dir`` and return a copy the caller owns."""
         output_path = os.path.join(work_dir, f"{label}_{Path(video_path).stem}.mp4")
-        cmd = self._encode_cmd(
-            video_path, output_path, video_filters, duration, enable_watermark, timeline,
-            frame_size=(media.width, media.height),
-        )
+        cmd = self._encode_cmd(video_path, output_path, video_filters, duration, timeline)
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=work_dir
         )
@@ -272,6 +269,11 @@ class SubtitleStylingService:
         if proc.returncode != 0 or not os.path.exists(output_path):
             err = stderr.decode("utf-8", errors="ignore")[-500:]
             raise CustomException(message=f"FFmpeg {label} render failed: {err}", code=error_code, status_code=500)
+        if enable_watermark:
+            try:
+                output_path = str(await apply_branding(Path(output_path), Path(work_dir) / f"branded_{Path(output_path).name}"))
+            except RuntimeError as exc:
+                raise CustomException(message=f"Branding {label} render failed: {exc}", code=error_code, status_code=500)
 
         final_path = os.path.join(tempfile.gettempdir(), f"{label}_{Path(video_path).name}")
         shutil.copy2(output_path, final_path)
@@ -283,9 +285,7 @@ class SubtitleStylingService:
         output_path: str,
         video_filters: list[str],
         duration: float,
-        enable_watermark: bool,
         timeline: Optional[tuple[list[str], str, str]] = None,
-        frame_size: Optional[tuple[int, int]] = None,
     ) -> list[str]:
         # No -ss: the input is already the trimmed clip. veryfast renders about
         # twice as fast as fast at the same quality. This is the last encode
@@ -293,7 +293,7 @@ class SubtitleStylingService:
         return [
             "ffmpeg", "-y",
             "-i", video_path,
-            *burn_filter_args(video_filters, enable_watermark, timeline, frame_size),
+            *burn_filter_args(video_filters, timeline),
             "-t", str(duration),
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "128k",
@@ -372,7 +372,7 @@ class SubtitleStylingService:
             )
             return await self._encode(
                 video_path, [ass_filter(ass_path)], enable_watermark, duration, tmpdir, timeline,
-                label="burned", media=media,
+                label="burned",
             )
 
     @staticmethod
@@ -452,7 +452,7 @@ class SubtitleStylingService:
                 )
             return await self._encode(
                 video_path, filters, enable_watermark, duration, tmpdir, timeline,
-                label="burned_srt", media=media,
+                label="burned_srt",
             )
 
     def _generate_srt(self, subtitles: list[dict], clip_start: float, output_dir: str | None = None) -> str:

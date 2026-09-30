@@ -2,7 +2,8 @@
 
 Each scene is encoded to the same format (H.264, 30 fps, no audio) so the
 scenes join by stream copy; the voiceover is then laid under the joined
-picture, and captions and the watermark are burned in one last pass.
+picture, captions are burned in one last pass, and branding (intro, watermark,
+end card) is added on top.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+from branding.service import apply_branding
 from broll.renditions import run
 from core.logging_config import get_logger
 from subtitle_styling.ass_generator import FONTS_DIR, ass_filter, burn_filter_args, script_font
@@ -134,25 +136,22 @@ def has_libass() -> bool:
     return any(line.split()[1:2] == ["ass"] for line in listing.splitlines() if len(line.split()) > 1)
 
 
-async def finish(video: Path, ass_file: Path | None, watermark: bool, out: Path,
-                 size: tuple[int, int] = (WIDTH, HEIGHT), preset: str = "medium") -> Path:
-    """Burn captions and the watermark; returns ``video`` itself when there is nothing to burn."""
+async def finish(video: Path, ass_file: Path | None, watermark: bool, out: Path, preset: str = "medium") -> Path:
+    """Burn captions, then add Clipnera branding; returns ``video`` itself when there is nothing to do."""
     filters: list[str] = []
     if ass_file and has_libass():
         filters.append(ass_filter(str(ass_file)))
     elif ass_file:
         log.warning("This ffmpeg has no libass; the reel renders without burned captions")
-    if not filters and not watermark:
-        return video
-    args = burn_filter_args(filters or ["null"], watermark, frame_size=size)
-    cwd = ass_file.parent if ass_file else video.parent
+    if not filters:
+        return await apply_branding(video, out) if watermark else video
+    captioned = out.with_name(f"captioned_{out.name}") if watermark else out
     proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", str(video), *args,
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", str(video), *burn_filter_args(filters),
         "-c:v", "libx264", "-preset", preset, "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "copy",
-        "-movflags", "+faststart", str(out), cwd=str(cwd), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        "-movflags", "+faststart", str(captioned), cwd=str(ass_file.parent), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
     )
     _, stderr = await proc.communicate()
     if proc.returncode != 0:
         raise RuntimeError(f"Final burn failed: {stderr.decode('utf-8', 'ignore')[-300:]}")
-    return out
-
+    return await apply_branding(captioned, out) if watermark else captioned
