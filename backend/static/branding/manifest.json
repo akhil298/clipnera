@@ -4,11 +4,12 @@
     "slug": "reframe",
     "duration": 5.633333333333334,
     "files": {
-      "9x16": "outro/reframe_9x16.mov",
-      "16x9": "outro/reframe_16x9.mov",
-      "1x1": "outro/reframe_1x1.mov"
+      "9x16": "outro/reframe_9x16.mp4",
+      "16x9": "outro/reframe_16x9.mp4",
+      "1x1": "outro/reframe_1x1.mp4"
     },
-    "blur_in_s": 0.6
+    "blur_in_s": 0.6,
+    "fade_in_s": 0.27
   },
   "watermark": {
     "slug": "listening-spark",

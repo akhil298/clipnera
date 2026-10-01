@@ -36,6 +36,8 @@ class Assets:
     outro_s: float
     blur_in_s: float
     layout: Path
+    # The card's own fade-in over the clip, applied here since the files are opaque.
+    fade_in_s: float = 0.0
 
     @classmethod
     def load(cls, root: Path = STATIC_DIR) -> "Assets | None":
@@ -46,6 +48,7 @@ class Assets:
         return cls(
             outro={k: str(root / v) for k, v in spec["outro"]["files"].items()}, outro_s=spec["outro"]["duration"],
             blur_in_s=spec["outro"]["blur_in_s"], layout=root / spec["watermark"]["layout"],
+            fade_in_s=spec["outro"].get("fade_in_s", 0.0),
         )
 
 
@@ -77,6 +80,7 @@ def branding_cmd(video: Path, out: Path, media: MediaInfo, found: Assets, overla
     w, h, fps = media.width, media.height, f"{media.fps:.6f}"
     fill = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1"
     blur = max(2, round(min(w, h) * BLUR_RATIO))
+    fade = f",format=yuva420p,fade=t=in:st=0:d={found.fade_in_s:.3f}:alpha=1" if found.fade_in_s > 0 else ""
     silence = "anullsrc=r=48000:cl=stereo,atrim=duration={:.3f}"
     main_audio = "[0:a]asetpts=PTS-STARTPTS[ma]" if media.has_audio else f"{silence.format(media.duration)}[ma]"
     graph = [
@@ -86,7 +90,7 @@ def branding_cmd(video: Path, out: Path, media: MediaInfo, found: Assets, overla
         f"[3:v]scale={w}:{h},setsar=1,format=yuv420p,split[sharp][soft]",
         f"[soft]boxblur=luma_radius={blur}:luma_power=2[blurred]",
         f"[sharp][blurred]blend=all_expr='A+(B-A)*min(T/{found.blur_in_s},1)'[still]",
-        f"[2:v]{fill}[card]",
+        f"[2:v]{fill}{fade}[card]",
         # The looped still never ends on its own inside concat, so cut it to length.
         f"[still][card]overlay=0:0,fps={fps},format=yuv420p,trim=duration={found.outro_s:.3f},setpts=PTS-STARTPTS[outro]",
         f"{silence.format(found.outro_s)}[oa]",

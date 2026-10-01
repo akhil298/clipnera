@@ -112,7 +112,9 @@ const fromDataUrl = url => Buffer.from(url.slice(url.indexOf(',') + 1), 'base64'
 /* ---------- frame sources ---------- */
 // Round 2 is canvas code (signature.html); round 1 is CSS animation (reel.html).
 async function renderSignature(cdp, out, times, { id, W, H, layer = false, backdrop = null, alpha = false }) {
-  const enc = encoder(out, { alpha });
+  // Only a .mov keeps the transparency; an .mp4 of transparent frames keeps
+  // their colour, and the backend restores any fade with the manifest's fade_in_s.
+  const enc = encoder(out, { alpha: alpha && out.endsWith('.mov') });
   for (const t of times) {
     await enc.write(fromDataUrl(await evaluate(cdp, `Harness.frame(${JSON.stringify({ id, t, W, H, layer, backdrop, alpha })})`)));
   }
@@ -152,7 +154,10 @@ async function production(cdp) {
   const { sizes, outro, watermark } = catalog.production;
   await openPage(cdp, 'signature.html');
   const manifest = { fps: FPS };
-  for (const [key, spec, ext, opts] of [['outro', outro, 'mov', { layer: true, alpha: true }]]) {
+  // The end card is opaque but for its quarter-second fade-in, so it ships as a
+  // small MP4 (PNG-in-MOV ran past GitHub's 100 MB file limit) and the backend
+  // fades it in over the clip.
+  for (const [key, spec, ext, opts] of [['outro', outro, 'mp4', { layer: true, alpha: true }]]) {
     const times = remapTimes(spec.segments, spec.speed), dir = path.join(STATIC, key), files = {};
     await mkdir(dir, { recursive: true });
     for (const [name, [W, H]] of Object.entries(sizes)) {
@@ -161,7 +166,10 @@ async function production(cdp) {
       await renderSignature(cdp, out, times, { id: spec.id, W, H, ...opts });
       files[name] = path.relative(STATIC, out);
     }
-    manifest[key] = { slug: spec.slug, duration: times.length / FPS, files, ...(spec.blur_in_s ? { blur_in_s: spec.blur_in_s } : {}) };
+    manifest[key] = {
+      slug: spec.slug, duration: times.length / FPS, files,
+      ...(spec.blur_in_s ? { blur_in_s: spec.blur_in_s } : {}), ...(spec.fade_in_s ? { fade_in_s: spec.fade_in_s } : {}),
+    };
   }
 
   const dir = path.join(STATIC, 'watermark', watermark.slug);

@@ -9,7 +9,7 @@
   },
   "production": {
     "sizes": { "9x16": [1080, 1920], "16x9": [1920, 1080], "1x1": [1080, 1080] },
-    "outro": { "slug": "reframe", "id": "F2", "segments": [[0, 5.6], [6.4, 7.0]], "speed": 1.1, "blur_in_s": 0.6 },
+    "outro": { "slug": "reframe", "id": "F2", "segments": [[0, 5.6], [6.4, 7.0]], "speed": 1.1, "blur_in_s": 0.6, "fade_in_s": 0.27 },
     "watermark": { "slug": "listening-spark", "id": "W1", "levels": 16 }
   },
   "motions": [

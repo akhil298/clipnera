@@ -64,6 +64,12 @@ class TestBrandingCommand:
         assert "overlay=x=700:y=40:eof_action=pass" in graph
         assert "[0:a]asetpts=PTS-STARTPTS[ma]" in graph
 
+    def test_the_opaque_end_card_fades_in_over_the_clip(self):
+        media = MediaInfo(width=1080, height=1920, fps=30.0, duration=12.0, has_audio=True)
+        found = Assets(outro=FILES, outro_s=4.9, blur_in_s=0.9, layout=Path("l.json"), fade_in_s=0.27)
+        cmd = branding_cmd(Path("clip.mp4"), Path("out.mp4"), media, found, Path("wm.mov"), (0, 0), Path("last.png"))
+        assert "format=yuva420p,fade=t=in:st=0:d=0.270:alpha=1[card]" in cmd[cmd.index("-filter_complex") + 1]
+
     def test_clip_without_sound_gets_silence(self):
         graph = self._cmd(False)[self._cmd(False).index("-filter_complex") + 1]
         assert "atrim=duration=12.000[ma]" in graph and "[0:a]" not in graph
