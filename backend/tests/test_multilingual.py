@@ -205,17 +205,17 @@ class TestCaptionFonts:
         for name in get_template_names():
             assert bundled_family(get_template(name)["font_family"]) in shipped, name
 
-    @pytest.mark.parametrize(("style", "family"), [("simple", "Anton"), ("impact", "Anton"), ("karaoke", "Poppins Black"), ("soft_rise", "Roboto")])
+    @pytest.mark.parametrize(("style", "family"), [("simple", "Anton"), ("impact", "Anton"), ("karaoke", "Montserrat ExtraBold"), ("soft_rise", "Roboto")])
     def test_english_captions_use_a_bundled_latin_face(self, style, family):
         from subtitle_styling.ass_generator import AssGenerator
 
         ass = AssGenerator().build_ass([{"start": 0.0, "end": 1.0, "text": "hello"}], 0.0, 3.0, style_id=style, title="Watch this")
-        assert f"Style: Caption,{family}," in ass and f"Style: Title,{family}," in ass
+        assert f"Style: Caption,{family}," in ass and "Style: Title,Montserrat," in ass
 
     def test_unknown_editor_font_falls_back_to_bundled(self):
         from subtitle_styling.ass_generator import DEFAULT_FAMILY, bundled_family
 
-        assert bundled_family("Montserrat") == DEFAULT_FAMILY
+        assert bundled_family("Lobster") == DEFAULT_FAMILY
 
     def test_every_detected_script_has_a_font(self):
         from subtitle_styling.ass_generator import SCRIPT_FONT_FILES

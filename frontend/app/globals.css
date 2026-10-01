@@ -256,21 +256,18 @@
   }
 }
 
-/* Headline entrance; mirrors TITLE_ENTRANCE in backend ass_generator.py. */
-@keyframes title-pop {
-  0% { opacity: 0; transform: scale(0.7); }
-  50% { opacity: 1; }
-  60% { transform: scale(1.06); }
-  100% { opacity: 1; transform: scale(1); }
+/* Headline card fade-in; mirrors TITLE_FADE_IN_MS in backend ass_generator.py. */
+@keyframes title-card-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.title-pop {
-  animation: title-pop 300ms ease-out both;
-  transform-origin: top center;
+.title-card {
+  animation: title-card-in 150ms ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .title-pop {
+  .title-card {
     animation: none;
   }
 }
@@ -292,6 +289,20 @@
   font-family: 'Poppins Black';
   src: url('/fonts/Poppins-Black.ttf') format('truetype');
   font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Montserrat ExtraBold';
+  src: url('/fonts/Montserrat-ExtraBold.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Montserrat';
+  src: url('/fonts/Montserrat-Bold.ttf') format('truetype');
+  font-weight: 700;
   font-display: swap;
 }
 

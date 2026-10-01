@@ -70,13 +70,13 @@ class TestColourEmoji:
 
     def test_title_emoji_holds_its_place_and_gets_a_colour_layer_per_part(self):
         ass = AssGenerator().build_ass([{"start": 0.5, "end": 1.0, "text": "deep"}], 0.0, 5.0, title="🌊 dam is so deep")
-        titles = [d for d in self._dialogues(ass) if ",Title" in d]
+        titles = [d for d in self._dialogues(ass) if ",Title" in d and ",TitleCard," not in d]
         assert len(titles) == 3  # the title itself, then the wave's two colour layers
         assert "🌊" not in "".join(titles) and "\\p3" in titles[0]
         assert "Style: TitleEmoji," in ass
 
     def test_caption_word_carries_its_emoji(self):
-        ass = AssGenerator().build_ass(self.WORDS, 0.0, 3.0, style_id="karaoke")
+        ass = AssGenerator().build_ass(self.WORDS, 0.0, 3.0, style_id="lime_stack")
         assert any("MONEY {\\1a&HFF&" in d for d in self._dialogues(ass))
         assert any(",CaptionEmoji," in d for d in self._dialogues(ass))
 
@@ -228,6 +228,10 @@ class TestAnimatedPlateCaptions:
             assert not ("tell" in text and "so" in text.replace("so\\", "")), event
 
 
+# Too long for any line at template sizes, so it can only fit by shrinking.
+LONG_WORD = "pneumonoultramicroscopicsilicovolcanoconiosis"
+
+
 class TestCaptionFit:
     @staticmethod
     def _captions(ass: str) -> list[str]:
@@ -238,17 +242,19 @@ class TestCaptionFit:
                  for i, w in enumerate("begin to stretch spaghettification quickly now".split())]
         ass = AssGenerator().build_ass(words, 0.0, 3.0, style_id="punch",
                                        style_overrides={"font_size": 54})
-        # No caption line may hold more characters than fit inside the frame.
-        from subtitle_styling.ass_generator import caption_layout_budget, char_width_px, ass_font_size
-        budget = caption_layout_budget(char_width_px("Luckiest Guy", ass_font_size(54), True), 1080)
+        # Every caption line fits inside the frame at the size it is drawn.
+        from subtitle_styling.ass_generator import CAPTION_SAFE_WIDTH, char_width_px
+        base = int(next(l for l in ass.splitlines() if l.startswith("Style: Caption,")).split(",")[2])
         for line in self._captions(ass):
-            # An emoji's drawing stands in for the three letters' width the layout gives it.
+            shrunk = re.search(r"\\fs(\d+)", line)
+            em = 54 * (int(shrunk.group(1)) / base if shrunk else 1.0)
+            # An emoji and its space stand in for the three letters' width the layout gives them.
             body = re.sub(r"\{[^}]*\\p3\}[^{]*\{\\p0[^}]*\}", "EMO", line.split(",", 9)[9])
-            text = "".join(part.split("}")[-1] for part in body.split("{"))
-            assert len(text.strip()) <= max(budget, len("SPAGHETTIFICATION"))
+            text = "".join(part.split("}")[-1] for part in body.split("{")).replace(" EMO", "EMO")
+            assert len(text.strip()) * char_width_px("Luckiest Guy", em, True) <= 1080 * CAPTION_SAFE_WIDTH + 1
 
     def test_a_word_too_long_for_the_frame_is_shrunk(self):
-        words = [{"text": "spaghettification", "start": 0.0, "end": 1.0}]
+        words = [{"text": LONG_WORD, "start": 0.0, "end": 1.0}]
         ass = AssGenerator().build_ass(words, 0.0, 1.0, style_id="punch", style_overrides={"font_size": 60})
         line = self._captions(ass)[0]
         assert "\\fs" in line
@@ -256,7 +262,7 @@ class TestCaptionFit:
 
     def test_a_long_title_word_shrinks_the_title(self):
         normal = AssGenerator().build_ass([], 0.0, 1.0, style_id="punch", title="Black holes")
-        long = AssGenerator().build_ass([], 0.0, 1.0, style_id="punch", title="Spaghettificationally speaking")
+        long = AssGenerator().build_ass([], 0.0, 1.0, style_id="punch", title=f"{LONG_WORD.title()} speaking")
         size = lambda ass: int(next(l for l in ass.splitlines() if l.startswith("Style: Title,")).split(",")[2])
         assert size(long) < size(normal)
 

@@ -1,21 +1,38 @@
 from __future__ import annotations
 
+import itertools
 import math
 import os
 import tempfile
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+from PIL import ImageFont
+
 from core.logging_config import get_logger
 from subtitle_styling.emoji_annotator import annotate_caption_words
-from subtitle_styling.emoji_art import GHOST, colourize
+from subtitle_styling.emoji_art import EMOJI, GHOST, colourize
 from subtitle_styling.templates import DEFAULT_STYLE, get_template
 from transcription.language import script_of
 
 log = get_logger(__name__)
 
 CAPTION_SAFE_WIDTH = 0.90
+# libass sizes a face by its (usWinAscent + usWinDescent) / unitsPerEm span
+# while CSS sizes it by its em, so a template's px size, which the editor
+# previews as an em, burns at the em times its face's span. One shared ratio
+# drew a short-span face like Roboto half as large again as its preview.
+FONT_WIN_SPAN: dict[str, float] = {
+    "Anton": 1.733, "Archivo Black": 1.347, "Montserrat ExtraBold": 1.562, "Montserrat": 1.562, "Bangers": 1.757, "Bebas Neue": 1.3,
+    "Courier Prime": 1.318, "DM Serif Display": 1.371, "DejaVu Sans": 1.164,
+    "DejaVu Sans Mono": 1.164, "DejaVu Serif": 1.175, "Luckiest Guy": 1.226,
+    "Permanent Marker": 1.427, "Poppins Black": 1.762, "Roboto": 1.2,
+    "Noto Naskh Arabic": 2.039, "Noto Sans Bengali": 1.403, "Noto Sans Devanagari": 1.906,
+    "Noto Sans Gujarati": 1.484, "Noto Sans Gurmukhi": 1.304, "Noto Sans Kannada": 1.645,
+    "Noto Sans Malayalam": 1.247, "Noto Sans Tamil": 1.24, "Noto Sans Telugu": 1.478,
+}
 DEFAULT_WIN_SPAN_RATIO = 1.75
 # Mean advance per character, in em, as (all caps, sentence case), measured over
 # English text with its spaces. Captions are drawn unwrapped (\q2), so a line's
@@ -32,6 +49,8 @@ FONT_CHAR_EM: dict[str, tuple[float, float]] = {
     "DM Serif Display": (0.534, 0.447),
     "Impact": (0.443, 0.407),
     "Luckiest Guy": (0.509, 0.513),
+    "Montserrat ExtraBold": (0.666, 0.551),
+    "Montserrat": (0.660, 0.540),
     "Permanent Marker": (0.611, 0.508),
     "Poppins Black": (0.596, 0.527),
     "Courier Prime": (0.600, 0.600),
@@ -42,12 +61,34 @@ FONT_CHAR_EM: dict[str, tuple[float, float]] = {
 DEFAULT_CHAR_EM = (0.712, 0.602)
 # Room for the active word's pop scale, outlines and wide letters (M, W).
 CAPTION_WIDTH_MARGIN = 1.15
+# A caption line ends where the speaker does: after a word closing a clause, or
+# before a pause this long, so no line carries one thought into the next.
+PHRASE_PAUSE_SECONDS = 0.35
+CLAUSE_ENDINGS = (".", ",", "?", "!", ";", ":", "…")
+# Trimmed from both ends of a displayed word; apostrophes, %, $ and inner
+# punctuation (U.S., 3.5) stay.
+DISPLAY_TRIM = ".,?!;:…\"“”—–"
 # Bundled caption faces (SIL OFL / Apache 2.0), so styles render identically on
 # any host instead of depending on what fontconfig happens to have installed.
 FONTS_DIR = Path(__file__).resolve().parent.parent / "static" / "fonts"
-# The headline pops in: it fades up from 70% size, overshoots, then settles.
-# Mirrored by the ``title-pop`` keyframes in the frontend preview.
-TITLE_ENTRANCE = r"{\fad(150,0)\fscx70\fscy70\t(0,180,\fscx106\fscy106)\t(180,300,\fscx100\fscy100)}"
+# The headline is a hook: dark semibold text on a white rounded card for the
+# opening seconds, then it clears off the speaker. Mirrored by the title card in
+# the frontend preview (StudioCanvas).
+TITLE_FAMILY, TITLE_FONT_FILE = "Montserrat", "Montserrat-Bold.ttf"
+TITLE_TEXT_COLOUR = "&H00141414"
+TITLE_CARD_COLOUR = "&H00FFFFFF"
+TITLE_SECONDS = 5.0
+TITLE_FADE_IN_MS, TITLE_FADE_OUT_MS = 150, 250
+# Card padding around the text and its corner radius, in ems of the title.
+TITLE_PAD_X, TITLE_PAD_Y, TITLE_RADIUS = 1.3, 0.42, 0.22
+# Baseline to baseline between title lines, and room kept under the last
+# baseline for descenders (g, y), in ems. libass would space lines by the
+# face's whole ascent-to-descent span, which in Montserrat leaves a gap.
+TITLE_LINE_PITCH, TITLE_DESCENT_ROOM = 1.22, 0.24
+# The card spans at most this much of the frame width.
+TITLE_MAX_WIDTH = 0.8
+# Control-point offset that makes a cubic Bezier a quarter circle.
+KAPPA = 0.5523
 # Display faces carry Latin glyphs only; captions in these scripts switch to a
 # bundled Noto face instead of rendering as empty boxes. Covers every script the
 # transcriber can emit (see transcription.language._LANGUAGE_CODES).
@@ -69,7 +110,7 @@ SCRIPT_FONT_FILES = {
 # Noto Indic one without Latin letters, and English captions burned as boxes.
 BUNDLED_FAMILIES = frozenset({
     "Anton", "Archivo Black", "Bangers", "Bebas Neue", "DM Serif Display", "Luckiest Guy",
-    "Permanent Marker", "Poppins Black", "Courier Prime", "Roboto",
+    "Montserrat ExtraBold", "Montserrat", "Permanent Marker", "Poppins Black", "Courier Prime", "Roboto",
     "DejaVu Sans", "DejaVu Sans Mono", "DejaVu Serif",
 })
 # Faces bundled only as a heavy regular cut. Asking libass for bold on these
@@ -77,13 +118,12 @@ BUNDLED_FAMILIES = frozenset({
 # at their own weight; every other bundled face ships a real bold cut.
 UNBOLDED_FAMILIES = frozenset({
     "Anton", "Archivo Black", "Bangers", "Bebas Neue", "DM Serif Display", "Luckiest Guy",
-    "Permanent Marker", "Poppins Black",
+    "Montserrat ExtraBold", "Permanent Marker", "Poppins Black",
 })
 # Closest bundled face for common families that cannot ship (Impact is proprietary).
 FONT_SUBSTITUTES = {"Impact": "Anton", "Poppins": "Poppins Black", "Arial": "DejaVu Sans", "Helvetica": "DejaVu Sans", "Inter": "DejaVu Sans",
                     "Georgia": "DejaVu Serif", "Times New Roman": "DejaVu Serif", "Courier New": "DejaVu Sans Mono"}
 DEFAULT_FAMILY = "DejaVu Sans"
-DEFAULT_FONT_FILE = "DejaVuSans-Bold.ttf"
 
 
 def bundled_family(family: str) -> str:
@@ -329,9 +369,9 @@ def _hex_to_ass_style(hex_color: str) -> str:
     return f"&H00{b}{g}{r}".upper()
 
 
-def ass_font_size(em_px: float, win_span_ratio: float | None = None) -> int:
-    ratio = win_span_ratio if win_span_ratio is not None else DEFAULT_WIN_SPAN_RATIO
-    return max(4, round(em_px * ratio))
+def ass_font_size(em_px: float, font_family: str) -> int:
+    """The ASS Fontsize that draws ``font_family`` at an em of ``em_px``."""
+    return max(4, round(em_px * FONT_WIN_SPAN.get(font_family, DEFAULT_WIN_SPAN_RATIO)))
 
 
 def escape_ass(text: str) -> str:
@@ -343,10 +383,10 @@ def escape_ass(text: str) -> str:
     )
 
 
-def char_width_px(font_family: str, font_size: int, uppercase: bool) -> float:
-    """Typical on-screen width of one character, margin included."""
+def char_width_px(font_family: str, em_px: float, uppercase: bool) -> float:
+    """Typical on-screen width of one character at an em of ``em_px``, margin included."""
     upper, mixed = FONT_CHAR_EM.get(font_family, DEFAULT_CHAR_EM)
-    return font_size * (upper if uppercase else mixed) * CAPTION_WIDTH_MARGIN
+    return em_px * (upper if uppercase else mixed) * CAPTION_WIDTH_MARGIN
 
 
 def caption_layout_budget(char_px: float, width: int) -> int:
@@ -363,12 +403,85 @@ def fit_font_size(font_size: int, chars: int, char_px: float, max_width: float) 
     return font_size if needed <= max_width else max(4, int(font_size * max_width / needed))
 
 
+@lru_cache(maxsize=16)
+def face_metrics(font_file: str) -> tuple[float, float]:
+    """(ascent libass places the baseline at, cap height) of a bundled face, in ems."""
+    from fontTools.ttLib import TTFont
+
+    font = TTFont(FONTS_DIR / font_file, lazy=True)
+    units, os2 = font["head"].unitsPerEm, font["OS/2"]
+    return os2.usWinAscent / units, (getattr(os2, "sCapHeight", 0) or 0.7 * units) / units
+
+
+@lru_cache(maxsize=64)
+def _face(font_file: str, em_px: int) -> ImageFont.FreeTypeFont:
+    return ImageFont.truetype(str(FONTS_DIR / font_file), em_px)
+
+
+def text_width(text: str, font_file: str, em_px: float, emoji_px: float) -> float:
+    """Drawn width of ``text`` in a bundled face; an emoji is a square ``emoji_px`` wide."""
+    emoji = EMOJI.findall(text)
+    return _face(font_file, max(1, round(em_px))).getlength(EMOJI.sub("", text)) + emoji_px * len(emoji)
+
+
+def wrap_title(title: str, measure: Any, max_width: float) -> list[str]:
+    """``title`` broken between words into as few lines as fit ``max_width``,
+    balanced so no line is left holding a lone word."""
+    words = title.split()
+    count = 0
+    line = ""
+    for word in words:
+        candidate = f"{line} {word}" if line else word
+        if line and measure(candidate) > max_width:
+            count, line = count + 1, word
+        else:
+            line = candidate
+    count += 1
+    if count == 1:
+        return [title.strip()]
+
+    def split(breaks: tuple[int, ...]) -> list[str]:
+        bounds = (0, *breaks, len(words))
+        return [" ".join(words[a:b]) for a, b in zip(bounds, bounds[1:])]
+
+    return min(
+        (split(breaks) for breaks in itertools.combinations(range(1, len(words)), count - 1)),
+        key=lambda lines: max(measure(line) for line in lines),
+    )
+
+
+def rounded_rect(w: float, h: float, r: float) -> str:
+    """ASS drawing of a ``w`` x ``h`` rectangle with corners of radius ``r``, from its top-left."""
+    r = min(r, w / 2, h / 2)
+    k = r * (1 - KAPPA)
+    points = [
+        ("m", r, 0), ("l", w - r, 0), ("b", w - k, 0, w, k, w, r),
+        ("l", w, h - r), ("b", w, h - k, w - k, h, w - r, h),
+        ("l", r, h), ("b", k, h, 0, h - k, 0, h - r),
+        ("l", 0, r), ("b", 0, k, k, 0, r, 0),
+    ]
+    return " ".join(f"{cmd} " + " ".join(str(round(v)) for v in values) for cmd, *values in points)
+
+
+def _phrase_ends(previous: dict[str, Any], word: dict[str, Any]) -> bool:
+    """Whether a caption line should end between ``previous`` and ``word``."""
+    if str(previous.get("text", "")).strip().endswith(CLAUSE_ENDINGS):
+        return True
+    return float(word.get("start", 0.0)) - float(previous.get("end", 0.0)) >= PHRASE_PAUSE_SECONDS
+
+
+def display_text(text: str) -> str:
+    """A word as burned: its surrounding punctuation trimmed."""
+    return text.strip().strip(DISPLAY_TRIM)
+
+
 def group_words(
     words: list[dict[str, Any]],
     max_chars: int,
     max_words: int,
 ) -> list[list[dict[str, Any]]]:
-    """Group flat word list into display lines based on character budget."""
+    """Group flat word list into display lines: a character and word budget,
+    broken early at clause ends and pauses."""
     groups: list[list[dict[str, Any]]] = []
     current: list[dict[str, Any]] = []
     current_chars = 0
@@ -379,7 +492,11 @@ def group_words(
             continue
         word_len = len(text)
 
-        if current and (current_chars + 1 + word_len > max_chars or len(current) >= max_words):
+        if current and (
+            current_chars + 1 + word_len > max_chars
+            or len(current) >= max_words
+            or _phrase_ends(current[-1], word)
+        ):
             groups.append(current)
             current = []
             current_chars = 0
@@ -418,12 +535,18 @@ class AssGenerator:
         emoji_collection: str | None = None,
         style_overrides: dict[str, Any] | None = None,
         segment_breaks: list[float] | None = None,
+        seams: list[tuple[float, float, float]] | None = None,
     ) -> str:
         """``segment_breaks`` are times (on the words' timeline) where the picture
         cuts to a different segment, e.g. the end of the hook teaser; no caption
-        line spans one, or it would carry the hook's words over into the clip."""
+        line spans one, or it would carry the hook's words over into the clip.
+        ``seams`` are ``(start, end, seam)`` stretches, in seconds from the
+        clip's start, where two people are stacked: a line starting in one sits
+        on the seam between them, as a share of the height, not over a face."""
         template = {**get_template(style_id), **(style_overrides or {})}
-        breaks = sorted(segment_breaks or [])
+        # A stack starting or ending moves the captions, so no line spans that either.
+        seam_edges = [clip_start + edge for low, high, _ in seams or [] for edge in (low, high)]
+        breaks = sorted([*(segment_breaks or []), *seam_edges])
         spoken = " ".join(str(w.get("text") or w.get("word") or "") for w in transcript_words)
         fallback = script_font(f"{spoken} {title or ''}")
         template["font_family"] = fallback[0] if fallback else bundled_family(template["font_family"])
@@ -434,7 +557,7 @@ class AssGenerator:
         # height made the same template 1.78x larger on 9:16 (h=1920) than on
         # 16:9 (h=1080); width is the stable axis across 9:16, 1:1 and 4:5.
         font_size_em = template["font_size"] * width / 1080.0
-        font_size = ass_font_size(font_size_em)
+        font_size = ass_font_size(font_size_em, template["font_family"])
 
         caption_x = round(width / 2)
         caption_y = round(template["position_y"] * height)
@@ -533,45 +656,41 @@ class AssGenerator:
                 f"{max(4, round(font_size * 0.14))},0,5,{margin_h},{margin_h},0,1"
             )
 
-        # Same width-based scale as the captions, so the editor preview can
-        # size both from one rule.
-        hook_font_size = ass_font_size(template["title_font_size"] * width / 1080.0)
+        lines: list[str] = []
+        clip_duration = clip_end - clip_start
         title_margin_v = round(template["title_position_y"] * height)
-        title_margin_h = round(width * 0.1)
+        # Same width-based scale as the captions, so the editor preview can
+        # size both from one rule. A script the title face lacks keeps the
+        # captions' fallback face.
+        title_family, title_file = fallback or (TITLE_FAMILY, TITLE_FONT_FILE)
+        title_em = template["title_font_size"] * width / 1080.0
         if title and title.strip():
-            # The title wraps between words, but a word longer than the line
-            # would run off both edges, so the size gives way instead.
-            longest = max(len(word) for word in title.split())
-            title_char_px = char_width_px(template["font_family"], hook_font_size, title.isupper())
-            hook_font_size = fit_font_size(hook_font_size, longest, title_char_px, width - 2 * title_margin_h)
-        title_box_pad = max(6, round(height * 0.009))
-        title_shadow = max(2, round(height * 0.0032))
+            from subtitle_styling.emoji_annotator import inject_collection_emojis
+            styled_title = escape_ass(inject_collection_emojis(title.strip(), emoji_collection))
+            title_lines, title_em = self._fit_title(styled_title, title_family, title_file, title_em, width)
+        title_font_size = ass_font_size(title_em, title_family)
 
         header_lines.extend([
             "",
-            f"Style: Title,{template['font_family']},{hook_font_size},"
-            f"&H00FFFFFF,&H00FFFFFF,&H40000000,&H40000000,-1,0,0,0,100,100,0,0,3,"
-            f"{title_box_pad},{title_shadow},8,{title_margin_h},{title_margin_h},{title_margin_v},1",
+            f"Style: Title,{title_family},{title_font_size},"
+            f"{TITLE_TEXT_COLOUR},{TITLE_TEXT_COLOUR},&H00000000,&H00000000,"
+            f"{-1 if font_weight(title_family) >= 700 else 0},0,0,0,100,100,0,0,1,"
+            f"0,0,8,0,0,{title_margin_v},1",
+            f"Style: TitleCard,{title_family},{title_font_size},"
+            f"{TITLE_CARD_COLOUR},{TITLE_CARD_COLOUR},&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,"
+            f"0,0,7,0,0,0,1",
             "",
             "[Events]",
             "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
         ])
 
-        lines: list[str] = []
-        clip_duration = clip_end - clip_start
-
         if title and title.strip():
-            from subtitle_styling.emoji_annotator import inject_collection_emojis
-            styled_title = inject_collection_emojis(title.strip(), emoji_collection)
-            # The title is the clip's static headline, so it holds for the whole
-            # clip; only the word captions below it move.
-            lines.append(
-                f"Dialogue: 2,{ass_time(0)},{ass_time(max(0.0, clip_duration))},Title,,0,0,0,,"
-                f"{TITLE_ENTRANCE}{escape_ass(styled_title)}"
-            )
+            lines.extend(self._title_card(
+                title_lines, title_file, title_em, title_font_size, title_margin_v, width, min(TITLE_SECONDS, clip_duration),
+            ))
 
         if not transcript_words:
-            return "\n".join(header_lines) + "\n"
+            return colourize("\n".join(header_lines + lines) + "\n")
 
         words_in_clip = []
         for word in transcript_words:
@@ -589,9 +708,9 @@ class AssGenerator:
             words_in_clip.append(entry)
 
         if not words_in_clip:
-            return "\n".join(header_lines) + "\n"
+            return colourize("\n".join(header_lines + lines) + "\n")
 
-        caption_char_px = char_width_px(template["font_family"], font_size, look.uppercase)
+        caption_char_px = char_width_px(template["font_family"], font_size_em, look.uppercase)
         # A stacked style spreads a line over its rows, so it holds more text.
         max_chars = caption_layout_budget(caption_char_px, width) * rows
         groups = _split_at_breaks(group_words(words_in_clip, max_chars, template["max_words_per_line"]), breaks)
@@ -638,10 +757,13 @@ class AssGenerator:
             line_size = fit_font_size(font_size, math.ceil(max(row_chars)), caption_char_px, width * CAPTION_SAFE_WIDTH)
             size_tag = f"\\fs{line_size}" if line_size < font_size else ""
             size_block = f"{{{size_tag}}}" if size_tag else ""
-            still = f"{{\\an5\\q2\\pos({caption_x},{caption_y})}}"
+            line_y = next(
+                (round(seam * height) for low, high, seam in seams or [] if low <= group_start < high), caption_y,
+            )
+            still = f"{{\\an5\\q2\\pos({caption_x},{line_y})}}"
             # Each caption line animates in once, on its first word's event;
             # the events for its later words hold it in place.
-            entering = _entrance(animation, animation_speed, caption_x, caption_y, height) or still
+            entering = _entrance(animation, animation_speed, caption_x, line_y, height) or still
 
             for wi, word in enumerate(group):
                 anchor = entering if wi == 0 else still
@@ -674,6 +796,48 @@ class AssGenerator:
 
         return colourize("\n".join(header_lines) + "\n" + "\n".join(lines) + "\n")
 
+    @staticmethod
+    def _fit_title(title: str, family: str, font_file: str, em: float, width: int) -> tuple[list[str], float]:
+        """The title's lines and em: wrapped between words to the card's width,
+        shrunk only when one word alone is too wide for it."""
+        inner = width * TITLE_MAX_WIDTH - 2 * TITLE_PAD_X * em
+        emoji_px = ass_font_size(em, family)
+        widest = max(text_width(word, font_file, em, emoji_px) for word in title.split())
+        if widest > inner:
+            em *= inner / widest
+            inner = width * TITLE_MAX_WIDTH - 2 * TITLE_PAD_X * em
+            emoji_px = ass_font_size(em, family)
+        return wrap_title(title, lambda text: text_width(text, font_file, em, emoji_px), inner), em
+
+    @staticmethod
+    def _title_card(
+        title_lines: list[str], font_file: str, em: float, font_size: int, top: int, width: int, seconds: float,
+    ) -> list[str]:
+        """Dialogue lines drawing the title: its white card, then each line of text on it.
+
+        Lines are placed one by one at ``TITLE_LINE_PITCH``, and the card is
+        sized from cap height and baselines, so the padding reads even.
+        """
+        ascent, cap = face_metrics(font_file)
+        text_w = max(text_width(line, font_file, em, font_size) for line in title_lines)
+        card_w = text_w + 2 * TITLE_PAD_X * em
+        first_baseline = top + (TITLE_PAD_Y + cap) * em
+        card_h = (2 * TITLE_PAD_Y + cap + (len(title_lines) - 1) * TITLE_LINE_PITCH + TITLE_DESCENT_ROOM) * em
+        left = round((width - card_w) / 2)
+        timing = f"{ass_time(0)},{ass_time(max(0.0, seconds))}"
+        fade = f"\\fad({TITLE_FADE_IN_MS},{TITLE_FADE_OUT_MS})"
+        events = [
+            f"Dialogue: 0,{timing},TitleCard,,0,0,0,,"
+            f"{{\\an7\\pos({left},{top}){fade}\\p1}}{rounded_rect(card_w, card_h, TITLE_RADIUS * em)}{{\\p0}}",
+        ]
+        for index, line in enumerate(title_lines):
+            # \an8 anchors a line's top, which sits one ascent above its baseline.
+            line_top = first_baseline + (index * TITLE_LINE_PITCH - ascent) * em
+            events.append(
+                f"Dialogue: 2,{timing},Title,,0,0,0,,{{\\an8\\pos({round(width / 2)},{round(line_top)}){fade}}}{line}"
+            )
+        return events
+
     def _render_group(
         self,
         group: list[dict[str, Any]],
@@ -697,7 +861,7 @@ class AssGenerator:
         """
         rows: list[list[str]] = [[], []]
         for i, word in enumerate(group):
-            raw = escape_ass(word.get("text", ""))
+            raw = escape_ass(display_text(word.get("text", "")))
             text = raw.upper() if look.uppercase else raw
             if not text:
                 continue
@@ -771,6 +935,7 @@ def build_ass_file(
     emoji_collection: str | None = None,
     style_overrides: dict[str, Any] | None = None,
     segment_breaks: list[float] | None = None,
+    seams: list[tuple[float, float, float]] | None = None,
 ) -> str:
     """Generate an ASS subtitle file and return its path."""
     generator = AssGenerator()
@@ -787,6 +952,7 @@ def build_ass_file(
         emoji_collection=emoji_collection,
         style_overrides=style_overrides,
         segment_breaks=segment_breaks,
+        seams=seams,
     )
 
     if output_path:

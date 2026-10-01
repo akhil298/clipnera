@@ -64,7 +64,7 @@ export const CaptionStylePreview: React.FC<CaptionStylePreviewProps> = ({
   // The card is a fixed size, so the template's real px font size would overflow
   // the wide presets and look lost on the small ones. Scaled into a legible band
   // that still preserves the relative difference between templates.
-  const previewFontSize = fontSize ?? Math.round(Math.min(22, Math.max(11, config.fontSize * 0.42)));
+  const previewFontSize = fontSize ?? Math.round(Math.min(22, Math.max(11, config.fontSize * 0.21)));
   const split = captionRowSplit(words, config.rows);
   const rows = [words.slice(0, split), words.slice(split)].filter((row) => row.length > 0);
 

@@ -9,9 +9,9 @@ Design notes:
 
 * Layout is inferred from faces actually detected in the clip, not from a
   separate analysis pass that had no face data to work with, and is decided
-  per camera shot and within it per exchange: two people are stacked only
-  while they trade quick replies on screen together, never through a
-  monologue, a close-up of one of them, or B-roll with nobody in it.
+  per camera shot and within it per exchange: two people are stacked through
+  a two-shot of them and while they trade quick replies on screen together,
+  never over a close-up of one of them or B-roll with nobody in it.
 * The crop follows the active speaker per frame and is smoothed, rather than
   being a single static window per scene. A change of speaker is a hard cut,
   as an editor would make it, not a pan across the room.
@@ -37,11 +37,13 @@ from core.exceptions import CustomException
 from clip_generation.hook import Hook
 from core.logging_config import get_logger
 from video_processor.editing import (
+    THUMBNAIL_SIZE,
     Layout,
     Part,
     Turn,
     choose_layout,
     framing_stretches,
+    picture_difference,
     plan_parts,
     shot_cuts,
     shot_windows,
@@ -75,6 +77,10 @@ SAMPLE_INTERVAL_SECONDS = 1.0 / 6.0
 # Face detection runs on a downscaled copy; boxes are normalised so they map
 # back to full resolution exactly.
 DETECT_WIDTH = 640
+# A cut found between two samples is pinned to its frame by decoding that gap
+# at this rate, so the crop changes with the picture rather than up to a
+# sample later.
+CUT_REFINE_FPS = 50.0
 # Crop targets computed per second of output, twice the sampling rate so the
 # smoothed path has a point between every pair of detections.
 TRACKING_FPS = 4.0
@@ -172,6 +178,9 @@ class CutResult:
     speaker_count: int
     output_files: dict[str, str] = field(default_factory=dict)
     crop_tracking: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    # Per aspect ratio: (start, end, seam) wherever two people are stacked, in
+    # the rendered file's own seconds, with the seam as a share of its height.
+    seams: dict[str, list[tuple[float, float, float]]] = field(default_factory=dict)
     faces: list[dict[str, Any]] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -200,9 +209,10 @@ class ClipCutter:
         frames = await self._sample_frames(request)
         faces_per_frame = await asyncio.to_thread(self._detect_faces, request.clip_id, frames)
         cuts = await asyncio.to_thread(shot_cuts, _decode_frames(frames))
+        cuts = [await self._refine_cut(request, cut) for cut in cuts]
         # A jump between windows is a cut, so the crop never glides across it.
         cuts = sorted(set(cuts) | {start for start, _ in request.windows[1:]})
-        tracks = build_tracks(_decode_frames(frames), faces_per_frame)
+        tracks = build_tracks(_decode_frames(frames), faces_per_frame, cuts)
         for track in tracks:
             log.info(
                 "[TRACK] clip=%s id=%d samples=%d seen=%.2fs-%.2fs mean_area=%.4f mean_motion=%.2f",
@@ -259,6 +269,7 @@ class ClipCutter:
                 request, layout, tracks, cuts, turns, aspect_ratio, source_width, source_height,
             )
             result.layout = next((frame.kind for _, frame in shots if frame.composite), result.layout)
+            result.seams[aspect_ratio] = _stack_seams(shots)
             log.info("[LAYOUT] clip=%s ratio=%s hint=%s detected=%s used=%s beats=%d",
                      request.clip_id, aspect_ratio, request.layout_hint, layout,
                      " ".join(f"{part.start:.1f}-{part.end:.1f}:{frame.kind}" for part, frame in shots),
@@ -377,6 +388,28 @@ class ClipCutter:
 
         return [(start + index / fps, payload) for index, payload in enumerate(_split_mjpeg(stdout))]
 
+    async def _refine_cut(self, request: CutRequest, cut: float) -> float:
+        """``cut``, stamped at the first sample of the new shot, moved to the
+        frame where the picture actually changes."""
+        start = max(0.0, cut - SAMPLE_INTERVAL_SECONDS)
+        width, height = THUMBNAIL_SIZE
+        cmd = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin",
+            "-ss", f"{start:.3f}", "-i", request.source_path, "-t", f"{cut - start + 0.05:.3f}",
+            "-vf", f"fps={CUT_REFINE_FPS},scale={width}:{height},format=gray",
+            "-an", "-f", "rawvideo", "pipe:1",
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        stdout, _ = await proc.communicate()
+        count = len(stdout) // (width * height)
+        if proc.returncode != 0 or count < 2:
+            return cut
+        frames = np.frombuffer(stdout[:count * width * height], np.uint8).reshape(count, height, width).astype(np.float32)
+        jump = max(range(1, count), key=lambda i: picture_difference(frames[i - 1], frames[i]))
+        return round(start + jump / CUT_REFINE_FPS, 3)
+
     def _detect_faces(self, clip_id: str, frames: list[tuple[float, bytes]]) -> list[list[Face]]:
         started = time.monotonic()
         faces_per_frame, backend = self._faces.detect_clip(
@@ -486,12 +519,21 @@ class ClipCutter:
         # slow glide from where the last shot's subject was. So is a switch to
         # a speaker out of frame.
         switches = _switch_cuts(timestamps, speakers, raw, crop_w / source_width)
+        boundaries = sorted(set(cuts or []) | set(switches))
         points: list[dict[str, Any]] = []
-        for low, high in _shot_ranges(timestamps, sorted(set(cuts or []) | set(switches))):
+        for low, high in _shot_ranges(timestamps, boundaries):
             xs = _smooth_series([point[0] for point in raw[low:high]], step)
             ys = _smooth_series([point[1] for point in raw[low:high]], step)
             if points:
-                points.append({**points[-1], "timestamp": round(timestamps[low] - CUT_HOLD_SECONDS, 3)})
+                # The crop moves on the cut's own frame, not at the next tracking point.
+                cut = min(c for c in boundaries if timestamps[low - 1] < c <= timestamps[low])
+                points.append({**points[-1], "timestamp": round(cut - CUT_HOLD_SECONDS, 3)})
+                if cut < timestamps[low]:
+                    points.append({
+                        "timestamp": round(cut, 3),
+                        "bbox": crop_around(xs[0], ys[0], source_width, source_height, aspect_ratio).as_dict(),
+                        "strategy": strategy,
+                    })
             points.extend(
                 {
                     "timestamp": round(ts, 3),
@@ -657,6 +699,7 @@ def _plan_shots(
         for shot_start, shot_end in shot_windows(span_start, span_end, cuts):
             stretches = framing_stretches(
                 shot_start, shot_end, turns, SAMPLE_INTERVAL_SECONDS, request.transcript_segments,
+                present=tracks_in_shot(tracks, shot_start, shot_end, SAMPLE_INTERVAL_SECONDS),
             )
             for start, end, pair in stretches:
                 present = tracks_in_shot(tracks, start, end, SAMPLE_INTERVAL_SECONDS)
@@ -670,6 +713,20 @@ def _plan_shots(
                     shots.append((Part(start, end), frame))
                 joinable = True
     return shots
+
+
+def _stack_seams(shots: list[tuple[Part, Layout]]) -> list[tuple[float, float, float]]:
+    """Where two people share the frame, on the rendered file's timeline: the
+    shots play back to back, so each starts where the last one ended."""
+    seams: list[tuple[float, float, float]] = []
+    cursor = 0.0
+    for part, frame in shots:
+        length = part.end - part.start
+        if frame.kind == "two_speaker_stack":
+            seam = frame.cells[0].height / sum(cell.height for cell in frame.cells)
+            seams.append((round(cursor, 3), round(cursor + length, 3), round(seam, 4)))
+        cursor += length
+    return seams
 
 
 def _switch_cuts(

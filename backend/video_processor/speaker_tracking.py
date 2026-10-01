@@ -74,10 +74,26 @@ class FaceSample:
 
 @dataclass
 class SpeakerTrack:
-    """One person followed across the sampled frames."""
+    """One person followed across the sampled frames.
+
+    ``cuts`` are the clip's camera cuts: a track is placed, seen and heard only
+    from samples in the same shot as the moment asked about, so a person in
+    the shot before a cut is never framed after it.
+    """
 
     track_id: int
     samples: list[FaceSample] = field(default_factory=list)
+    cuts: list[float] = field(default_factory=list)
+
+    def _shot(self, timestamp: float) -> int:
+        return bisect_right(self.cuts, timestamp)
+
+    def _in_shot(self, timestamp: float) -> list[FaceSample]:
+        """Samples from ``timestamp``'s shot; all of them when the track was never in it."""
+        if not self.cuts:
+            return self.samples
+        shot = self._shot(timestamp)
+        return [s for s in self.samples if self._shot(s.timestamp) == shot] or self.samples
 
     @property
     def first_seen(self) -> float:
@@ -97,15 +113,16 @@ class SpeakerTrack:
         return [s.timestamp for s in self.samples]
 
     def box_at(self, timestamp: float) -> Box | None:
-        """Position at ``timestamp``, interpolated between observations."""
-        if not self.samples:
+        """Position at ``timestamp``, interpolated between observations in its shot."""
+        samples = self._in_shot(timestamp)
+        if not samples:
             return None
-        if len(self.samples) == 1 or timestamp <= self.samples[0].timestamp:
-            return self.samples[0].face.box
-        if timestamp >= self.samples[-1].timestamp:
-            return self.samples[-1].face.box
-        index = bisect_left(self._timestamps(), timestamp)
-        earlier, later = self.samples[index - 1], self.samples[index]
+        if len(samples) == 1 or timestamp <= samples[0].timestamp:
+            return samples[0].face.box
+        if timestamp >= samples[-1].timestamp:
+            return samples[-1].face.box
+        index = bisect_left([s.timestamp for s in samples], timestamp)
+        earlier, later = samples[index - 1], samples[index]
         span = max(1e-6, later.timestamp - earlier.timestamp)
         ratio = (timestamp - earlier.timestamp) / span
         a, b = earlier.face.box, later.face.box
@@ -117,18 +134,22 @@ class SpeakerTrack:
         )
 
     def motion_at(self, timestamp: float, window: float = MOTION_WINDOW_SECONDS) -> float:
-        """Mean mouth motion in ``window`` seconds either side of ``timestamp``."""
+        """Mean mouth motion in ``window`` seconds either side of ``timestamp``, within its shot."""
+        shot = self._shot(timestamp)
         timestamps = self._timestamps()
         low = bisect_left(timestamps, timestamp - window)
         high = bisect_right(timestamps, timestamp + window)
-        nearby = self.samples[low:high]
+        nearby = [s for s in self.samples[low:high] if self._shot(s.timestamp) == shot]
         if not nearby:
             return 0.0
         return sum(s.mouth_motion for s in nearby) / len(nearby)
 
     def visible_at(self, timestamp: float, gap: float = VISIBLE_GAP_SECONDS) -> bool:
+        shot = self._shot(timestamp)
         timestamps = self._timestamps()
-        return bisect_right(timestamps, timestamp + gap) > bisect_left(timestamps, timestamp - gap)
+        low = bisect_left(timestamps, timestamp - gap)
+        high = bisect_right(timestamps, timestamp + gap)
+        return any(self._shot(s.timestamp) == shot for s in self.samples[low:high])
 
 
 def _crop_region(frame: np.ndarray, region: Box) -> np.ndarray | None:
@@ -162,12 +183,15 @@ def _eye_region(face: Box) -> Box:
 def build_tracks(
     frames: Iterable[tuple[float, np.ndarray]],
     faces_per_frame: Iterable[list[Face]],
+    cuts: Iterable[float] = (),
 ) -> list[SpeakerTrack]:
     """Link per-frame detections into tracks and score their lip motion.
 
-    Both arguments may be lazy iterables, so callers can stream decoded frames
-    instead of holding a whole clip in memory.
+    Both iterables may be lazy, so callers can stream decoded frames instead of
+    holding a whole clip in memory. No track and no lip comparison spans one of
+    the camera ``cuts``.
     """
+    cuts = sorted(cuts)
     tracks: list[SpeakerTrack] = []
     # Per track: (timestamp, mouth patch, eye patch) from its last observation.
     previous: dict[int, tuple[float, np.ndarray, np.ndarray | None]] = {}
@@ -178,9 +202,9 @@ def build_tracks(
         frame_count += 1
         claimed: set[int] = set()
         for face in faces:
-            match = _best_track(tracks, face.box, claimed)
+            match = _best_track(tracks, face.box, claimed, timestamp, cuts)
             if match is None:
-                match = SpeakerTrack(track_id=next_track_id)
+                match = SpeakerTrack(track_id=next_track_id, cuts=cuts)
                 tracks.append(match)
                 next_track_id += 1
             claimed.add(match.track_id)
@@ -190,7 +214,10 @@ def build_tracks(
             if mouth is not None:
                 eyes = _crop_region(frame, _eye_region(face.box))
                 earlier = previous.get(match.track_id)
-                if earlier is not None and timestamp - earlier[0] <= MAX_MOTION_GAP_SECONDS:
+                if (
+                    earlier is not None and timestamp - earlier[0] <= MAX_MOTION_GAP_SECONDS
+                    and bisect_right(cuts, earlier[0]) == bisect_right(cuts, timestamp)
+                ):
                     motion = _lip_motion(earlier[1], mouth, earlier[2], eyes)
                 previous[match.track_id] = (timestamp, mouth, eyes)
 
@@ -239,17 +266,23 @@ def _center_distance(a: Box, b: Box) -> float:
     return ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5
 
 
-def _best_track(tracks: list[SpeakerTrack], box: Box, claimed: set[int]) -> SpeakerTrack | None:
+def _best_track(
+    tracks: list[SpeakerTrack], box: Box, claimed: set[int], timestamp: float, cuts: list[float],
+) -> SpeakerTrack | None:
     """Closest existing track for a detection, by overlap or proximity.
 
     Overlap alone is too strict: a speaker who shifts between samples produces
     boxes that barely intersect, which split one person into many short tracks
-    that are then all discarded as too brief.
+    that are then all discarded as too brief. A track last seen before a camera
+    cut is never continued after it: whoever stands there now is a new framing.
     """
     best: SpeakerTrack | None = None
     best_score = 0.0
+    shot = bisect_right(cuts, timestamp)
     for track in tracks:
         if track.track_id in claimed or not track.samples:
+            continue
+        if bisect_right(cuts, track.last_seen) != shot:
             continue
         previous = track.samples[-1].face.box
         iou = previous.intersection_over_union(box)

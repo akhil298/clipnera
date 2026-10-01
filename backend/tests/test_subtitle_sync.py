@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from subtitle_styling.ass_generator import ass_filter, AssGenerator, ass_time, burn_filter_args
+from subtitle_styling.ass_generator import TITLE_SECONDS, ass_filter, AssGenerator, ass_time, burn_filter_args
 from subtitle_styling.service import SubtitleStylingService
 
 
@@ -129,18 +129,35 @@ class TestStaticTitle:
     """The title is a headline, not a caption: one sentence, pinned on top."""
 
     def _title_line(self, ass: str) -> str:
+        """The title's first line; every line of it shares that line's timing."""
         titles = [line for line in dialogue_lines(ass) if ",Title," in line]
-        assert len(titles) == 1, "expected exactly one title cue"
+        assert titles and len({start_of(line) + line.split(",")[2] for line in titles}) == 1
         return titles[0]
 
-    def test_title_holds_for_the_whole_clip(self, offset_segments) -> None:
+    def test_title_holds_for_the_opening_seconds(self, offset_segments) -> None:
         ass = AssGenerator().build_ass(
             SubtitleStylingService._extract_words_for_ass(offset_segments),
             clip_start=30.0, clip_end=40.0, title="One sentence headline",
         )
         line = self._title_line(ass)
         assert start_of(line) == ass_time(0)
-        assert line.split(",")[2] == ass_time(10.0)
+        assert line.split(",")[2] == ass_time(TITLE_SECONDS)
+
+    def test_title_never_outlasts_a_short_clip(self, offset_segments) -> None:
+        ass = AssGenerator().build_ass(
+            SubtitleStylingService._extract_words_for_ass(offset_segments),
+            clip_start=30.0, clip_end=33.0, title="One sentence headline",
+        )
+        assert self._title_line(ass).split(",")[2] == ass_time(3.0)
+
+    def test_title_sits_on_a_card_behind_it(self, offset_segments) -> None:
+        ass = AssGenerator().build_ass(
+            SubtitleStylingService._extract_words_for_ass(offset_segments),
+            clip_start=30.0, clip_end=40.0, title="One sentence headline",
+        )
+        card = next(line for line in dialogue_lines(ass) if ",TitleCard," in line)
+        assert "\\p1}m " in card
+        assert int(card.split(",")[0].split(": ")[1]) < int(self._title_line(ass).split(",")[0].split(": ")[1])
 
     def test_title_is_top_aligned(self, offset_segments) -> None:
         ass = AssGenerator().build_ass(
@@ -150,6 +167,23 @@ class TestStaticTitle:
         style = next(line for line in ass.splitlines() if line.startswith("Style: Title,"))
         # Field 18 of an ASS style is Alignment; 8 is top-centre.
         assert style.split(",")[18] == "8"
+
+    def test_captions_sit_on_the_seam_while_two_people_are_stacked(self, offset_segments) -> None:
+        words = SubtitleStylingService._extract_words_for_ass(offset_segments)
+        ass = AssGenerator().build_ass(words, clip_start=30.0, clip_end=40.0, seams=[(0.0, 2.0, 0.5)])
+        captions = [line for line in dialogue_lines(ass) if ",Caption," in line]
+        on_seam = [line for line in captions if "\\pos(540,960)" in line]
+        assert on_seam and all(float(start_of(line).split(":")[-1]) < 2.0 for line in on_seam)
+        assert any("\\pos(540,960)" not in line for line in captions)
+
+    def test_no_caption_line_runs_out_of_a_stack(self) -> None:
+        words = [{"start": 30.0 + i * 0.3, "end": 30.25 + i * 0.3, "text": w} for i, w in enumerate("a b c d e f".split())]
+        ass = AssGenerator().build_ass(words, clip_start=30.0, clip_end=40.0, seams=[(0.0, 0.8, 0.5)])
+        for line in (line for line in dialogue_lines(ass) if ",Caption," in line):
+            on_seam = "\\pos(540,960)" in line
+            assert on_seam == (float(start_of(line).split(":")[-1]) < 0.8)
+            # Words after the stack ends are never drawn on a line placed on its seam.
+            assert not (on_seam and any(word in line for word in ("}D{", "}E{", "}F{")))
 
     def test_no_title_cue_without_a_title(self, offset_segments) -> None:
         ass = AssGenerator().build_ass(

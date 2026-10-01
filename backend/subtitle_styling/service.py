@@ -18,7 +18,7 @@ from core.exceptions import CustomException
 from video_processor.ffmpeg_service import FFmpegService
 from branding.service import apply_branding
 from subtitle_styling.ass_generator import (
-    CAPTION_ANIMATIONS, DEFAULT_FONT_FILE, FONTS_DIR, AssGenerator, ass_filter, build_ass_file, bundled_family, burn_filter_args,
+    CAPTION_ANIMATIONS, FONTS_DIR, AssGenerator, ass_filter, build_ass_file, bundled_family, burn_filter_args,
     escape_filter_value, script_font,
 )
 from subtitle_styling.templates import DEFAULT_STYLE, get_template, get_template_info, get_template_names
@@ -31,7 +31,7 @@ log = get_logger(__name__)
 # Editor custom_config key -> (template key, min, max, scale). Ranges mirror the
 # editor's sliders; positions arrive as a percentage of frame height.
 _STYLE_OVERRIDE_FIELDS: dict[str, tuple[str, float, float, float]] = {
-    "font_size": ("font_size", 8, 72, 1.0),
+    "font_size": ("font_size", 8, 96, 1.0),
     "position_y": ("position_y", 20, 90, 0.01),
     "title_font_size": ("title_font_size", 24, 96, 1.0),
     "title_position_y": ("title_position_y", 2, 40, 0.01),
@@ -170,12 +170,15 @@ class SubtitleStylingService:
         hook: Optional[Hook] = None,
         transition: Optional[TransitionSpec] = None,
         spans: Optional[list[Span]] = None,
+        seams: Optional[list[tuple[float, float, float]]] = None,
     ) -> str:
         """Burn captions into a cut clip, with Clipnera branding when ``enable_watermark``.
 
         ``transition`` re-lays the clip as ``[hook][bridge][clip]`` in the same
         pass; it only applies when the clip has a ``hook`` to bridge from.
         ``spans`` are the source ranges a stitched body was cut from.
+        ``seams`` are the cut's stacked stretches, ``(start, end, seam)`` in its
+        own seconds (see ``CutResult.seams``); captions sit on the seam there.
         """
         # FFmpeg runs with cwd set to a scratch dir (for the bare caption
         # filename), so a relative clip path like generated_clips/... would not
@@ -198,6 +201,7 @@ class SubtitleStylingService:
                 video_path, clip_start, clip_end, style_type, title_text,
                 enable_watermark, transcript_segments, ai_cues,
                 animation_speed, emoji_collection, _style_overrides(custom_config), hook, transition, spans,
+                seams,
             )
         return await self._burn_with_srt(
             video_path, clip_start, clip_end, style_type, custom_config,
@@ -323,6 +327,7 @@ class SubtitleStylingService:
         hook: Optional[Hook] = None,
         transition: Optional[TransitionSpec] = None,
         spans: Optional[list[Span]] = None,
+        seams: Optional[list[tuple[float, float, float]]] = None,
     ) -> str:
         template_name = style_type
         if not get_template_names().__contains__(style_type):
@@ -369,6 +374,8 @@ class SubtitleStylingService:
                 style_overrides=style_overrides,
                 # Where the hook teaser ends: no caption line may run across it.
                 segment_breaks=_segment_breaks(clip_start, body_start, hook, spans),
+                # Stacks are built for vertical cuts only.
+                seams=_seams_on_output(seams, hook, gap) if media.height > media.width else None,
                 output_path=os.path.join(tmpdir, "captions.ass"),
             )
             return await self._encode(
@@ -444,13 +451,12 @@ class SubtitleStylingService:
             fonts_dir = escape_filter_value(str(FONTS_DIR))
             filters = [f"subtitles={escaped_srt}:fontsdir={fonts_dir}:force_style='{filter_str}'"]
             if title_text:
-                safe_title = title_text.replace("'", r"\'").replace(":", r"\:")
-                title_font = script_font(title_text)
-                title_file = title_font[1] if title_font else DEFAULT_FONT_FILE
-                filters.append(
-                    f"drawtext=fontfile={fonts_dir}/{title_file}:text='{safe_title}':fontcolor=white:fontsize=36:"
-                    "box=1:boxcolor=black@0.5:boxborderw=8:x=(w-text_w)/2:y=20"
+                # The same headline card the ASS burn draws, without captions.
+                title_ass = build_ass_file(
+                    [], 0.0, duration, style_type, media.width, media.height, title=title_text,
+                    output_path=os.path.join(tmpdir, "title.ass"),
                 )
+                filters.append(ass_filter(title_ass))
             return await self._encode(
                 video_path, filters, enable_watermark, duration, tmpdir, timeline,
                 label="burned_srt",
@@ -497,7 +503,9 @@ class SubtitleStylingService:
         template = get_template(SubtitleStyleType.to_template(style_type))
         return {
             "font": template["font_family"],
-            "font_size": template["font_size"],
+            # force_style sizes against libass's 288-line default canvas, not the
+            # 1080-wide frame templates are authored for, so it takes half.
+            "font_size": round(template["font_size"] / 2),
             "font_color": template["font_color"],
             "stroke_color": template["stroke_color"],
             "stroke_width": template["stroke_width"],
@@ -589,6 +597,20 @@ class SubtitleStylingService:
             max_chars=max_chars,
             max_words_per_line=max_words_per_line,
         )
+
+
+def _seams_on_output(
+    seams: Optional[list[tuple[float, float, float]]], hook: Optional[Hook], gap: float,
+) -> Optional[list[tuple[float, float, float]]]:
+    """Stacked stretches moved from the cut's seconds to the output's: a bridge
+    rendered after the teaser pushes everything after it back by ``gap``."""
+    if not seams:
+        return None
+
+    def shift(t: float) -> float:
+        return t + gap if hook and t >= hook.duration else t
+
+    return [(shift(start), shift(end), seam) for start, end, seam in seams]
 
 
 def _segment_breaks(

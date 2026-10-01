@@ -49,12 +49,12 @@ class TestLayout:
         layout = choose_layout("split_gameplay", "gaming_with_facecam", [track], "9:16", 1920, 1080, 1080, 1920)
         assert layout.kind == "follow"
 
-    def test_two_speakers_stack_left_on_top(self):
+    def test_two_speakers_stack_in_the_pairs_order(self):
         left, right = _track(1, Box(0.15, 0.3, 0.12, 0.2)), _track(2, Box(0.7, 0.3, 0.12, 0.2))
         layout = choose_layout("auto", "two_subjects_left_right", [right, left], "9:16", 1920, 1080, 1080, 1920,
                                pair=[right, left])
         assert layout.kind == "two_speaker_stack"
-        assert layout.cells[0].box.center[0] < layout.cells[1].box.center[0]
+        assert layout.cells[0].box.center[0] > layout.cells[1].box.center[0]
 
     def test_other_shapes_always_follow(self):
         facecam = _track(1, Box(0.82, 0.05, 0.1, 0.15))
@@ -185,6 +185,27 @@ class TestExchanges:
         stretches = self.stretches([(0.0, 1), (5.0, 2), (7.0, 1), (9.0, 2), (11.0, 1)], segments=segments)
         assert all(not pair for *_, pair in stretches)
 
+    def test_a_two_shot_is_split_with_the_talker_on_top(self):
+        """Both people side by side for the whole shot: the listener's reactions stay on screen."""
+        host, guest = _person(1, self.HOST, 0.0, 20.0), _person(2, self.GUEST, 0.0, 20.0)
+        timestamps, speakers = _timeline([(0.0, guest), (2.0, host), (4.0, guest)], 20.0)
+        stretches = framing_stretches(0.0, 20.0, speaker_turns(timestamps, speakers), 0.1, [], present=[host, guest])
+        assert [(a, b) for a, b, _ in stretches] == [(0.0, 20.0)]
+        assert [track.track_id for track in stretches[0][2]] == [2, 1]
+
+    def test_a_face_on_a_poster_behind_a_solo_speaker_is_not_a_two_shot(self):
+        host = _person(1, Box(0.35, 0.25, 0.2, 0.32), 0.0, 20.0)
+        poster = _person(2, Box(0.82, 0.1, 0.06, 0.1), 0.0, 20.0)
+        timestamps, speakers = _timeline([(0.0, host)], 20.0)
+        stretches = framing_stretches(0.0, 20.0, speaker_turns(timestamps, speakers), 0.1, [], present=[host, poster])
+        assert all(not pair for *_, pair in stretches)
+
+    def test_a_close_up_is_not_a_two_shot(self):
+        host = _person(1, self.HOST, 0.0, 20.0)
+        timestamps, speakers = _timeline([(0.0, host)], 20.0)
+        stretches = framing_stretches(0.0, 20.0, speaker_turns(timestamps, speakers), 0.1, [], present=[host])
+        assert all(not pair for *_, pair in stretches)
+
     def test_turns_follow_the_timeline(self):
         a, b = _person(1, self.HOST, 0, 1), _person(2, self.GUEST, 0, 1)
         timestamps, speakers = _timeline([(0.0, a), (1.0, b), (2.0, None)], 3.0)
@@ -237,6 +258,23 @@ class TestShotCuts:
         blue[:, :, 0] = 220
         frames = [(0.0, red), (0.5, red), (1.0, blue), (1.5, blue)]
         assert shot_cuts(frames) == [1.0]
+
+    def test_a_new_angle_on_the_same_set_is_a_cut(self):
+        """Same colours, different picture: the histogram cannot see it, the picture can."""
+        rng = np.random.default_rng(0)
+        wide = rng.integers(0, 255, (90, 160, 3), dtype=np.uint8)
+        close = np.ascontiguousarray(wide[:, ::-1])  # the same pixels, rearranged
+        frames = [(i / 6, wide) for i in range(12)] + [(2 + i / 6, close) for i in range(12)]
+        assert shot_cuts(frames) == [2.0]
+
+    def test_movement_within_a_shot_is_not_a_cut(self):
+        base = np.full((90, 160, 3), 90, np.uint8)
+        frames = []
+        for i in range(24):
+            frame = base.copy()
+            frame[30:60, 20 + i * 4:60 + i * 4] = 200  # someone moving across the frame
+            frames.append((i / 6, frame))
+        assert shot_cuts(frames) == []
 
 
 @pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")

@@ -14,6 +14,8 @@ is just a moment clip.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Callable
 from typing import Any
 
 from clip_generation.hook import MAX_HOOK_SECONDS, MIN_HOOK_OFFSET_SECONDS, MIN_HOOK_SECONDS
@@ -43,6 +45,21 @@ MAX_STORY_PIECES = 8
 MIN_STORY_PIECE_SECONDS = 1.5
 # A story needs two pieces at least this far apart; closer is one moment.
 MIN_STORY_GAP_SECONDS = 60.0
+# A clip that had to lose its closing lines to fit lost the payoff they held;
+# its payoff score is capped here so complete clips outrank it.
+TRIMMED_PAYOFF_SCORE = 3.0
+# Housekeeping no viewer stops for: channel plugs, sponsor reads, greetings.
+PROMO = re.compile(
+    r"\b(subscrib\w*|hit the (bell|like)|notification bell|like and share|link (is )?in the (description|bio)"
+    r"|sponsor(ed|ship)?|use (my |the )?code|promo code|patreon|thanks for watching"
+    r"|see you (in the )?next (one|video|episode)|welcome (back )?to (the |my |our )?(channel|show|podcast))\b",
+    re.IGNORECASE,
+)
+SIGN_OFF = re.compile(r"^\W*(thank you|thanks|that's all|see you)\b", re.IGNORECASE)
+# Where a video's intro and outro can sit, as shares of its length, and how far
+# before an outro's first plug its sign-off may start it.
+INTRO_SHARE, OUTRO_SHARE = 0.10, 0.15
+SIGN_OFF_REACH = 5
 
 
 def build_clips(
@@ -57,10 +74,11 @@ def build_clips(
 ) -> list[dict[str, Any]]:
     """Validated clips, best first, at most ``max_clips``."""
     by_id = {s.id: s for s in sentences}
+    bounds = content_bounds(sentences, duration)
     clips: list[dict[str, Any]] = []
     for plan in plans:
         try:
-            clip = _build_clip(plan, sentences, by_id, duration, min_seconds, max_seconds, category, jump_cuts)
+            clip = _build_clip(plan, sentences, by_id, duration, min_seconds, max_seconds, category, jump_cuts, bounds)
         except Exception as exc:
             log.warning("Dropped an edit plan that could not be repaired: %s", exc)
             continue
@@ -84,10 +102,11 @@ def build_story_clips(
 ) -> list[dict[str, Any]]:
     """Validated story clips, best first, at most ``max_clips``; not yet numbered."""
     by_id = {s.id: s for s in sentences}
+    bounds = content_bounds(sentences, duration)
     clips: list[dict[str, Any]] = []
     for plan in plans:
         try:
-            clip = _build_story(plan, by_id, duration, min_seconds, max_seconds, category, jump_cuts)
+            clip = _build_story(plan, by_id, duration, min_seconds, max_seconds, category, jump_cuts, bounds)
         except Exception as exc:
             log.warning("Dropped a story plan that could not be repaired: %s", exc)
             continue
@@ -103,6 +122,35 @@ def number_clips(clips: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for index, clip in enumerate(sorted(clips, key=lambda c: c["start_time"])):
         clip["id"] = f"highlight_{index}"
     return clips
+
+
+def content_bounds(sentences: list[Sentence], duration: float) -> tuple[int, int]:
+    """First and last sentence ids a clip may use: the video without its intro
+    and outro housekeeping.
+
+    The intro ends at the last plug or greeting in the opening ``INTRO_SHARE``.
+    The outro starts at the first plug in the closing ``OUTRO_SHARE``, or at a
+    sign-off just before it ("Thank you so much. ... Go subscribe."), since
+    what sits between them is the goodbye, often garbled by a second voice.
+    """
+    if not sentences:
+        return 0, 0
+    length = duration or sentences[-1].end
+    first, last = sentences[0].id, sentences[-1].id
+    intro = [s for s in sentences if s.end <= length * INTRO_SHARE and PROMO.search(s.text)]
+    if intro:
+        first = intro[-1].id + 1
+    outro = next((i for i, s in enumerate(sentences) if s.start >= length * (1 - OUTRO_SHARE) and PROMO.search(s.text)), None)
+    if outro is not None:
+        reach = sentences[max(0, outro - SIGN_OFF_REACH):outro]
+        start = next((s for s in reach if SIGN_OFF.search(s.text)), sentences[outro])
+        last = start.id - 1
+    return first, max(first, last)
+
+
+def _within_bounds(ranges: list[tuple[int, int]], bounds: tuple[int, int]) -> list[tuple[int, int]]:
+    low, high = bounds
+    return [(max(first, low), min(last, high)) for first, last in ranges if last >= low and first <= high]
 
 
 def _best(clips: list[dict[str, Any]], max_clips: int) -> list[dict[str, Any]]:
@@ -126,14 +174,22 @@ def _build_clip(
     max_seconds: float,
     category: str,
     jump_cuts: bool,
+    bounds: tuple[int, int],
 ) -> dict[str, Any] | None:
-    ranges = _ranges(plan.get("segments") or [], by_id)
+    ranges = _within_bounds(_ranges(plan.get("segments") or [], by_id), bounds)
     if not ranges:
         return None
     first, last = ranges[0]
-    ranges[0] = (_thought_start(first, by_id), last)
-    ranges = _fit_length(ranges, sentences, by_id, min_seconds, max_seconds)
-    return _assemble(plan, ranges, by_id, duration, category, jump_cuts, "director", " ")
+    ranges[0] = (_thought_start(first, by_id, bounds[0]), last)
+    planned_end = ranges[-1][1]
+    ranges = _fit_length(
+        ranges, sentences, by_id, min_seconds, max_seconds,
+        lambda candidate: _played_seconds(candidate, by_id, duration, jump_cuts), bounds,
+    )
+    return _assemble(
+        plan, ranges, by_id, duration, category, jump_cuts, "director", " ",
+        payoff_cut=ranges[-1][1] < planned_end,
+    )
 
 
 def _build_story(
@@ -144,9 +200,10 @@ def _build_story(
     max_seconds: float,
     category: str,
     jump_cuts: bool,
+    bounds: tuple[int, int],
 ) -> dict[str, Any] | None:
-    ranges = _ranges(plan.get("segments") or [], by_id, MAX_STORY_PIECES)
-    floor = 0
+    ranges = _within_bounds(_ranges(plan.get("segments") or [], by_id, MAX_STORY_PIECES), bounds)
+    floor = bounds[0]
     opened: list[tuple[int, int]] = []
     for first, last in ranges:
         opened.append((_thought_start(first, by_id, floor), last))
@@ -167,8 +224,12 @@ def _assemble(
     jump_cuts: bool,
     source: str,
     separator: str,
+    payoff_cut: bool = False,
 ) -> dict[str, Any] | None:
-    """The clip for ``ranges``: word-exact spans, teaser, beats, copy and score."""
+    """The clip for ``ranges``: word-exact spans, teaser, beats, copy and score.
+
+    ``payoff_cut`` marks a clip whose planned closing lines were trimmed away.
+    """
     ids = [i for first, last in ranges for i in range(first, last + 1)]
     spans = [_span(first, last, by_id, duration) for first, last in ranges]
     if jump_cuts:
@@ -179,6 +240,8 @@ def _assemble(
         return None
 
     scores = _rubric(plan.get("scores"))
+    if payoff_cut:
+        scores["payoff"] = min(scores["payoff"], TRIMMED_PAYOFF_SCORE)
     overall = sum(scores[key] * weight for key, weight in RUBRIC_WEIGHTS.items()) / 10.0
     hook = _hook(plan.get("hook"), ids, by_id, spans)
     text = separator.join(" ".join(by_id[i].text for i in range(first, last + 1)) for first, last in ranges)
@@ -204,7 +267,7 @@ def _assemble(
         "content_category": category,
         "detection_source": source,
         "director_version": DIRECTOR_VERSION,
-        "reasons": [source],
+        "reasons": [source, "payoff_trimmed"] if payoff_cut else [source],
     }
 
 
@@ -245,16 +308,33 @@ def _seconds(ranges: list[tuple[int, int]], by_id: dict[int, Sentence]) -> float
     return sum(by_id[last].end - by_id[first].start for first, last in ranges)
 
 
+def _played_seconds(
+    ranges: list[tuple[int, int]], by_id: dict[int, Sentence], duration: float, jump_cuts: bool,
+) -> float:
+    """How long ``ranges`` play once cut: without the pauses and filler that
+    jump cuts remove, which a raw sentence span still counts."""
+    spans = [_span(first, last, by_id, duration) for first, last in ranges]
+    if jump_cuts:
+        words = [w for first, last in ranges for i in range(first, last + 1) for w in by_id[i].words]
+        spans = _merge_close(_tighten(spans, words))
+    return sum(end - start for start, end in spans)
+
+
 def _fit_length(
     ranges: list[tuple[int, int]],
     sentences: list[Sentence],
     by_id: dict[int, Sentence],
     min_seconds: float,
     max_seconds: float,
+    length: Callable[[list[tuple[int, int]]], float] | None = None,
+    bounds: tuple[int, int] | None = None,
 ) -> list[tuple[int, int]]:
+    """``ranges`` brought inside the length band, measured by ``length``
+    (default: the raw sentence spans), growing no further than ``bounds``."""
+    length = length or (lambda candidate: _seconds(candidate, by_id))
     ranges = list(ranges)
     # Too long: drop sentences from the end, keeping at least the first one.
-    while _seconds(ranges, by_id) > max_seconds:
+    while length(ranges) > max_seconds:
         first, last = ranges[-1]
         if last > first:
             ranges[-1] = (first, last - 1)
@@ -263,14 +343,15 @@ def _fit_length(
         else:
             break
     # Too short: grow forward, then backward, a sentence at a time.
-    last_id = sentences[-1].id if sentences else 0
-    while _seconds(ranges, by_id) < min_seconds:
+    first_id = bounds[0] if bounds else (sentences[0].id if sentences else 0)
+    last_id = bounds[1] if bounds else (sentences[-1].id if sentences else 0)
+    while length(ranges) < min_seconds:
         first, last = ranges[-1]
-        if last + 1 <= last_id and _seconds(ranges[:-1] + [(first, last + 1)], by_id) <= max_seconds:
+        if last + 1 <= last_id and length(ranges[:-1] + [(first, last + 1)]) <= max_seconds:
             ranges[-1] = (first, last + 1)
             continue
         head_first, head_last = ranges[0]
-        if head_first - 1 in by_id and _seconds([(head_first - 1, head_last)] + ranges[1:], by_id) <= max_seconds:
+        if head_first - 1 >= first_id and head_first - 1 in by_id and length([(head_first - 1, head_last)] + ranges[1:]) <= max_seconds:
             ranges[0] = (head_first - 1, head_last)
             continue
         break

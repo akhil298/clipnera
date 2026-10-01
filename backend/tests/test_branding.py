@@ -79,15 +79,37 @@ class TestListeningSpark:
     def test_no_audio_is_silence(self, tmp_path):
         assert not loudness(tmp_path / "missing.mp4", 30.0, 10, False).any()
 
+    LAYOUT = STATIC_DIR / "watermark" / "listening-spark" / "layout.json"
+
+    @staticmethod
+    def _opaque_box(overlay: SparkOverlay, t: float) -> tuple[int, int, int, int] | None:
+        """Bounding box of the clearly visible mark at ``t``, glow and halo aside."""
+        from PIL import Image
+
+        image = Image.frombytes("RGBA", overlay.size, overlay.frame(t, 15, [15, 15, 15]))
+        return image.getchannel("A").point(lambda a: 255 if a > 220 else 0).getbbox()
+
     def test_overlay_scales_to_the_frame(self):
-        big = SparkOverlay(STATIC_DIR / "watermark" / "listening-spark" / "layout.json", 1080)
-        small = SparkOverlay(STATIC_DIR / "watermark" / "listening-spark" / "layout.json", 540)
-        assert small.size[0] == pytest.approx(big.size[0] / 2, abs=1)
-        # The glow's padding may run past the frame edge; FFmpeg clips it.
-        x, y = big.position(1080)
-        assert 540 > x > 0 and x + big.size[0] > 1080 and -big.size[1] / 4 < y < 60
-        quiet, loud = big.frame(0, [0, 0, 0]), big.frame(15, [15, 15, 15])
+        big, small = SparkOverlay(self.LAYOUT, 1080), SparkOverlay(self.LAYOUT, 540)
+        assert small.size[0] == pytest.approx(big.size[0] / 2, abs=2)
+        assert big.position(1080) == (0, 0)
+        quiet, loud = big.frame(20.0, 0, [0, 0, 0]), big.frame(20.0, 15, [15, 15, 15])
         assert len(quiet) == big.size[0] * big.size[1] * 4 and quiet != loud
+
+    def test_the_headline_holds_the_opening_alone(self):
+        overlay = SparkOverlay(self.LAYOUT, 1080)
+        assert self._opaque_box(overlay, 2.0) is None
+
+    def test_the_badge_waits_beside_the_speaker_then_settles_top_left(self):
+        overlay = SparkOverlay(self.LAYOUT, 1080)
+        waiting = self._opaque_box(overlay, 6.0)
+        settled = self._opaque_box(overlay, 20.0)
+        assert waiting and settled
+        # Waiting: a narrow vertical badge on the left edge, around face height.
+        assert waiting[2] - waiting[0] < 120 and waiting[3] > 600
+        # Settled: icon and name across the top-left, where the headline card was.
+        assert settled[0] == pytest.approx(124, abs=6)
+        assert 230 < (settled[1] + settled[3]) / 2 < 360 and settled[2] > 400
 
 
 @pytest.mark.asyncio

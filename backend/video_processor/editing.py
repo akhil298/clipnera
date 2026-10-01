@@ -4,8 +4,8 @@ The cutter frames whoever is talking; this module decides how the frame is
 built, the way a human editor would. One person on screen is the default and
 the camera cuts to whoever talks. The frame is decided shot by shot, from the
 people actually in each shot: for vertical output it can stack two regions
-(facecam over gameplay, a screen over its presenter, and two people only while
-they trade quick replies on screen together), a shot with nobody in it is shown
+(facecam over gameplay, a screen over its presenter, and two people through a
+two-shot of them or while they trade quick replies), a shot with nobody in it is shown
 whole, and within a followed shot it sets the rhythm: a fresh framing at each
 new sentence, a punch-in zoom where a point lands, a cut to the listener's face
 for a reaction. Everything here is geometry and timing; FFmpeg work stays in
@@ -29,6 +29,15 @@ VERTICAL = "9:16"
 # Correlation between consecutive sampled frames' colour histograms below which
 # the picture is treated as a new shot.
 SHOT_CUT_CORRELATION = 0.55
+# Two cameras on one set share their colours, so histograms miss the cut
+# between them; the picture itself still changes completely. Mean absolute
+# difference of small greyscale thumbnails (0-255) at or above this, and this
+# many times the typical difference nearby, is a cut. Within a podcast shot the
+# difference stays under ~13 while angle changes score 30+.
+SHOT_CUT_DIFFERENCE = 20.0
+SHOT_CUT_DIFFERENCE_RATIO = 4.0
+SHOT_CUT_CONTEXT_SAMPLES = 12
+THUMBNAIL_SIZE = (64, 36)
 PUNCH_IN_ZOOM = 1.2
 PUNCH_IN_SECONDS = 2.0
 REACT_SECONDS = 1.2
@@ -45,6 +54,9 @@ MIN_SHOT_PRESENCE = 0.4
 # A stacked speaker's cell is centred this many face heights below the face, so
 # the face sits in the upper part of the cell with room for the shoulders.
 SPEAKER_HEADROOM = 0.5
+# A stacked speaker's cell spans this many face sizes: a head-and-shoulders
+# framing where the face reads at phone size, not a wide shot cut in half.
+STACK_FACE_SPAN = 2.3
 # A faceless shot is shown whole only when cropping would lose this much more
 # width than the output shape keeps; a near match is simply cropped.
 FIT_MIN_ASPECT_GAP = 1.15
@@ -59,6 +71,9 @@ MIN_SPLIT_SECONDS = 3.0
 PAIR_MIN_TOGETHER = 0.6
 # ...and this many face widths apart, or it is one person tracked twice.
 PAIR_MIN_SEPARATION = 1.5
+# Two people sharing a shot sit about as far from the camera, so their faces are
+# of a size; a much smaller face is a photo, poster or screen behind a solo speaker.
+PAIR_MIN_SIZE_RATIO = 0.6
 # A talking head gets a fresh framing, alternately wide and this much tighter,
 # at a new sentence at most this often: the jump-cut zoom editors use so a long
 # answer never sits in one static shot.
@@ -106,20 +121,48 @@ class Turn:
     track: SpeakerTrack | None
 
 
+def thumbnail(frame: np.ndarray) -> np.ndarray:
+    """A small greyscale copy for comparing whole pictures."""
+    grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
+    return cv2.resize(grey, THUMBNAIL_SIZE, interpolation=cv2.INTER_AREA).astype(np.float32)
+
+
+def picture_difference(a: np.ndarray, b: np.ndarray) -> float:
+    """Mean absolute difference of two thumbnails, 0-255."""
+    return float(np.abs(a - b).mean())
+
+
 def shot_cuts(frames: Iterable[tuple[float, np.ndarray]]) -> list[float]:
-    """Timestamps where the picture changes shot, from sampled frames."""
-    cuts: list[float] = []
-    previous = None
+    """Timestamps where the picture changes shot, from sampled frames.
+
+    Each cut is stamped at the first sample of the new shot.
+    """
+    stamps: list[float] = []
+    differences: list[float] = []
+    colour_cuts: set[float] = set()
+    previous_hist = previous_thumb = None
     for timestamp, frame in frames:
         if frame is None or frame.size < 3:
             continue
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         hist = cv2.calcHist([hsv], [0, 1], None, [16, 16], [0, 180, 0, 256])
         cv2.normalize(hist, hist)
-        if previous is not None and cv2.compareHist(previous, hist, cv2.HISTCMP_CORREL) < SHOT_CUT_CORRELATION:
-            cuts.append(round(timestamp, 3))
-        previous = hist
-    return cuts
+        thumb = thumbnail(frame)
+        if previous_hist is not None:
+            stamp = round(timestamp, 3)
+            stamps.append(stamp)
+            differences.append(picture_difference(previous_thumb, thumb))
+            if cv2.compareHist(previous_hist, hist, cv2.HISTCMP_CORREL) < SHOT_CUT_CORRELATION:
+                colour_cuts.add(stamp)
+        previous_hist, previous_thumb = hist, thumb
+
+    cuts = set(colour_cuts)
+    for index, difference in enumerate(differences):
+        nearby = differences[max(0, index - SHOT_CUT_CONTEXT_SAMPLES):index + SHOT_CUT_CONTEXT_SAMPLES + 1]
+        typical = float(np.median(nearby))
+        if difference >= SHOT_CUT_DIFFERENCE and difference >= typical * SHOT_CUT_DIFFERENCE_RATIO:
+            cuts.add(stamps[index])
+    return sorted(cuts)
 
 
 def shot_windows(start: float, end: float, cuts: list[float]) -> list[tuple[float, float]]:
@@ -171,15 +214,21 @@ def framing_stretches(
     turns: list[Turn],
     sample_interval: float,
     transcript_segments: list[dict[str, Any]],
+    present: list[SpeakerTrack] | None = None,
 ) -> list[tuple[float, float, list[SpeakerTrack]]]:
-    """``start``..``end`` tiled into stretches, each with the pair to show together.
+    """The shot ``start``..``end`` tiled into stretches, each with the pair to show together.
 
-    The pair is empty except during a live exchange: two people seen side by
-    side in this very shot, trading quick replies, and, when the transcript is
-    diarized, two voices actually heard. A monologue stays on its speaker
-    however long the other person listens; a close-up, B-roll or a second
-    detection of the same face never splits the screen.
+    A two-shot, exactly two people side by side in the picture (``present``),
+    is split for its whole length with whoever talks more on top: cropping to
+    one of them would throw away the other's reactions, which the wide shot is
+    there to show. In any other shot the pair is empty except during a live
+    exchange: two people seen side by side, trading quick replies, and, when
+    the transcript is diarized, two voices actually heard. A close-up, B-roll
+    or a second detection of the same face never splits the screen.
     """
+    two_shot = _two_shot(present or [], turns, start, end, sample_interval)
+    if two_shot:
+        return [(start, end, two_shot)]
     stretches: list[tuple[float, float, list[SpeakerTrack]]] = []
     cursor = start
     for low, high, first, second in _exchanges(turns, start, end):
@@ -228,6 +277,28 @@ def _exchanges(
     return found
 
 
+def _two_shot(
+    present: list[SpeakerTrack], turns: list[Turn], start: float, end: float, sample_interval: float,
+) -> list[SpeakerTrack]:
+    """The two people of a two-shot, the more talkative first; empty for any other shot."""
+    if len(present) != 2 or end - start < MIN_SPLIT_SECONDS:
+        return []
+    pair = [_within(track, start, end) for track in present]
+    if not _on_screen_together(pair, start, end, sample_interval):
+        return []
+    small, large = sorted(_typical_box(track).width for track in pair)
+    if small < large * PAIR_MIN_SIZE_RATIO:
+        return []
+    return sorted(pair, key=lambda track: -_talk_time(track, turns, start, end))
+
+
+def _talk_time(track: SpeakerTrack, turns: list[Turn], start: float, end: float) -> float:
+    return sum(
+        max(0.0, min(turn.end, end) - max(turn.start, start))
+        for turn in turns if turn.track is not None and turn.track.track_id == track.track_id
+    )
+
+
 def _on_screen_together(pair: list[SpeakerTrack], start: float, end: float, sample_interval: float) -> bool:
     """Both people in the same frames, far enough apart to be two people."""
     first, second = pair
@@ -252,7 +323,9 @@ def _two_voices(transcript_segments: list[dict[str, Any]], start: float, end: fl
 
 
 def _within(track: SpeakerTrack, start: float, end: float) -> SpeakerTrack:
-    return SpeakerTrack(track_id=track.track_id, samples=[s for s in track.samples if start <= s.timestamp < end])
+    return SpeakerTrack(
+        track_id=track.track_id, samples=[s for s in track.samples if start <= s.timestamp < end], cuts=track.cuts,
+    )
 
 
 def _expected_samples(start: float, end: float, sample_interval: float) -> float:
@@ -275,8 +348,9 @@ def choose_layout(
     ``tracks`` are the people in the stretch being framed (see
     :func:`tracks_in_shot`). With nobody there the whole picture is shown, since
     a crop would cut an arbitrary slice out of it. ``pair`` is set only during
-    a live exchange (see :func:`framing_stretches`); two people are stacked
-    then and never on the director's say-so alone, since the director reads the
+    a two-shot or a live exchange (see :func:`framing_stretches`), in the order
+    stacked top to bottom; two people are stacked then and never on the
+    director's say-so alone, since the director reads the
     transcript and cannot see who is in the picture. A composite layout is used
     only when the faces it needs were found; any other doubt falls back to
     following the speaker, which is always safe.
@@ -300,9 +374,9 @@ def choose_layout(
         half = output_height // 2 // 2 * 2
         heights = (half, output_height - half)
         return Layout("two_speaker_stack", [
-            Cell(region_around(_with_headroom(_typical_box(track)), 3.2, output_width / h,
+            Cell(region_around(_with_headroom(_typical_box(track)), STACK_FACE_SPAN, output_width / h,
                                source_width, source_height), h)
-            for track, h in zip(sorted(pair, key=lambda t: _typical_box(t).center[0]), heights)
+            for track, h in zip(pair, heights)
         ])
     if wants_screen:
         speaker = _most_present(tracks, 1)

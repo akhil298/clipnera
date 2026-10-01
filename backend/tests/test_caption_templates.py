@@ -18,7 +18,7 @@ class TestTemplates:
         template = get_template(DEFAULT_STYLE)
         assert template["name"] == "Karaoke"
         assert template["animation"] == "karaoke"
-        assert template["rows"] == 2
+        assert template["rows"] == 1
 
     def test_get_template_unknown_falls_back(self):
         assert get_template("nonexistent")["name"] == "Karaoke"

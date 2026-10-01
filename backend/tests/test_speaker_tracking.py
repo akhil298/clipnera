@@ -17,6 +17,7 @@ from video_processor.speaker_tracking import (
     match_labels_to_tracks,
     speaker_timeline,
     speech_intervals,
+    visible_tracks,
 )
 
 
@@ -57,6 +58,16 @@ class TestBuildTracks:
         faces = [[face_at(0.1, 0.4), face_at(0.7, 0.4)] for _ in range(4)]
         tracks = build_tracks(frames, faces)
         assert len(tracks) == 2
+
+    def test_nobody_carries_over_a_camera_cut(self) -> None:
+        """A two-shot cuts to a close-up: only the close-up's face is on screen after it."""
+        frames = [(i * 0.5, np.zeros((64, 64, 3), dtype=np.uint8)) for i in range(20)]
+        close_up = face_at(0.45, 0.4, 0.1)
+        faces = [[face_at(0.25, 0.4, 0.1), face_at(0.74, 0.4, 0.1)] for _ in range(10)] + [[close_up] for _ in range(10)]
+        tracks = build_tracks(frames, faces, cuts=[5.0])
+        on_screen = visible_tracks(5.5, tracks)
+        assert [track.box_at(5.5).center for track in on_screen] == [close_up.box.center]
+        assert all(track.box_at(4.5).center != close_up.box.center for track in visible_tracks(4.5, tracks))
 
     def test_drops_transient_detections(self) -> None:
         frames = [(float(i), np.zeros((64, 64, 3), dtype=np.uint8)) for i in range(10)]

@@ -8,7 +8,7 @@ import pytest
 
 from clip_generation.hook import body_duration, on_output_timeline, parse_spans, trim_spans, Hook
 from content_intelligence.director import CHECK_SCHEMA, DIRECTOR_SCHEMA, MAP_SCHEMA, VideoDirector, _merge_maps, _spread, _windows
-from content_intelligence.edit_plan import build_clips, build_story_clips
+from content_intelligence.edit_plan import TRIMMED_PAYOFF_SCORE, build_clips, build_story_clips, content_bounds
 from content_intelligence.service import story_clip_count
 from video_processor.clip_cutter import CutRequest
 from content_intelligence.sentences import Sentence, build_sentences, format_table
@@ -122,6 +122,34 @@ class TestEditPlan:
         sentences = build_sentences(segments)
         clips = build_clips([{"segments": [{"from": 5, "to": 9}]}], sentences, 50.0, 10.0, 60.0, 5, "vlog", False)
         assert clips[0]["start_time"] < sentences[4].start
+
+    def test_a_trimmed_ending_counts_against_the_payoff(self):
+        scores = {"hook": 9, "payoff": 9, "standalone": 9, "emotion": 9, "pacing": 9}
+        trimmed, _ = self._clips([{"segments": [{"from": 1, "to": 20}], "scores": scores}])
+        whole, _ = self._clips([{"segments": [{"from": 1, "to": 10}], "scores": scores}])
+        assert trimmed[0]["rubric"]["payoff"] == TRIMMED_PAYOFF_SCORE and "payoff_trimmed" in trimmed[0]["reasons"]
+        assert whole[0]["rubric"]["payoff"] == 9 and trimmed[0]["score"] < whole[0]["score"]
+
+    def test_length_is_judged_as_played_after_jump_cuts(self):
+        """Pauses cut out of a thought make room for its ending."""
+        segments = [_segment(i * 9.0, " ".join(["word"] * 14) + f" end{i}.") for i in range(10)]  # ~5s talk, ~4s pause
+        sentences = build_sentences(segments)
+        clips = build_clips([{"segments": [{"from": 1, "to": 10}]}], sentences, 90.0, 10.0, 60.0, 3, "vlog", True)
+        assert clips[0]["end_time"] >= sentences[-1].end - 0.01
+        assert "payoff_trimmed" not in clips[0]["reasons"]
+
+    def test_intro_and_outro_housekeeping_is_never_clipped(self):
+        segments = _talk(40)
+        segments[1] = _segment(5.0, "Welcome back to the channel everyone.")
+        segments[36] = _segment(180.0, "Thank you so much for having me.")
+        segments[38] = _segment(190.0, "Go subscribe to the channel.")
+        sentences = build_sentences(segments)
+        low, high = content_bounds(sentences, 200.0)
+        by_id = {s.id: s for s in sentences}
+        assert by_id[low].start > 5.0 and by_id[high].end < 180.0
+        clips = build_clips([{"segments": [{"from": 1, "to": 12}]}, {"segments": [{"from": 30, "to": 40}]}],
+                            sentences, 200.0, 10.0, 60.0, 5, "podcast_interview", False)
+        assert all(c["start_time"] > 5.0 and c["end_time"] <= 180.0 for c in clips)
 
     def test_jump_cuts_remove_long_pauses_and_fillers(self):
         segments = [_segment(0.0, "This is the first part of the thought"),

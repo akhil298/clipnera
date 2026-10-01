@@ -215,6 +215,16 @@ async def project_source(project: Any) -> AsyncIterator[str]:
         yield path
 
 
+def stack_seams(clip: GeneratedClip, ratio: str = "9:16") -> list[tuple[float, float, float]]:
+    """Where the clip's cut at ``ratio`` stacks two people, as the cutter recorded it."""
+    try:
+        formats = json.loads(clip.output_formats or "{}")
+    except (TypeError, ValueError):
+        return []
+    seams = (formats.get(ratio) or {}).get("seams") if isinstance(formats, dict) else None
+    return [tuple(seam) for seam in seams or [] if len(seam) == 3]
+
+
 def stored_cut_key(clip: GeneratedClip, ratio: str) -> str | None:
     """S3 key of the clip's cut at ``ratio``, if the pipeline rendered that size."""
     try:
@@ -356,6 +366,7 @@ class ClipService:
                 hook=Hook.from_values(clip.hook_start, clip.hook_end),
                 transition=self.hook_transition_for(clip, burn_request.get("hook_transition")),
                 spans=parse_spans(clip.edit_spans),
+                seams=stack_seams(clip),
             )
 
         s3_key = f"clips/{user_id}/{clip.project_id}/{clip_id}_burned.mp4"
@@ -728,6 +739,7 @@ class ClipService:
             hook=hook,
             transition=transition,
             spans=spans,
+            seams=stack_seams(clip),
         )
 
     def hook_transition_for(
@@ -1053,6 +1065,7 @@ class ClipService:
                     "layout": result.layout,
                     "strategy": result.strategy,
                     "speaker_count": result.speaker_count,
+                    "seams": result.seams.get(ratio, []),
                 }
                 for ratio in ratios
             }

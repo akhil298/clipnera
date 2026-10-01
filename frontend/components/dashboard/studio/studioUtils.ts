@@ -195,18 +195,27 @@ export const applyEmojiCollection = (text: string, collectionId?: string): strin
 export const isWordCut = (word: WordTimestamp, removed: ReadonlySet<number>): boolean =>
   word.sourceStart !== undefined && removed.has(word.sourceStart);
 
+// Mirrors PHRASE_PAUSE_SECONDS, CLAUSE_ENDINGS and DISPLAY_TRIM in the ASS burner.
+const PHRASE_PAUSE_SECONDS = 0.35;
+const CLAUSE_ENDING = /[.,?!;:…]$/;
+const DISPLAY_TRIM = /^[.,?!;:…"“”—–]+|[.,?!;:…"“”—–]+$/g;
+
+/** A caption word as burned: its surrounding punctuation trimmed. */
+export const displayWord = (text: string): string => text.trim().replace(DISPLAY_TRIM, '');
+
 /**
  * Captions flow as short phrases, mirroring the ASS burner's grouping, so the
  * preview shows the same line breaks the exported video will have.
  */
 export const groupCaptionWords = (words: WordTimestamp[], maxWordsPerLine: number): WordTimestamp[][] => {
   const maxWords = Math.max(1, maxWordsPerLine);
-  const GAP_BREAK = 0.6; // a pause this long starts a new line
   const groups: WordTimestamp[][] = [];
   let current: WordTimestamp[] = [];
   for (const word of words) {
     const previous = current[current.length - 1];
-    if (current.length >= maxWords || (previous && word.start - previous.end > GAP_BREAK)) {
+    const phraseEnds =
+      previous && (CLAUSE_ENDING.test(previous.text.trim()) || word.start - previous.end >= PHRASE_PAUSE_SECONDS);
+    if (current.length >= maxWords || phraseEnds) {
       groups.push(current);
       current = [];
     }

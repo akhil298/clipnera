@@ -114,7 +114,7 @@ export function CaptionsPanel({ config, onChange, onPickPreset, captionsOn, onTu
           )}
         </div>
         <div className="grid grid-cols-2 gap-3.5">
-          <RangeField label="Size" value={config.fontSize} display={`${config.fontSize} px`} min={8} max={72} onChange={(v) => onChange({ fontSize: v }, 'fontSize')} />
+          <RangeField label="Size" value={config.fontSize} display={`${config.fontSize} px`} min={8} max={96} onChange={(v) => onChange({ fontSize: v }, 'fontSize')} />
           <RangeField
             label="Shadow"
             value={config.shadowIntensity}

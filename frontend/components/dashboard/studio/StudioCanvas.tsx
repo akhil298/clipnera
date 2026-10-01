@@ -12,11 +12,14 @@ import {
   captionEntrance,
   captionWordStyle,
   captionsClear,
+  displayWord,
   safeZoneFor,
 } from './studioUtils';
 
 /** Caption and title sizes are authored against a 1080px-wide frame, as the burner scales them. */
 const CAPTION_REFERENCE_WIDTH = 1080;
+/** How long the headline card shows, as TITLE_SECONDS in the burner. */
+const TITLE_SECONDS = 5;
 const RATIO: Record<AspectRatio, number> = { '9:16': 9 / 16, '4:5': 4 / 5, '1:1': 1, '16:9': 16 / 9 };
 /** How close (in % of frame height) a dragged caption must come to a safe-area edge to snap to it. */
 const SNAP_DISTANCE = 2.5;
@@ -177,16 +180,23 @@ export function StudioCanvas(props: StudioCanvasProps) {
           </div>
         )}
 
-        {/* The clip's headline, pinned near the top; mirrors the ASS "Title" style. */}
-        {showTitle && clip.title?.trim() && (
+        {/* The clip's headline card for its opening seconds; mirrors the ASS "Title" and "TitleCard" styles. */}
+        {showTitle && clip.title?.trim() && currentTime < TITLE_SECONDS && (
           <div
-            className="absolute inset-x-4 z-30 pointer-events-none flex justify-center text-center"
+            className="absolute inset-x-0 z-30 pointer-events-none flex justify-center text-center"
             style={{ top: `${config.titlePositionY}%` }}
           >
             <p
               key={clip.id}
-              className="title-pop px-2.5 py-1.5 rounded-lg bg-black/45 backdrop-blur-[2px] font-extrabold leading-snug text-white"
-              style={{ fontFamily: config.fontFamily, fontSize: `${titleFontPx}px`, textShadow: '0 2px 8px rgba(0,0,0,0.9)' }}
+              className="title-card max-w-[80%] bg-white font-bold text-[#141414] [text-wrap:balance] transition-opacity duration-[250ms]"
+              style={{
+                fontFamily: "'Montserrat', sans-serif",
+                fontSize: `${titleFontPx}px`,
+                lineHeight: 1.22,
+                padding: '0.42em 1.3em',
+                borderRadius: '0.22em',
+                opacity: currentTime > TITLE_SECONDS - 0.25 ? 0 : 1,
+              }}
             >
               {config.emojisEnabled ? applyEmojiCollection(clip.title, config.emojiCollection) : clip.title}
             </p>
@@ -251,7 +261,7 @@ export function StudioCanvas(props: StudioCanvasProps) {
                             secondRow,
                           )}
                         >
-                          {word.text}
+                          {displayWord(word.text)}
                           {word.emoji && config.emojisEnabled && <span className="ml-1 inline-block animate-pulse">{word.emoji}</span>}
                         </span>
                       ))}

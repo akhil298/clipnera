@@ -1,8 +1,8 @@
 """The branding pass every branded export goes through, whatever rendered it.
 
-The finished video becomes ``[clip + Listening Spark][Caption Beat]``: the
-watermark rides the top-right corner of the clip and follows its voice, and the
-end card blurs the clip's last frame behind it.
+The finished video becomes ``[clip + Listening Spark][end card]``: after the
+opening headline the watermark rolls into the clip's top-left corner and follows
+its voice, and the end card blurs the clip's last frame behind it.
 The files are rendered by ``branding/motion/source/render.mjs``;
 ``static/branding/manifest.json`` lists them.
 """

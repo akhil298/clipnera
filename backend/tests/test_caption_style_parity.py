@@ -43,7 +43,7 @@ class TestTemplates:
         for name in get_template_names():
             template = get_template(name)
             assert 0.5 <= template["position_y"] <= 0.95, name
-            assert 12 <= template["font_size"] <= 64, name
+            assert 12 <= template["font_size"] <= 96, name
             assert 1 <= template["max_words_per_line"] <= 10, name
 
     def test_colors_are_hex(self) -> None:
@@ -104,6 +104,7 @@ class TestBundledFonts:
             "Bebas Neue": "BebasNeue-Regular.ttf",
             "DM Serif Display": "DMSerifDisplay-Regular.ttf",
             "Luckiest Guy": "LuckiestGuy-Regular.ttf",
+            "Montserrat ExtraBold": "Montserrat-ExtraBold.ttf",
             "Permanent Marker": "PermanentMarker-Regular.ttf",
             "Poppins Black": "Poppins-Black.ttf",
             "Courier Prime": "CourierPrime-Bold.ttf",
@@ -120,7 +121,7 @@ class TestBundledFonts:
         names = {
             "Anton": "anton", "Archivo": "archivo-black", "Bangers": "bangers", "BebasNeue": "bebas-neue",
             "CourierPrime": "courier-prime", "DejaVu": "dejavu", "DMSerifDisplay": "dm-serif-display",
-            "LuckiestGuy": "luckiest-guy", "NotoEmoji": "noto-emoji", "NotoNaskhArabic": "noto-naskh-arabic", "NotoSans": "noto-sans-",
+            "LuckiestGuy": "luckiest-guy", "Montserrat": "montserrat", "NotoEmoji": "noto-emoji", "NotoNaskhArabic": "noto-naskh-arabic", "NotoSans": "noto-sans-",
             "PermanentMarker": "permanent-marker", "Poppins": "poppins", "Roboto": "roboto", "Twemoji": "twemoji",
         }
         for font in FONTS_DIR.glob("*.ttf"):
