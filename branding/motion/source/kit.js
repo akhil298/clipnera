@@ -185,55 +185,64 @@ function F1(ctx, W, H, t) {
 }
 
 /* ---------- F2 Reframe ---------- */
-function F2(ctx, W, H, t) {
-  bg(ctx, W, H);
+// Every frame is covered: the wide shot runs edge to edge over a blurred copy of
+// itself, the 9:16 crop grows to fill the screen, then shrinks into the tile.
+// As the end card (``o.layer``) it fades in over the clip's last frame and out to black.
+function F2(ctx, W, H, t, T, o = {}) {
   const m = Math.min(W, H), u = m / 100, fs = m * .1, cx = W / 2, cy = H / 2, lk = lockup(ctx, fs), ts = lk.ts;
-  const out = 1 - seg(t, 6.4, 7); ctx.globalAlpha = out;
-  let fw = W * .86, fh = fw * 9 / 16; if (fh > H * .7) { fh = H * .7; fw = fh * 16 / 9; }
-  const fx = cx - fw / 2, fy = cy - fh / 2;
-  const inA = eo3(seg(t, 0, .7)), sc = .94 + .06 * inA;
-  const ch = fh * .94, cw = ch * 9 / 16;
-  const hx = headX(fx, fw, t);
-  const follow = eio(seg(t, 1.5, 2.2)), cropCx = cl(lerp(cx, hx, follow), fx + cw / 2, fx + fw - cw / 2);
-  const morph = eio(seg(t, 2.9, 3.8)), dim = seg(t, 1.4, 1.9), outside = 1 - seg(t, 2.6, 3.1);
-  const r = { x: lerp(cropCx, cx, morph), w: lerp(cw, ts, morph), h: lerp(ch, ts, morph), rad: lerp(u * .6, ts * 9 / 32, morph) };
-  const fillA = seg(t, 3.2, 3.75);
+  const out = 1 - seg(t, 6.4, 7); ctx.globalAlpha = o.layer ? eio(seg(t, 0, .4)) : out;
+  bg(ctx, W, H);
+  let fw = W, fh = W * 9 / 16; if (fh > H) { fh = H; fw = H * 16 / 9; }
+  const fx = cx - fw / 2, fy = cy - fh / 2, hue = 205;
+  const cw = fh * 9 / 16, fullW = Math.min(W, H * 9 / 16);
+  const follow = eio(seg(t, 1.3, 2.0)), grow = eio(seg(t, 2.2, 2.9)), shrink = eio(seg(t, 3.0, 3.8));
+  const cropCx = cl(lerp(cx, headX(fx, fw, t), follow), fx + cw / 2, fx + fw - cw / 2);
+  const r = {
+    x: lerp(lerp(cropCx, cx, grow), cx, shrink),
+    w: lerp(lerp(cw, fullW, grow), ts, shrink),
+    h: lerp(lerp(fh, H, grow), ts, shrink),
+    rad: lerp(lerp(u * .6, 0, grow), ts * 9 / 32, shrink),
+  };
+  const box = () => { ctx.beginPath(); ctx.roundRect(r.x - r.w / 2, cy - r.h / 2, r.w, r.h, r.rad); };
 
   if (t < 3.8) {
-    ctx.save(); ctx.translate(cx, cy); ctx.scale(sc, sc); ctx.translate(-cx, -cy);
-    if (outside > 0) {
-      ctx.save(); ctx.globalAlpha *= inA * outside;
-      ctx.beginPath(); ctx.roundRect(fx, fy, fw, fh, u * .8); ctx.clip();
-      const hd = scene(ctx, fx, fy, fw, fh, 205, t);
-      if (dim > 0) {
-        ctx.fillStyle = `rgba(0,0,0,${.62 * dim})`; ctx.beginPath(); ctx.rect(fx, fy, fw, fh);
-        ctx.roundRect(r.x - r.w / 2, cy - r.h / 2, r.w, r.h, r.rad); ctx.fill('evenodd');
-      }
-      ctx.restore();
-      const ta = seg(t, .7, .9) * (1 - seg(t, 2.3, 2.6));
+    const wide = 1 - seg(t, 2.6, 3.0);
+    if (wide > 0) {
+      ctx.save(); ctx.globalAlpha *= wide;
+      // The blurred copy fills the screen around the wide shot, as phones show landscape video.
+      const bw = Math.max(W, H * 16 / 9), bh = bw * 9 / 16, sw = 48, sh = Math.max(2, Math.round(48 * H / W));
+      SMALL.width = sw; SMALL.height = sh; SCTX.setTransform(sw / W, 0, 0, sh / H, 0, 0);
+      scene(SCTX, cx - bw / 2, cy - bh / 2, bw, bh, hue, t);
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(SMALL, 0, 0, W, H);
+      ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0, 0, W, H);
+      const hd = scene(ctx, fx, fy, fw, fh, hue, t);
+      const dim = seg(t, 1.2, 1.7);
+      if (dim > 0) { ctx.fillStyle = `rgba(0,0,0,${.62 * dim})`; ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.roundRect(r.x - r.w / 2, cy - r.h / 2, r.w, r.h, r.rad); ctx.fill('evenodd'); }
+      const ta = seg(t, .5, .7) * (1 - seg(t, 2.0, 2.3));
       if (ta > 0) {
-        const bs = hd.hr * 1.5 * (1 + .6 * (1 - eo3(seg(t, .7, 1.1)))), jx = Math.sin(t * 7) * u * .15, arm = bs * .35;
+        const bs = hd.hr * 1.5 * (1 + .6 * (1 - eo3(seg(t, .5, .9)))), jx = Math.sin(t * 7) * u * .15, arm = bs * .35;
         const L = hd.hx - bs + jx, R = hd.hx + bs + jx, T = hd.hy - bs, B = hd.hy + bs;
-        ctx.save(); ctx.globalAlpha *= ta * inA; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1.2, u * .35); ctx.lineCap = 'round';
+        ctx.save(); ctx.globalAlpha *= ta; ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1.2, u * .35); ctx.lineCap = 'round';
         ctx.beginPath();
         for (const [px, py, dx, dy] of [[L, T, 1, 1], [R, T, -1, 1], [L, B, 1, -1], [R, B, -1, -1]]) { ctx.moveTo(px + dx * arm, py); ctx.lineTo(px, py); ctx.lineTo(px, py + dy * arm); }
         ctx.stroke(); ctx.restore();
-        text(ctx, 'SPEAKER 1', L, T - fs * .25, fs * .2, '#fff', ta * inA, 500, 'mono', 'left');
+        text(ctx, 'SPEAKER 1', L, T - fs * .25, fs * .2, '#fff', ta, 500, 'mono', 'left');
       }
+      ctx.restore();
     }
-    if (dim > 0) {
-      ctx.save(); ctx.beginPath(); ctx.roundRect(r.x - r.w / 2, cy - r.h / 2, r.w, r.h, r.rad); ctx.clip();
-      ctx.translate(r.x, cy); ctx.scale(r.h / ch, r.h / ch); ctx.translate(-cropCx, -cy);
-      scene(ctx, fx, fy, fw, fh, 205, t); ctx.restore();
-      if (fillA > 0) { ctx.save(); ctx.globalAlpha *= fillA; ctx.fillStyle = AMBER; ctx.beginPath(); ctx.roundRect(r.x - r.w / 2, cy - r.h / 2, r.w, r.h, r.rad); ctx.fill(); ctx.restore(); }
-      const ba = dim * (1 - seg(t, 3.4, 3.7));
+    if (t >= 1.2) {
+      // Inside the crop the shot zooms with it, so the speaker fills the screen once it has grown.
+      ctx.save(); box(); ctx.clip();
+      ctx.translate(r.x, cy); ctx.scale(r.h / fh, r.h / fh); ctx.translate(-cropCx, -cy);
+      scene(ctx, fx, fy, fw, fh, hue, t); ctx.restore();
+      const fillA = seg(t, 3.35, 3.8);
+      if (fillA > 0) { ctx.save(); ctx.globalAlpha *= fillA; ctx.fillStyle = AMBER; box(); ctx.fill(); ctx.restore(); }
+      const ba = seg(t, 1.2, 1.5) * (1 - seg(t, 2.3, 2.6)) + seg(t, 3.0, 3.2) * (1 - seg(t, 3.4, 3.7));
       if (ba > 0) {
-        ctx.save(); ctx.globalAlpha *= ba; ctx.strokeStyle = AMBER; ctx.lineWidth = Math.max(1.5, u * .45);
-        ctx.beginPath(); ctx.roundRect(r.x - r.w / 2, cy - r.h / 2, r.w, r.h, r.rad); ctx.stroke(); ctx.restore();
-        text(ctx, '9:16', r.x, cy - r.h / 2 - fs * .3, fs * .22, AMBER, ba * (1 - morph), 500, 'mono');
+        ctx.save(); ctx.globalAlpha *= ba; ctx.strokeStyle = AMBER; ctx.lineWidth = Math.max(1.5, u * .45); box(); ctx.stroke(); ctx.restore();
       }
+      text(ctx, '9:16', r.x, cy - r.h / 2 - fs * .3, fs * .22, AMBER, seg(t, 1.3, 1.6) * (1 - seg(t, 2.1, 2.3)), 500, 'mono');
     }
-    ctx.restore();
   } else {
     const slide = eio(seg(t, 4.0, 4.6)), tx = lerp(cx, cx - lk.total / 2 + ts / 2, slide), wx = tx + ts / 2 + lk.gap;
     const ls = letters(ctx, fs), clipEnd = ls[3].x + ls[3].w, neraX = ls[4].x, ww = wordWidth(ls);
@@ -252,10 +261,22 @@ function F2(ctx, W, H, t) {
     const rp = seg(t, 3.8, 4.5); if (rp < 1) ring(ctx, tx, cy, ts * (.6 + 1.4 * eo3(rp)), Math.max(1, u * .5), (1 - rp) * .7);
     const sp = eback(seg(t, 3.75, 4.2));
     tile(ctx, tx, cy, ts, { starScale: sp, starRot: (1 - sp) * -1.6, cross: seg(t, 4.1, 4.3) });
-    const ta = eo3(seg(t, 5.1, 5.6));
-    text(ctx, 'Landscape in. Shorts out.', cx, cy + fs * 1.5 + fs * .3 * (1 - ta), fs * .34, '#b8ada0', ta);
+    const ma = eo3(seg(t, 4.3, 4.7));
+    text(ctx, 'MADE WITH', cx, cy - fs * 1.35 - fs * .3 * (1 - ma), fs * .46, '#fff', ma, 800);
+    // The same call to action as Caption Beat, early enough to hold before the fade.
+    const ca = eo3(seg(t, 4.7, 5.2));
+    if (ca > 0) {
+      const csz = fs * .34, label = 'Turn long videos into shorts';
+      ctx.font = `600 ${csz}px "Plus Jakarta Sans", sans-serif`;
+      const w = ctx.measureText(label).width, y = cy + fs * 1.6 + fs * .3 * (1 - ca);
+      ctx.save(); ctx.globalAlpha *= ca;
+      pill(ctx, cx - w / 2 - csz, y - csz * 1.1, w + csz * 2, csz * 2.2, 'rgba(245,158,11,.16)', 'rgba(245,158,11,.6)');
+      ctx.restore();
+      text(ctx, label, cx, y, csz, '#fff', ca);
+    }
   }
   ctx.globalAlpha = 1;
+  if (o.layer && out < 1) { ctx.fillStyle = `rgba(11,10,9,${1 - out})`; ctx.fillRect(0, 0, W, H); }
 }
 
 /* ---------- F3 Thousand Frames ---------- */

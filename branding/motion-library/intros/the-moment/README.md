@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Type | Intro |
-| Status | In use: intro before every branded video |
+| Status | Library |
 | Preview | `the-moment.mp4`, 1080×1920, 30 fps, 7.2 s |
 | Design round | 2 |
 | Source | `branding/motion/source/kit.js`, function `F1` |
@@ -25,10 +25,6 @@ The whole product in one shot: long video in, the AI finds the moment, a clip co
 - **3.2 s** The rest falls away; the moment folds into the tile
 - **4.1 s** Sparkle draws itself, ring burst
 - **4.6 s** Name slides out, tagline fades in
-
-## Where it runs
-
-Rendered for 9:16, 16:9 and 1:1 in `backend/static/branding/intro/`. `backend/branding/service.py` adds it to every branded export.
 
 ## Re-render
 

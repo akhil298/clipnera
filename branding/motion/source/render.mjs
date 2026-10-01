@@ -149,10 +149,10 @@ function remapTimes(segments, speed) {
 
 /* ---------- production: what the backend renders with ---------- */
 async function production(cdp) {
-  const { sizes, intro, outro, watermark } = catalog.production;
+  const { sizes, outro, watermark } = catalog.production;
   await openPage(cdp, 'signature.html');
   const manifest = { fps: FPS };
-  for (const [key, spec, ext, opts] of [['intro', intro, 'mp4', {}], ['outro', outro, 'mov', { layer: true, alpha: true }]]) {
+  for (const [key, spec, ext, opts] of [['outro', outro, 'mov', { layer: true, alpha: true }]]) {
     const times = remapTimes(spec.segments, spec.speed), dir = path.join(STATIC, key), files = {};
     await mkdir(dir, { recursive: true });
     for (const [name, [W, H]] of Object.entries(sizes)) {
@@ -242,7 +242,7 @@ async function library(cdp, only) {
     console.log(`library ${m.slug} -> ${rel(out)}`);
     if (m.page === 'signature') {
       const [W, H] = catalog.library_size;
-      await renderSignature(cdp, out, times, { id: m.id, W, H, backdrop: m.backdrop ?? null });
+      await renderSignature(cdp, out, times, { id: m.id, W, H, backdrop: m.backdrop ?? null, layer: m.layer ?? false });
     } else {
       await renderReel(cdp, out, times, { id: m.id });
     }

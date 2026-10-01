@@ -1,8 +1,8 @@
 """The branding pass every branded export goes through, whatever rendered it.
 
-The finished video becomes ``[The Moment][clip + Listening Spark][Caption Beat]``:
-the intro plays first, the watermark rides the top-right corner of the clip and
-follows its voice, and the end card blurs the clip's last frame behind it.
+The finished video becomes ``[clip + Listening Spark][Caption Beat]``: the
+watermark rides the top-right corner of the clip and follows its voice, and the
+end card blurs the clip's last frame behind it.
 The files are rendered by ``branding/motion/source/render.mjs``;
 ``static/branding/manifest.json`` lists them.
 """
@@ -32,8 +32,6 @@ BLUR_RATIO = 1 / 40
 
 @dataclass(frozen=True)
 class Assets:
-    intro: dict[str, str]
-    intro_s: float
     outro: dict[str, str]
     outro_s: float
     blur_in_s: float
@@ -46,7 +44,6 @@ class Assets:
             return None
         spec = json.loads(path.read_text())
         return cls(
-            intro={k: str(root / v) for k, v in spec["intro"]["files"].items()}, intro_s=spec["intro"]["duration"],
             outro={k: str(root / v) for k, v in spec["outro"]["files"].items()}, outro_s=spec["outro"]["duration"],
             blur_in_s=spec["outro"]["blur_in_s"], layout=root / spec["watermark"]["layout"],
         )
@@ -63,7 +60,7 @@ def assets() -> Assets | None:
 def added_seconds() -> float:
     """How much longer a branded export runs than its clip."""
     found = assets()
-    return found.intro_s + found.outro_s if found else 0.0
+    return found.outro_s if found else 0.0
 
 
 def nearest(files: dict[str, str], width: int, height: int) -> str:
@@ -76,33 +73,30 @@ def nearest(files: dict[str, str], width: int, height: int) -> str:
 
 def branding_cmd(video: Path, out: Path, media: MediaInfo, found: Assets, overlay: Path,
                  overlay_xy: tuple[int, int], last_frame: Path) -> list[str]:
-    """One FFmpeg run: intro, then the clip under the watermark, then the end card."""
+    """One FFmpeg run: the clip under the watermark, then the end card."""
     w, h, fps = media.width, media.height, f"{media.fps:.6f}"
     fill = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1"
     blur = max(2, round(min(w, h) * BLUR_RATIO))
     silence = "anullsrc=r=48000:cl=stereo,atrim=duration={:.3f}"
     main_audio = "[0:a]asetpts=PTS-STARTPTS[ma]" if media.has_audio else f"{silence.format(media.duration)}[ma]"
     graph = [
-        f"[2:v]{fill},fps={fps},format=yuv420p,setpts=PTS-STARTPTS[intro]",
-        f"{silence.format(found.intro_s)}[ia]",
         f"[0:v][1:v]overlay=x={overlay_xy[0]}:y={overlay_xy[1]}:eof_action=pass,setsar=1,format=yuv420p,setpts=PTS-STARTPTS[main]",
         main_audio,
         # The end card sits over the clip's last frame, which blurs in behind it.
-        f"[4:v]scale={w}:{h},setsar=1,format=yuv420p,split[sharp][soft]",
+        f"[3:v]scale={w}:{h},setsar=1,format=yuv420p,split[sharp][soft]",
         f"[soft]boxblur=luma_radius={blur}:luma_power=2[blurred]",
         f"[sharp][blurred]blend=all_expr='A+(B-A)*min(T/{found.blur_in_s},1)'[still]",
-        f"[3:v]{fill}[card]",
+        f"[2:v]{fill}[card]",
         # The looped still never ends on its own inside concat, so cut it to length.
         f"[still][card]overlay=0:0,fps={fps},format=yuv420p,trim=duration={found.outro_s:.3f},setpts=PTS-STARTPTS[outro]",
         f"{silence.format(found.outro_s)}[oa]",
         # concat expects every piece to start at zero, hence the setpts above.
-        "[intro][ia][main][ma][outro][oa]concat=n=3:v=1:a=1[v][a]",
+        "[main][ma][outro][oa]concat=n=2:v=1:a=1[v][a]",
     ]
     return [
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
         "-i", str(video),
         "-i", str(overlay),
-        "-i", nearest(found.intro, w, h),
         "-i", nearest(found.outro, w, h),
         "-loop", "1", "-framerate", fps, "-t", f"{found.outro_s:.3f}", "-i", str(last_frame),
         "-filter_complex", ";".join(graph), "-map", "[v]", "-map", "[a]",
@@ -112,7 +106,7 @@ def branding_cmd(video: Path, out: Path, media: MediaInfo, found: Assets, overla
 
 
 async def apply_branding(video: Path, out: Path) -> Path:
-    """``video`` with the intro, watermark and end card, written to ``out``.
+    """``video`` with the watermark and end card, written to ``out``.
 
     Without rendered assets the video comes back unbranded instead of failing
     the export, as a missing watermark image did before.

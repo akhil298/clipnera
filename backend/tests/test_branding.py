@@ -43,24 +43,24 @@ class TestRenditions:
     def test_shipped_assets_are_complete(self):
         found = Assets.load()
         assert found is not None, "run branding/motion/source/render.mjs production"
-        for path in [*found.intro.values(), *found.outro.values(), found.layout]:
+        for path in [*found.outro.values(), found.layout]:
             assert Path(path).exists(), path
-        assert 4 < found.intro_s < 7 and 4 < found.outro_s < 6
+        assert 4 < found.outro_s < 6
 
 
 class TestBrandingCommand:
     @staticmethod
     def _cmd(has_audio: bool) -> list[str]:
         media = MediaInfo(width=1080, height=1920, fps=30.0, duration=12.0, has_audio=has_audio)
-        found = Assets(intro=FILES, intro_s=5.3, outro=FILES, outro_s=4.9, blur_in_s=0.9, layout=Path("l.json"))
+        found = Assets(outro=FILES, outro_s=4.9, blur_in_s=0.9, layout=Path("l.json"))
         return branding_cmd(Path("clip.mp4"), Path("out.mp4"), media, found, Path("wm.mov"), (700, 40), Path("last.png"))
 
-    def test_intro_clip_and_end_card_are_joined_in_order(self):
+    def test_clip_and_end_card_are_joined_in_order(self):
         cmd = self._cmd(True)
         inputs = [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "-i"]
-        assert inputs == ["clip.mp4", "wm.mov", "a.mp4", "a.mp4", "last.png"]
+        assert inputs == ["clip.mp4", "wm.mov", "a.mp4", "last.png"]
         graph = cmd[cmd.index("-filter_complex") + 1]
-        assert "[intro][ia][main][ma][outro][oa]concat=n=3:v=1:a=1[v][a]" in graph
+        assert "[main][ma][outro][oa]concat=n=2:v=1:a=1[v][a]" in graph
         assert "overlay=x=700:y=40:eof_action=pass" in graph
         assert "[0:a]asetpts=PTS-STARTPTS[ma]" in graph
 
@@ -91,7 +91,7 @@ class TestListeningSpark:
 
 
 @pytest.mark.asyncio
-async def test_branded_export_plays_intro_clip_and_end_card(tmp_path):
+async def test_branded_export_plays_clip_and_end_card(tmp_path):
     found = Assets.load()
     clip = _clip(tmp_path / "clip.mp4", "360x640", 2, "sine=f=440:d=2")
     out = await apply_branding(clip, tmp_path / "branded.mp4")
@@ -99,5 +99,5 @@ async def test_branded_export_plays_intro_clip_and_end_card(tmp_path):
     video = next(s for s in probe["streams"] if s["codec_type"] == "video")
     assert (video["width"], video["height"]) == (360, 640)
     assert any(s["codec_type"] == "audio" for s in probe["streams"])
-    assert float(probe["format"]["duration"]) == pytest.approx(found.intro_s + 2 + found.outro_s, abs=0.3)
+    assert float(probe["format"]["duration"]) == pytest.approx(2 + found.outro_s, abs=0.3)
     assert np.isfinite(float(probe["format"]["duration"]))

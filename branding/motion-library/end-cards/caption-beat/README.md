@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Type | End card |
-| Status | In use: end card after every branded video |
+| Status | Library |
 | Preview | `caption-beat.mp4`, 1080×1920, 30 fps, 6.5 s |
 | Design round | 2 |
 | Source | `branding/motion/source/kit.js`, function `F4` |
@@ -15,10 +15,6 @@ The last frame blurs and darkens. "MADE" and "WITH" pop in on the beat with a ka
 ## Why it fits Clipnera
 
 Ends every video in Clipnera's own caption style, with a clear call to action.
-
-## Where it runs
-
-Rendered for 9:16, 16:9 and 1:1 in `backend/static/branding/outro/`. `backend/branding/service.py` adds it to every branded export.
 
 ## Re-render
 

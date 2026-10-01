@@ -9,22 +9,21 @@
   },
   "production": {
     "sizes": { "9x16": [1080, 1920], "16x9": [1920, 1080], "1x1": [1080, 1080] },
-    "intro": { "slug": "the-moment", "id": "F1", "segments": [[0, 6.0], [6.5, 7.1]], "speed": 1.25 },
-    "outro": { "slug": "caption-beat", "id": "F4", "segments": [[0, 4.4], [6.0, 6.5]], "speed": 1, "blur_in_s": 0.9 },
+    "outro": { "slug": "reframe", "id": "F2", "segments": [[0, 5.6], [6.4, 7.0]], "speed": 1.1, "blur_in_s": 0.6 },
     "watermark": { "slug": "listening-spark", "id": "W1", "levels": 16 }
   },
   "motions": [
     {
       "slug": "the-moment", "name": "The Moment", "type": "intro", "round": 2, "page": "signature", "id": "F1",
-      "render_s": 7.2, "status": "In use: intro before every branded video",
+      "render_s": 7.2, "status": "Library",
       "what": "A 1 h 24 m podcast appears as its sound wave. An amber scan line reads it end to end and comes back to the peak. Brackets snap around the best 29 seconds, everything else falls away, and those bars fold into the amber tile. The sparkle draws itself, a ring bursts, and the name slides out with the line \"Every long video has a moment.\"",
       "why": "The whole product in one shot: long video in, the AI finds the moment, a clip comes out, and that clip is the logo.",
       "beats": [["0.0 s", "The sound wave grows in, timecodes at both ends"], ["1.0 s", "Scan line sweeps the whole video"], ["2.3 s", "Scan line returns to the peak"], ["2.8 s", "Brackets snap around \"BEST MOMENT · 0:29\""], ["3.2 s", "The rest falls away; the moment folds into the tile"], ["4.1 s", "Sparkle draws itself, ring burst"], ["4.6 s", "Name slides out, tagline fades in"]]
     },
     {
-      "slug": "reframe", "name": "Reframe", "type": "intro", "round": 2, "page": "signature", "id": "F2",
-      "render_s": 7.0, "status": "Library",
-      "what": "A wide video with a face-tracking box on the speaker. A 9:16 crop window follows them, then shrinks into the tile, and the name pops in word by word like Clipnera's karaoke captions. Tagline: \"Landscape in. Shorts out.\"",
+      "slug": "reframe", "name": "Reframe", "type": "end-card", "round": 2, "page": "signature", "id": "F2", "backdrop": 170, "layer": true,
+      "render_s": 7.0, "status": "In use: end card after every branded video",
+      "what": "The clip's last frame blurs and darkens. Over it, a wide video with a face-tracking box on the speaker: a 9:16 crop window follows them, then shrinks into the tile, and the name pops in word by word like Clipnera's karaoke captions under \"MADE WITH\", then a \"Turn long videos into shorts\" pill. In real exports the blurred frame is the clip's own last frame.",
       "why": "Shows reframing to vertical, the other half of the product. The crop window literally becomes the logo."
     },
     {
@@ -35,7 +34,7 @@
     },
     {
       "slug": "caption-beat", "name": "Caption Beat", "type": "end-card", "round": 2, "page": "signature", "id": "F4",
-      "render_s": 6.5, "status": "In use: end card after every branded video",
+      "render_s": 6.5, "status": "Library",
       "what": "The last frame blurs and darkens. \"MADE\" and \"WITH\" pop in on the beat with a karaoke highlight, the logo slams in and pulses with the beat, a sound line moves along the bottom, and a \"Turn long videos into shorts\" pill appears. In real exports the blurred frame is the clip's own last frame.",
       "why": "Ends every video in Clipnera's own caption style, with a clear call to action."
     },
