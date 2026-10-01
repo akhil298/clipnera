@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Eye, ShieldCheck } from 'lucide-react';
 import type { AspectRatio, BRollOverlay, CaptionConfig, ViralClip, WordTimestamp } from '@/lib/types';
 import { PlatformOverlay } from './PlatformOverlay';
@@ -13,6 +13,7 @@ import {
   captionWordStyle,
   captionsClear,
   displayWord,
+  fitTitleFontPx,
   safeZoneFor,
 } from './studioUtils';
 
@@ -87,7 +88,10 @@ export function StudioCanvas(props: StudioCanvasProps) {
   const zonesOn = vertical && showSafeZones;
   const scale = stageWidth > 0 ? stageWidth / CAPTION_REFERENCE_WIDTH : 0.3;
   const captionFontPx = Math.max(9, config.fontSize * scale);
-  const titleFontPx = Math.max(9, config.titleFontSize * scale);
+  const titleFontPx = useMemo(
+    () => Math.max(9, fitTitleFontPx(clip.title ?? '', config.titleFontSize * scale, stageWidth)),
+    [clip.title, config.titleFontSize, scale, stageWidth],
+  );
   // As burned: each word holds the highlight from its start until the next
   // word starts, and a stacked style splits the line over two rows.
   const activeIndex = captionWords.reduce((found, word, i) => (currentTime >= word.start ? i : found), -1);
@@ -193,7 +197,7 @@ export function StudioCanvas(props: StudioCanvasProps) {
                 fontFamily: "'Montserrat', sans-serif",
                 fontSize: `${titleFontPx}px`,
                 lineHeight: 1.22,
-                padding: '0.42em 1.3em',
+                padding: '0.42em 1em',
                 borderRadius: '0.22em',
                 opacity: currentTime > TITLE_SECONDS - 0.25 ? 0 : 1,
               }}

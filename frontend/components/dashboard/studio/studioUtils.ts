@@ -200,6 +200,46 @@ const PHRASE_PAUSE_SECONDS = 0.35;
 const CLAUSE_ENDING = /[.,?!;:…]$/;
 const DISPLAY_TRIM = /^[.,?!;:…"“”—–]+|[.,?!;:…"“”—–]+$/g;
 
+// Mirror TITLE_MAX_WIDTH, TITLE_PAD_X, TITLE_MAX_LINES, TITLE_MIN_SCALE and
+// TITLE_SHRINK_STEP in the ASS burner, so the preview's headline card wraps and
+// shrinks the way the export's does.
+const TITLE_MAX_WIDTH = 0.8;
+const TITLE_PAD_X = 1.0;
+const TITLE_MAX_LINES = 2;
+const TITLE_MIN_SCALE = 0.7;
+const TITLE_SHRINK_STEP = 0.94;
+
+/** Lines ``title`` takes at ``px`` in a ``maxWidth``-wide card, as measured by ``ctx``. */
+const titleLineCount = (ctx: CanvasRenderingContext2D, title: string, px: number, maxWidth: number): number => {
+  ctx.font = `700 ${px}px Montserrat, sans-serif`;
+  const inner = maxWidth - 2 * TITLE_PAD_X * px;
+  let lines = 0;
+  let line = '';
+  for (const word of title.split(/\s+/).filter(Boolean)) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(candidate).width > inner) {
+      lines += 1;
+      line = word;
+    } else {
+      line = candidate;
+    }
+  }
+  return lines + (line ? 1 : 0);
+};
+
+/** The headline's font size on a ``stageWidth``-wide preview: ``basePx``, made
+ * smaller until the title fits two lines, as the export does. */
+export const fitTitleFontPx = (title: string, basePx: number, stageWidth: number): number => {
+  const ctx = typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d');
+  if (!ctx || stageWidth <= 0) return basePx;
+  const maxWidth = stageWidth * TITLE_MAX_WIDTH;
+  let px = basePx;
+  while (titleLineCount(ctx, title, px, maxWidth) > TITLE_MAX_LINES && px * TITLE_SHRINK_STEP >= basePx * TITLE_MIN_SCALE) {
+    px *= TITLE_SHRINK_STEP;
+  }
+  return px;
+};
+
 /** A caption word as burned: its surrounding punctuation trimmed. */
 export const displayWord = (text: string): string => text.trim().replace(DISPLAY_TRIM, '');
 

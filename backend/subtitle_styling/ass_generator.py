@@ -80,13 +80,21 @@ TITLE_CARD_COLOUR = "&H00FFFFFF"
 TITLE_SECONDS = 5.0
 TITLE_FADE_IN_MS, TITLE_FADE_OUT_MS = 150, 250
 # Card padding around the text and its corner radius, in ems of the title.
-TITLE_PAD_X, TITLE_PAD_Y, TITLE_RADIUS = 1.3, 0.42, 0.22
+TITLE_PAD_X, TITLE_PAD_Y, TITLE_RADIUS = 1.0, 0.42, 0.22
 # Baseline to baseline between title lines, and room kept under the last
 # baseline for descenders (g, y), in ems. libass would space lines by the
 # face's whole ascent-to-descent span, which in Montserrat leaves a gap.
 TITLE_LINE_PITCH, TITLE_DESCENT_ROOM = 1.22, 0.24
+# An emoji in the title is drawn this share of the ASS font size: about the
+# letters' height, where the full size would tower over them.
+TITLE_EMOJI_SCALE = 0.62
 # The card spans at most this much of the frame width.
 TITLE_MAX_WIDTH = 0.8
+# A headline reads as one or two lines; a longer one gets smaller, down to this
+# share of its set size, before it may take a third line.
+TITLE_MAX_LINES = 2
+TITLE_MIN_SCALE = 0.7
+TITLE_SHRINK_STEP = 0.94
 # Control-point offset that makes a cubic Bezier a quarter circle.
 KAPPA = 0.5523
 # Display faces carry Latin glyphs only; captions in these scripts switch to a
@@ -405,12 +413,12 @@ def fit_font_size(font_size: int, chars: int, char_px: float, max_width: float) 
 
 @lru_cache(maxsize=16)
 def face_metrics(font_file: str) -> tuple[float, float]:
-    """(ascent libass places the baseline at, cap height) of a bundled face, in ems."""
+    """(descent libass sets below the baseline, cap height) of a bundled face, in ems."""
     from fontTools.ttLib import TTFont
 
     font = TTFont(FONTS_DIR / font_file, lazy=True)
     units, os2 = font["head"].unitsPerEm, font["OS/2"]
-    return os2.usWinAscent / units, (getattr(os2, "sCapHeight", 0) or 0.7 * units) / units
+    return os2.usWinDescent / units, (getattr(os2, "sCapHeight", 0) or 0.7 * units) / units
 
 
 @lru_cache(maxsize=64)
@@ -424,10 +432,24 @@ def text_width(text: str, font_file: str, em_px: float, emoji_px: float) -> floa
     return _face(font_file, max(1, round(em_px))).getlength(EMOJI.sub("", text)) + emoji_px * len(emoji)
 
 
+def title_words(title: str) -> list[str]:
+    """``title``'s words, each emoji kept with the word beside it so it never
+    ends up alone on a line."""
+    words: list[str] = []
+    for word in title.split():
+        if words and not EMOJI.sub("", word).strip():
+            words[-1] = f"{words[-1]} {word}"
+        elif words and not EMOJI.sub("", words[-1]).strip():
+            words[-1] = f"{words[-1]} {word}"
+        else:
+            words.append(word)
+    return words
+
+
 def wrap_title(title: str, measure: Any, max_width: float) -> list[str]:
     """``title`` broken between words into as few lines as fit ``max_width``,
     balanced so no line is left holding a lone word."""
-    words = title.split()
+    words = title_words(title)
     count = 0
     line = ""
     for word in words:
@@ -799,15 +821,25 @@ class AssGenerator:
     @staticmethod
     def _fit_title(title: str, family: str, font_file: str, em: float, width: int) -> tuple[list[str], float]:
         """The title's lines and em: wrapped between words to the card's width,
-        shrunk only when one word alone is too wide for it."""
-        inner = width * TITLE_MAX_WIDTH - 2 * TITLE_PAD_X * em
-        emoji_px = ass_font_size(em, family)
-        widest = max(text_width(word, font_file, em, emoji_px) for word in title.split())
+        made smaller until it fits ``TITLE_MAX_LINES`` lines (or reaches
+        ``TITLE_MIN_SCALE``), and smaller still if one word alone is too wide."""
+        floor = em * TITLE_MIN_SCALE
+
+        def layout(size: float) -> tuple[list[str], float, float]:
+            inner = width * TITLE_MAX_WIDTH - 2 * TITLE_PAD_X * size
+            emoji_px = ass_font_size(size, family) * TITLE_EMOJI_SCALE
+            measure = lambda text: text_width(text, font_file, size, emoji_px)  # noqa: E731
+            widest = max(measure(word) for word in title_words(title))
+            return wrap_title(title, measure, inner), inner, widest
+
+        lines, inner, widest = layout(em)
+        while len(lines) > TITLE_MAX_LINES and em * TITLE_SHRINK_STEP >= floor:
+            em *= TITLE_SHRINK_STEP
+            lines, inner, widest = layout(em)
         if widest > inner:
             em *= inner / widest
-            inner = width * TITLE_MAX_WIDTH - 2 * TITLE_PAD_X * em
-            emoji_px = ass_font_size(em, family)
-        return wrap_title(title, lambda text: text_width(text, font_file, em, emoji_px), inner), em
+            lines, _, _ = layout(em)
+        return lines, em
 
     @staticmethod
     def _title_card(
@@ -815,11 +847,13 @@ class AssGenerator:
     ) -> list[str]:
         """Dialogue lines drawing the title: its white card, then each line of text on it.
 
-        Lines are placed one by one at ``TITLE_LINE_PITCH``, and the card is
-        sized from cap height and baselines, so the padding reads even.
+        Lines are placed one by one at ``TITLE_LINE_PITCH``, each by its
+        baseline so an emoji in it cannot push it down, and the card is sized
+        from cap height and baselines, so the padding reads even.
         """
-        ascent, cap = face_metrics(font_file)
-        text_w = max(text_width(line, font_file, em, font_size) for line in title_lines)
+        descent, cap = face_metrics(font_file)
+        emoji_size = max(1, round(font_size * TITLE_EMOJI_SCALE))
+        text_w = max(text_width(line, font_file, em, emoji_size) for line in title_lines)
         card_w = text_w + 2 * TITLE_PAD_X * em
         first_baseline = top + (TITLE_PAD_Y + cap) * em
         card_h = (2 * TITLE_PAD_Y + cap + (len(title_lines) - 1) * TITLE_LINE_PITCH + TITLE_DESCENT_ROOM) * em
@@ -831,10 +865,12 @@ class AssGenerator:
             f"{{\\an7\\pos({left},{top}){fade}\\p1}}{rounded_rect(card_w, card_h, TITLE_RADIUS * em)}{{\\p0}}",
         ]
         for index, line in enumerate(title_lines):
-            # \an8 anchors a line's top, which sits one ascent above its baseline.
-            line_top = first_baseline + (index * TITLE_LINE_PITCH - ascent) * em
+            # \an2 anchors a line's bottom, one descent below its baseline;
+            # emoji drawings rest on the baseline, so they never move the line.
+            line_bottom = first_baseline + (index * TITLE_LINE_PITCH + descent) * em
+            text = EMOJI.sub(lambda m: f"{{\\fs{emoji_size}}}{m.group(0)}{{\\fs{font_size}}}", line)
             events.append(
-                f"Dialogue: 2,{timing},Title,,0,0,0,,{{\\an8\\pos({round(width / 2)},{round(line_top)}){fade}}}{line}"
+                f"Dialogue: 2,{timing},Title,,0,0,0,,{{\\an2\\pos({round(width / 2)},{round(line_bottom)}){fade}}}{text}"
             )
         return events
 

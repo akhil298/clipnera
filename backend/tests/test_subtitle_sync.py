@@ -150,6 +150,16 @@ class TestStaticTitle:
         )
         assert self._title_line(ass).split(",")[2] == ass_time(3.0)
 
+    def test_a_long_title_shrinks_to_two_lines_instead_of_stacking_words(self) -> None:
+        ass = AssGenerator().build_ass([], 0.0, 10.0, title="Unlocking extraordinary transformational neuroplasticity")
+        assert len([line for line in dialogue_lines(ass) if ",Title," in line]) == 2
+
+    def test_an_emoji_never_takes_a_line_of_its_own(self) -> None:
+        from subtitle_styling.ass_generator import title_words
+
+        assert title_words("Unlocking extraordinary transformational 🔥") == ["Unlocking", "extraordinary", "transformational 🔥"]
+        assert title_words("🧠 Why gratitude works") == ["🧠 Why", "gratitude", "works"]
+
     def test_title_sits_on_a_card_behind_it(self, offset_segments) -> None:
         ass = AssGenerator().build_ass(
             SubtitleStylingService._extract_words_for_ass(offset_segments),

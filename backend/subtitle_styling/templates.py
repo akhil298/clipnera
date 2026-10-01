@@ -53,7 +53,7 @@ TEMPLATE_DEFAULTS: dict[str, Any] = {
     "position_y": 0.76,
     # The static headline pinned above the captions: size on the same
     # 1080-wide scale as font_size, top margin as a fraction of frame height.
-    "title_font_size": 64,
+    "title_font_size": 52,
     "title_position_y": 0.07,
 }
 
