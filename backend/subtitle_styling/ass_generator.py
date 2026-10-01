@@ -9,6 +9,7 @@ from typing import Any
 
 from core.logging_config import get_logger
 from subtitle_styling.emoji_annotator import annotate_caption_words
+from subtitle_styling.emoji_art import GHOST, colourize
 from subtitle_styling.templates import DEFAULT_STYLE, get_template
 from transcription.language import script_of
 
@@ -595,7 +596,7 @@ class AssGenerator:
         max_chars = caption_layout_budget(caption_char_px, width) * rows
         groups = _split_at_breaks(group_words(words_in_clip, max_chars, template["max_words_per_line"]), breaks)
 
-        _, emphasis_indices = annotate_caption_words(
+        emoji_by_index, emphasis_indices = annotate_caption_words(
             words_in_clip, ai_cues,
             enable_emoji=template.get("emoji", False),
             enable_emphasis=True,
@@ -625,9 +626,13 @@ class AssGenerator:
             row_start = _row_split(group, rows)
             first_row = group[:row_start]
             second_row = group[row_start:]
+            # An emoji and its space take about three letters.
             row_chars = [
-                (sum(len(w["text"]) for w in row) + len(row) - 1) * scale
-                for row, scale in ((first_row, 1.0), (second_row, look.second_scale / 100 if rows > 1 else 1.0))
+                (sum(len(w["text"]) + 3 * (cap_idx + start + j in emoji_by_index) for j, w in enumerate(row))
+                 + len(row) - 1) * scale
+                for row, start, scale in (
+                    (first_row, 0, 1.0), (second_row, row_start, look.second_scale / 100 if rows > 1 else 1.0),
+                )
                 if row
             ]
             line_size = fit_font_size(font_size, math.ceil(max(row_chars)), caption_char_px, width * CAPTION_SAFE_WIDTH)
@@ -652,7 +657,7 @@ class AssGenerator:
                 timing = f"{ass_time(w_start_clip)},{ass_time(w_end_clip)}"
                 render = dict(
                     group=group, active_index=wi, cap_index=cap_idx, row_start=row_start if rows > 1 else len(group),
-                    emphasis_indices=emphasis_indices, look=look, entering=wi == 0, reset=f"\\r{size_tag}",
+                    emphasis_indices=emphasis_indices, emoji_by_index=emoji_by_index, look=look, entering=wi == 0, reset=f"\\r{size_tag}",
                 )
                 if look.word_box:
                     lines.append(
@@ -667,7 +672,7 @@ class AssGenerator:
             # every line after a group's first.
             cap_idx += len(group)
 
-        return "\n".join(header_lines) + "\n" + "\n".join(lines) + "\n"
+        return colourize("\n".join(header_lines) + "\n" + "\n".join(lines) + "\n")
 
     def _render_group(
         self,
@@ -676,6 +681,7 @@ class AssGenerator:
         cap_index: int,
         row_start: int,
         emphasis_indices: set[int],
+        emoji_by_index: dict[int, str],
         look: _Look,
         entering: bool,
         reset: str = "\\r",
@@ -686,7 +692,8 @@ class AssGenerator:
         Words from ``row_start`` on sit on a second row. ``entering`` adds the
         line's entrance to every word; ``reset`` ends each word's styling and
         carries any line-level size. ``box_layer`` renders the same layout with
-        only the spoken word's box visible, to sit beneath the text.
+        only the spoken word's box visible, to sit beneath the text. A word's
+        emoji follows it; ``emoji_art.colourize`` later draws it in colour.
         """
         rows: list[list[str]] = [[], []]
         for i, word in enumerate(group):
@@ -697,6 +704,10 @@ class AssGenerator:
             second_row = i >= row_start
             scale = look.second_scale if second_row else 100
             is_active = i == active_index and look.animation != "none"
+            hidden = i > active_index and look.hide_upcoming
+            if cap_index + i in emoji_by_index:
+                # A hidden upcoming word's emoji keeps its place but is not drawn yet.
+                text = f"{text} {GHOST if hidden else ''}{emoji_by_index[cap_index + i]}"
 
             tags = f"\\fscx{scale}\\fscy{scale}" if scale != 100 else ""
             if look.glow and not box_layer:
@@ -709,7 +720,7 @@ class AssGenerator:
                 # sized to the word above it.
                 if is_active:
                     tags += f"\\3c{look.word_box}\\3a&H00&{_active_motion(look, scale)}"
-            elif i > active_index and look.hide_upcoming:
+            elif hidden:
                 tags += "\\alpha&HFF&"
             elif is_active:
                 tags += self._active_colour(look, second_row) + _active_motion(look, scale)

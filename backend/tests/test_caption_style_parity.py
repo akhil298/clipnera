@@ -120,8 +120,8 @@ class TestBundledFonts:
         names = {
             "Anton": "anton", "Archivo": "archivo-black", "Bangers": "bangers", "BebasNeue": "bebas-neue",
             "CourierPrime": "courier-prime", "DejaVu": "dejavu", "DMSerifDisplay": "dm-serif-display",
-            "LuckiestGuy": "luckiest-guy", "NotoNaskhArabic": "noto-naskh-arabic", "NotoSans": "noto-sans-",
-            "PermanentMarker": "permanent-marker", "Poppins": "poppins", "Roboto": "roboto",
+            "LuckiestGuy": "luckiest-guy", "NotoEmoji": "noto-emoji", "NotoNaskhArabic": "noto-naskh-arabic", "NotoSans": "noto-sans-",
+            "PermanentMarker": "permanent-marker", "Poppins": "poppins", "Roboto": "roboto", "Twemoji": "twemoji",
         }
         for font in FONTS_DIR.glob("*.ttf"):
             prefix = next((p for p in names if font.name.startswith(p)), None)

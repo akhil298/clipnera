@@ -160,7 +160,8 @@ def _emphasised(words) -> set[str]:
             width=1080, height=1920, output_path=os.path.join(tmp, "c.ass"),
         )
         text = open(path, encoding="utf-8").read()
-    return {word for tag, word in re.findall(r"\{([^}]*)\}([A-Z]+)\{", text) if emphasis in tag}
+    # A word with an emoji is followed by a space and the emoji, not its reset.
+    return {word for tag, word in re.findall(r"\{([^}]*)\}([A-Z]+)[ {]", text) if emphasis in tag}
 
 
 PLAIN = [

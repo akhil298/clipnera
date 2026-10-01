@@ -28,6 +28,7 @@ from edit_engine.perception import probe_media
 from hook_transitions.graph import SAMPLE_RATE, SOUND_BUILDERS
 from reels import render as reel_render
 from subtitle_styling.ass_generator import AssGenerator, ass_time, escape_ass, script_font
+from subtitle_styling.emoji_art import colourize
 from subtitle_styling.templates import DEFAULT_STYLE
 
 log = get_logger(__name__)
@@ -210,7 +211,7 @@ def texts_ass(texts: list[dict[str, Any]], width: int, height: int, base: str | 
             "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text", "",
         ])
     head, _, tail = base.partition("\n[Events]")
-    return f"{head.rstrip()}\n" + "\n".join(styles) + "\n\n[Events]" + tail.rstrip("\n") + "\n" + "\n".join(events) + "\n"
+    return colourize(f"{head.rstrip()}\n" + "\n".join(styles) + "\n\n[Events]" + tail.rstrip("\n") + "\n" + "\n".join(events) + "\n")
 
 
 def captions_ass(timeline: dict[str, Any]) -> str | None:

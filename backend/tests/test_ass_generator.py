@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from subtitle_styling.ass_generator import (
@@ -57,6 +59,30 @@ class TestEscapeAss:
 
     def test_replaces_newline(self):
         assert escape_ass("line1\nline2") == "line1 line2"
+
+
+class TestColourEmoji:
+    WORDS = [{"start": i * 0.5, "end": i * 0.5 + 0.4, "text": t} for i, t in enumerate("where did the money go".split())]
+
+    @staticmethod
+    def _dialogues(ass: str) -> list[str]:
+        return [line for line in ass.splitlines() if line.startswith("Dialogue: ")]
+
+    def test_title_emoji_holds_its_place_and_gets_a_colour_layer_per_part(self):
+        ass = AssGenerator().build_ass([{"start": 0.5, "end": 1.0, "text": "deep"}], 0.0, 5.0, title="🌊 dam is so deep")
+        titles = [d for d in self._dialogues(ass) if ",Title" in d]
+        assert len(titles) == 3  # the title itself, then the wave's two colour layers
+        assert "🌊" not in "".join(titles) and "\\p3" in titles[0]
+        assert "Style: TitleEmoji," in ass
+
+    def test_caption_word_carries_its_emoji(self):
+        ass = AssGenerator().build_ass(self.WORDS, 0.0, 3.0, style_id="karaoke")
+        assert any("MONEY {\\1a&HFF&" in d for d in self._dialogues(ass))
+        assert any(",CaptionEmoji," in d for d in self._dialogues(ass))
+
+    def test_styles_without_emoji_add_none(self):
+        ass = AssGenerator().build_ass(self.WORDS, 0.0, 3.0, style_id="spotlight")
+        assert "\\p3" not in ass and "Emoji" not in ass
 
 
 class TestAssGenerator:
@@ -121,7 +147,8 @@ class TestAssGenerator:
     def test_build_ass_karaoke_dialogue_per_word(self, words):
         gen = AssGenerator()
         result = gen.build_ass(words, 0.0, 5.0, style_id="karaoke")
-        dialogue_lines = [l for l in result.split("\n") if l.startswith("Dialogue:")]
+        # Emoji colour layers add copies on their own Caption…Emoji style; count the captions.
+        dialogue_lines = [l for l in result.split("\n") if l.startswith("Dialogue:") and ",Caption," in l]
         assert len(dialogue_lines) == len(words)
         for line in dialogue_lines:
             assert line.startswith("Dialogue: 1")
@@ -215,7 +242,9 @@ class TestCaptionFit:
         from subtitle_styling.ass_generator import caption_layout_budget, char_width_px, ass_font_size
         budget = caption_layout_budget(char_width_px("Luckiest Guy", ass_font_size(54), True), 1080)
         for line in self._captions(ass):
-            text = "".join(part.split("}")[-1] for part in line.split(",", 9)[9].split("{"))
+            # An emoji's drawing stands in for the three letters' width the layout gives it.
+            body = re.sub(r"\{[^}]*\\p3\}[^{]*\{\\p0[^}]*\}", "EMO", line.split(",", 9)[9])
+            text = "".join(part.split("}")[-1] for part in body.split("{"))
             assert len(text.strip()) <= max(budget, len("SPAGHETTIFICATION"))
 
     def test_a_word_too_long_for_the_frame_is_shrunk(self):
