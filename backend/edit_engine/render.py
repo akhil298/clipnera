@@ -28,6 +28,7 @@ from edit_engine.perception import probe_media
 from hook_transitions.graph import SAMPLE_RATE, SOUND_BUILDERS
 from reels import render as reel_render
 from subtitle_styling.ass_generator import AssGenerator, ass_time, escape_ass, script_font
+from subtitle_styling.templates import DEFAULT_STYLE
 
 log = get_logger(__name__)
 
@@ -219,7 +220,7 @@ def captions_ass(timeline: dict[str, Any]) -> str | None:
         words = [{"text": w["word"], "start": w["start"], "end": w["end"]} for w in timeline["words"]]
         # No caption line may run across a text card, or it would show words the card interrupts.
         breaks = sorted({t for item in timeline["picture"] if item["kind"] == "card" for t in (item["at"], item["at"] + item["dur"])})
-        base = AssGenerator().build_ass(words, 0.0, duration, style_id=timeline.get("caption_style") or "default",
+        base = AssGenerator().build_ass(words, 0.0, duration, style_id=timeline.get("caption_style") or DEFAULT_STYLE,
                                         width=width, height=height, segment_breaks=breaks)
     if not timeline["texts"]:
         return base

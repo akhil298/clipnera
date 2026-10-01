@@ -42,7 +42,7 @@ SOCIAL_PLATFORM_DEFAULTS: dict[str, dict[str, Any]] = {
     SocialPlatform.TIKTOK.value: {
         "aspect_ratio": "9:16",
         "dimensions": [1080, 1920],
-        "subtitle_style": "tiktok",
+        "subtitle_style": "hot_pink",
         "max_duration": 60,
         "caption_max_chars": 42,
         "caption_max_words_per_line": 4,
@@ -54,7 +54,7 @@ SOCIAL_PLATFORM_DEFAULTS: dict[str, dict[str, Any]] = {
     SocialPlatform.INSTAGRAM_REELS.value: {
         "aspect_ratio": "9:16",
         "dimensions": [1080, 1920],
-        "subtitle_style": "default",
+        "subtitle_style": "karaoke",
         "max_duration": 90,
         "caption_max_chars": 42,
         "caption_max_words_per_line": 4,
@@ -66,7 +66,7 @@ SOCIAL_PLATFORM_DEFAULTS: dict[str, dict[str, Any]] = {
     SocialPlatform.YOUTUBE_SHORTS.value: {
         "aspect_ratio": "9:16",
         "dimensions": [1080, 1920],
-        "subtitle_style": "mrbeast",
+        "subtitle_style": "punch",
         "max_duration": 60,
         "caption_max_chars": 42,
         "caption_max_words_per_line": 3,
@@ -78,7 +78,7 @@ SOCIAL_PLATFORM_DEFAULTS: dict[str, dict[str, Any]] = {
     SocialPlatform.INSTAGRAM_FEED.value: {
         "aspect_ratio": "1:1",
         "dimensions": [1080, 1080],
-        "subtitle_style": "minimal",
+        "subtitle_style": "spotlight",
         "max_duration": 120,
         "caption_max_chars": 42,
         "caption_max_words_per_line": 6,
@@ -90,7 +90,7 @@ SOCIAL_PLATFORM_DEFAULTS: dict[str, dict[str, Any]] = {
     SocialPlatform.LINKEDIN.value: {
         "aspect_ratio": "1:1",
         "dimensions": [1080, 1080],
-        "subtitle_style": "podcast",
+        "subtitle_style": "reveal",
         "max_duration": 120,
         "caption_max_chars": 42,
         "caption_max_words_per_line": 5,
@@ -102,7 +102,7 @@ SOCIAL_PLATFORM_DEFAULTS: dict[str, dict[str, Any]] = {
     SocialPlatform.TWITTER.value: {
         "aspect_ratio": "16:9",
         "dimensions": [1920, 1080],
-        "subtitle_style": "minimal",
+        "subtitle_style": "spotlight",
         "max_duration": 140,
         "caption_max_chars": 42,
         "caption_max_words_per_line": 6,
@@ -114,7 +114,7 @@ SOCIAL_PLATFORM_DEFAULTS: dict[str, dict[str, Any]] = {
     SocialPlatform.FACEBOOK.value: {
         "aspect_ratio": "16:9",
         "dimensions": [1920, 1080],
-        "subtitle_style": "boxed",
+        "subtitle_style": "highlighter",
         "max_duration": 120,
         "caption_max_chars": 42,
         "caption_max_words_per_line": 4,
@@ -126,7 +126,7 @@ SOCIAL_PLATFORM_DEFAULTS: dict[str, dict[str, Any]] = {
     SocialPlatform.SNAPCHAT.value: {
         "aspect_ratio": "9:16",
         "dimensions": [1080, 1920],
-        "subtitle_style": "tiktok",
+        "subtitle_style": "hot_pink",
         "max_duration": 60,
         "caption_max_chars": 42,
         "caption_max_words_per_line": 4,

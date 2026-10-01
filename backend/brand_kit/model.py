@@ -8,16 +8,7 @@ from sqlalchemy import String, DateTime, Boolean, Text, Integer, Enum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.database import Base
-
-
-class CaptionPreset(str, enum.Enum):
-    HORMOZI = "hormozi"
-    MRBEAST = "mrbeast"
-    NEON = "neon"
-    CYBERPUNK = "cyberpunk"
-    MINIMAL = "minimal"
-    KARAOKE_YELLOW = "karaoke_yellow"
-    SUNSET = "sunset"
+from subtitle_styling.templates import DEFAULT_STYLE
 
 
 class LogoPosition(str, enum.Enum):
@@ -46,11 +37,8 @@ class BrandKit(Base):
     primary_color: Mapped[str] = mapped_column(String(9), default="#f59e0b", nullable=False)
     secondary_color: Mapped[str] = mapped_column(String(9), default="#f43f5e", nullable=False)
     preferred_font: Mapped[str] = mapped_column(String(100), default="Syne", nullable=False)
-    default_preset: Mapped[CaptionPreset] = mapped_column(
-        Enum(CaptionPreset, values_callable=lambda obj: [e.value for e in obj], name="caption_preset"),
-        default=CaptionPreset.HORMOZI,
-        nullable=False,
-    )
+    # A caption template id (subtitle_styling/templates.py).
+    default_preset: Mapped[str] = mapped_column(String(50), default=DEFAULT_STYLE, nullable=False)
     auto_emojis: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     outro_cta_text: Mapped[str] = mapped_column(String(500), default="", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

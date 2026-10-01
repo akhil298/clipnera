@@ -21,7 +21,7 @@ from subtitle_styling.ass_generator import (
     CAPTION_ANIMATIONS, DEFAULT_FONT_FILE, FONTS_DIR, AssGenerator, ass_filter, build_ass_file, bundled_family, burn_filter_args,
     escape_filter_value, script_font,
 )
-from subtitle_styling.templates import get_template, get_template_info, get_template_names
+from subtitle_styling.templates import DEFAULT_STYLE, get_template, get_template_info, get_template_names
 from subtitle_styling.phrase_segmenter import segment_phrases, segment_for_captions
 from subtitle_styling.schema import SubtitleBurnRequest
 from subscription.service import SubscriptionService, require_caption_style, require_hook_transition
@@ -45,6 +45,7 @@ _STYLE_COLOR_FIELDS: dict[str, str] = {
     "highlight_color": "highlight_color",
     "secondary_highlight_color": "emphasis_color",
     "bg_box_color": "background_color",
+    "word_box_color": "word_box_color",
 }
 _STYLE_FLAG_FIELDS: dict[str, str] = {
     "has_bg_box": "background",
@@ -159,7 +160,7 @@ class SubtitleStylingService:
         video_path: str,
         clip_start: float,
         clip_end: float,
-        style_type: str = "bold_captions",
+        style_type: str = DEFAULT_STYLE,
         custom_config: Optional[dict] = None,
         subtitles: Optional[list[dict]] = None,
         title_text: Optional[str] = None,

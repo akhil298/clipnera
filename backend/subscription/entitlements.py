@@ -16,6 +16,7 @@ from dataclasses import dataclass, asdict
 from typing import Any, Literal
 
 from subscription.model import BillingPeriod, PlanSlug
+from subtitle_styling.templates import resolve_style_id
 
 # Boolean capabilities a route can require with ``require_feature``.
 Feature = Literal[
@@ -83,12 +84,12 @@ CREDIT_PACKS: dict[str, CreditPack] = {
 # (see subtitle_styling/templates.py) is a Pro feature.
 FREE_CAPTION_STYLES: tuple[str, ...] = (
     # The default style for new clips, so it must be usable on every plan.
-    "clean_dark",
-    "default",
-    "hormozi",
-    "mrbeast",
-    "tiktok",
-    "bold_captions",
+    "karaoke",
+    "simple",
+    "punch",
+    "spotlight",
+    "lime_stack",
+    "backdrop",
 )
 
 
@@ -124,7 +125,8 @@ class Entitlements:
     creator_intro: bool
 
     def allows_caption_style(self, style: str) -> bool:
-        return self.caption_styles is None or style in self.caption_styles
+        # Retired ids are judged as the style they now render as.
+        return self.caption_styles is None or resolve_style_id(style) in self.caption_styles
 
     def allows_aspect_ratio(self, ratio: str) -> bool:
         return ratio in self.aspect_ratios

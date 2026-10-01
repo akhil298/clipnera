@@ -191,17 +191,21 @@ class TestCaptionFonts:
             assert bytes(font.getmask(letter)) != bytes(font.getmask("\U0010FFFD")), (script, filename)
 
     def test_every_template_font_is_bundled(self):
+        from fontTools.ttLib import TTFont
         from PIL import ImageFont
 
         from subtitle_styling.ass_generator import BUNDLED_FAMILIES, FONTS_DIR, bundled_family
         from subtitle_styling.templates import get_template, get_template_names
 
+        # libass matches the legacy family name (name ID 1), which for a face
+        # such as "Poppins Black" differs from the typographic one PIL reports.
         shipped = {ImageFont.truetype(str(path), 20).getname()[0] for path in FONTS_DIR.glob("*.ttf")}
+        shipped |= {TTFont(path)["name"].getDebugName(1) for path in FONTS_DIR.glob("*.ttf")}
         assert BUNDLED_FAMILIES <= shipped
         for name in get_template_names():
             assert bundled_family(get_template(name)["font_family"]) in shipped, name
 
-    @pytest.mark.parametrize(("style", "family"), [("impact", "Anton"), ("mrbeast", "Anton"), ("default", "DejaVu Sans")])
+    @pytest.mark.parametrize(("style", "family"), [("simple", "Anton"), ("impact", "Anton"), ("karaoke", "Poppins Black"), ("soft_rise", "Roboto")])
     def test_english_captions_use_a_bundled_latin_face(self, style, family):
         from subtitle_styling.ass_generator import AssGenerator
 

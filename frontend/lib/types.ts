@@ -1,6 +1,6 @@
 ﻿export type AspectRatio = '9:16' | '1:1' | '4:5' | '16:9';
-import type { CaptionPreset } from '@/lib/utils/captionStyles.generated';
-export type { CaptionPreset };
+import type { CaptionAnimation, CaptionPreset } from '@/lib/utils/captionStyles.generated';
+export type { CaptionAnimation, CaptionPreset };
 export type LayoutMode = 'single_speaker' | 'split_screen' | 'screen_share_focus';
 
 export interface AudioEnhancementConfig {
@@ -72,13 +72,32 @@ export interface CaptionConfig {
   preset: CaptionPreset;
   fontSize: number;
   fontFamily: string;
+  /** 400 for faces bundled only as a heavy regular cut, 700 for the rest. */
+  fontWeight: number;
+  italic: boolean;
   textColor: string;
   highlightColor: string;
   secondaryHighlightColor: string;
   hasBgBox: boolean;
   bgBoxColor: string;
+  strokeColor: string | null;
+  /** Outline width on the 1080-wide scale; 0 for none. */
+  strokeWidth: number;
+  /** Box behind the spoken word; null for none. */
+  wordBoxColor: string | null;
+  /** Colour of words not yet spoken; null keeps the text colour. */
+  upcomingColor: string | null;
+  /** Words appear only as they are spoken. */
+  hideUpcoming: boolean;
+  /** 2 stacks each caption line on two rows. */
+  rows: number;
+  secondLineColor: string | null;
+  secondLineScale: number;
+  /** Size of the spoken word relative to the rest, for pop-style motions. */
+  activeScale: number;
+  glow: boolean;
   uppercase: boolean;
-  animation: 'pop' | 'wave' | 'karaoke' | 'glow' | 'fade' | 'none';
+  animation: CaptionAnimation;
   animationSpeed: number;
   positionY: number;
   emojisEnabled: boolean;

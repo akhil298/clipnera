@@ -30,19 +30,19 @@ class TestSocialPlatform:
         defaults = SOCIAL_PLATFORM_DEFAULTS["tiktok"]
         assert defaults["aspect_ratio"] == "9:16"
         assert defaults["dimensions"] == [1080, 1920]
-        assert defaults["subtitle_style"] == "tiktok"
+        assert defaults["subtitle_style"] == "hot_pink"
         assert defaults["emoji_enabled"] is True
 
     def test_twitter_defaults(self):
         defaults = SOCIAL_PLATFORM_DEFAULTS["twitter"]
         assert defaults["aspect_ratio"] == "16:9"
-        assert defaults["subtitle_style"] == "minimal"
+        assert defaults["subtitle_style"] == "spotlight"
         assert defaults["max_duration"] == 140
 
     def test_linkedin_defaults(self):
         defaults = SOCIAL_PLATFORM_DEFAULTS["linkedin"]
         assert defaults["aspect_ratio"] == "1:1"
-        assert defaults["subtitle_style"] == "podcast"
+        assert defaults["subtitle_style"] == "reveal"
         assert defaults["emoji_enabled"] is False
 
 

@@ -9,7 +9,7 @@ import { CaptionStylePreview } from './CaptionStylePreview';
 import { ChannelIntroPanel } from './ChannelIntroPanel';
 import { BrandKitSkeleton } from '@/components/skeletons';
 import { CAPTION_PRESETS } from '@/lib/data/captionPresets';
-import { getCaptionConfig } from '@/lib/utils/captionStyles';
+import { DEFAULT_CAPTION_PRESET, getCaptionConfig } from '@/lib/utils/captionStyles';
 import { PageHeader } from '@/components/ui/PageHeader';
 
 type LogoPosition = BrandKit['logoPosition'];
@@ -38,7 +38,7 @@ const DEFAULT_BRAND_KIT: BrandKit = {
   primaryColor: '#f59e0b',
   secondaryColor: '#f43f5e',
   preferredFont: 'Syne',
-  defaultPreset: 'hormozi',
+  defaultPreset: DEFAULT_CAPTION_PRESET,
   autoEmojis: true,
   outroCtaText: '',
   isCustomized: false,

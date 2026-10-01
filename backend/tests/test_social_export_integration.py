@@ -143,14 +143,15 @@ class TestSubtitleStylingService:
         service = SubtitleStylingService()
         result = await service.get_style_presets()
         types = [p["style_type"] for p in result]
-        assert "bold_captions" in types
-        assert "minimal" in types
+        assert "karaoke" in types
+        assert "spotlight" in types
 
     def test_style_presets_dict(self):
-        # "karaoke" and "boxed" are legacy ids that now resolve through
-        # LEGACY_STYLE_ALIASES rather than existing as templates of their own.
-        for style in ("bold_captions", "minimal", "neon", "typewriter", "karaoke_yellow", "hormozi"):
+        # Retired ids such as "hormozi" resolve through LEGACY_STYLE_ALIASES
+        # rather than existing as templates of their own.
+        for style in ("karaoke", "simple", "spotlight", "typewriter", "glitch", "blur_in"):
             assert style in CAPTION_TEMPLATES
+        assert "hormozi" not in CAPTION_TEMPLATES
 
 
 class TestWordSnapping:

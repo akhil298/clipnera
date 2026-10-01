@@ -11,9 +11,9 @@ async def test_get_style_presets():
     presets = await service.get_style_presets()
     assert len(presets) >= 1
     types = [p["style_type"] for p in presets]
-    assert "bold_captions" in types
-    assert "karaoke_yellow" in types
-    assert "minimal" in types
+    assert "karaoke" in types
+    assert "simple" in types
+    assert "spotlight" in types
 
 
 @pytest.mark.asyncio

@@ -50,6 +50,7 @@ from video_processor.geometry import SUPPORTED_ASPECT_RATIOS
 from hook_transitions.schema import HookTransitionConfig
 from usage.context import RunBudget, llm_scope
 from jobs.queue import Job, get_queue, handler, uses_workers
+from subtitle_styling.templates import DEFAULT_STYLE
 
 log = get_logger(__name__)
 
@@ -914,8 +915,7 @@ class PipelineOrchestrator:
                     await repo.get_subtitle_style(clip.subtitle_style_id, self.user_id)
                     if clip.subtitle_style_id else None
                 )
-                # Clean Dark is the default look: animated captions on a dark plate.
-                styles[clip.id] = stored_style.style_type if stored_style else "clean_dark"
+                styles[clip.id] = stored_style.style_type if stored_style else DEFAULT_STYLE
 
         log.info(
             "BURN-IN START | project=%s | %d clip(s) fetched from S3",

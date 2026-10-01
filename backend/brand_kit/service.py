@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from brand_kit.model import CaptionPreset, LogoPosition
+from brand_kit.model import LogoPosition
 from brand_kit.repository import BrandKitRepository
 from brand_kit.schema import CreateBrandKitRequest, BrandKitResponse
+from subtitle_styling.templates import DEFAULT_STYLE, resolve_style_id
 
 # What a user's kit holds until they save their own.
 DEFAULT_BRAND_KIT = {
@@ -14,7 +15,7 @@ DEFAULT_BRAND_KIT = {
     "primary_color": "#f59e0b",
     "secondary_color": "#f43f5e",
     "preferred_font": "Syne",
-    "default_preset": CaptionPreset.HORMOZI,
+    "default_preset": DEFAULT_STYLE,
     "auto_emojis": True,
     "outro_cta_text": "",
 }
@@ -45,7 +46,7 @@ class BrandKitService:
                 primary_color=data.primary_color,
                 secondary_color=data.secondary_color,
                 preferred_font=data.preferred_font,
-                default_preset=CaptionPreset(data.default_preset),
+                default_preset=resolve_style_id(data.default_preset),
                 auto_emojis=data.auto_emojis,
                 outro_cta_text=data.outro_cta_text,
             )
@@ -61,7 +62,7 @@ class BrandKitService:
             primary_color=data.primary_color,
             secondary_color=data.secondary_color,
             preferred_font=data.preferred_font,
-            default_preset=CaptionPreset(data.default_preset),
+            default_preset=resolve_style_id(data.default_preset),
             auto_emojis=data.auto_emojis,
             outro_cta_text=data.outro_cta_text,
         )
@@ -91,7 +92,7 @@ class BrandKitService:
             primaryColor=brand_kit.primary_color,
             secondaryColor=brand_kit.secondary_color,
             preferredFont=brand_kit.preferred_font,
-            defaultPreset=brand_kit.default_preset.value,
+            defaultPreset=resolve_style_id(brand_kit.default_preset),
             autoEmojis=brand_kit.auto_emojis,
             outroCtaText=brand_kit.outro_cta_text,
             isCustomized=any(getattr(brand_kit, key) != value for key, value in DEFAULT_BRAND_KIT.items()),

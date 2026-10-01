@@ -150,12 +150,13 @@ def _emphasised(words) -> set[str]:
     import tempfile
 
     from subtitle_styling.ass_generator import _hex_to_ass_style, build_ass_file
-    from subtitle_styling.templates import get_template
 
-    emphasis = _hex_to_ass_style(get_template("hormozi")["emphasis_color"])
+    # An emphasis colour distinct from the spoken word's, so the two can be told apart.
+    overrides = {"emphasis_color": "#FF00FF"}
+    emphasis = _hex_to_ass_style(overrides["emphasis_color"])
     with tempfile.TemporaryDirectory() as tmp:
         path = build_ass_file(
-            transcript_words=words, clip_start=0.0, clip_end=2.0, style_id="hormozi",
+            transcript_words=words, clip_start=0.0, clip_end=2.0, style_id="karaoke", style_overrides=overrides,
             width=1080, height=1920, output_path=os.path.join(tmp, "c.ass"),
         )
         text = open(path, encoding="utf-8").read()

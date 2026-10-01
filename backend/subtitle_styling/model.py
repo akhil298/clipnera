@@ -1,29 +1,19 @@
 from __future__ import annotations
 
-import enum
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import String, ForeignKey, Enum, DateTime, Text, Boolean
+from sqlalchemy import String, ForeignKey, DateTime, Text, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.database import Base
 
 
-# Style ids retired in favour of the canonical template list, kept so rows and
-# API calls written before the consolidation still resolve to something sensible.
-LEGACY_STYLE_ALIASES: dict[str, str] = {
-    "karaoke": "karaoke_yellow",
-    "boxed": "hormozi",
-}
-
-
 class SubtitleStyleType:
     """Resolves caption style ids against the canonical template list.
 
-    Previously an enum holding a subset of the available styles, with a hand
-    written mapping that had no entry for most of the ids the UI could send, so
-    those styles silently rendered as Default.
+    Retired ids map to their closest current style through
+    ``templates.LEGACY_STYLE_ALIASES``; anything else becomes the default.
     """
 
     @staticmethod
@@ -34,11 +24,9 @@ class SubtitleStyleType:
 
     @staticmethod
     def to_template(style_type: str) -> str:
-        from subtitle_styling.templates import has_template
+        from subtitle_styling.templates import resolve_style_id
 
-        if has_template(style_type):
-            return style_type
-        return LEGACY_STYLE_ALIASES.get(style_type, "default")
+        return resolve_style_id(style_type)
 
     @staticmethod
     def values() -> list[str]:

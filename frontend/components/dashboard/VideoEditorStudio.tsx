@@ -13,7 +13,7 @@ import type {
   ViralClip,
   WordTimestamp,
 } from '@/lib/types';
-import { getAllCaptionStyles, getCaptionConfig } from '@/lib/utils/captionStyles';
+import { getAllCaptionStyles, getCaptionConfig, resolveCaptionPreset } from '@/lib/utils/captionStyles';
 import { useEntitlements, canUseAspectRatio, canUseCaptionStyle } from '@/hooks/useEntitlements';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { sfxEngine } from '@/lib/utils/audioSynth';
@@ -211,7 +211,7 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
         replace((d) => ({
           ...d,
           captionConfig: {
-            ...getCaptionConfig(kit.defaultPreset),
+            ...getCaptionConfig(resolveCaptionPreset(kit.defaultPreset)),
             highlightColor: kit.primaryColor,
             secondaryHighlightColor: kit.secondaryColor,
             emojisEnabled: kit.autoEmojis,

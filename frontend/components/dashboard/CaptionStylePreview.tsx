@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import { CaptionConfig } from '@/lib/types';
-import { pillTextColor } from '@/lib/utils/captionStyles';
+import { captionRowSplit, captionTextStyle, captionWordColor } from '@/lib/utils/captionStyles';
 
 interface CaptionStylePreviewProps {
   config: CaptionConfig;
@@ -16,23 +16,40 @@ interface CaptionStylePreviewProps {
 
 const SAMPLE_WORDS = ['THIS', 'CHANGES', 'EVERY', 'THING'];
 
-/** Per-animation motion, expressed as the custom properties the keyframes read. */
-const MOTION: Record<CaptionConfig['animation'], { pop: string; lift: string; idleOpacity: string }> = {
-  pop: { pop: '1.22', lift: '0px', idleOpacity: '1' },
-  wave: { pop: '1.06', lift: '-0.16em', idleOpacity: '1' },
-  karaoke: { pop: '1', lift: '0px', idleOpacity: '1' },
-  glow: { pop: '1.08', lift: '0px', idleOpacity: '1' },
-  fade: { pop: '1', lift: '0px', idleOpacity: '0.45' },
-  none: { pop: '1', lift: '0px', idleOpacity: '1' },
+interface Motion {
+  pop?: number;
+  lift?: string;
+  rotate?: string;
+  skew?: string;
+}
+
+/** The spoken word's pose per animation, as the custom properties the keyframes read. */
+const MOTION: Record<CaptionConfig['animation'], Motion> = {
+  pop: { pop: 1.22 },
+  wave: { pop: 1.06, lift: '-0.16em' },
+  karaoke: {},
+  glow: { pop: 1.08 },
+  fade: {},
+  none: {},
+  land: { lift: '0.06em' },
+  bounce: { pop: 1.06, lift: '-0.14em' },
+  grow: {},
+  breathe: {},
+  blur: {},
+  shake: { rotate: '-4deg' },
+  glitch: { skew: '-12deg' },
 };
+
+/** Motions whose spoken word grows by the template's own scale. */
+const SCALED = new Set<CaptionConfig['animation']>(['pop', 'grow', 'breathe']);
 
 /**
  * A live, looping sample of one caption template.
  *
  * Reads as the thing it describes rather than a sentence about it: the same
- * colours, weight, casing, highlight treatment and motion the burned captions
- * use. The highlight travels in pure CSS with a staggered `animation-delay`, so
- * a list of twenty previews runs without a single JS timer.
+ * face, colours, outline, rows, highlight treatment and motion the burned
+ * captions use. The highlight travels in pure CSS with a staggered
+ * `animation-delay`, so a list of twenty previews runs without a JS timer.
  */
 export const CaptionStylePreview: React.FC<CaptionStylePreviewProps> = ({
   config,
@@ -41,20 +58,40 @@ export const CaptionStylePreview: React.FC<CaptionStylePreviewProps> = ({
   fontSize,
   overlay = false,
 }) => {
-  const motion = MOTION[config.animation] ?? MOTION.none;
-  const text = config.uppercase ? (w: string) => w.toUpperCase() : (w: string) => w;
+  const motion = MOTION[config.animation] ?? {};
+  const pop = SCALED.has(config.animation) ? config.activeScale : motion.pop ?? 1;
 
   // The card is a fixed size, so the template's real px font size would overflow
   // the wide presets and look lost on the small ones. Scaled into a legible band
   // that still preserves the relative difference between templates.
   const previewFontSize = fontSize ?? Math.round(Math.min(22, Math.max(11, config.fontSize * 0.42)));
+  const split = captionRowSplit(words, config.rows);
+  const rows = [words.slice(0, split), words.slice(split)].filter((row) => row.length > 0);
 
-  const shadow = config.shadowIntensity > 0
-    ? `0 ${Math.round(config.shadowIntensity * 2)}px ${Math.round(config.shadowIntensity * 5)}px rgba(0,0,0,0.85)`
-    : 'none';
-  const glow = config.animation === 'glow'
-    ? `, 0 0 10px ${config.highlightColor}, 0 0 20px ${config.highlightColor}`
-    : '';
+  const renderWord = (word: string, index: number) => {
+    const secondRow = index >= split && config.rows > 1;
+    return (
+      <span
+        key={`${word}-${index}`}
+        className="caption-preview-word"
+        style={
+          {
+            '--cap-text': captionWordColor(config, 'upcoming', secondRow, false),
+            '--cap-hl': captionWordColor(config, 'active', secondRow, false),
+            '--cap-hl-bg': config.wordBoxColor ?? 'transparent',
+            '--cap-pop': String(pop),
+            '--cap-lift': motion.lift ?? '0px',
+            '--cap-rotate': motion.rotate ?? '0deg',
+            '--cap-skew': motion.skew ?? '0deg',
+            '--cap-idle-opacity': config.hideUpcoming ? '0.3' : '1',
+            animationDelay: `${index * 0.7}s`,
+          } as React.CSSProperties
+        }
+      >
+        {word}
+      </span>
+    );
+  };
 
   return (
     <div
@@ -72,41 +109,30 @@ export const CaptionStylePreview: React.FC<CaptionStylePreviewProps> = ({
         }}
       />}
 
-      <p
-        className="relative flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-center leading-tight"
+      <div
+        className="relative flex flex-col items-center justify-center text-center leading-[1.05]"
         style={{
-          fontFamily: config.fontFamily,
+          ...captionTextStyle(config),
           fontSize: `${previewFontSize}px`,
-          fontWeight: 800,
-          textShadow: `${shadow}${glow}`,
           ...(config.hasBgBox
-            ? { backgroundColor: config.bgBoxColor, padding: '0.2em 0.45em', borderRadius: '0.35em' }
+            ? { backgroundColor: config.bgBoxColor, padding: '0.2em 0.45em', borderRadius: '0.25em' }
             : {}),
         }}
       >
-        {words.map((word, index) => (
-          <span
-            key={`${word}-${index}`}
-            className="caption-preview-word"
-            style={
-              {
-                '--cap-text': config.textColor,
-                '--cap-hl': config.hasBgBox ? pillTextColor(config) : config.highlightColor,
-                // Hormozi-style templates paint a pill behind the active word;
-                // the rest highlight by colour alone.
-                '--cap-hl-bg': config.hasBgBox ? config.secondaryHighlightColor : 'transparent',
-                '--cap-pop': motion.pop,
-                '--cap-lift': motion.lift,
-                '--cap-idle-opacity': motion.idleOpacity,
-                color: config.textColor,
-                animationDelay: `${index * 0.7}s`,
-              } as React.CSSProperties
-            }
-          >
-            {text(word)}
-          </span>
-        ))}
-      </p>
+        {rows.map((row, r) => {
+          const offset = r === 0 ? 0 : split;
+          const second = offset > 0 || (split === 0 && config.rows > 1);
+          return (
+            <p
+              key={r}
+              className="flex flex-wrap items-center justify-center gap-x-[0.2em]"
+              style={second ? { fontSize: `${config.secondLineScale}em` } : undefined}
+            >
+              {row.map((word, i) => renderWord(word, offset + i))}
+            </p>
+          );
+        })}
+      </div>
     </div>
   );
 };

@@ -4,6 +4,7 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 from hook_transitions.schema import HookTransitionApplied, HookTransitionConfig
+from subtitle_styling.templates import DEFAULT_STYLE
 
 
 class BoundingBox(BaseModel):
@@ -172,7 +173,7 @@ class ClipGenerationResponse(BaseModel):
 
 class StyleBurnRequest(BaseModel):
     style_id: Optional[str] = Field(None, description="SubtitleStyle ID to use for burning")
-    style_type: str = Field("bold_captions", description="Subtitle style preset name")
+    style_type: str = Field(DEFAULT_STYLE, description="Subtitle style preset name")
     custom_config: Optional[dict] = Field(None, description="Custom style overrides")
 
 

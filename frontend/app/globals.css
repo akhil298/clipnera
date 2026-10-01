@@ -100,14 +100,14 @@
   21% {
     color: var(--cap-hl);
     background-color: var(--cap-hl-bg);
-    transform: translateY(var(--cap-lift)) scale(var(--cap-pop));
+    transform: translateY(var(--cap-lift)) scale(var(--cap-pop)) rotate(var(--cap-rotate)) skewX(var(--cap-skew));
     opacity: 1;
   }
   27%,
   100% {
     color: var(--cap-text);
     background-color: transparent;
-    transform: translateY(0) scale(1);
+    transform: none;
     opacity: var(--cap-idle-opacity);
   }
 }
@@ -115,8 +115,11 @@
 .caption-preview-word {
   --cap-pop: 1;
   --cap-lift: 0px;
+  --cap-rotate: 0deg;
+  --cap-skew: 0deg;
   --cap-idle-opacity: 1;
   --cap-hl-bg: transparent;
+  color: var(--cap-text);
   display: inline-block;
   border-radius: 0.3em;
   padding: 0.05em 0.25em;
@@ -185,6 +188,74 @@
   to { opacity: 1; }
 }
 
+@keyframes caption-land {
+  from { opacity: 0; transform: translateY(-0.7em); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes caption-bounce {
+  0% { opacity: 0; transform: scale(0.7); }
+  62% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes caption-grow {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes caption-blur {
+  from { opacity: 0; filter: blur(8px); }
+  to { opacity: 1; filter: blur(0); }
+}
+
+/* The spoken word's motion; mirrors _active_motion() in ass_generator.py.
+   --word-scale is the word's resting scale, --word-grow its spoken scale. */
+@keyframes word-grow {
+  from { transform: scale(var(--word-scale)); }
+  to { transform: scale(var(--word-grow)); }
+}
+
+@keyframes word-breathe {
+  0% { transform: scale(var(--word-scale)); }
+  25% { transform: scale(var(--word-grow)); }
+  100% { transform: scale(calc((var(--word-scale) + var(--word-grow)) / 2)); }
+}
+
+@keyframes word-bounce {
+  0% { transform: scale(var(--word-scale)); }
+  33% { transform: scale(calc(var(--word-scale) * 0.92), calc(var(--word-scale) * 1.18)); }
+  66% { transform: scale(calc(var(--word-scale) * 1.05), calc(var(--word-scale) * 0.95)); }
+  100% { transform: scale(var(--word-scale)); }
+}
+
+@keyframes word-shake {
+  0% { transform: scale(var(--word-scale)) rotate(0deg); }
+  20% { transform: scale(var(--word-scale)) rotate(4deg); }
+  40% { transform: scale(var(--word-scale)) rotate(-4deg); }
+  60% { transform: scale(var(--word-scale)) rotate(3deg); }
+  80% { transform: scale(var(--word-scale)) rotate(-2deg); }
+  100% { transform: scale(var(--word-scale)) rotate(0deg); }
+}
+
+@keyframes word-glitch {
+  0% { transform: scale(var(--word-scale)) skewX(-16deg); text-shadow: -0.12em 0 #00ffff; }
+  25% { transform: scale(var(--word-scale)) skewX(14deg); text-shadow: 0.1em 0 #00ffff; }
+  50% { transform: scale(var(--word-scale)) skewX(-7deg); text-shadow: -0.06em 0 #00ffff; }
+  100% { transform: scale(var(--word-scale)) skewX(0deg); }
+}
+
+@keyframes word-blur {
+  from { filter: blur(6px); opacity: var(--word-from-opacity, 1); }
+  to { filter: blur(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caption-motion {
+    animation: none !important;
+  }
+}
+
 /* Headline entrance; mirrors TITLE_ENTRANCE in backend ass_generator.py. */
 @keyframes title-pop {
   0% { opacity: 0; transform: scale(0.7); }
@@ -211,6 +282,30 @@
   font-family: 'DejaVu Sans';
   src: url('/fonts/DejaVuSans-Bold.ttf') format('truetype');
   font-weight: 100 900;
+  font-display: swap;
+}
+
+/* Caption faces served from the same files the export burns with
+   (backend/static/fonts), under the family names libass reads from them.
+   Licenses sit beside the files in public/fonts. */
+@font-face {
+  font-family: 'Poppins Black';
+  src: url('/fonts/Poppins-Black.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Courier Prime';
+  src: url('/fonts/CourierPrime-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Roboto';
+  src: url('/fonts/Roboto-Bold.ttf') format('truetype');
+  font-weight: 700;
   font-display: swap;
 }
 

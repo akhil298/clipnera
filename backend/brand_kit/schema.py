@@ -4,6 +4,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from subtitle_styling.templates import DEFAULT_STYLE
+
 
 class CreateBrandKitRequest(BaseModel):
     brand_name: str = Field(min_length=1, max_length=255)
@@ -14,7 +16,7 @@ class CreateBrandKitRequest(BaseModel):
     primary_color: str = Field(default="#f59e0b", min_length=7, max_length=7)
     secondary_color: str = Field(default="#f43f5e", min_length=7, max_length=7)
     preferred_font: str = Field(default="Syne", max_length=100)
-    default_preset: str = Field(default="hormozi")
+    default_preset: str = Field(default=DEFAULT_STYLE, max_length=50)
     auto_emojis: bool = True
     outro_cta_text: str = Field(default="", max_length=500)
 

@@ -34,7 +34,7 @@ const CLIPS: ResultClip[] = [
     clip: 'podcast',
     position: '48% 50%',
     caption: ['Stop', 'chasing', 'views'],
-    preset: 'bold_pop',
+    preset: 'lime_stack',
     hashtags: ['#creatortips', '#podcastclips', '#youtubegrowth'],
     reasons: [
       ['Hook', 'opens on a strong claim'],
@@ -51,7 +51,7 @@ const CLIPS: ResultClip[] = [
     clip: 'host',
     position: '50% 50%',
     caption: ['It', 'finally', 'clicked'],
-    preset: 'karaoke_yellow',
+    preset: 'gold_stack',
     hashtags: ['#podcast', '#storytime', '#creatorlife'],
     reasons: [
       ['Story', 'setup, turn and payoff'],
@@ -68,7 +68,7 @@ const CLIPS: ResultClip[] = [
     clip: 'interview',
     position: '40% 40%',
     caption: ['I', 'almost', 'quit'],
-    preset: 'bold_captions',
+    preset: 'simple',
     hashtags: ['#interview', '#motivation', '#behindthescenes'],
     reasons: [
       ['Emotion', 'a candid turning point'],
@@ -85,7 +85,7 @@ const CLIPS: ResultClip[] = [
     clip: 'talk',
     position: '50% 50%',
     caption: ['The', 'real', 'reason'],
-    preset: 'clean_creator',
+    preset: 'spotlight',
     hashtags: ['#explained', '#learnontiktok', '#tips'],
     reasons: [
       ['Quote', 'a line people repeat'],

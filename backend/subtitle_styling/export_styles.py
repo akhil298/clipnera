@@ -14,28 +14,24 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from subtitle_styling.templates import CAPTION_TEMPLATES, get_template
+from subtitle_styling.ass_generator import CAPTION_ANIMATIONS, font_weight
+from subtitle_styling.templates import CAPTION_TEMPLATES, DEFAULT_STYLE, LEGACY_STYLE_ALIASES, get_template
 
 OUTPUT_PATH = (
     Path(__file__).resolve().parent.parent.parent
     / "frontend" / "lib" / "utils" / "captionStyles.generated.ts"
 )
 
-# CaptionConfig.animation in the frontend accepts a wider set than the templates
-# use; anything unmapped falls back to the karaoke reveal.
-ANIMATIONS = {"karaoke", "pop", "fade", "none"}
-
-
 def _badge(template: dict) -> str:
     """A label describing how the style looks; never a performance or popularity claim."""
+    if template["animation"] not in ("karaoke", "pop", "fade", "none"):
+        return "Animated"
     if template["glow"]:
-        return "Neon"
-    if template["font_size"] >= 40:
-        return "Large"
-    if template["font_size"] <= 20:
-        return "Compact"
+        return "Glow"
     if template["background"]:
-        return "Clean"
+        return "Boxed"
+    if template["rows"] > 1:
+        return "Stacked"
     return "Bold"
 
 
@@ -48,8 +44,14 @@ def _ts(value: object) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
+def _optional(template: dict, key: str) -> str:
+    """A template value as a TypeScript literal, or null when unset."""
+    return _ts(template[key]) if template[key] else "null"
+
+
 def render() -> str:
     ids = list(CAPTION_TEMPLATES)
+    animations = sorted(CAPTION_ANIMATIONS)
     lines: list[str] = [
         "// GENERATED FILE - do not edit by hand.",
         "// Mirrors backend/subtitle_styling/templates.py, the canonical style list.",
@@ -62,6 +64,16 @@ def render() -> str:
     for index, name in enumerate(ids):
         lines.append(f"  | {_ts(name)}{';' if index == len(ids) - 1 else ''}")
     lines += [
+        "",
+        "export type CaptionAnimation =",
+        *(f"  | {_ts(name)}{';' if i == len(animations) - 1 else ''}" for i, name in enumerate(animations)),
+        "",
+        f"export const DEFAULT_CAPTION_PRESET: CaptionPreset = {_ts(DEFAULT_STYLE)};",
+        "",
+        "/** Retired style ids and the current style each now renders as. */",
+        "export const LEGACY_CAPTION_PRESETS: Record<string, CaptionPreset> = {",
+        *(f"  {old}: {_ts(new)}," for old, new in LEGACY_STYLE_ALIASES.items()),
+        "};",
         "",
         "export interface CaptionStyle {",
         "  id: CaptionPreset;",
@@ -77,7 +89,7 @@ def render() -> str:
 
     for name in ids:
         template = get_template(name)
-        animation = template["animation"] if template["animation"] in ANIMATIONS else "karaoke"
+        animation = template["animation"] if template["animation"] in CAPTION_ANIMATIONS else "karaoke"
         lines += [
             f"  {name}: {{",
             f"    id: {_ts(name)},",
@@ -89,11 +101,23 @@ def render() -> str:
             f"      preset: {_ts(name)},",
             f"      fontSize: {_ts(template['font_size'])},",
             f"      fontFamily: {_ts(template['font_family'])},",
+            f"      fontWeight: {font_weight(template['font_family'])},",
+            f"      italic: {_ts(bool(template['italic']))},",
             f"      textColor: {_ts(template['font_color'])},",
             f"      highlightColor: {_ts(template['highlight_color'])},",
-            f"      secondaryHighlightColor: {_ts(template['emphasis_color'] or template['highlight_color'])},",
+            f"      secondaryHighlightColor: {_ts(template['emphasis_color'] or template['font_color'])},",
             f"      hasBgBox: {_ts(bool(template['background']))},",
             f"      bgBoxColor: {_ts(template['background_color'] or 'rgba(0,0,0,0.85)')},",
+            f"      strokeColor: {_optional(template, 'stroke_color')},",
+            f"      strokeWidth: {_ts(template['stroke_width'] if template['stroke_color'] else 0)},",
+            f"      wordBoxColor: {_ts(template['word_box_color']) if template['word_box'] and template['word_box_color'] else 'null'},",
+            f"      upcomingColor: {_optional(template, 'upcoming_color')},",
+            f"      hideUpcoming: {_ts(bool(template['hide_upcoming']))},",
+            f"      rows: {_ts(template['rows'])},",
+            f"      secondLineColor: {_optional(template, 'second_line_color')},",
+            f"      secondLineScale: {_ts(template['second_line_scale'])},",
+            f"      activeScale: {_ts(template['active_scale'])},",
+            f"      glow: {_ts(bool(template['glow']))},",
             f"      uppercase: {_ts(bool(template['uppercase']))},",
             f"      animation: {_ts(animation)},",
             "      animationSpeed: 1.0,",

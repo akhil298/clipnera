@@ -14,6 +14,8 @@ import { CAPTION_Y_MAX, CAPTION_Y_MIN, PreviewMode, captionsClear, safeZoneFor }
 const COLLAPSED_STYLE_COUNT = 5;
 const ACTIVE_COLOURS = ['#f59e0b', '#22c55e', '#facc15', '#ec4899', '#38bdf8'];
 const EMPHASIS_COLOURS = ['#a78bfa', '#f472b6', '#fb923c', '#4ade80', '#ffffff'];
+const WORD_BOX_COLOURS = ['#8b3dff', '#f472b6', '#22c55e', '#f59e0b', '#0ea5e9'];
+const MOTIONS: CaptionConfig['animation'][] = ['pop', 'karaoke', 'wave', 'glow', 'land', 'bounce', 'grow', 'breathe', 'blur', 'shake', 'glitch'];
 const POSITIONS: Array<[string, number]> = [
   ['Top', 22],
   ['Middle', 50],
@@ -97,11 +99,19 @@ export function CaptionsPanel({ config, onChange, onPickPreset, captionsOn, onTu
         <div className="space-y-2.5">
           <ColorSwatches label="Active word" value={config.highlightColor} options={ACTIVE_COLOURS} onChange={(c) => onChange({ highlightColor: c }, 'highlightColor')} />
           <ColorSwatches
-            label={config.hasBgBox ? 'Word pill' : 'Highlighted words'}
+            label="Highlighted words"
             value={config.secondaryHighlightColor}
             options={EMPHASIS_COLOURS}
             onChange={(c) => onChange({ secondaryHighlightColor: c }, 'secondaryHighlightColor')}
           />
+          {config.wordBoxColor && (
+            <ColorSwatches
+              label="Word box"
+              value={config.wordBoxColor}
+              options={WORD_BOX_COLOURS}
+              onChange={(c) => onChange({ wordBoxColor: c }, 'wordBoxColor')}
+            />
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3.5">
           <RangeField label="Size" value={config.fontSize} display={`${config.fontSize} px`} min={8} max={72} onChange={(v) => onChange({ fontSize: v }, 'fontSize')} />
@@ -119,7 +129,7 @@ export function CaptionsPanel({ config, onChange, onPickPreset, captionsOn, onTu
 
       <Section title="Motion" aside={<small className="text-[11.5px] text-neutral-500 capitalize">{config.animation} · {config.animationSpeed.toFixed(2)}×</small>}>
         <div className="flex flex-wrap gap-1.5">
-          {(['pop', 'karaoke', 'wave', 'glow'] as const).map((anim) => (
+          {MOTIONS.map((anim) => (
             <Chip key={anim} active={config.animation === anim} onClick={() => onChange({ animation: anim })}>
               <span className="capitalize">{anim}</span>
             </Chip>
@@ -192,7 +202,11 @@ export function CaptionsPanel({ config, onChange, onPickPreset, captionsOn, onTu
         aside={<Switch checked={config.hasBgBox} onChange={(on) => onChange({ hasBgBox: on })} label="Dark box behind captions" />}
       >
         <p className="text-[11.5px] text-neutral-500">
-          {config.hasBgBox ? 'Captions sit on a dark box; the spoken word gets a coloured pill.' : 'Captions sit straight on the video.'}
+          {!config.hasBgBox
+            ? 'Captions sit straight on the video.'
+            : config.wordBoxColor
+              ? 'Captions sit on a box; the spoken word gets a coloured pill.'
+              : 'Captions sit on a box behind the words.'}
         </p>
       </Section>
     </>

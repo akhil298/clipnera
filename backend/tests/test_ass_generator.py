@@ -104,32 +104,32 @@ class TestAssGenerator:
         assert int(moved[-2]) == round(0.2 * 1920)
 
     def test_caption_style_overrides_size(self, words):
-        default = self._style(AssGenerator().build_ass(words, 0.0, 5.0, style_id="mrbeast"), "Caption")
+        default = self._style(AssGenerator().build_ass(words, 0.0, 5.0, style_id="punch"), "Caption")
         smaller = self._style(
-            AssGenerator().build_ass(words, 0.0, 5.0, style_id="mrbeast", style_overrides={"font_size": 30}),
+            AssGenerator().build_ass(words, 0.0, 5.0, style_id="punch", style_overrides={"font_size": 20}),
             "Caption",
         )
         assert int(smaller[2]) < int(default[2])
 
     def test_build_ass_filters_words_outside_clip(self, words):
         gen = AssGenerator()
-        result = gen.build_ass(words, 2.0, 4.0, style_id="default")
+        result = gen.build_ass(words, 2.0, 4.0, style_id="soft_rise")
         assert "this" in result
         assert "test" in result
         assert "Hello" not in result
 
     def test_build_ass_karaoke_dialogue_per_word(self, words):
         gen = AssGenerator()
-        result = gen.build_ass(words, 0.0, 5.0, style_id="default")
+        result = gen.build_ass(words, 0.0, 5.0, style_id="karaoke")
         dialogue_lines = [l for l in result.split("\n") if l.startswith("Dialogue:")]
-        assert len(dialogue_lines) > 0
+        assert len(dialogue_lines) == len(words)
         for line in dialogue_lines:
-            assert line.startswith("Dialogue: 0")
+            assert line.startswith("Dialogue: 1")
 
-    def test_build_ass_neon_style(self, words):
-        gen = AssGenerator()
-        result = gen.build_ass(words, 0.0, 5.0, style_id="neon")
-        assert "Glow" in result
+    def test_glow_style_softens_every_word(self, words):
+        result = AssGenerator().build_ass(words, 0.0, 5.0, style_id="grow")
+        captions = [l for l in result.split("\n") if l.startswith("Dialogue: 1")]
+        assert captions and all("\\blur3" in l for l in captions)
 
     def test_build_ass_no_words(self):
         gen = AssGenerator()
@@ -142,15 +142,19 @@ class TestAssGenerator:
         result = gen.build_ass(words, 0.0, 5.0, style_id="mrbeast")
         assert "HELLO" in result.upper() or "Hello" in result
 
-    def test_build_ass_hormozi_word_box(self, words):
-        gen = AssGenerator()
-        result = gen.build_ass(words, 0.0, 5.0, style_id="hormozi")
-        assert "\\3c&H" in result
+    def test_word_box_draws_on_its_own_layer_beneath_the_text(self, words):
+        result = AssGenerator().build_ass(words, 0.0, 5.0, style_id="purple_pop")
+        assert "Style: WordBox," in result
+        boxes = [l for l in result.split("\n") if l.startswith("Dialogue: 0") and ",WordBox," in l]
+        captions = [l for l in result.split("\n") if l.startswith("Dialogue: 1")]
+        assert len(boxes) == len(captions) == len(words)
+        # Only the spoken word's box is opaque, and it is the template's purple.
+        assert all(l.count("\\3a&H00&") == 1 for l in boxes)
+        assert all("\\3c&H00FF3D8B" in l for l in boxes)
 
-    def test_build_ass_minimal_no_glow(self, words):
-        gen = AssGenerator()
-        result = gen.build_ass(words, 0.0, 5.0, style_id="minimal")
-        assert "Glow" not in result
+    def test_styles_without_a_word_box_add_no_box_layer(self, words):
+        result = AssGenerator().build_ass(words, 0.0, 5.0, style_id="simple")
+        assert "WordBox" not in result
 
     def test_build_ass_file_creation(self, words):
         import os
@@ -171,27 +175,27 @@ class TestAnimatedPlateCaptions:
 
     def _events(self, **kw):
         doc = AssGenerator().build_ass(self.WORDS, 0.0, 6.0, **kw)
-        return doc, [l for l in doc.splitlines() if l.startswith("Dialogue: 0")]
+        return doc, [l for l in doc.splitlines() if l.startswith("Dialogue: 1")]
 
-    def test_clean_dark_draws_a_real_plate(self):
-        doc, _ = self._events(style_id="clean_dark")
+    def test_boxed_style_draws_a_real_plate(self):
+        doc, _ = self._events(style_id="backdrop")
         caption_style = next(l for l in doc.splitlines() if l.startswith("Style: Caption"))
         # BorderStyle 3 = opaque box; the old code only tinted the shadow.
         assert caption_style.split(",")[15] == "3"
 
     def test_lines_animate_in_once(self):
-        _, events = self._events(style_id="clean_dark")
+        _, events = self._events(style_id="lime_stack")
         moving = [e for e in events if "\\move(" in e]
         assert moving and all("\\fad(" in e for e in moving)
         assert len(moving) < len(events)  # later words of a line hold still
 
     def test_none_animation_has_no_highlight_or_motion(self):
-        _, events = self._events(style_id="clean_dark", style_overrides={"animation": "none"})
+        _, events = self._events(style_id="backdrop", style_overrides={"animation": "none"})
         assert not any("\\move(" in e or "\\t(" in e or "\\3c" in e for e in events)
 
     def test_no_line_spans_the_hook_break(self):
         # Hook words end at 2.0; the clip's words follow the bridge.
-        _, events = self._events(style_id="clean_dark", segment_breaks=[1.5])
+        _, events = self._events(style_id="backdrop", segment_breaks=[1.5])
         for event in events:
             text = event.split(",,", 1)[1]
             assert not ("tell" in text and "so" in text.replace("so\\", "")), event
@@ -200,12 +204,12 @@ class TestAnimatedPlateCaptions:
 class TestCaptionFit:
     @staticmethod
     def _captions(ass: str) -> list[str]:
-        return [line for line in ass.splitlines() if line.startswith("Dialogue: 0")]
+        return [line for line in ass.splitlines() if line.startswith("Dialogue: 1")]
 
     def test_wide_face_gets_shorter_lines(self):
         words = [{"text": w, "start": i * 0.3, "end": i * 0.3 + 0.25}
                  for i, w in enumerate("begin to stretch spaghettification quickly now".split())]
-        ass = AssGenerator().build_ass(words, 0.0, 3.0, style_id="bubble",
+        ass = AssGenerator().build_ass(words, 0.0, 3.0, style_id="punch",
                                        style_overrides={"font_size": 54})
         # No caption line may hold more characters than fit inside the frame.
         from subtitle_styling.ass_generator import caption_layout_budget, char_width_px, ass_font_size
@@ -216,13 +220,52 @@ class TestCaptionFit:
 
     def test_a_word_too_long_for_the_frame_is_shrunk(self):
         words = [{"text": "spaghettification", "start": 0.0, "end": 1.0}]
-        ass = AssGenerator().build_ass(words, 0.0, 1.0, style_id="bubble", style_overrides={"font_size": 60})
+        ass = AssGenerator().build_ass(words, 0.0, 1.0, style_id="punch", style_overrides={"font_size": 60})
         line = self._captions(ass)[0]
         assert "\\fs" in line
         assert line.count("\\r\\fs") >= 1
 
     def test_a_long_title_word_shrinks_the_title(self):
-        normal = AssGenerator().build_ass([], 0.0, 1.0, style_id="bubble", title="Black holes")
-        long = AssGenerator().build_ass([], 0.0, 1.0, style_id="bubble", title="Spaghettificationally speaking")
+        normal = AssGenerator().build_ass([], 0.0, 1.0, style_id="punch", title="Black holes")
+        long = AssGenerator().build_ass([], 0.0, 1.0, style_id="punch", title="Spaghettificationally speaking")
         size = lambda ass: int(next(l for l in ass.splitlines() if l.startswith("Style: Title,")).split(",")[2])
         assert size(long) < size(normal)
+
+
+class TestStyleFeatures:
+    WORDS = [{"start": i * 0.4, "end": i * 0.4 + 0.35, "text": w} for i, w in enumerate("to get started".split())]
+
+    def _captions(self, style_id: str) -> list[str]:
+        doc = AssGenerator().build_ass(self.WORDS, 0.0, 2.0, style_id=style_id)
+        return [line.split(",,", 1)[1] for line in doc.splitlines() if line.startswith("Dialogue: 1")]
+
+    def test_stacked_style_breaks_onto_a_second_row(self):
+        first = self._captions("gold_stack")[0]
+        assert first.index("TO") < first.index("GET") < first.index("\\N") < first.index("STARTED")
+
+    def test_second_row_keeps_its_colour_and_scale(self):
+        first = self._captions("typewriter")[0]
+        second_row = first.split("\\N")[1]
+        assert "\\c&H005CE4FF" in second_row  # #FFE45C
+        assert "\\fscx160" in second_row
+
+    def test_upcoming_words_are_dimmed(self):
+        first = self._captions("spotlight")[0]
+        assert first.count("\\c&H00A3A3A3") == 2  # GET and STARTED wait in grey
+
+    def test_upcoming_words_can_stay_hidden(self):
+        events = self._captions("blur_in")
+        # A word still to come ends its tags hidden; the spoken one fades in.
+        assert events[0].count("\\alpha&HFF&}") == 2
+        assert events[-1].count("\\alpha&HFF&}") == 0
+
+    def test_italic_and_bold_follow_the_face(self):
+        doc = AssGenerator().build_ass(self.WORDS, 0.0, 2.0, style_id="punch")
+        fields = next(l for l in doc.splitlines() if l.startswith("Style: Caption")).split(",")
+        assert fields[1] == "Luckiest Guy"
+        assert (fields[7], fields[8]) == ("0", "-1")  # a heavy regular face is not faux-bolded
+
+    @pytest.mark.parametrize("style_id", ["soft_rise", "tremor", "pulse", "bounce", "blur_swap", "grow", "glitch"])
+    def test_every_motion_animates_the_spoken_word_or_line(self, style_id):
+        events = self._captions(style_id)
+        assert any("\\t(" in e or "\\move(" in e for e in events), style_id

@@ -67,7 +67,7 @@ class FallbackRenderer:
                 video_path=video_path,
                 clip_start=clip_start,
                 clip_end=clip_end,
-                style_type="bold_captions",
+                style_type="simple",
                 transcript_segments=segments_for_styling,
             )
             

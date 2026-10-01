@@ -44,6 +44,7 @@ from video_processor.clip_cutter import ClipCutter, CutRequest
 from video_processor.ffmpeg_service import FFmpegService
 from content_intelligence.service import FALLBACK_ASPECT_RATIOS
 from video_processor.geometry import SUPPORTED_ASPECT_RATIOS, output_dimensions
+from subtitle_styling.templates import DEFAULT_STYLE
 
 settings = get_settings()
 log = get_logger(__name__)
@@ -346,7 +347,7 @@ class ClipService:
                 video_path=video_path,
                 clip_start=clip.start_time,
                 clip_end=clip.end_time,
-                style_type=burn_request.get("style_type", "bold_captions"),
+                style_type=burn_request.get("style_type", DEFAULT_STYLE),
                 custom_config=burn_request.get("custom_config"),
                 subtitles=burn_request.get("subtitles"),
                 title_text=clip.title,

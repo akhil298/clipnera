@@ -6,14 +6,14 @@ import { CaptionStylePreview } from '@/components/dashboard/CaptionStylePreview'
 import { LandingVideo } from './LandingVideo';
 
 // Featured presets; every one comes from the same list the export renders with.
-const FEATURED: CaptionPreset[] = ['bold_pop', 'karaoke_yellow', 'cyberpunk', 'neon'];
+const FEATURED: CaptionPreset[] = ['karaoke', 'purple_pop', 'glitch', 'blur_in'];
 const PHONE_WORDS = ['Watch', 'this', 'part'];
 
 const OPTIONS = ['Auto-emoji on/off', 'UPPERCASE', '1 or 2 lines', 'Custom colours'];
 
 /** Pick a real caption preset and the phone re-styles with its colours, font, casing and motion. */
 export function CaptionTypographyShowcase() {
-  const [preset, setPreset] = useState<CaptionPreset>('bold_pop');
+  const [preset, setPreset] = useState<CaptionPreset>('karaoke');
   const { config, brandName } = getCaptionStyle(preset);
   const presetCount = getAllCaptionStyles().length;
 

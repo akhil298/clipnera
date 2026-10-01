@@ -590,7 +590,7 @@ class DepthCaptionsPipeline:
             video_path=video_path,
             clip_start=0,
             clip_end=max(s.end for s in transcript_segments) if transcript_segments else 30,
-            style_type="bold_captions",
+            style_type="simple",
             transcript_segments=[s.model_dump() for s in transcript_segments],
         )
         

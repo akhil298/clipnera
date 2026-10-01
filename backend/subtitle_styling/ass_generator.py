@@ -3,12 +3,13 @@ from __future__ import annotations
 import math
 import os
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from core.logging_config import get_logger
 from subtitle_styling.emoji_annotator import annotate_caption_words
-from subtitle_styling.templates import get_template
+from subtitle_styling.templates import DEFAULT_STYLE, get_template
 from transcription.language import script_of
 
 log = get_logger(__name__)
@@ -31,6 +32,9 @@ FONT_CHAR_EM: dict[str, tuple[float, float]] = {
     "Impact": (0.443, 0.407),
     "Luckiest Guy": (0.509, 0.513),
     "Permanent Marker": (0.611, 0.508),
+    "Poppins Black": (0.596, 0.527),
+    "Courier Prime": (0.600, 0.600),
+    "Roboto": (0.565, 0.455),
 }
 # An unlisted face is assumed as wide as the widest listed one, so it errs
 # toward shorter lines rather than off the frame.
@@ -64,10 +68,18 @@ SCRIPT_FONT_FILES = {
 # Noto Indic one without Latin letters, and English captions burned as boxes.
 BUNDLED_FAMILIES = frozenset({
     "Anton", "Archivo Black", "Bangers", "Bebas Neue", "DM Serif Display", "Luckiest Guy",
-    "Permanent Marker", "DejaVu Sans", "DejaVu Sans Mono", "DejaVu Serif",
+    "Permanent Marker", "Poppins Black", "Courier Prime", "Roboto",
+    "DejaVu Sans", "DejaVu Sans Mono", "DejaVu Serif",
+})
+# Faces bundled only as a heavy regular cut. Asking libass for bold on these
+# would smear an already black face with synthetic emboldening, so they render
+# at their own weight; every other bundled face ships a real bold cut.
+UNBOLDED_FAMILIES = frozenset({
+    "Anton", "Archivo Black", "Bangers", "Bebas Neue", "DM Serif Display", "Luckiest Guy",
+    "Permanent Marker", "Poppins Black",
 })
 # Closest bundled face for common families that cannot ship (Impact is proprietary).
-FONT_SUBSTITUTES = {"Impact": "Anton", "Arial": "DejaVu Sans", "Helvetica": "DejaVu Sans", "Inter": "DejaVu Sans",
+FONT_SUBSTITUTES = {"Impact": "Anton", "Poppins": "Poppins Black", "Arial": "DejaVu Sans", "Helvetica": "DejaVu Sans", "Inter": "DejaVu Sans",
                     "Georgia": "DejaVu Serif", "Times New Roman": "DejaVu Serif", "Courier New": "DejaVu Sans Mono"}
 DEFAULT_FAMILY = "DejaVu Sans"
 DEFAULT_FONT_FILE = "DejaVuSans-Bold.ttf"
@@ -78,6 +90,11 @@ def bundled_family(family: str) -> str:
     if family in BUNDLED_FAMILIES:
         return family
     return FONT_SUBSTITUTES.get(family, DEFAULT_FAMILY)
+
+
+def font_weight(family: str) -> int:
+    """CSS weight a bundled face renders at; the ASS bold flag follows it."""
+    return 400 if family in UNBOLDED_FAMILIES else 700
 
 
 def script_font(text: str) -> tuple[str, str] | None:
@@ -119,7 +136,36 @@ def burn_filter_args(
 
 
 # Caption animations the burner renders; the editor offers the same names.
-CAPTION_ANIMATIONS = frozenset({"pop", "wave", "karaoke", "glow", "fade", "none"})
+CAPTION_ANIMATIONS = frozenset({
+    "pop", "wave", "karaoke", "glow", "fade", "none",
+    "land", "bounce", "grow", "blur", "shake", "breathe", "glitch",
+})
+# Glow templates soften their outline into a halo by this much.
+GLOW_BLUR = 3
+
+
+@dataclass(frozen=True)
+class _Look:
+    """A template resolved into the ASS values every caption word is drawn from."""
+
+    animation: str
+    speed: float
+    primary: str
+    highlight: str
+    emphasis: str | None
+    upcoming: str | None
+    second_line: str | None
+    second_scale: int
+    hide_upcoming: bool
+    # Pill behind the spoken word on a plate, or box behind it off one.
+    pill: str | None
+    word_box: str | None
+    outline_width: int
+    shadow_width: int
+    active_scale: float
+    word_pop: bool
+    glow: bool
+    uppercase: bool
 
 
 def _box_colour(css_hex: str, default_opacity: float = 0.75) -> str:
@@ -139,13 +185,34 @@ def _box_colour(css_hex: str, default_opacity: float = 0.75) -> str:
 def _entrance(animation: str, speed: float, x: int, y: int, height: int) -> str | None:
     """Override block that animates a caption line onto the screen, or None."""
     speed = max(0.25, speed)
+    rise = round(height * 0.02)
     if animation in ("pop", "wave"):
-        rise = round(height * 0.02)
-        ms = round(170 / speed)
-        return f"{{\\an5\\q2\\move({x},{y + rise},{x},{y},0,{ms})\\fad({round(120 / speed)},0)}}"
-    if animation in ("fade", "glow"):
+        return f"{{\\an5\\q2\\move({x},{y + rise},{x},{y},0,{round(170 / speed)})\\fad({round(120 / speed)},0)}}"
+    if animation == "land":
+        # Settles down onto its spot from above.
+        return f"{{\\an5\\q2\\move({x},{y - rise * 2},{x},{y},0,{round(260 / speed)})\\fad({round(200 / speed)},0)}}"
+    if animation in ("fade", "glow", "blur"):
         return f"{{\\an5\\q2\\pos({x},{y})\\fad({round(200 / speed)},0)}}"
+    if animation in ("bounce", "grow", "shake", "breathe", "glitch"):
+        return f"{{\\an5\\q2\\pos({x},{y})\\fad({round(100 / speed)},0)}}"
     return None
+
+
+def _word_entrance(animation: str, speed: float, scale: int, rest_blur: int) -> str:
+    """Per-word tags for a line's entrance that a single anchor block cannot
+    carry: every word ends in a reset, so a scale or blur must be set on each."""
+    speed = max(0.25, speed)
+    if animation == "bounce":
+        ms = round(160 / speed)
+        return (f"\\fscx{round(scale * 0.7)}\\fscy{round(scale * 0.7)}"
+                f"\\t(0,{ms},\\fscx{round(scale * 1.08)}\\fscy{round(scale * 1.08)})"
+                f"\\t({ms},{round(ms * 1.6)},\\fscx{scale}\\fscy{scale})")
+    if animation == "grow":
+        ms = round(140 / speed)
+        return f"\\fscx{round(scale * 0.85)}\\fscy{round(scale * 0.85)}\\t(0,{ms},\\fscx{scale}\\fscy{scale})"
+    if animation == "blur":
+        return f"\\blur10\\t(0,{round(220 / speed)},\\blur{rest_blur})"
+    return ""
 
 
 def _contrast_on(ass_colour: str) -> str:
@@ -155,38 +222,65 @@ def _contrast_on(ass_colour: str) -> str:
     return "&H00000000" if 0.299 * r + 0.587 * g + 0.114 * b > 150 else "&H00FFFFFF"
 
 
-def _active_word_tags(
-    template: dict[str, Any],
-    animation: str,
-    speed: float,
-    highlight: str,
-    pill: str | None,
-    word_box: str | None,
-    outline_width: int,
-    primary: str,
-) -> str:
-    """Override tags for the word being spoken, per animation style."""
-    speed = max(0.25, speed)
-    if pill:
-        # On a plate: light the word with a pill. Text that would vanish into
-        # a same-coloured pill keeps the base colour, and if that matches too
-        # (Minimal is white on white) falls back to black or white.
-        colour = next((c for c in (highlight, primary) if c != pill), None) or _contrast_on(pill)
-        tags = f"\\c{colour}\\3c{pill}\\3a&H00&"
-    elif word_box:
-        tags = f"\\c{highlight}\\bord{outline_width}\\3c{word_box}"
-    else:
-        tags = f"\\c{highlight}"
-
-    if animation == "pop" and template.get("word_pop", True):
+def _active_motion(look: _Look, scale: int) -> str:
+    """Motion tags for the word being spoken, around its resting ``scale`` (%)."""
+    speed = max(0.25, look.speed)
+    grown = round(scale * look.active_scale)
+    rest = f"\\fscx{scale}\\fscy{scale}"
+    animation = look.animation
+    if animation == "pop" and look.word_pop:
         ms = max(10, round(70 / speed))
-        tags += f"\\fscx100\\fscy100\\t(0,{ms},\\fscx109\\fscy109)"
-    elif animation == "wave":
+        return f"{rest}\\t(0,{ms},\\fscx{grown}\\fscy{grown})"
+    if animation == "wave":
         ms = max(10, round(90 / speed))
-        tags += f"\\fscx100\\fscy100\\t(0,{ms},\\fscx106\\fscy118)\\t({ms},{ms * 2},\\fscx100\\fscy100)"
-    elif animation == "glow" and not pill:
-        tags += f"\\3c{highlight}\\bord{outline_width + 2}\\blur4"
-    return tags
+        return (f"{rest}\\t(0,{ms},\\fscx{round(scale * 1.06)}\\fscy{round(scale * 1.18)})"
+                f"\\t({ms},{ms * 2},{rest})")
+    if animation == "grow":
+        ms = max(10, round(150 / speed))
+        return f"{rest}\\t(0,{ms},0.5,\\fscx{grown}\\fscy{grown})"
+    if animation == "breathe":
+        ms = max(10, round(180 / speed))
+        settle = round(scale * (1 + (look.active_scale - 1) / 2))
+        return f"{rest}\\t(0,{ms},\\fscx{grown}\\fscy{grown})\\t({ms},{ms * 3},\\fscx{settle}\\fscy{settle})"
+    if animation == "bounce":
+        ms = max(10, round(70 / speed))
+        return (f"{rest}\\t(0,{ms},\\fscx{round(scale * 0.92)}\\fscy{round(scale * 1.18)})"
+                f"\\t({ms},{ms * 2},\\fscx{round(scale * 1.05)}\\fscy{round(scale * 0.95)})"
+                f"\\t({ms * 2},{ms * 3},{rest})")
+    if animation == "shake":
+        ms = max(10, round(35 / speed))
+        return "".join(f"\\t({i * ms},{(i + 1) * ms},\\frz{angle})" for i, angle in enumerate((4, -4, 3, -2, 0)))
+    if animation == "glitch":
+        # Skews and throws a cyan ghost sideways, then settles back.
+        ms = max(10, round(45 / speed))
+        steps = ((0.3, -6), (-0.25, 5), (0.12, -3), (0, look.shadow_width))
+        return "\\4c&HFFFF00&\\4a&H00&" + "".join(
+            f"\\t({i * ms},{(i + 1) * ms},\\fax{fax}\\xshad{x})" for i, (fax, x) in enumerate(steps)
+        )
+    if animation == "blur":
+        ms = max(10, round(180 / speed))
+        fade_in = f"\\alpha&HFF&\\t(0,{ms},\\alpha&H00&)" if look.hide_upcoming else ""
+        return f"{fade_in}\\blur6\\t(0,{ms},\\blur{GLOW_BLUR if look.glow else 0})"
+    return ""
+
+
+def _row_split(group: list[dict[str, Any]], rows: int) -> int:
+    """Index of the first word on the second row; ``len(group)`` for one row.
+
+    The first row takes as many words as fit in half the line's characters and
+    the second always keeps at least one, so a lone word lands on the second
+    row, which is the larger or coloured one in stacked styles.
+    """
+    if rows < 2 or len(group) < 2:
+        return 0 if rows >= 2 else len(group)
+    half = (sum(len(w["text"]) for w in group) + len(group) - 1) / 2
+    split, chars = 0, -1
+    for word in group[:-1]:
+        chars += len(word["text"]) + 1
+        if split and chars > half:
+            break
+        split += 1
+    return split
 
 
 def _split_at_breaks(groups: list[list[dict[str, Any]]], breaks: list[float]) -> list[list[dict[str, Any]]]:
@@ -300,11 +394,10 @@ def group_words(
 
 
 class AssGenerator:
-    """Generates ASS subtitle files with word-level karaoke highlighting.
+    """Generates ASS subtitle files with word-level highlighting.
 
-    Ported from ClipForge's captions.ts approach: one ASS Dialogue event per
-    word, showing the whole group with the active word emphasised. libass
-    renders this as "Opus Clip" style animated captions when burned in.
+    One ASS Dialogue event per word, showing the whole group with the active
+    word emphasised; libass renders this as animated captions when burned in.
     """
 
     def __init__(self) -> None:
@@ -315,7 +408,7 @@ class AssGenerator:
         transcript_words: list[dict[str, Any]],
         clip_start: float,
         clip_end: float,
-        style_id: str = "default",
+        style_id: str = DEFAULT_STYLE,
         width: int = 1080,
         height: int = 1920,
         title: str | None = None,
@@ -333,6 +426,8 @@ class AssGenerator:
         spoken = " ".join(str(w.get("text") or w.get("word") or "") for w in transcript_words)
         fallback = script_font(f"{spoken} {title or ''}")
         template["font_family"] = fallback[0] if fallback else bundled_family(template["font_family"])
+        bold = -1 if font_weight(template["font_family"]) >= 700 else 0
+        italic = -1 if template.get("italic") else 0
 
         # Templates are authored against a 1080-wide vertical frame. Scaling by
         # height made the same template 1.78x larger on 9:16 (h=1920) than on
@@ -358,6 +453,11 @@ class AssGenerator:
             if template.get("emphasis_color")
             else None
         )
+        word_box_color = (
+            _hex_to_ass_style(template["word_box_color"])
+            if template.get("word_box") and template.get("word_box_color")
+            else None
+        )
 
         outline_width = max(1, round(template.get("stroke_width", 3) * 0.8))
         shadow_width = round(template.get("stroke_width", 3)) if template.get("shadow", True) else 0
@@ -365,27 +465,45 @@ class AssGenerator:
 
         # A boxed template sits on a solid plate, as the editor preview draws
         # it. BorderStyle 3 makes libass paint the outline as an opaque box,
-        # with the outline width as its padding. This used to only tint the
-        # drop shadow, so "background" templates burned with no plate at all.
+        # with the outline width as its padding.
         boxed = bool(template.get("background") and template.get("background_color"))
-        pill_color: str | None = None
         if boxed:
             border_style = 3
             outline_color = back_color = _box_colour(template["background_color"])
             outline_width = max(4, round(font_size * 0.18))
             shadow_width = 0
-            # The preview lights the active word with a pill in the secondary
-            # highlight colour (emphasis, else highlight); the burn does the same.
-            pill_color = emphasis_color or highlight_color
 
         animation = template.get("animation")
         if animation not in CAPTION_ANIMATIONS:
             animation = "karaoke"
 
+        look = _Look(
+            animation=animation,
+            speed=animation_speed,
+            primary=primary_color,
+            highlight=highlight_color,
+            emphasis=emphasis_color,
+            upcoming=_hex_to_ass_style(template["upcoming_color"]) if template.get("upcoming_color") else None,
+            second_line=_hex_to_ass_style(template["second_line_color"]) if template.get("second_line_color") else None,
+            second_scale=round(100 * float(template.get("second_line_scale") or 1.0)),
+            hide_upcoming=bool(template.get("hide_upcoming")),
+            # On a plate the spoken word's box is a pill in the plate; off one
+            # it is drawn on a layer of its own, beneath the outlined text.
+            pill=word_box_color if boxed else None,
+            word_box=None if boxed else word_box_color,
+            outline_width=max(1, round(template.get("stroke_width", 3))),
+            shadow_width=shadow_width,
+            active_scale=float(template.get("active_scale") or 1.0),
+            word_pop=bool(template.get("word_pop", True)),
+            glow=bool(template.get("glow")),
+            uppercase=bool(template.get("uppercase")),
+        )
+        rows = max(1, int(template.get("rows") or 1))
+
         # --- Build header ---
         header_lines = [
             "[Script Info]",
-            "Title: ClipForge captions",
+            "Title: Clipnera captions",
             "ScriptType: v4.00+",
             f"PlayResX: {width}",
             f"PlayResY: {height}",
@@ -400,17 +518,18 @@ class AssGenerator:
             (
                 f"Style: Caption,{template['font_family']},{font_size},"
                 f"{primary_color},{primary_color},{outline_color},{back_color},"
-                f"{1 if template.get('bold', True) else 0},0,0,0,100,100,0,0,{border_style},"
+                f"{bold},{italic},0,0,100,100,0,0,{border_style},"
                 f"{outline_width},{shadow_width},5,{margin_h},{margin_h},0,1"
             ),
         ]
-
-        if template.get("glow", False):
-            glow_outline = 2
+        if look.word_box:
+            # Same face and size as Caption, so its boxes sit exactly behind
+            # the words; box and text are transparent until a word is spoken.
             header_lines.append(
-                f"Style: Glow,{template['font_family']},{font_size + 2},"
-                f"{highlight_color},{highlight_color},{outline_color},"
-                f"&H00000000,0,0,0,0,100,100,0,0,1,{glow_outline},0,5,{margin_h},{margin_h},0,1"
+                f"Style: WordBox,{template['font_family']},{font_size},"
+                f"&HFF000000,&HFF000000,&HFF000000,&HFF000000,"
+                f"{bold},{italic},0,0,100,100,0,0,3,"
+                f"{max(4, round(font_size * 0.14))},0,5,{margin_h},{margin_h},0,1"
             )
 
         # Same width-based scale as the captions, so the editor preview can
@@ -444,10 +563,9 @@ class AssGenerator:
             from subtitle_styling.emoji_annotator import inject_collection_emojis
             styled_title = inject_collection_emojis(title.strip(), emoji_collection)
             # The title is the clip's static headline, so it holds for the whole
-            # clip; only the word captions below it move. It used to vanish after
-            # four seconds, which read as a glitch rather than a headline.
+            # clip; only the word captions below it move.
             lines.append(
-                f"Dialogue: 1,{ass_time(0)},{ass_time(max(0.0, clip_duration))},Title,,0,0,0,,"
+                f"Dialogue: 2,{ass_time(0)},{ass_time(max(0.0, clip_duration))},Title,,0,0,0,,"
                 f"{TITLE_ENTRANCE}{escape_ass(styled_title)}"
             )
 
@@ -472,11 +590,12 @@ class AssGenerator:
         if not words_in_clip:
             return "\n".join(header_lines) + "\n"
 
-        caption_char_px = char_width_px(template["font_family"], font_size, bool(template.get("uppercase")))
-        max_chars = caption_layout_budget(caption_char_px, width)
+        caption_char_px = char_width_px(template["font_family"], font_size, look.uppercase)
+        # A stacked style spreads a line over its rows, so it holds more text.
+        max_chars = caption_layout_budget(caption_char_px, width) * rows
         groups = _split_at_breaks(group_words(words_in_clip, max_chars, template["max_words_per_line"]), breaks)
 
-        emoji_by_index, emphasis_indices = annotate_caption_words(
+        _, emphasis_indices = annotate_caption_words(
             words_in_clip, ai_cues,
             enable_emoji=template.get("emoji", False),
             enable_emphasis=True,
@@ -501,9 +620,17 @@ class AssGenerator:
             if cut is not None:
                 group_end = max(last_word_end, min(group_end, cut))
 
-            # A line of one word too long for the frame is shrunk to fit.
-            line_chars = sum(len(w["text"]) for w in group) + len(group) - 1
-            line_size = fit_font_size(font_size, line_chars, caption_char_px, width * CAPTION_SAFE_WIDTH)
+            # A line too wide for the frame (one long word, or a stacked row) is
+            # shrunk to fit; the second row counts at its own scale.
+            row_start = _row_split(group, rows)
+            first_row = group[:row_start]
+            second_row = group[row_start:]
+            row_chars = [
+                (sum(len(w["text"]) for w in row) + len(row) - 1) * scale
+                for row, scale in ((first_row, 1.0), (second_row, look.second_scale / 100 if rows > 1 else 1.0))
+                if row
+            ]
+            line_size = fit_font_size(font_size, math.ceil(max(row_chars)), caption_char_px, width * CAPTION_SAFE_WIDTH)
             size_tag = f"\\fs{line_size}" if line_size < font_size else ""
             size_block = f"{{{size_tag}}}" if size_tag else ""
             still = f"{{\\an5\\q2\\pos({caption_x},{caption_y})}}"
@@ -522,29 +649,18 @@ class AssGenerator:
                 if w_end_clip <= w_start_clip:
                     w_end_clip = max(w_start_clip + 0.01, w_end_clip)
 
-                rendered = self._render_group(
-                    group=group,
-                    active_index=wi,
-                    cap_index=cap_idx,
-                    emphasis_indices=emphasis_indices,
-                    emoji_by_index=emoji_by_index,
-                    template=template,
-                    highlight_color=highlight_color,
-                    emphasis_color=emphasis_color,
-                    box_color=_hex_to_ass_style(template["word_box_color"])
-                    if template.get("word_box") and template.get("word_box_color")
-                    else None,
-                    primary_color=primary_color,
-                    outline_width=max(1, round(template.get("stroke_width", 3))),
-                    animation_speed=animation_speed,
-                    animation=animation,
-                    pill_color=pill_color,
-                    reset=f"\\r{size_tag}",
+                timing = f"{ass_time(w_start_clip)},{ass_time(w_end_clip)}"
+                render = dict(
+                    group=group, active_index=wi, cap_index=cap_idx, row_start=row_start if rows > 1 else len(group),
+                    emphasis_indices=emphasis_indices, look=look, entering=wi == 0, reset=f"\\r{size_tag}",
                 )
-
+                if look.word_box:
+                    lines.append(
+                        f"Dialogue: 0,{timing},WordBox,,0,0,0,,{anchor}{size_block}"
+                        f"{self._render_group(**render, box_layer=True)}"
+                    )
                 lines.append(
-                    f"Dialogue: 0,{ass_time(w_start_clip)},{ass_time(w_end_clip)}"
-                    f",Caption,,0,0,0,,{anchor}{size_block}{rendered}"
+                    f"Dialogue: 1,{timing},Caption,,0,0,0,,{anchor}{size_block}{self._render_group(**render)}"
                 )
             # cap_idx is the index of each group's first word. Advancing it per
             # word event moved emphasis and emoji one word further along on
@@ -558,50 +674,83 @@ class AssGenerator:
         group: list[dict[str, Any]],
         active_index: int,
         cap_index: int,
+        row_start: int,
         emphasis_indices: set[int],
-        emoji_by_index: dict[int, str],
-        template: dict[str, Any],
-        highlight_color: str,
-        emphasis_color: str | None,
-        box_color: str | None,
-        primary_color: str,
-        outline_width: int,
-        animation_speed: float = 1.0,
-        animation: str = "pop",
-        pill_color: str | None = None,
+        look: _Look,
+        entering: bool,
         reset: str = "\\r",
+        box_layer: bool = False,
     ) -> str:
-        """``reset`` ends each word's styling; it carries any line-level size."""
-        parts: list[str] = []
+        """One caption line with the word at ``active_index`` spoken.
+
+        Words from ``row_start`` on sit on a second row. ``entering`` adds the
+        line's entrance to every word; ``reset`` ends each word's styling and
+        carries any line-level size. ``box_layer`` renders the same layout with
+        only the spoken word's box visible, to sit beneath the text.
+        """
+        rows: list[list[str]] = [[], []]
         for i, word in enumerate(group):
-            is_active = i == active_index
-            is_emphasized = cap_index + i in emphasis_indices and not is_active
             raw = escape_ass(word.get("text", ""))
-            text = raw.upper() if template.get("uppercase", False) else raw
+            text = raw.upper() if look.uppercase else raw
             if not text:
-                parts.append(f"{{{reset}}}")
                 continue
+            second_row = i >= row_start
+            scale = look.second_scale if second_row else 100
+            is_active = i == active_index and look.animation != "none"
 
-            if is_active and animation != "none":
-                parts.append(
-                    f"{{{_active_word_tags(template, animation, animation_speed, highlight_color, pill_color, box_color, outline_width, primary_color)}}}"
-                    f"{text}{{{reset}}}"
-                )
-            elif is_emphasized and emphasis_color and not pill_color:
-                # On a plate the emphasis colour is the active word's pill, so
-                # it is not also used for text.
-                parts.append(f"{{\\c{emphasis_color}}}{text}{{{reset}}}")
+            tags = f"\\fscx{scale}\\fscy{scale}" if scale != 100 else ""
+            if look.glow and not box_layer:
+                tags += f"\\3c{look.highlight}\\blur{GLOW_BLUR}" if look.highlight != look.primary else f"\\blur{GLOW_BLUR}"
+            if entering:
+                tags += _word_entrance(look.animation, look.speed, scale, GLOW_BLUR if look.glow and not box_layer else 0)
+
+            if box_layer:
+                # Only the spoken word's box shows; its motion keeps the box
+                # sized to the word above it.
+                if is_active:
+                    tags += f"\\3c{look.word_box}\\3a&H00&{_active_motion(look, scale)}"
+            elif i > active_index and look.hide_upcoming:
+                tags += "\\alpha&HFF&"
+            elif is_active:
+                tags += self._active_colour(look, second_row) + _active_motion(look, scale)
             else:
-                parts.append(f"{{\\c{primary_color}}}{text}{{{reset}}}")
+                tags += f"\\c{self._rest_colour(look, i, active_index, second_row, cap_index + i in emphasis_indices)}"
+            rows[1 if second_row else 0].append(f"{{{tags}}}{text}{{{reset}}}")
 
-        return " ".join(parts)
+        return "\\N".join(" ".join(row) for row in rows if row)
+
+    @staticmethod
+    def _active_colour(look: _Look, second_row: bool) -> str:
+        """Colour tags for the spoken word. A coloured second row keeps its colour."""
+        if look.pill:
+            # On a plate: light the word with a pill. Text that would vanish
+            # into a same-coloured pill keeps the base colour, and if that
+            # matches too falls back to black or white.
+            colour = next((c for c in (look.highlight, look.primary) if c != look.pill), None) or _contrast_on(look.pill)
+            return f"\\c{colour}\\3c{look.pill}\\3a&H00&"
+        colour = look.second_line if second_row and look.second_line else look.highlight
+        if look.animation == "glow":
+            return f"\\c{colour}\\3c{colour}\\bord{look.outline_width + 2}\\blur4"
+        return f"\\c{colour}"
+
+    @staticmethod
+    def _rest_colour(look: _Look, index: int, active_index: int, second_row: bool, emphasised: bool) -> str:
+        """Colour of a word that is not being spoken."""
+        if second_row and look.second_line:
+            return look.second_line
+        if index > active_index and look.upcoming:
+            return look.upcoming
+        # On a plate the emphasis colour would fight the pill, so it is unused.
+        if emphasised and look.emphasis and not look.pill:
+            return look.emphasis
+        return look.primary
 
 
 def build_ass_file(
     transcript_words: list[dict[str, Any]],
     clip_start: float,
     clip_end: float,
-    style_id: str = "default",
+    style_id: str = DEFAULT_STYLE,
     width: int = 1080,
     height: int = 1920,
     title: str | None = None,

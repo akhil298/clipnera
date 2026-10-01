@@ -10,7 +10,7 @@ import {
   TranscriptSegment,
   WordTimestamp,
 } from '@/lib/types';
-import { pillTextColor } from '@/lib/utils/captionStyles';
+import { captionWordColor, type CaptionWordState } from '@/lib/utils/captionStyles';
 import { getEmojiCollection } from '@/lib/data/emojiCollections';
 
 /** Everything the Studio edits for one clip; undo and redo step through snapshots of it. */
@@ -102,43 +102,75 @@ export const exportStage = (progress: number): string =>
     ? 'Encoding the video...'
     : 'Almost done, uploading your file...';
 
-/** CSS entrance for a caption line; mirrors _entrance() in ass_generator.py. */
+/** CSS entrance for a caption line; mirrors _entrance() and _word_entrance() in ass_generator.py. */
 export const captionEntrance = (animation: CaptionConfig['animation'], speed: number): string | undefined => {
   const pace = Math.max(0.25, speed || 1);
-  if (animation === 'pop' || animation === 'wave') return `caption-rise ${Math.round(170 / pace)}ms ease-out`;
-  if (animation === 'fade' || animation === 'glow') return `caption-fade ${Math.round(200 / pace)}ms ease-out`;
-  return undefined;
+  const ms = (base: number) => `${Math.round(base / pace)}ms`;
+  switch (animation) {
+    case 'pop':
+    case 'wave':
+      return `caption-rise ${ms(170)} ease-out`;
+    case 'land':
+      return `caption-land ${ms(260)} ease-out`;
+    case 'bounce':
+      return `caption-bounce ${ms(260)} ease-out`;
+    case 'grow':
+      return `caption-grow ${ms(140)} ease-out`;
+    case 'blur':
+      return `caption-blur ${ms(220)} ease-out`;
+    case 'fade':
+    case 'glow':
+      return `caption-fade ${ms(200)} ease-out`;
+    case 'shake':
+    case 'breathe':
+    case 'glitch':
+      return `caption-fade ${ms(100)} ease-out`;
+    default:
+      return undefined;
+  }
+};
+
+/** The spoken word's keyframes per animation, with their duration at 1x. */
+const WORD_MOTION: Partial<Record<CaptionConfig['animation'], [string, number]>> = {
+  pop: ['word-grow', 70],
+  grow: ['word-grow', 150],
+  breathe: ['word-breathe', 540],
+  bounce: ['word-bounce', 210],
+  shake: ['word-shake', 175],
+  glitch: ['word-glitch', 180],
+  blur: ['word-blur', 180],
 };
 
 /**
- * One caption word's look; mirrors _active_word_tags() in ass_generator.py. On
- * a plate the spoken word sits in a pill of the secondary highlight colour,
- * and the emphasis colour is not used for text.
+ * One caption word's look; mirrors _render_group() in ass_generator.py.
+ * ``scale`` is the word's resting size (the second row of a stacked style
+ * can be larger), around which the spoken word moves.
  */
-export const activeWordStyle = (config: CaptionConfig, isActive: boolean, highlighted: boolean): React.CSSProperties => {
-  const onPlate = config.hasBgBox;
-  if (!isActive) {
-    return {
-      color: highlighted && !onPlate ? config.secondaryHighlightColor : config.textColor,
-      transform: 'scale(1)',
-    };
-  }
-  const motion =
-    config.animation === 'pop' ? 'scale(1.09)' : config.animation === 'wave' ? 'translateY(-8%) scale(1.06)' : 'scale(1)';
-  if (onPlate) {
-    return {
-      color: pillTextColor(config),
-      backgroundColor: config.secondaryHighlightColor,
-      borderRadius: '0.3em',
-      padding: '0 0.2em',
-      transform: motion,
-    };
-  }
+export const captionWordStyle = (
+  config: CaptionConfig,
+  state: CaptionWordState,
+  scale: number,
+  emphasised: boolean,
+  secondRow: boolean,
+): React.CSSProperties => {
+  const color = captionWordColor(config, state, secondRow, emphasised);
+  const rest: React.CSSProperties = { color, transform: `scale(${scale})` };
+  if (state === 'upcoming' && config.hideUpcoming) return { ...rest, opacity: 0 };
+  if (state !== 'active' || config.animation === 'none') return rest;
+
+  const [keyframes, duration] = WORD_MOTION[config.animation] ?? [];
+  const grow = scale * (config.animation === 'pop' || config.animation === 'grow' || config.animation === 'breathe' ? config.activeScale : 1);
+  const pace = Math.max(0.25, config.animationSpeed || 1);
   return {
-    color: config.highlightColor,
-    transform: motion,
-    ...(config.animation === 'glow' ? { textShadow: `0 0 12px ${config.highlightColor}` } : {}),
-  };
+    ...rest,
+    transform: `scale(${grow})`,
+    '--word-scale': String(scale),
+    '--word-grow': String(grow),
+    '--word-from-opacity': config.hideUpcoming ? '0' : '1',
+    ...(keyframes ? { animation: `${keyframes} ${Math.round(duration! / pace)}ms ease-out both` } : {}),
+    ...(config.wordBoxColor ? { backgroundColor: config.wordBoxColor, borderRadius: '0.12em' } : {}),
+    ...(config.animation === 'glow' ? { textShadow: `0 0 12px ${color}` } : {}),
+  } as React.CSSProperties;
 };
 
 /** Puts the chosen emoji set into the title the way the burner does. */

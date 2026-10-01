@@ -3,6 +3,7 @@
 import { createContext, useContext } from 'react';
 import type { EntitlementsResponse, PlanFeature } from '@/lib/api';
 import { parseApiDate } from '@/lib/utils/dates';
+import { resolveCaptionPreset } from '@/lib/utils/captionStyles';
 
 /**
  * Capabilities of the signed-in user's plan.
@@ -19,7 +20,7 @@ import { parseApiDate } from '@/lib/utils/dates';
 export const FREE_TIER_FALLBACK: EntitlementsResponse = {
   plan: 'free',
   aspect_ratios: ['9:16'],
-  caption_styles: ['clean_dark', 'default', 'hormozi', 'mrbeast', 'tiktok', 'bold_captions'],
+  caption_styles: ['karaoke', 'simple', 'punch', 'spotlight', 'lime_stack', 'backdrop'],
   max_clips_per_video: 5,
   watermark_forced: true,
   pro_ai_provider: false,
@@ -105,7 +106,7 @@ export const canUseCaptionStyle = (
   entitlements: EntitlementsResponse,
   styleId: string,
 ): boolean =>
-  entitlements.caption_styles === null || entitlements.caption_styles.includes(styleId);
+  entitlements.caption_styles === null || entitlements.caption_styles.includes(resolveCaptionPreset(styleId));
 
 /** Whether an output format is usable on the current plan. */
 export const canUseAspectRatio = (

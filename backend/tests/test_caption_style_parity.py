@@ -7,9 +7,11 @@ import pytest
 
 from subtitle_styling.ass_generator import FONTS_DIR, ass_filter
 from subtitle_styling.export_styles import OUTPUT_PATH, render
-from subtitle_styling.model import LEGACY_STYLE_ALIASES, SubtitleStyleType
+from subtitle_styling.model import SubtitleStyleType
 from subtitle_styling.templates import (
     CAPTION_TEMPLATES,
+    DEFAULT_STYLE,
+    LEGACY_STYLE_ALIASES,
     TEMPLATE_DEFAULTS,
     get_template,
     get_template_info,
@@ -19,7 +21,7 @@ from subtitle_styling.templates import (
 
 class TestTemplates:
     def test_expected_style_count(self) -> None:
-        assert len(CAPTION_TEMPLATES) == 28
+        assert len(CAPTION_TEMPLATES) == 21
 
     def test_every_template_is_fully_populated(self) -> None:
         for name in get_template_names():
@@ -29,7 +31,10 @@ class TestTemplates:
             assert template["name"] and template["description"]
 
     def test_unknown_style_falls_back_to_default(self) -> None:
-        assert get_template("does_not_exist") == get_template("default")
+        assert get_template("does_not_exist") == get_template(DEFAULT_STYLE)
+
+    def test_retired_ids_render_as_their_replacement(self) -> None:
+        assert get_template("hormozi") == get_template("lime_stack")
 
     def test_info_covers_every_template(self) -> None:
         assert {item["id"] for item in get_template_info()} == set(CAPTION_TEMPLATES)
@@ -61,7 +66,10 @@ class TestStyleResolution:
             assert SubtitleStyleType.to_template(alias) == target
 
     def test_unknown_resolves_to_default(self) -> None:
-        assert SubtitleStyleType.to_template("nonsense") == "default"
+        assert SubtitleStyleType.to_template("nonsense") == DEFAULT_STYLE
+
+    def test_no_retired_id_shadows_a_current_one(self) -> None:
+        assert not set(LEGACY_STYLE_ALIASES) & set(CAPTION_TEMPLATES)
 
 
 class TestFrontendParity:
@@ -97,8 +105,25 @@ class TestBundledFonts:
             "DM Serif Display": "DMSerifDisplay-Regular.ttf",
             "Luckiest Guy": "LuckiestGuy-Regular.ttf",
             "Permanent Marker": "PermanentMarker-Regular.ttf",
+            "Poppins Black": "Poppins-Black.ttf",
+            "Courier Prime": "CourierPrime-Bold.ttf",
+            "Roboto": "Roboto-Bold.ttf",
         }
         for name in get_template_names():
             family = get_template(name)["font_family"]
-            if family in bundled:
-                assert (FONTS_DIR / bundled[family]).is_file(), f"{name}: {family}"
+            assert family in bundled, f"{name}: {family} is not bundled"
+            assert (FONTS_DIR / bundled[family]).is_file(), f"{name}: {family}"
+
+    def test_every_bundled_font_ships_its_license(self) -> None:
+        """OFL and Apache fonts may only be redistributed with their license."""
+        licenses = list(FONTS_DIR.glob("LICENSE-*.txt"))
+        names = {
+            "Anton": "anton", "Archivo": "archivo-black", "Bangers": "bangers", "BebasNeue": "bebas-neue",
+            "CourierPrime": "courier-prime", "DejaVu": "dejavu", "DMSerifDisplay": "dm-serif-display",
+            "LuckiestGuy": "luckiest-guy", "NotoNaskhArabic": "noto-naskh-arabic", "NotoSans": "noto-sans-",
+            "PermanentMarker": "permanent-marker", "Poppins": "poppins", "Roboto": "roboto",
+        }
+        for font in FONTS_DIR.glob("*.ttf"):
+            prefix = next((p for p in names if font.name.startswith(p)), None)
+            assert prefix, f"{font.name} has no known license"
+            assert any(names[prefix] in lic.name for lic in licenses), f"{font.name} ships without its license"

@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from subtitle_styling.templates import DEFAULT_STYLE
 
 ScriptMode = Literal["auto", "spoken", "voiceover", "onscreen", "direction"]
 TargetSeconds = Literal[0, 15, 30, 45, 60, 90]
@@ -31,7 +32,7 @@ class EditCreateRequest(BaseModel):
     intent: str | None = Field(None, max_length=300)
     # A language code ("en", "hi", "te") or a mix ("hinglish", "tenglish").
     language: str = Field("en", min_length=2, max_length=20)
-    caption_style: str = Field("hormozi", min_length=1, max_length=60)
+    caption_style: str = Field(DEFAULT_STYLE, min_length=1, max_length=60)
     target_seconds: TargetSeconds = 0
     autopilot: bool = False
 

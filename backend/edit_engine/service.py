@@ -41,6 +41,7 @@ from jobs.queue import Job, get_queue
 from subscription.entitlements import Entitlements
 from subscription.service import InsufficientCreditsError, SubscriptionService
 from usage.context import llm_scope
+from subtitle_styling.templates import DEFAULT_STYLE
 
 log = get_logger(__name__)
 
@@ -368,7 +369,7 @@ class EditService:
             missing_lines=[line["text"] for line in lines if not line["sentences"]] if plan.get("mode") == "spoken" else [],
             skip_missing=bool(plan.get("skip_missing")), removed_lines=removed,
             hook=plan.get("hook", ""), title=plan.get("title", ""), look=plan.get("look", "natural"),
-            caption_style=plan.get("caption_style", "hormozi"),
+            caption_style=plan.get("caption_style", DEFAULT_STYLE),
             music=EditMusicResponse(id=track.id, title=track.title, artist=track.artist, licence=track.licence,
                                     credit_text=track.credit_text, url=self._url(track.audio_key)) if track else None,
             music_mood=plan.get("music_mood", ""), broll_count=counts["broll"],

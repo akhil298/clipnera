@@ -3,13 +3,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Eye, ShieldCheck } from 'lucide-react';
 import type { AspectRatio, BRollOverlay, CaptionConfig, ViralClip, WordTimestamp } from '@/lib/types';
 import { PlatformOverlay } from './PlatformOverlay';
+import { captionRowSplit, captionTextStyle } from '@/lib/utils/captionStyles';
 import {
   CAPTION_Y_MAX,
   CAPTION_Y_MIN,
   PreviewMode,
-  activeWordStyle,
   applyEmojiCollection,
   captionEntrance,
+  captionWordStyle,
   captionsClear,
   safeZoneFor,
 } from './studioUtils';
@@ -84,6 +85,17 @@ export function StudioCanvas(props: StudioCanvasProps) {
   const scale = stageWidth > 0 ? stageWidth / CAPTION_REFERENCE_WIDTH : 0.3;
   const captionFontPx = Math.max(9, config.fontSize * scale);
   const titleFontPx = Math.max(9, config.titleFontSize * scale);
+  // As burned: each word holds the highlight from its start until the next
+  // word starts, and a stacked style splits the line over two rows.
+  const activeIndex = captionWords.reduce((found, word, i) => (currentTime >= word.start ? i : found), -1);
+  const rowStart = captionRowSplit(captionWords.map((word) => word.text), config.rows);
+  const captionRows = [0, 1]
+    .map((r) =>
+      captionWords
+        .map((word, index) => ({ word, index, secondRow: config.rows > 1 && index >= rowStart }))
+        .filter(({ secondRow }) => (r === 1) === secondRow),
+    )
+    .filter((row) => row.length > 0);
 
   const moveCaption = (clientY: number) => {
     const rect = stageRef.current?.getBoundingClientRect();
@@ -216,27 +228,36 @@ export function StudioCanvas(props: StudioCanvasProps) {
                 } ${config.hasBgBox ? 'shadow-2xl border border-neutral-700/50' : ''}`}
                 style={{ backgroundColor: config.hasBgBox ? config.bgBoxColor : 'transparent' }}
               >
-                <p
+                <div
                   key={captionWords[0]?.id}
-                  className={`font-black tracking-tight leading-tight ${config.uppercase ? 'uppercase' : ''}`}
+                  className="leading-[1.1] tracking-tight"
                   style={{
+                    ...captionTextStyle(config),
                     animation: captionEntrance(config.animation, config.animationSpeed),
-                    fontFamily: config.fontFamily,
                     fontSize: `${captionFontPx}px`,
-                    color: config.textColor,
-                    textShadow: config.shadowIntensity > 0 ? `0 2px ${config.shadowIntensity * 10}px rgba(0,0,0,0.9)` : 'none',
                   }}
                 >
-                  {captionWords.map((word) => {
-                    const isActive = config.animation !== 'none' && currentTime >= word.start && currentTime <= word.end;
-                    return (
-                      <span key={word.id} className="inline-block mx-1 transition-all" style={activeWordStyle(config, isActive, Boolean(word.highlighted))}>
-                        {word.text}
-                        {word.emoji && config.emojisEnabled && <span className="ml-1 inline-block animate-pulse">{word.emoji}</span>}
-                      </span>
-                    );
-                  })}
-                </p>
+                  {captionRows.map((row, r) => (
+                    <p key={r}>
+                      {row.map(({ word, index, secondRow }) => (
+                        <span
+                          key={word.id}
+                          className="caption-motion inline-block mx-[0.12em] px-[0.06em] transition-[color,transform] duration-75"
+                          style={captionWordStyle(
+                            config,
+                            index < activeIndex ? 'spoken' : index === activeIndex ? 'active' : 'upcoming',
+                            secondRow ? config.secondLineScale : 1,
+                            Boolean(word.highlighted),
+                            secondRow,
+                          )}
+                        >
+                          {word.text}
+                          {word.emoji && config.emojisEnabled && <span className="ml-1 inline-block animate-pulse">{word.emoji}</span>}
+                        </span>
+                      ))}
+                    </p>
+                  ))}
+                </div>
               </div>
             ) : !hasTranscript ? (
               <div className="inline-block px-3 py-1.5 rounded-lg bg-black/70 border border-neutral-700/50 text-[10px] text-neutral-400">

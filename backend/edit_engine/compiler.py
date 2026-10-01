@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 from transcription.language import is_hesitation
+from subtitle_styling.templates import DEFAULT_STYLE
 
 # Padding kept around speech at every cut, so a word's attack and decay survive
 # (the same values content_intelligence.edit_plan uses for clips).
@@ -62,7 +63,7 @@ def compile_timeline(analysis: dict[str, Any], plan: dict[str, Any], *, size: tu
     timeline = builder(analysis, plan, target_seconds, max_seconds)
     timeline.update({
         "layout": layout, "width": size[0], "height": size[1], "fps": 30,
-        "look": plan.get("look", "natural"), "caption_style": plan.get("caption_style", "hormozi"),
+        "look": plan.get("look", "natural"), "caption_style": plan.get("caption_style", DEFAULT_STYLE),
     })
     _add_hook(timeline, plan)
     if plan.get("mode") == "onscreen":

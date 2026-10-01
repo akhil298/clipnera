@@ -15,7 +15,7 @@ import {
 } from '@/lib/types';
 import { getToken, clearAuth, setAuth } from '@/lib/auth';
 import { emojiForKeyword } from '@/lib/data/emojiCatalog.generated';
-import { getCaptionConfig } from '@/lib/utils/captionStyles';
+import { DEFAULT_CAPTION_PRESET, normalizeCaptionConfig } from '@/lib/utils/captionStyles';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
@@ -318,9 +318,6 @@ export interface ExportProjectOptions {
   channelIntro?: boolean;
 }
 
-// New clips start on Clean Dark: animated white captions on a dark plate.
-// Taken from the generated style list so the preview matches what burns.
-const DEFAULT_CAPTION_CONFIG: CaptionConfig = getCaptionConfig('clean_dark');
 
 /**
  * Build the editor's transcript segments on the clip's own timeline.
@@ -467,7 +464,7 @@ export function mapBackendClip(clip: BackendClip): ViralClip {
     transcriptSegments: applyTranscriptEdits(buildTranscriptSegments(clip), settings.transcript_edits),
     bRollOverlays: [],
     soundEffects: [],
-    captionConfig: { ...DEFAULT_CAPTION_CONFIG, ...settings.caption_config },
+    captionConfig: normalizeCaptionConfig(settings.caption_config),
     hookTransition: settings.hook_transition,
     watermarkEnabled: settings.watermark_enabled,
     captionsEnabled: settings.captions_enabled,
@@ -650,7 +647,7 @@ export const clipApi = {
       channel_intro: channelIntro,
       ...(hookTransition ? { hook_transition: hookTransition } : {}),
       ...(bundle ? { bundle } : {}),
-      style_type: captionConfig?.preset || 'bold_captions',
+      style_type: captionConfig?.preset || DEFAULT_CAPTION_PRESET,
       custom_config: captionConfig ? {
         font_size: captionConfig.fontSize,
         font_family: captionConfig.fontFamily,
@@ -659,6 +656,7 @@ export const clipApi = {
         secondary_highlight_color: captionConfig.secondaryHighlightColor,
         has_bg_box: captionConfig.hasBgBox,
         bg_box_color: captionConfig.bgBoxColor,
+        word_box_color: captionConfig.wordBoxColor,
         uppercase: captionConfig.uppercase,
         animation: captionConfig.animation,
         animation_speed: captionConfig.animationSpeed,

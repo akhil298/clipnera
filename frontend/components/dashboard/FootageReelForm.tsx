@@ -13,7 +13,7 @@ import {
   editsApi,
 } from '@/lib/api';
 import { canUseCaptionStyle, useEntitlements } from '@/hooks/useEntitlements';
-import { getAllCaptionStyles } from '@/lib/utils/captionStyles';
+import { DEFAULT_CAPTION_PRESET, getAllCaptionStyles } from '@/lib/utils/captionStyles';
 import {
   SCRIPT_MODE_OPTIONS,
   TARGET_OPTIONS,
@@ -61,7 +61,7 @@ export function FootageReelForm({ onCreated }: { onCreated: (id: string) => void
   const [scriptMode, setScriptMode] = useState<EditScriptMode>('auto');
   const [intent, setIntent] = useState('');
   const [language, setLanguage] = useState('en');
-  const [captionStyle, setCaptionStyle] = useState('hormozi');
+  const [captionStyle, setCaptionStyle] = useState<string>(DEFAULT_CAPTION_PRESET);
   const [target, setTarget] = useState<EditTargetSeconds>(0);
   const [autopilot, setAutopilot] = useState(false);
   const [showScript, setShowScript] = useState(false);

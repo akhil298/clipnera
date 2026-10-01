@@ -15,6 +15,7 @@ from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Integer, Stri
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.database import Base
+from subtitle_styling.templates import DEFAULT_STYLE
 
 
 class EditStatus(str, enum.Enum):
@@ -47,7 +48,7 @@ class EditProject(Base):
     script_mode: Mapped[str] = mapped_column(String(20), default="auto", nullable=False)
     intent: Mapped[str | None] = mapped_column(String(300), nullable=True)
     language: Mapped[str] = mapped_column(String(20), default="en", nullable=False)
-    caption_style: Mapped[str] = mapped_column(String(60), default="hormozi", nullable=False)
+    caption_style: Mapped[str] = mapped_column(String(60), default=DEFAULT_STYLE, nullable=False)
     # 0 lets the director choose.
     target_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     autopilot: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
