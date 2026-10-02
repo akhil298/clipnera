@@ -33,7 +33,7 @@ from core.logging_config import get_logger
 from usage.context import check_budget
 from usage.recorder import record_llm_call
 
-from .base import BaseAI
+from .base import BaseAI, ToolCall, ToolReply, ToolResult, ToolSpec
 
 settings = get_settings()
 log = get_logger(__name__)
@@ -219,7 +219,43 @@ class Anthropic(BaseAI):
             "Anthropic API call started: model=%s, messages=%d, max_output_tokens=%d, schema=%s",
             self.model, len(conversation), request["max_tokens"], bool(json_schema),
         )
+        response = await self._send(request, effort)
 
+        text = "".join(block.text for block in response.content if block.type == "text")
+        usage = response.usage
+        log.info(
+            "Anthropic API call succeeded: model=%s, chars=%d, stop_reason=%s, "
+            "input_tokens=%s, output_tokens=%s, cache_read=%s",
+            self.model, len(text), response.stop_reason,
+            getattr(usage, "input_tokens", None), getattr(usage, "output_tokens", None),
+            getattr(usage, "cache_read_input_tokens", None),
+        )
+
+        truncated = response.stop_reason == "max_tokens"
+        if not text.strip():
+            cause = " (output cap spent on thinking)" if truncated else ""
+            raise RuntimeError(f"Anthropic model {self.model} returned no text content{cause}")
+
+        if truncated:
+            # A schema constrains the shape, not the length: a reply cut off at
+            # the cap is still incomplete JSON and parses to nothing downstream.
+            log.warning(
+                "Anthropic reply hit the output cap at max_tokens=%d; it is truncated",
+                request["max_tokens"],
+            )
+
+        # A schema-enforced reply is valid JSON by construction, but a caller in
+        # json_mode without a schema relies on the prompt; fail loudly here
+        # rather than let an unparseable body become an empty result.
+        if json_mode and not json_schema:
+            try:
+                json.loads(text)
+            except json.JSONDecodeError:
+                log.warning("Anthropic reply in json_mode was not valid JSON: model=%s", self.model)
+        return text
+
+    async def _send(self, request: dict[str, Any], effort: str) -> Any:
+        """Stream one request to its final message, record what it cost, and refuse a declined reply."""
         started = time.monotonic()
         try:
             # Streamed so a long reply cannot hit the HTTP timeout; the helper
@@ -266,44 +302,54 @@ class Anthropic(BaseAI):
             effort=effort,
             latency_ms=int((time.monotonic() - started) * 1000),
         )
-
         if response.stop_reason == "refusal":
             details = getattr(response, "stop_details", None)
             raise RuntimeError(
                 f"Anthropic declined the request: {getattr(details, 'category', 'unknown')}"
             )
+        return response
 
-        text = "".join(block.text for block in response.content if block.type == "text")
-        log.info(
-            "Anthropic API call succeeded: model=%s, chars=%d, stop_reason=%s, "
-            "input_tokens=%s, output_tokens=%s, cache_read=%s",
-            self.model, len(text), response.stop_reason,
-            getattr(usage, "input_tokens", None), getattr(usage, "output_tokens", None),
-            getattr(usage, "cache_read_input_tokens", None),
+    async def chat_with_tools(self, messages: list[dict[str, Any]], tools: list[ToolSpec], *,
+                              max_tokens: int = 4096) -> ToolReply:
+        budget = check_budget()
+        effort = "low" if budget is not None and budget.tight else self.effort
+        system, conversation = self._split_system(messages)
+        definitions = [
+            {"name": t.name, "description": t.description, "input_schema": t.schema,
+             # Inputs stream as they are written; the caller validates every one before running it.
+             "eager_input_streaming": True}
+            for t in tools
+        ]
+        if definitions:
+            # Tools render before the system prompt, so one breakpoint here caches both across steps.
+            definitions[-1]["cache_control"] = {"type": "ephemeral"}
+        request: dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": output_token_cap(max_tokens, effort),
+            "messages": conversation,
+            "tools": definitions,
+            "output_config": {"effort": effort},
+        }
+        if system:
+            request["system"] = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+        response = await self._send(request, effort)
+
+        calls = [ToolCall(id=b.id, name=b.name, arguments=b.input if isinstance(b.input, dict) else {})
+                 for b in response.content if b.type == "tool_use"]
+        return ToolReply(
+            text="".join(b.text for b in response.content if b.type == "text"),
+            calls=calls,
+            # Every block, thinking included, goes back unchanged on the next step.
+            message={"role": "assistant", "content": [b.model_dump(mode="json", exclude_none=True) for b in response.content]},
+            truncated=response.stop_reason == "max_tokens",
         )
 
-        truncated = response.stop_reason == "max_tokens"
-        if not text.strip():
-            cause = " (output cap spent on thinking)" if truncated else ""
-            raise RuntimeError(f"Anthropic model {self.model} returned no text content{cause}")
-
-        if truncated:
-            # A schema constrains the shape, not the length: a reply cut off at
-            # the cap is still incomplete JSON and parses to nothing downstream.
-            log.warning(
-                "Anthropic reply hit the output cap at max_tokens=%d; it is truncated",
-                request["max_tokens"],
-            )
-
-        # A schema-enforced reply is valid JSON by construction, but a caller in
-        # json_mode without a schema relies on the prompt; fail loudly here
-        # rather than let an unparseable body become an empty result.
-        if json_mode and not json_schema:
-            try:
-                json.loads(text)
-            except json.JSONDecodeError:
-                log.warning("Anthropic reply in json_mode was not valid JSON: model=%s", self.model)
-        return text
+    def tool_results(self, results: list[ToolResult]) -> list[dict[str, Any]]:
+        # All results of one step go back in a single message, or Claude learns to stop calling tools in parallel.
+        return [{"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": r.call_id, "content": r.content, "is_error": r.is_error}
+            for r in results
+        ]}]
 
     async def stream_chat(self, messages: list[dict[str, Any]], **kwargs: Any) -> AsyncIterator[str]:
         requested_max_tokens = int(kwargs.pop("max_tokens", None) or 4096)

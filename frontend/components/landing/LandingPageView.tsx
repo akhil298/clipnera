@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { X } from 'lucide-react';
-import { GoogleSignIn } from '@/components/auth/GoogleSignIn';
 import { isAuthenticated } from '@/lib/auth';
 import { Navbar } from './Navbar';
+import { SignInModal } from './SignInModal';
 import { HeroSection } from './HeroSection';
 import { ClipWall } from './ClipWall';
 import { EngineSection } from './EngineSection';
@@ -43,14 +42,7 @@ export default function LandingPageView() {
     },
   ];
 
-  useEffect(() => {
-    if (!isAuthModalOpen) return;
-    const closeOnEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsAuthModalOpen(false);
-    };
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [isAuthModalOpen]);
+  const closeAuthModal = useCallback(() => setIsAuthModalOpen(false), []);
 
   // Signed-out visitors sign in first; the dashboard would only bounce them back here.
   const handleLaunchStudio = () => {
@@ -66,26 +58,7 @@ export default function LandingPageView() {
       >
         Skip to content
       </a>
-      {isAuthModalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Sign in to Clipnera"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
-        >
-          <div className="relative w-full max-w-md rounded-2xl bg-neutral-900/90 border border-neutral-800 p-6 shadow-xl">
-            <button
-              onClick={() => setIsAuthModalOpen(false)}
-              aria-label="Close"
-              autoFocus
-              className="absolute top-5 right-5 p-1.5 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
-            >
-              <X className="w-4 h-4" aria-hidden="true" />
-            </button>
-            <GoogleSignIn />
-          </div>
-        </div>
-      )}
+      <SignInModal open={isAuthModalOpen} onClose={closeAuthModal} />
 
       <Navbar onOpenAuthModal={() => setIsAuthModalOpen(true)} onLaunchStudio={handleLaunchStudio} />
 

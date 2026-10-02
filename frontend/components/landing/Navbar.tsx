@@ -2,11 +2,13 @@
 
 import { BrandMark } from './BrandMark';
 
+// Rooted at "/" so the same bar works on the home page and on /editor.
 const LINKS = [
-  { href: '#clip-wall', label: 'Clip wall' },
-  { href: '#how-it-works', label: 'How it works' },
-  { href: '#captions', label: 'Captions' },
-  { href: '#pricing', label: 'Pricing' },
+  { href: '/#clip-wall', label: 'Clip wall' },
+  { href: '/#how-it-works', label: 'How it works' },
+  { href: '/editor', label: 'Editor', isNew: true },
+  { href: '/#captions', label: 'Captions' },
+  { href: '/#pricing', label: 'Pricing' },
 ];
 
 export function Navbar({ onOpenAuthModal, onLaunchStudio }: { onOpenAuthModal: () => void; onLaunchStudio: () => void }) {
@@ -24,8 +26,11 @@ export function Navbar({ onOpenAuthModal, onLaunchStudio }: { onOpenAuthModal: (
 
         <nav aria-label="Main" className="hidden items-center gap-9 text-sm font-medium text-neutral-300 md:flex">
           {LINKS.map((link) => (
-            <a key={link.href} href={link.href} className="transition-colors hover:text-white">
+            <a key={link.href} href={link.href} className="inline-flex items-center gap-1.5 transition-colors hover:text-white">
               {link.label}
+              {link.isNew && (
+                <span className="rounded-md bg-amber-500 px-1.5 py-px font-jetbrains text-[9.5px] font-bold text-neutral-950">NEW</span>
+              )}
             </a>
           ))}
         </nav>

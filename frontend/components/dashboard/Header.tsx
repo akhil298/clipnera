@@ -33,6 +33,7 @@ const TAB_TITLES: Record<TabType, string> = {
   analytics: 'Analytics',
   brand_kit: 'Brand kit',
   reels: 'Reels',
+  video_editor: 'Editor',
   settings: 'Settings',
 };
 

@@ -16,6 +16,7 @@ import {
 import { getToken, clearAuth, setAuth } from '@/lib/auth';
 import { emojiForKeyword } from '@/lib/data/emojiCatalog.generated';
 import { DEFAULT_CAPTION_PRESET, normalizeCaptionConfig } from '@/lib/utils/captionStyles';
+import type { Timeline, TimelineOp } from '@/lib/editor/timeline';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL;
 
@@ -1713,7 +1714,8 @@ export type FeatureFlagKey =
   | 'broll_studio.reels'
   | 'broll_studio.ai_shots'
   | 'broll_studio.reels.footage'
-  | 'broll_studio.reels.footage.opus_director';
+  | 'broll_studio.reels.footage.opus_director'
+  | 'agent_editor';
 
 export interface FeatureFlagsResponse {
   flags: Record<FeatureFlagKey, boolean>;
@@ -2544,4 +2546,48 @@ export const adminMusicApi = {
   add: (form: FormData) => envelopeRequest<MusicTrackResponse>('/admin/music', { method: 'POST', body: form }),
   setStatus: (trackId: string, status: 'live' | 'pulled') =>
     envelopeRequest<MusicTrackResponse>(`/admin/music/${trackId}/status`, post({ status })),
+};
+
+// --- Editor (backend editor/schema.py) ----------------------------------------
+
+export type EditorAspect = '9:16' | '1:1' | '4:5' | '16:9';
+
+export interface EditorProjectCreate {
+  title?: string;
+  aspect?: EditorAspect;
+}
+
+export interface EditorProjectSummary {
+  id: string;
+  title: string;
+  version: number;
+  /** Seconds, for the project list. */
+  duration_s: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EditorProjectResponse extends EditorProjectSummary {
+  timeline: Timeline;
+}
+
+export interface EditorOpsRequest {
+  /** The project version the ops were made against; a stale one is refused with 409 STALE_VERSION. */
+  base_version: number;
+  ops: TimelineOp[];
+}
+
+export interface EditorOpsResponse {
+  version: number;
+  timeline: Timeline;
+}
+
+export const editorApi = {
+  create: (payload: EditorProjectCreate) => envelopeRequest<EditorProjectResponse>('/editor/projects', post(payload)),
+  /** Opens a footage reel's current edit as a new editor project. */
+  openReel: (editId: string) => envelopeRequest<EditorProjectResponse>(`/editor/projects/from-reel/${editId}`, post({})),
+  list: () => envelopeRequest<EditorProjectSummary[]>('/editor/projects'),
+  get: (projectId: string) => envelopeRequest<EditorProjectResponse>(`/editor/projects/${projectId}`),
+  applyOps: (projectId: string, payload: EditorOpsRequest) =>
+    envelopeRequest<EditorOpsResponse>(`/editor/projects/${projectId}/ops`, post(payload)),
 };

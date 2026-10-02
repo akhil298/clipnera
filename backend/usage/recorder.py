@@ -45,10 +45,10 @@ async def record_llm_call(
         cache_read_tokens, cache_write_tokens,
         f"{audio_seconds:.1f}" if audio_seconds is not None else "-", cost,
     )
+    if scope is not None and scope.budget is not None:
+        scope.budget.charge(cost)
     if scope is None or scope.project_id is None:
         return cost
-    if scope.budget is not None:
-        scope.budget.charge(cost)
 
     try:
         async with AsyncSessionLocal() as session:

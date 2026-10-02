@@ -341,6 +341,7 @@ export type TabType =
   | 'analytics'
   | 'brand_kit'
   | 'reels'
+  | 'video_editor'
   | 'settings';
 
 export interface UserProfile {

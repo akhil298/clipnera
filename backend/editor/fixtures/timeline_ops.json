@@ -1,0 +1,1626 @@
+{
+ "base": {
+  "fps": 30,
+  "width": 1080,
+  "height": 1920,
+  "assets": {
+   "a1": {
+    "id": "a1",
+    "kind": "video",
+    "key": "u/p/a1.mp4",
+    "frames": 900,
+    "has_audio": true
+   },
+   "a2": {
+    "id": "a2",
+    "kind": "video",
+    "key": "u/p/a2.mp4",
+    "frames": 300
+   },
+   "img": {
+    "id": "img",
+    "kind": "image",
+    "key": "u/p/fort.jpg",
+    "frames": 1
+   }
+  },
+  "tracks": [
+   {
+    "id": "v1",
+    "kind": "video",
+    "items": [
+     {
+      "type": "clip",
+      "id": "c1",
+      "asset": "a1",
+      "at": 0,
+      "src_in": 0,
+      "src_out": 300
+     },
+     {
+      "type": "clip",
+      "id": "c2",
+      "asset": "a1",
+      "at": 300,
+      "src_in": 450,
+      "src_out": 600,
+      "keyframes": {
+       "scale": [
+        {
+         "f": 0,
+         "v": 1.0
+        },
+        {
+         "f": 120,
+         "v": 1.2,
+         "ease": "out"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "o1",
+    "kind": "overlay",
+    "items": [
+     {
+      "type": "clip",
+      "id": "b1",
+      "asset": "a2",
+      "at": 90,
+      "src_in": 0,
+      "src_out": 60
+     }
+    ]
+   },
+   {
+    "id": "t1",
+    "kind": "text",
+    "items": [
+     {
+      "type": "text",
+      "id": "h1",
+      "text": "Nobody tells you this",
+      "style": "hook_bold",
+      "at": 0,
+      "dur": 66
+     }
+    ]
+   },
+   {
+    "id": "au",
+    "kind": "audio",
+    "items": [
+     {
+      "type": "music",
+      "id": "mus",
+      "track": "m12",
+      "at": 0,
+      "dur": 450
+     }
+    ]
+   }
+  ],
+  "captions": {
+   "follow": "v1",
+   "style": "lime_stack",
+   "language": "hinglish"
+  }
+ },
+ "cases": [
+  {
+   "name": "add a text item",
+   "ops": [
+    {
+     "op": "add_item",
+     "track": "t1",
+     "item": {
+      "type": "text",
+      "id": "h2",
+      "text": "Wait for it",
+      "style": "pop",
+      "at": 400,
+      "dur": 30
+     }
+    }
+   ],
+   "expect": {
+    "timeline": {
+     "assets": {
+      "a1": {
+       "id": "a1",
+       "kind": "video",
+       "key": "u/p/a1.mp4",
+       "frames": 900,
+       "has_audio": true
+      },
+      "a2": {
+       "id": "a2",
+       "kind": "video",
+       "key": "u/p/a2.mp4",
+       "frames": 300
+      },
+      "img": {
+       "id": "img",
+       "kind": "image",
+       "key": "u/p/fort.jpg",
+       "frames": 1
+      }
+     },
+     "tracks": [
+      {
+       "id": "v1",
+       "kind": "video",
+       "items": [
+        {
+         "id": "c1",
+         "at": 0,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 0,
+         "src_out": 300
+        },
+        {
+         "id": "c2",
+         "at": 300,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 450,
+         "src_out": 600,
+         "keyframes": {
+          "scale": [
+           {
+            "f": 0,
+            "v": 1.0
+           },
+           {
+            "f": 120,
+            "v": 1.2,
+            "ease": "out"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "id": "o1",
+       "kind": "overlay",
+       "items": [
+        {
+         "id": "b1",
+         "at": 90,
+         "type": "clip",
+         "asset": "a2",
+         "src_in": 0,
+         "src_out": 60
+        }
+       ]
+      },
+      {
+       "id": "t1",
+       "kind": "text",
+       "items": [
+        {
+         "id": "h1",
+         "at": 0,
+         "type": "text",
+         "text": "Nobody tells you this",
+         "style": "hook_bold",
+         "dur": 66
+        },
+        {
+         "id": "h2",
+         "at": 400,
+         "type": "text",
+         "text": "Wait for it",
+         "style": "pop",
+         "dur": 30
+        }
+       ]
+      },
+      {
+       "id": "au",
+       "kind": "audio",
+       "items": [
+        {
+         "id": "mus",
+         "at": 0,
+         "type": "music",
+         "track": "m12",
+         "dur": 450
+        }
+       ]
+      }
+     ],
+     "captions": {
+      "style": "lime_stack",
+      "language": "hinglish",
+      "follow": "v1"
+     }
+    }
+   }
+  },
+  {
+   "name": "adding a clip over another is refused",
+   "ops": [
+    {
+     "op": "add_item",
+     "track": "v1",
+     "item": {
+      "type": "clip",
+      "id": "c3",
+      "asset": "a2",
+      "at": 250,
+      "src_in": 0,
+      "src_out": 60
+     }
+    }
+   ],
+   "expect": {
+    "error": "OVERLAP",
+    "op_index": 0
+   }
+  },
+  {
+   "name": "ripple delete pulls later clips left",
+   "ops": [
+    {
+     "op": "remove_item",
+     "item": "c1",
+     "ripple": true
+    }
+   ],
+   "expect": {
+    "timeline": {
+     "assets": {
+      "a1": {
+       "id": "a1",
+       "kind": "video",
+       "key": "u/p/a1.mp4",
+       "frames": 900,
+       "has_audio": true
+      },
+      "a2": {
+       "id": "a2",
+       "kind": "video",
+       "key": "u/p/a2.mp4",
+       "frames": 300
+      },
+      "img": {
+       "id": "img",
+       "kind": "image",
+       "key": "u/p/fort.jpg",
+       "frames": 1
+      }
+     },
+     "tracks": [
+      {
+       "id": "v1",
+       "kind": "video",
+       "items": [
+        {
+         "id": "c2",
+         "at": 0,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 450,
+         "src_out": 600,
+         "keyframes": {
+          "scale": [
+           {
+            "f": 0,
+            "v": 1.0
+           },
+           {
+            "f": 120,
+            "v": 1.2,
+            "ease": "out"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "id": "o1",
+       "kind": "overlay",
+       "items": [
+        {
+         "id": "b1",
+         "at": 90,
+         "type": "clip",
+         "asset": "a2",
+         "src_in": 0,
+         "src_out": 60
+        }
+       ]
+      },
+      {
+       "id": "t1",
+       "kind": "text",
+       "items": [
+        {
+         "id": "h1",
+         "at": 0,
+         "type": "text",
+         "text": "Nobody tells you this",
+         "style": "hook_bold",
+         "dur": 66
+        }
+       ]
+      },
+      {
+       "id": "au",
+       "kind": "audio",
+       "items": [
+        {
+         "id": "mus",
+         "at": 0,
+         "type": "music",
+         "track": "m12",
+         "dur": 450
+        }
+       ]
+      }
+     ],
+     "captions": {
+      "style": "lime_stack",
+      "language": "hinglish",
+      "follow": "v1"
+     }
+    }
+   }
+  },
+  {
+   "name": "move a b-roll clip onto the video track",
+   "ops": [
+    {
+     "op": "move_item",
+     "item": "b1",
+     "at": 450,
+     "track": "v1"
+    }
+   ],
+   "expect": {
+    "timeline": {
+     "assets": {
+      "a1": {
+       "id": "a1",
+       "kind": "video",
+       "key": "u/p/a1.mp4",
+       "frames": 900,
+       "has_audio": true
+      },
+      "a2": {
+       "id": "a2",
+       "kind": "video",
+       "key": "u/p/a2.mp4",
+       "frames": 300
+      },
+      "img": {
+       "id": "img",
+       "kind": "image",
+       "key": "u/p/fort.jpg",
+       "frames": 1
+      }
+     },
+     "tracks": [
+      {
+       "id": "v1",
+       "kind": "video",
+       "items": [
+        {
+         "id": "c1",
+         "at": 0,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 0,
+         "src_out": 300
+        },
+        {
+         "id": "c2",
+         "at": 300,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 450,
+         "src_out": 600,
+         "keyframes": {
+          "scale": [
+           {
+            "f": 0,
+            "v": 1.0
+           },
+           {
+            "f": 120,
+            "v": 1.2,
+            "ease": "out"
+           }
+          ]
+         }
+        },
+        {
+         "id": "b1",
+         "at": 450,
+         "type": "clip",
+         "asset": "a2",
+         "src_in": 0,
+         "src_out": 60
+        }
+       ]
+      },
+      {
+       "id": "o1",
+       "kind": "overlay"
+      },
+      {
+       "id": "t1",
+       "kind": "text",
+       "items": [
+        {
+         "id": "h1",
+         "at": 0,
+         "type": "text",
+         "text": "Nobody tells you this",
+         "style": "hook_bold",
+         "dur": 66
+        }
+       ]
+      },
+      {
+       "id": "au",
+       "kind": "audio",
+       "items": [
+        {
+         "id": "mus",
+         "at": 0,
+         "type": "music",
+         "track": "m12",
+         "dur": 450
+        }
+       ]
+      }
+     ],
+     "captions": {
+      "style": "lime_stack",
+      "language": "hinglish",
+      "follow": "v1"
+     }
+    }
+   }
+  },
+  {
+   "name": "split keeps keyframes with their piece",
+   "ops": [
+    {
+     "op": "split_item",
+     "item": "c2",
+     "at": 360,
+     "new_id": "c2b"
+    }
+   ],
+   "expect": {
+    "timeline": {
+     "assets": {
+      "a1": {
+       "id": "a1",
+       "kind": "video",
+       "key": "u/p/a1.mp4",
+       "frames": 900,
+       "has_audio": true
+      },
+      "a2": {
+       "id": "a2",
+       "kind": "video",
+       "key": "u/p/a2.mp4",
+       "frames": 300
+      },
+      "img": {
+       "id": "img",
+       "kind": "image",
+       "key": "u/p/fort.jpg",
+       "frames": 1
+      }
+     },
+     "tracks": [
+      {
+       "id": "v1",
+       "kind": "video",
+       "items": [
+        {
+         "id": "c1",
+         "at": 0,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 0,
+         "src_out": 300
+        },
+        {
+         "id": "c2",
+         "at": 300,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 450,
+         "src_out": 510,
+         "keyframes": {
+          "scale": [
+           {
+            "f": 0,
+            "v": 1.0
+           }
+          ]
+         }
+        },
+        {
+         "id": "c2b",
+         "at": 360,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 510,
+         "src_out": 600,
+         "keyframes": {
+          "scale": [
+           {
+            "f": 60,
+            "v": 1.2,
+            "ease": "out"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "id": "o1",
+       "kind": "overlay",
+       "items": [
+        {
+         "id": "b1",
+         "at": 90,
+         "type": "clip",
+         "asset": "a2",
+         "src_in": 0,
+         "src_out": 60
+        }
+       ]
+      },
+      {
+       "id": "t1",
+       "kind": "text",
+       "items": [
+        {
+         "id": "h1",
+         "at": 0,
+         "type": "text",
+         "text": "Nobody tells you this",
+         "style": "hook_bold",
+         "dur": 66
+        }
+       ]
+      },
+      {
+       "id": "au",
+       "kind": "audio",
+       "items": [
+        {
+         "id": "mus",
+         "at": 0,
+         "type": "music",
+         "track": "m12",
+         "dur": 450
+        }
+       ]
+      }
+     ],
+     "captions": {
+      "style": "lime_stack",
+      "language": "hinglish",
+      "follow": "v1"
+     }
+    }
+   }
+  },
+  {
+   "name": "trimming past the asset is refused",
+   "ops": [
+    {
+     "op": "trim_item",
+     "item": "c1",
+     "src_out": 1000
+    }
+   ],
+   "expect": {
+    "error": "OUT_OF_RANGE",
+    "op_index": 0
+   }
+  },
+  {
+   "name": "a transform patch merges with the current transform",
+   "ops": [
+    {
+     "op": "update_item",
+     "item": "c1",
+     "patch": {
+      "transform": {
+       "scale": 1.2
+      }
+     }
+    }
+   ],
+   "expect": {
+    "timeline": {
+     "assets": {
+      "a1": {
+       "id": "a1",
+       "kind": "video",
+       "key": "u/p/a1.mp4",
+       "frames": 900,
+       "has_audio": true
+      },
+      "a2": {
+       "id": "a2",
+       "kind": "video",
+       "key": "u/p/a2.mp4",
+       "frames": 300
+      },
+      "img": {
+       "id": "img",
+       "kind": "image",
+       "key": "u/p/fort.jpg",
+       "frames": 1
+      }
+     },
+     "tracks": [
+      {
+       "id": "v1",
+       "kind": "video",
+       "items": [
+        {
+         "id": "c1",
+         "at": 0,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 0,
+         "src_out": 300,
+         "transform": {
+          "scale": 1.2
+         }
+        },
+        {
+         "id": "c2",
+         "at": 300,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 450,
+         "src_out": 600,
+         "keyframes": {
+          "scale": [
+           {
+            "f": 0,
+            "v": 1.0
+           },
+           {
+            "f": 120,
+            "v": 1.2,
+            "ease": "out"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "id": "o1",
+       "kind": "overlay",
+       "items": [
+        {
+         "id": "b1",
+         "at": 90,
+         "type": "clip",
+         "asset": "a2",
+         "src_in": 0,
+         "src_out": 60
+        }
+       ]
+      },
+      {
+       "id": "t1",
+       "kind": "text",
+       "items": [
+        {
+         "id": "h1",
+         "at": 0,
+         "type": "text",
+         "text": "Nobody tells you this",
+         "style": "hook_bold",
+         "dur": 66
+        }
+       ]
+      },
+      {
+       "id": "au",
+       "kind": "audio",
+       "items": [
+        {
+         "id": "mus",
+         "at": 0,
+         "type": "music",
+         "track": "m12",
+         "dur": 450
+        }
+       ]
+      }
+     ],
+     "captions": {
+      "style": "lime_stack",
+      "language": "hinglish",
+      "follow": "v1"
+     }
+    }
+   }
+  },
+  {
+   "name": "a field the item doesn't have is refused",
+   "ops": [
+    {
+     "op": "update_item",
+     "item": "c1",
+     "patch": {
+      "text": "hi"
+     }
+    }
+   ],
+   "expect": {
+    "error": "BAD_PATCH",
+    "op_index": 0
+   }
+  },
+  {
+   "name": "speeding up drops keyframes past the new end",
+   "ops": [
+    {
+     "op": "update_item",
+     "item": "c2",
+     "patch": {
+      "speed": 2
+     }
+    }
+   ],
+   "expect": {
+    "timeline": {
+     "assets": {
+      "a1": {
+       "id": "a1",
+       "kind": "video",
+       "key": "u/p/a1.mp4",
+       "frames": 900,
+       "has_audio": true
+      },
+      "a2": {
+       "id": "a2",
+       "kind": "video",
+       "key": "u/p/a2.mp4",
+       "frames": 300
+      },
+      "img": {
+       "id": "img",
+       "kind": "image",
+       "key": "u/p/fort.jpg",
+       "frames": 1
+      }
+     },
+     "tracks": [
+      {
+       "id": "v1",
+       "kind": "video",
+       "items": [
+        {
+         "id": "c1",
+         "at": 0,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 0,
+         "src_out": 300
+        },
+        {
+         "id": "c2",
+         "at": 300,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 450,
+         "src_out": 600,
+         "speed": 2.0,
+         "keyframes": {
+          "scale": [
+           {
+            "f": 0,
+            "v": 1.0
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "id": "o1",
+       "kind": "overlay",
+       "items": [
+        {
+         "id": "b1",
+         "at": 90,
+         "type": "clip",
+         "asset": "a2",
+         "src_in": 0,
+         "src_out": 60
+        }
+       ]
+      },
+      {
+       "id": "t1",
+       "kind": "text",
+       "items": [
+        {
+         "id": "h1",
+         "at": 0,
+         "type": "text",
+         "text": "Nobody tells you this",
+         "style": "hook_bold",
+         "dur": 66
+        }
+       ]
+      },
+      {
+       "id": "au",
+       "kind": "audio",
+       "items": [
+        {
+         "id": "mus",
+         "at": 0,
+         "type": "music",
+         "track": "m12",
+         "dur": 450
+        }
+       ]
+      }
+     ],
+     "captions": {
+      "style": "lime_stack",
+      "language": "hinglish",
+      "follow": "v1"
+     }
+    }
+   }
+  },
+  {
+   "name": "replace a b-roll clip's asset and keep its length",
+   "ops": [
+    {
+     "op": "replace_asset",
+     "item": "b1",
+     "asset": "img"
+    }
+   ],
+   "expect": {
+    "timeline": {
+     "assets": {
+      "a1": {
+       "id": "a1",
+       "kind": "video",
+       "key": "u/p/a1.mp4",
+       "frames": 900,
+       "has_audio": true
+      },
+      "a2": {
+       "id": "a2",
+       "kind": "video",
+       "key": "u/p/a2.mp4",
+       "frames": 300
+      },
+      "img": {
+       "id": "img",
+       "kind": "image",
+       "key": "u/p/fort.jpg",
+       "frames": 1
+      }
+     },
+     "tracks": [
+      {
+       "id": "v1",
+       "kind": "video",
+       "items": [
+        {
+         "id": "c1",
+         "at": 0,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 0,
+         "src_out": 300
+        },
+        {
+         "id": "c2",
+         "at": 300,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 450,
+         "src_out": 600,
+         "keyframes": {
+          "scale": [
+           {
+            "f": 0,
+            "v": 1.0
+           },
+           {
+            "f": 120,
+            "v": 1.2,
+            "ease": "out"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "id": "o1",
+       "kind": "overlay",
+       "items": [
+        {
+         "id": "b1",
+         "at": 90,
+         "type": "clip",
+         "asset": "img",
+         "src_in": 0,
+         "src_out": 60
+        }
+       ]
+      },
+      {
+       "id": "t1",
+       "kind": "text",
+       "items": [
+        {
+         "id": "h1",
+         "at": 0,
+         "type": "text",
+         "text": "Nobody tells you this",
+         "style": "hook_bold",
+         "dur": 66
+        }
+       ]
+      },
+      {
+       "id": "au",
+       "kind": "audio",
+       "items": [
+        {
+         "id": "mus",
+         "at": 0,
+         "type": "music",
+         "track": "m12",
+         "dur": 450
+        }
+       ]
+      }
+     ],
+     "captions": {
+      "style": "lime_stack",
+      "language": "hinglish",
+      "follow": "v1"
+     }
+    }
+   }
+  },
+  {
+   "name": "add a voiceover asset and put it after the music",
+   "ops": [
+    {
+     "op": "add_asset",
+     "asset": {
+      "id": "vo",
+      "kind": "audio",
+      "key": "u/p/vo.mp3",
+      "frames": 600
+     }
+    },
+    {
+     "op": "add_item",
+     "track": "au",
+     "item": {
+      "type": "clip",
+      "id": "v-o",
+      "asset": "vo",
+      "at": 450,
+      "src_in": 0,
+      "src_out": 120
+     }
+    }
+   ],
+   "expect": {
+    "timeline": {
+     "assets": {
+      "a1": {
+       "id": "a1",
+       "kind": "video",
+       "key": "u/p/a1.mp4",
+       "frames": 900,
+       "has_audio": true
+      },
+      "a2": {
+       "id": "a2",
+       "kind": "video",
+       "key": "u/p/a2.mp4",
+       "frames": 300
+      },
+      "img": {
+       "id": "img",
+       "kind": "image",
+       "key": "u/p/fort.jpg",
+       "frames": 1
+      },
+      "vo": {
+       "id": "vo",
+       "kind": "audio",
+       "key": "u/p/vo.mp3",
+       "frames": 600
+      }
+     },
+     "tracks": [
+      {
+       "id": "v1",
+       "kind": "video",
+       "items": [
+        {
+         "id": "c1",
+         "at": 0,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 0,
+         "src_out": 300
+        },
+        {
+         "id": "c2",
+         "at": 300,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 450,
+         "src_out": 600,
+         "keyframes": {
+          "scale": [
+           {
+            "f": 0,
+            "v": 1.0
+           },
+           {
+            "f": 120,
+            "v": 1.2,
+            "ease": "out"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "id": "o1",
+       "kind": "overlay",
+       "items": [
+        {
+         "id": "b1",
+         "at": 90,
+         "type": "clip",
+         "asset": "a2",
+         "src_in": 0,
+         "src_out": 60
+        }
+       ]
+      },
+      {
+       "id": "t1",
+       "kind": "text",
+       "items": [
+        {
+         "id": "h1",
+         "at": 0,
+         "type": "text",
+         "text": "Nobody tells you this",
+         "style": "hook_bold",
+         "dur": 66
+        }
+       ]
+      },
+      {
+       "id": "au",
+       "kind": "audio",
+       "items": [
+        {
+         "id": "mus",
+         "at": 0,
+         "type": "music",
+         "track": "m12",
+         "dur": 450
+        },
+        {
+         "id": "v-o",
+         "at": 450,
+         "type": "clip",
+         "asset": "vo",
+         "src_in": 0,
+         "src_out": 120
+        }
+       ]
+      }
+     ],
+     "captions": {
+      "style": "lime_stack",
+      "language": "hinglish",
+      "follow": "v1"
+     }
+    }
+   }
+  },
+  {
+   "name": "text can't go on a video track",
+   "ops": [
+    {
+     "op": "add_item",
+     "track": "v1",
+     "item": {
+      "type": "text",
+      "id": "h3",
+      "text": "x",
+      "style": "pop",
+      "at": 900,
+      "dur": 10
+     }
+    }
+   ],
+   "expect": {
+    "error": "WRONG_TRACK",
+    "op_index": 0
+   }
+  },
+  {
+   "name": "a later failure names its op and changes nothing",
+   "ops": [
+    {
+     "op": "move_item",
+     "item": "c1",
+     "at": 1000
+    },
+    {
+     "op": "remove_item",
+     "item": "nope"
+    }
+   ],
+   "expect": {
+    "error": "UNKNOWN_ITEM",
+    "op_index": 1
+   }
+  },
+  {
+   "name": "captions style and a square frame",
+   "ops": [
+    {
+     "op": "set_captions",
+     "style": "punch"
+    },
+    {
+     "op": "set_project",
+     "width": 1080,
+     "height": 1080,
+     "look": "warm_film"
+    }
+   ],
+   "expect": {
+    "timeline": {
+     "height": 1080,
+     "look": "warm_film",
+     "assets": {
+      "a1": {
+       "id": "a1",
+       "kind": "video",
+       "key": "u/p/a1.mp4",
+       "frames": 900,
+       "has_audio": true
+      },
+      "a2": {
+       "id": "a2",
+       "kind": "video",
+       "key": "u/p/a2.mp4",
+       "frames": 300
+      },
+      "img": {
+       "id": "img",
+       "kind": "image",
+       "key": "u/p/fort.jpg",
+       "frames": 1
+      }
+     },
+     "tracks": [
+      {
+       "id": "v1",
+       "kind": "video",
+       "items": [
+        {
+         "id": "c1",
+         "at": 0,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 0,
+         "src_out": 300
+        },
+        {
+         "id": "c2",
+         "at": 300,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 450,
+         "src_out": 600,
+         "keyframes": {
+          "scale": [
+           {
+            "f": 0,
+            "v": 1.0
+           },
+           {
+            "f": 120,
+            "v": 1.2,
+            "ease": "out"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "id": "o1",
+       "kind": "overlay",
+       "items": [
+        {
+         "id": "b1",
+         "at": 90,
+         "type": "clip",
+         "asset": "a2",
+         "src_in": 0,
+         "src_out": 60
+        }
+       ]
+      },
+      {
+       "id": "t1",
+       "kind": "text",
+       "items": [
+        {
+         "id": "h1",
+         "at": 0,
+         "type": "text",
+         "text": "Nobody tells you this",
+         "style": "hook_bold",
+         "dur": 66
+        }
+       ]
+      },
+      {
+       "id": "au",
+       "kind": "audio",
+       "items": [
+        {
+         "id": "mus",
+         "at": 0,
+         "type": "music",
+         "track": "m12",
+         "dur": 450
+        }
+       ]
+      }
+     ],
+     "captions": {
+      "style": "punch",
+      "language": "hinglish",
+      "follow": "v1"
+     }
+    }
+   }
+  },
+  {
+   "name": "markers stay in order and replace one at the same frame",
+   "ops": [
+    {
+     "op": "add_marker",
+     "marker": {
+      "f": 66,
+      "label": "hook ends"
+     }
+    },
+    {
+     "op": "add_marker",
+     "marker": {
+      "f": 10,
+      "label": "start"
+     }
+    },
+    {
+     "op": "add_marker",
+     "marker": {
+      "f": 66,
+      "label": "hook out"
+     }
+    }
+   ],
+   "expect": {
+    "timeline": {
+     "assets": {
+      "a1": {
+       "id": "a1",
+       "kind": "video",
+       "key": "u/p/a1.mp4",
+       "frames": 900,
+       "has_audio": true
+      },
+      "a2": {
+       "id": "a2",
+       "kind": "video",
+       "key": "u/p/a2.mp4",
+       "frames": 300
+      },
+      "img": {
+       "id": "img",
+       "kind": "image",
+       "key": "u/p/fort.jpg",
+       "frames": 1
+      }
+     },
+     "tracks": [
+      {
+       "id": "v1",
+       "kind": "video",
+       "items": [
+        {
+         "id": "c1",
+         "at": 0,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 0,
+         "src_out": 300
+        },
+        {
+         "id": "c2",
+         "at": 300,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 450,
+         "src_out": 600,
+         "keyframes": {
+          "scale": [
+           {
+            "f": 0,
+            "v": 1.0
+           },
+           {
+            "f": 120,
+            "v": 1.2,
+            "ease": "out"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "id": "o1",
+       "kind": "overlay",
+       "items": [
+        {
+         "id": "b1",
+         "at": 90,
+         "type": "clip",
+         "asset": "a2",
+         "src_in": 0,
+         "src_out": 60
+        }
+       ]
+      },
+      {
+       "id": "t1",
+       "kind": "text",
+       "items": [
+        {
+         "id": "h1",
+         "at": 0,
+         "type": "text",
+         "text": "Nobody tells you this",
+         "style": "hook_bold",
+         "dur": 66
+        }
+       ]
+      },
+      {
+       "id": "au",
+       "kind": "audio",
+       "items": [
+        {
+         "id": "mus",
+         "at": 0,
+         "type": "music",
+         "track": "m12",
+         "dur": 450
+        }
+       ]
+      }
+     ],
+     "captions": {
+      "style": "lime_stack",
+      "language": "hinglish",
+      "follow": "v1"
+     },
+     "markers": [
+      {
+       "f": 10,
+       "label": "start"
+      },
+      {
+       "f": 66,
+       "label": "hook out"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "add a track, then a sound effect on it",
+   "ops": [
+    {
+     "op": "add_track",
+     "id": "fx",
+     "kind": "audio"
+    },
+    {
+     "op": "add_item",
+     "track": "fx",
+     "item": {
+      "type": "sfx",
+      "id": "pop1",
+      "name": "pop",
+      "at": 30,
+      "dur": 15
+     }
+    }
+   ],
+   "expect": {
+    "timeline": {
+     "assets": {
+      "a1": {
+       "id": "a1",
+       "kind": "video",
+       "key": "u/p/a1.mp4",
+       "frames": 900,
+       "has_audio": true
+      },
+      "a2": {
+       "id": "a2",
+       "kind": "video",
+       "key": "u/p/a2.mp4",
+       "frames": 300
+      },
+      "img": {
+       "id": "img",
+       "kind": "image",
+       "key": "u/p/fort.jpg",
+       "frames": 1
+      }
+     },
+     "tracks": [
+      {
+       "id": "v1",
+       "kind": "video",
+       "items": [
+        {
+         "id": "c1",
+         "at": 0,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 0,
+         "src_out": 300
+        },
+        {
+         "id": "c2",
+         "at": 300,
+         "type": "clip",
+         "asset": "a1",
+         "src_in": 450,
+         "src_out": 600,
+         "keyframes": {
+          "scale": [
+           {
+            "f": 0,
+            "v": 1.0
+           },
+           {
+            "f": 120,
+            "v": 1.2,
+            "ease": "out"
+           }
+          ]
+         }
+        }
+       ]
+      },
+      {
+       "id": "o1",
+       "kind": "overlay",
+       "items": [
+        {
+         "id": "b1",
+         "at": 90,
+         "type": "clip",
+         "asset": "a2",
+         "src_in": 0,
+         "src_out": 60
+        }
+       ]
+      },
+      {
+       "id": "t1",
+       "kind": "text",
+       "items": [
+        {
+         "id": "h1",
+         "at": 0,
+         "type": "text",
+         "text": "Nobody tells you this",
+         "style": "hook_bold",
+         "dur": 66
+        }
+       ]
+      },
+      {
+       "id": "au",
+       "kind": "audio",
+       "items": [
+        {
+         "id": "mus",
+         "at": 0,
+         "type": "music",
+         "track": "m12",
+         "dur": 450
+        }
+       ]
+      },
+      {
+       "id": "fx",
+       "kind": "audio",
+       "items": [
+        {
+         "id": "pop1",
+         "at": 30,
+         "type": "sfx",
+         "name": "pop",
+         "dur": 15
+        }
+       ]
+      }
+     ],
+     "captions": {
+      "style": "lime_stack",
+      "language": "hinglish",
+      "follow": "v1"
+     }
+    }
+   }
+  },
+  {
+   "name": "a track id already in use is refused",
+   "ops": [
+    {
+     "op": "add_track",
+     "id": "c1",
+     "kind": "text"
+    }
+   ],
+   "expect": {
+    "error": "DUPLICATE_ID",
+    "op_index": 0
+   }
+  }
+ ]
+}

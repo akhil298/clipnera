@@ -14,6 +14,7 @@ import { SocialSchedulerView } from './SocialSchedulerView';
 import { ViralAnalyticsView } from './ViralAnalyticsView';
 import { BrandKitView } from './BrandKitView';
 import { ReelsView } from './ReelsView';
+import { EditorView } from './editor/EditorView';
 import { SettingsView } from './SettingsView';
 import { NotificationsDrawer } from './NotificationsDrawer';
 import { SnackbarStack } from './SnackbarStack';
@@ -61,6 +62,7 @@ const getTabFromPathname = (pathname: string): TabType => {
   if (segments[1] === 'analytics') return 'analytics';
   if (segments[1] === 'brand-kit') return 'brand_kit';
   if (segments[1] === 'reels') return 'reels';
+  if (segments[1] === 'editor') return 'video_editor';
   if (segments[1] === 'settings') return 'settings';
 
   return 'dashboard';
@@ -90,6 +92,8 @@ const getDashboardPath = (
       return '/dashboard/brand-kit';
     case 'reels':
       return '/dashboard/reels';
+    case 'video_editor':
+      return '/dashboard/editor';
     case 'settings':
       return '/dashboard/settings';
     case 'dashboard':
@@ -101,11 +105,12 @@ const getDashboardPath = (
 export default function DashboardApp() {
   const router = useRouter();
   const pathname = usePathname();
-  const params = useParams<{ projectId?: string; clipId?: string; reelId?: string; editId?: string }>();
+  const params = useParams<{ projectId?: string; clipId?: string; reelId?: string; editId?: string; editorProjectId?: string }>();
   const routeProjectId = typeof params.projectId === 'string' ? params.projectId : undefined;
   const routeClipId = typeof params.clipId === 'string' ? params.clipId : undefined;
   const routeReelId = typeof params.reelId === 'string' ? params.reelId : undefined;
   const routeEditId = typeof params.editId === 'string' ? params.editId : undefined;
+  const routeEditorProjectId = typeof params.editorProjectId === 'string' ? params.editorProjectId : undefined;
 
   // Auth gate: only authenticated users may view the dashboard.
   const [isAuthed, setIsAuthed] = useState<boolean | null>(null);
@@ -872,6 +877,8 @@ export default function DashboardApp() {
           {activeTab === 'brand_kit' && <BrandKitView />}
 
           {activeTab === 'reels' && flags['broll_studio.reels'] && <ReelsView reelId={routeReelId} editId={routeEditId} />}
+
+          {activeTab === 'video_editor' && flags.agent_editor && <EditorView projectId={routeEditorProjectId} />}
 
           {/* TAB 8: SETTINGS, WORKSPACE & BILLING */}
           {activeTab === 'settings' && currentUser && (

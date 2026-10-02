@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
@@ -13,7 +14,7 @@ from core.logging_config import get_logger
 from usage.context import check_budget
 from usage.recorder import record_llm_call
 
-from .base import BaseAI
+from .base import BaseAI, ToolCall, ToolReply, ToolResult, ToolSpec
 
 settings = get_settings()
 log = get_logger(__name__)
@@ -277,6 +278,62 @@ class Groq(BaseAI):
         return content
 
     async def _chat_once(self, messages: list[dict[str, Any]], json_mode: bool = False, **kwargs: Any) -> str:
+        kwargs = self._request_kwargs(kwargs)
+        if json_mode:
+            kwargs.setdefault("response_format", {"type": "json_object"})
+        fitted = self._fit_messages(messages, kwargs["max_tokens"])
+        response = await self._create(fitted, mode="chat", **kwargs)
+        content = response.choices[0].message.content or ""
+        finish_reason = getattr(response.choices[0], "finish_reason", None)
+        if finish_reason == "length" and not content:
+            log.error(
+                "Groq returned no content: model=%s spent all %d output token(s) before "
+                "emitting any. Raise max_tokens or use a non-reasoning model.",
+                self.model, kwargs["max_tokens"],
+            )
+        elif finish_reason == "length":
+            log.warning(
+                "Groq response truncated at the output token cap: model=%s, max_tokens=%d, chars=%d",
+                self.model, kwargs["max_tokens"], len(content),
+            )
+        log.info(
+            "Groq API call succeeded: mode=chat, model=%s, response_chars=%d, finish_reason=%s",
+            self.model, len(content), finish_reason,
+        )
+        return content
+
+    async def chat_with_tools(self, messages: list[dict[str, Any]], tools: list[ToolSpec], *,
+                              max_tokens: int = 4096) -> ToolReply:
+        check_budget()
+        kwargs = self._request_kwargs({"max_tokens": max_tokens})
+        # Not trimmed to fit like plain chat: dropping a turn would split a tool call from its result.
+        response = await self._create(
+            messages, mode="tools",
+            tools=[{"type": "function", "function": {"name": t.name, "description": t.description, "parameters": t.schema}}
+                   for t in tools],
+            tool_choice="auto", **kwargs,
+        )
+        choice = response.choices[0]
+        message = choice.message
+        raw_calls = message.tool_calls or []
+        return ToolReply(
+            text=message.content or "",
+            calls=[ToolCall(id=c.id, name=c.function.name, arguments=_arguments(c.function.arguments)) for c in raw_calls],
+            message={
+                "role": "assistant", "content": message.content or "",
+                **({"tool_calls": [{"id": c.id, "type": "function", "function": {
+                    "name": c.function.name, "arguments": c.function.arguments}} for c in raw_calls]} if raw_calls else {}),
+            },
+            truncated=getattr(choice, "finish_reason", None) == "length",
+        )
+
+    def tool_results(self, results: list[ToolResult]) -> list[dict[str, Any]]:
+        return [{"role": "tool", "tool_call_id": r.call_id,
+                 "content": f"Error: {r.content}" if r.is_error else r.content} for r in results]
+
+    def _request_kwargs(self, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """``kwargs`` with an output cap a reasoning model can't spend entirely on thinking."""
+        kwargs = dict(kwargs)
         requested = int(kwargs.get("max_tokens") or 1024)
         max_output_tokens = effective_max_tokens(requested, self.model)
         if max_output_tokens != requested:
@@ -290,14 +347,15 @@ class Groq(BaseAI):
         # gone and returns nothing. Callers may override per request.
         if self.profile.reasoning:
             kwargs.setdefault("reasoning_effort", DEFAULT_REASONING_EFFORT)
-        if json_mode:
-            kwargs.setdefault("response_format", {"type": "json_object"})
-        fitted = self._fit_messages(messages, max_output_tokens)
-        estimated_input = _messages_tokens(fitted)
+        return kwargs
 
+    async def _create(self, messages: list[dict[str, Any]], *, mode: str, **kwargs: Any) -> Any:
+        """One completion with rate limiting, retries and usage recording."""
+        max_output_tokens = kwargs["max_tokens"]
+        estimated_input = _messages_tokens(messages)
         log.info(
-            "Groq API call started: mode=chat, model=%s, messages=%d, estimated_input_tokens=%d, max_output_tokens=%d",
-            self.model, len(fitted), estimated_input, max_output_tokens,
+            "Groq API call started: mode=%s, model=%s, messages=%d, estimated_input_tokens=%d, max_output_tokens=%d",
+            mode, self.model, len(messages), estimated_input, max_output_tokens,
         )
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(3),
@@ -308,14 +366,11 @@ class Groq(BaseAI):
             with attempt:
                 attempt_number = attempt.retry_state.attempt_number
                 await self._limiter_for(self.model).acquire(estimated_input + max_output_tokens)
-                log.info("Groq API request hit: mode=chat, model=%s, attempt=%d", self.model, attempt_number)
+                log.info("Groq API request hit: mode=%s, model=%s, attempt=%d", mode, self.model, attempt_number)
                 try:
                     started = time.monotonic()
                     response = await self._client.chat.completions.create(
-                        model=self.model,
-                        messages=fitted,
-                        stream=False,
-                        **kwargs,
+                        model=self.model, messages=messages, stream=False, **kwargs,
                     )
                     usage = getattr(response, "usage", None)
                     await record_llm_call(
@@ -325,24 +380,7 @@ class Groq(BaseAI):
                         effort=kwargs.get("reasoning_effort"),
                         latency_ms=int((time.monotonic() - started) * 1000),
                     )
-                    content = response.choices[0].message.content or ""
-                    finish_reason = getattr(response.choices[0], "finish_reason", None)
-                    if finish_reason == "length" and not content:
-                        log.error(
-                            "Groq returned no content: model=%s spent all %d output token(s) before "
-                            "emitting any. Raise max_tokens or use a non-reasoning model.",
-                            self.model, max_output_tokens,
-                        )
-                    elif finish_reason == "length":
-                        log.warning(
-                            "Groq response truncated at the output token cap: model=%s, max_tokens=%d, chars=%d",
-                            self.model, max_output_tokens, len(content),
-                        )
-                    log.info(
-                        "Groq API call succeeded: mode=chat, model=%s, attempt=%d, response_chars=%d, finish_reason=%s",
-                        self.model, attempt_number, len(content), finish_reason,
-                    )
-                    return content
+                    return response
                 except Exception as exc:
                     retry_after = _retry_after_seconds(exc)
                     if retry_after:
@@ -352,8 +390,8 @@ class Groq(BaseAI):
                         )
                         await asyncio.sleep(retry_after)
                     log.exception(
-                        "Groq API call failed: mode=chat, model=%s, attempt=%d",
-                        self.model, attempt_number,
+                        "Groq API call failed: mode=%s, model=%s, attempt=%d",
+                        mode, self.model, attempt_number,
                     )
                     raise
         raise RuntimeError("Unreachable")
@@ -385,3 +423,12 @@ class Groq(BaseAI):
     async def close(self) -> None:
         await self._client.close()
         log.info("Groq client closed: model=%s", self.model)
+
+
+def _arguments(raw: str | None) -> dict[str, Any]:
+    """A tool call's JSON arguments; anything unparseable reaches the tool as no arguments and fails validation there."""
+    try:
+        value = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return value if isinstance(value, dict) else {}

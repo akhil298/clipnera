@@ -27,6 +27,7 @@ BROLL_REELS = f"{BROLL_STUDIO}.reels"
 BROLL_AI_SHOTS = f"{BROLL_STUDIO}.ai_shots"
 REEL_EDITOR = f"{BROLL_REELS}.footage"
 REEL_EDITOR_OPUS = f"{REEL_EDITOR}.opus_director"
+AGENT_EDITOR = "agent_editor"
 
 
 def social_platform_flag(platform: str) -> str:
@@ -94,6 +95,11 @@ _DEFINITIONS = (
         "Pro footage reels are planned by Claude Opus 5.5 instead of Sonnet 5. Opus costs more, so these reels "
         "cost 1.5x the credits while this is on.",
         REEL_EDITOR,
+    ),
+    FlagDefinition(
+        AGENT_EDITOR,
+        "Editor",
+        "The multi-track editor: users build and change a video on a timeline, by hand and with the agent.",
     ),
 )
 

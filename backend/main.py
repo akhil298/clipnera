@@ -27,6 +27,7 @@ from broll.route import admin_broll as admin_broll_router, broll as broll_router
 from reels.route import reels_router
 from creator_intro.route import creator_intro_router
 from edit_engine.route import edits as edits_router, admin_music as admin_music_router
+from editor.route import editor as editor_router
 from video_processor.ffmpeg_service import FFmpegService
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -108,6 +109,7 @@ app.include_router(reels_router, prefix="/api/v1")
 app.include_router(creator_intro_router, prefix="/api/v1")
 app.include_router(edits_router, prefix="/api/v1")
 app.include_router(admin_music_router, prefix="/api/v1")
+app.include_router(editor_router, prefix="/api/v1")
 
 
 @app.exception_handler(CustomException)

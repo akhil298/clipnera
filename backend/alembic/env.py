@@ -35,6 +35,7 @@ from broll import model as broll_model
 from reels import model as reels_model
 from edit_engine import model as edit_engine_model
 from creator_intro import model as creator_intro_model
+from editor import model as editor_model
 
 target_metadata = Base.metadata
 

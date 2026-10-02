@@ -22,6 +22,7 @@ import {
   Share2,
   Cpu,
   Clapperboard,
+  Wand2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
@@ -86,6 +87,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'folders', label: 'Projects', icon: Folder, badge: projects.length ? `${projects.length}` : undefined },
     // Shown while an admin has Reels from Images switched on.
     ...(flags['broll_studio.reels'] ? [{ id: 'reels' as TabType, label: 'Reels', icon: Clapperboard }] : []),
+    ...(flags.agent_editor ? [{ id: 'video_editor' as TabType, label: 'Editor', icon: Wand2, badge: 'New' }] : []),
   ];
 
   // Clips and the editor only make sense with a project open, so they sit
