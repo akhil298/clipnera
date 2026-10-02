@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Eye, ShieldCheck } from 'lucide-react';
 import type { AspectRatio, BRollOverlay, CaptionConfig, ViralClip, WordTimestamp } from '@/lib/types';
 import { PlatformOverlay } from './PlatformOverlay';
+import { FormatOverlayPreview } from './FormatOverlayPreview';
+import { formatOverlay } from '@/lib/formats';
 import { captionRowSplit, captionTextStyle } from '@/lib/utils/captionStyles';
 import {
   CAPTION_Y_MAX,
@@ -205,6 +207,21 @@ export function StudioCanvas(props: StudioCanvasProps) {
               {config.emojisEnabled ? applyEmojiCollection(clip.title, config.emojiCollection) : clip.title}
             </p>
           </div>
+        )}
+
+        {/* A listicle's counter or a ranking's board, burned with the captions on export. */}
+        {showCaptions && (
+          <FormatOverlayPreview
+            overlay={formatOverlay(clip.contentFormat)}
+            items={clip.formatItems ?? []}
+            currentTime={currentTime}
+            config={config}
+            titleOn={showTitle && Boolean(clip.title?.trim())}
+            titleFontPx={titleFontPx}
+            captionFontPx={captionFontPx}
+            stageWidth={stageWidth}
+            stageHeight={stageWidth / ratio}
+          />
         )}
 
         {/* Captions: drag them up or down on the video. */}

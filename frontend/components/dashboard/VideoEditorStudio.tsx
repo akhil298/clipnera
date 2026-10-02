@@ -693,6 +693,7 @@ const StudioContent: React.FC<VideoEditorStudioProps & { clip: ViralClip }> = ({
       title={clip.title}
       subtitle={subtitle || `${Math.round(duration)} s · ${doc.aspectRatio}`}
       score={clip.viralityScore}
+      contentFormat={clip.contentFormat}
       aspectRatio={doc.aspectRatio}
       saveState={saveState}
       canUndo={canUndo}

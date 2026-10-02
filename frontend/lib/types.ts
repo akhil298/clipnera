@@ -1,5 +1,6 @@
 ﻿export type AspectRatio = '9:16' | '1:1' | '4:5' | '16:9';
 import type { CaptionAnimation, CaptionPreset } from '@/lib/utils/captionStyles.generated';
+import type { ContentFormat } from '@/lib/formats';
 export type { CaptionAnimation, CaptionPreset };
 export type LayoutMode = 'single_speaker' | 'split_screen' | 'screen_share_focus';
 
@@ -141,6 +142,20 @@ export interface SocialOptimization {
   postStatus: 'draft' | 'scheduled' | 'published';
 }
 
+/**
+ * Mirrors backend FormatItem: one item of a listicle or ranking, on the clip's
+ * own timeline (teaser first, cut-out pauses removed) as captions are.
+ */
+export interface FormatItem {
+  start: number;
+  end: number;
+  label: string;
+  /** Place in the order spoken, from 1. */
+  number: number;
+  /** Rank on a ranking's board (1 is best); null on a listicle. */
+  rank: number | null;
+}
+
 export interface ViralClip {
   id: string;
   projectId?: string;
@@ -184,6 +199,10 @@ export interface ViralClip {
   removedWords?: number[];
   /** Whether the server has saved editor settings for this clip. */
   hasSavedSettings?: boolean;
+  /** The short-form format the AI cut the clip as; null for clips made before formats. */
+  contentFormat?: ContentFormat | null;
+  /** What a listicle's counter or a ranking's board shows; empty for other formats. */
+  formatItems?: FormatItem[];
 }
 
 // --- Clip editor settings: mirror backend/clip_generation/schema.py ----------

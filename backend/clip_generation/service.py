@@ -40,6 +40,8 @@ from core.logging_config import get_logger
 from creator_intro.service import ExportIntro, export_intro
 from feedback.model import ClipEventKind
 from feedback.service import record_clip_event
+from formats.taxonomy import DEFAULT_FORMAT
+from subtitle_styling.format_overlay import place_format_items
 from video_processor.clip_cutter import ClipCutter, CutRequest
 from video_processor.ffmpeg_service import FFmpegService
 from content_intelligence.service import FALLBACK_ASPECT_RATIOS
@@ -261,12 +263,35 @@ def _sanitize_value(value: Any) -> Any:
     return value
 
 
-def _edit_choices(analysis: Any) -> dict[str, Any]:
-    """The director's layout hint and beats saved with a clip, for a re-cut or re-burn."""
+def _saved_clip(analysis: Any) -> dict[str, Any]:
+    """The clip as the director made it, saved under ``analysis_json["clip"]``."""
     clip = analysis.get("clip") if isinstance(analysis, dict) else None
-    if not isinstance(clip, dict):
+    return clip if isinstance(clip, dict) else {}
+
+
+def _edit_choices(analysis: Any) -> dict[str, Any]:
+    """The director's layout hint, beats and format saved with a clip, for a re-cut or re-burn.
+
+    Clips made before formats existed were all cut as talking heads.
+    """
+    clip = _saved_clip(analysis)
+    if not clip:
         return {}
-    return {"layout_hint": clip.get("layout_hint") or "auto", "beats": list(clip.get("beats") or [])}
+    evidence = clip.get("format_evidence")
+    return {
+        "layout_hint": clip.get("layout_hint") or "auto",
+        "beats": list(clip.get("beats") or []),
+        "content_format": clip.get("content_format") or DEFAULT_FORMAT,
+        "format_evidence": evidence if isinstance(evidence, dict) else None,
+    }
+
+
+def format_overlay(clip: GeneratedClip, analysis: Any) -> dict[str, Any]:
+    """The burner's list-overlay arguments for ``clip``: its format and labelled items."""
+    return {
+        "content_format": clip.content_format,
+        "format_items": list(_saved_clip(analysis).get("format_items") or []),
+    }
 
 
 def with_emphasis(transcript: list[dict[str, Any]] | None, beats: list[dict[str, Any]]) -> list[dict[str, Any]] | None:
@@ -350,9 +375,8 @@ class ClipService:
             # No words on record burned an empty caption track; transcribe the cut.
             if not transcript_segments and not burn_request.get("subtitles"):
                 transcript_segments = await self._transcribe_clip_cut(clip, video_path, user_id)
-            transcript_segments = with_emphasis(
-                transcript_segments, _edit_choices(self._loads(clip.analysis_json, {})).get("beats", []),
-            )
+            analysis = self._loads(clip.analysis_json, {})
+            transcript_segments = with_emphasis(transcript_segments, _edit_choices(analysis).get("beats", []))
             burned_path = await styling.burn_subtitles(
                 video_path=video_path,
                 clip_start=clip.start_time,
@@ -367,6 +391,7 @@ class ClipService:
                 transition=self.hook_transition_for(clip, burn_request.get("hook_transition")),
                 spans=parse_spans(clip.edit_spans),
                 seams=stack_seams(clip),
+                **format_overlay(clip, analysis),
             )
 
         s3_key = f"clips/{user_id}/{clip.project_id}/{clip_id}_burned.mp4"
@@ -740,6 +765,7 @@ class ClipService:
             transition=transition,
             spans=spans,
             seams=stack_seams(clip),
+            **format_overlay(clip, analysis),
         )
 
     def hook_transition_for(
@@ -1006,6 +1032,8 @@ class ClipService:
                 spans=parse_spans(clip_copy.get("edit_spans")),
                 layout_hint=str(clip_copy.get("layout_hint") or "auto"),
                 beats=list(clip_copy.get("beats") or []),
+                content_format=str(clip_copy.get("content_format") or DEFAULT_FORMAT),
+                format_evidence=clip_copy.get("format_evidence"),
             )
 
             tag = f"[CUT {index + 1}/{total}]"
@@ -1177,6 +1205,7 @@ class ClipService:
                     score=float(clip.get("score", 0.0)),
                     scores=_json_dumps(clip.get("scores", {})),
                     content_category=clip.get("content_category", ContentCategory.UNKNOWN.value),
+                    content_format=clip.get("content_format"),
                     # Only a clip that reached S3 counts: renders read from there.
                     status="completed" if s3_key else "failed",
                     local_path=local_path if s3_key else None,
@@ -1680,6 +1709,8 @@ class ClipService:
         analysis = self._loads(clip.analysis_json, {})
         transcript = self._loads(clip.transcript, [])
         ai_cues = analysis.get("clip", {}).get("ai_emoji_cues", []) if isinstance(analysis, dict) else []
+        hook = Hook.from_values(clip.hook_start, clip.hook_end)
+        spans = parse_spans(clip.edit_spans)
         return {
             "video_id": clip.project_id,
             "clip_id": analysis.get("clip", {}).get("clip_id", clip.id),
@@ -1693,7 +1724,7 @@ class ClipService:
             "duration_seconds": clip.duration_seconds,
             "hook_start": clip.hook_start,
             "hook_end": clip.hook_end,
-            "edit_spans": parse_spans(clip.edit_spans),
+            "edit_spans": spans,
             "timestamps": {
                 "start": clip.start_time,
                 "end": clip.end_time,
@@ -1703,6 +1734,12 @@ class ClipService:
             "score": clip.score,
             "scores": self._loads(clip.scores, {}),
             "content_category": clip.content_category,
+            "content_format": clip.content_format,
+            # The list overlay's items, on the clip's own timeline as captions are.
+            "format_items": place_format_items(
+                _saved_clip(analysis).get("format_items"), clip.content_format,
+                clip.start_time, clip.end_time, hook=hook, spans=spans,
+            ),
             # Signed per read: stored URLs expire, the S3 keys do not.
             "presigned_url": self._presign(clip.s3_bucket, clip.s3_key) or clip.presigned_url,
             "poster_url": self.poster_url(clip, analysis),
@@ -1715,9 +1752,7 @@ class ClipService:
             # Absolute-time transcript above, clip-relative words below: the
             # player needs the latter, the burner needs the former.
             "captions": self._clip_captions(
-                transcript, clip.start_time, clip.end_time, ai_cues,
-                hook=Hook.from_values(clip.hook_start, clip.hook_end),
-                spans=parse_spans(clip.edit_spans),
+                transcript, clip.start_time, clip.end_time, ai_cues, hook=hook, spans=spans,
             ),
             "visual_analysis": self._loads(clip.visual_analysis, []),
             "bounding_boxes": self._loads(clip.bounding_boxes, []),

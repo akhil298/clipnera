@@ -14,6 +14,8 @@ import {
   Undo2,
 } from 'lucide-react';
 import { AspectRatio } from '@/lib/types';
+import type { ContentFormat } from '@/lib/formats';
+import { FormatBadge } from '../FormatBadge';
 import { ProLockBadge } from '../ProLockBadge';
 import { Switch } from './controls';
 import { EXPORT_SIZE } from './studioUtils';
@@ -26,6 +28,8 @@ interface StudioTopBarProps {
   title: string;
   subtitle: string;
   score: number;
+  /** The format the AI cut the clip as, shown beside the title. */
+  contentFormat?: ContentFormat | null;
   aspectRatio: AspectRatio;
   saveState: SaveState;
   canUndo: boolean;
@@ -106,7 +110,7 @@ const iconButton =
 
 export function StudioTopBar(props: StudioTopBarProps) {
   const {
-    layout, title, subtitle, score, aspectRatio, saveState, canUndo, canRedo, onUndo, onRedo, onBack,
+    layout, title, subtitle, score, contentFormat, aspectRatio, saveState, canUndo, canRedo, onUndo, onRedo, onBack,
     onOpenClips, clipCount, onShowShortcuts, menuOpen, onMenuOpenChange, onExport, onSchedule,
     captionsOn, titleOn, onToggleTitle, watermarkOn, watermarkForced, onToggleWatermark,
     channelIntroOn, channelIntroReady, channelIntroLocked, onToggleChannelIntro,
@@ -261,6 +265,7 @@ export function StudioTopBar(props: StudioTopBarProps) {
         <small className="truncate text-[11px] text-neutral-500">{subtitle}</small>
         <strong className="truncate text-sm font-bold text-white">{title}</strong>
       </div>
+      <FormatBadge format={contentFormat} className="border border-neutral-800 bg-neutral-950 text-sky-300" />
       <div className="flex-1 min-w-0" />
       <button type="button" onClick={onUndo} disabled={!canUndo} className={iconButton} aria-label="Undo" title="Undo (⌘Z)">
         <Undo2 className="w-4 h-4" aria-hidden />

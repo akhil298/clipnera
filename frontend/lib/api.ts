@@ -12,7 +12,9 @@ import {
   HookTransitionResolveResponse,
   ClipEditorSettings,
   TranscriptEdits,
+  FormatItem,
 } from '@/lib/types';
+import { asContentFormat } from '@/lib/formats';
 import { getToken, clearAuth, setAuth } from '@/lib/auth';
 import { emojiForKeyword } from '@/lib/data/emojiCatalog.generated';
 import { DEFAULT_CAPTION_PRESET, normalizeCaptionConfig } from '@/lib/utils/captionStyles';
@@ -227,6 +229,10 @@ export interface BackendClip {
   score: number;
   scores: Record<string, number>;
   content_category: string | null;
+  /** One of the ContentFormat ids in lib/formats.ts; null for clips made before formats. */
+  content_format: string | null;
+  /** Items the list overlay draws, on the clip's own timeline; empty for most formats. */
+  format_items: FormatItem[];
   presigned_url: string | null;
   poster_url: string | null;
   local_path: string | null;
@@ -471,6 +477,9 @@ export function mapBackendClip(clip: BackendClip): ViralClip {
     titleEnabled: settings.title_enabled,
     removedWords: settings.transcript_edits?.removed ?? [],
     hasSavedSettings: clip.editor_settings != null,
+    contentFormat: asContentFormat(clip.content_format),
+    // The projects list sends a clip summary without items.
+    formatItems: clip.format_items ?? [],
     // Off by default: the render pipeline applies no zoom, so leaving it on
     // made the preview show motion the exported file never has.
     autoZoom: { enabled: false, frequency: 'subtle', scale: 1.1 },

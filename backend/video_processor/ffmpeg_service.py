@@ -23,6 +23,11 @@ UPSCALE_SHARPEN = "unsharp=5:5:0.6:5:5:0.0"
 # The blurred backdrop behind a fitted frame is blurred at this fraction of the
 # output size, which is several times cheaper than blurring at full size.
 BACKDROP_SCALE = 4
+# Chroma key tolerance around the measured screen colour (FFmpeg chromakey's
+# 0-1 UV distance), and the soft edge beyond it. Wider eats into skin and
+# clothes; narrower leaves a green fringe from uneven lighting.
+KEY_SIMILARITY = 0.14
+KEY_BLEND = 0.08
 
 
 # A punch-in eases to full zoom over this long (ease-out cubic), then holds.
@@ -61,6 +66,43 @@ def zoom_filter(zoom: float, width: int, height: int) -> str:
     )
 
 
+def backdrop_filter(width: int, height: int) -> str:
+    """Blurred, dimmed cover of the input at ``width``x``height``, blurred small for speed."""
+    back_w = width // BACKDROP_SCALE // 2 * 2
+    back_h = height // BACKDROP_SCALE // 2 * 2
+    return (
+        f"scale={back_w}:{back_h}:force_original_aspect_ratio=increase,crop={back_w}:{back_h},"
+        f"boxblur=16:3,eq=brightness=-0.12,scale={width}:{height},setsar=1"
+    )
+
+
+def fitted_filter(source: str, label: str, region: tuple[int, int], width: int, height: int, top: int | None = None) -> str:
+    """Graph from ``source`` to ``[label]``: a ``region``-sized picture shown
+    whole at ``width``x``height`` over a blurred copy of itself.
+
+    ``source`` is an input label, optionally followed by filters ending in a
+    comma. The picture is centred, or placed ``top`` pixels down.
+    """
+    scale = min(width / region[0], height / region[1])
+    fit_w, fit_h = max(2, int(region[0] * scale) // 2 * 2), max(2, int(region[1] * scale) // 2 * 2)
+    y = (height - fit_h) // 2 if top is None else top
+    return (
+        f"{source}split=2[{label}_bg][{label}_fg];"
+        f"[{label}_bg]{backdrop_filter(width, height)}[{label}_back];"
+        f"[{label}_fg]{upscale_filter(fit_w, fit_h, scale)},setsar=1[{label}_front];"
+        f"[{label}_back][{label}_front]overlay=(W-w)/2:{y}[{label}]"
+    )
+
+
+def pixel_region(box: dict, source_width: int, source_height: int) -> tuple[int, int, int, int]:
+    """``(w, h, x, y)`` in even source pixels for a normalised box, kept inside the frame."""
+    w = max(2, int(box["width"] * source_width) // 2 * 2)
+    h = max(2, int(box["height"] * source_height) // 2 * 2)
+    x = min(max(0, int(box["x"] * source_width)), source_width - w)
+    y = min(max(0, int(box["y"] * source_height)), source_height - h)
+    return w, h, x, y
+
+
 def upscale_filter(width: int, height: int, factor: float, fit: str = "") -> str:
     """Lanczos scale to ``width``x``height``, sharpened when ``factor`` enlarges noticeably.
 
@@ -70,6 +112,14 @@ def upscale_filter(width: int, height: int, factor: float, fit: str = "") -> str
     fit_option = f":force_original_aspect_ratio={fit}" if fit else ""
     chain = f"scale={width}:{height}{fit_option}:flags=lanczos"
     return f"{chain},{UPSCALE_SHARPEN}" if factor > SHARPEN_ABOVE_SCALE else chain
+
+
+def _relative(tracking: list[dict], start_time: float) -> list[dict]:
+    """Tracking points with timestamps made relative to a render starting at ``start_time``."""
+    return [
+        {**point, "timestamp": max(0.0, float(point.get("timestamp", 0.0)) - start_time)}
+        for point in tracking
+    ]
 
 
 class FFmpegService:
@@ -331,10 +381,7 @@ class FFmpegService:
         crop_width, crop_height = target_crop_size(source_width, source_height, f"{target_width}:{target_height}")
 
         # Tracking timestamps are absolute; the filter graph runs on the cut clip.
-        relative_tracking = [
-            {**point, "timestamp": max(0.0, float(point.get("timestamp", 0.0)) - start_time)}
-            for point in crop_tracking
-        ]
+        relative_tracking = _relative(crop_tracking, start_time)
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
@@ -452,37 +499,106 @@ class FFmpegService:
         output_path: str,
         start_time: float,
         duration: float,
-        cells: list[tuple[dict, int]],
+        cells: list[tuple],
         target_width: int,
         source_width: int,
         source_height: int,
     ) -> None:
         """Render regions of the source stacked top to bottom into one frame.
 
-        ``cells`` are ``(normalised box, output height)`` pairs; each region is
-        scaled to cover its cell and centre-cropped, so nothing is letterboxed.
-        Uses the same encoder settings as tracked crops, so the two join by
-        stream copy.
+        ``cells`` are ``(normalised box, output height)`` pairs, optionally
+        extended to ``(box, height, fill, path)``. A "crop" fill (the default)
+        scales the region to cover its cell and centre-crops it, so nothing is
+        letterboxed; "fit" shows the whole region over a blurred copy of
+        itself. ``path``, tracking points as :meth:`crop_with_tracking` takes
+        them, moves the region's window through the render the way a tracked
+        crop moves. Uses the same encoder settings as tracked crops, so the
+        two join by stream copy.
         """
         chains = []
         labels = []
-        for index, (box, height) in enumerate(cells):
-            w = max(2, int(box["width"] * source_width) // 2 * 2)
-            h = max(2, int(box["height"] * source_height) // 2 * 2)
-            x = min(max(0, int(box["x"] * source_width)), source_width - w)
-            y = min(max(0, int(box["y"] * source_height)), source_height - h)
-            scale = upscale_filter(target_width, height, max(target_width / w, height / h), fit="increase")
-            chains.append(
-                f"[s{index}]crop={w}:{h}:{x}:{y},{scale},"
-                f"crop={target_width}:{height},setsar=1[c{index}]"
-            )
+        commands: list[str] = []
+        for index, (box, height, *rest) in enumerate(cells):
+            fill = rest[0] if rest else "crop"
+            path = rest[1] if len(rest) > 1 else None
+            w, h, x, y = pixel_region(box, source_width, source_height)
+            crop = f"crop={w}:{h}:{x}:{y}"
+            if path:
+                # Named, so the command file moves this cell's window and no other.
+                moves = crop_tracking_path(
+                    _relative(path, start_time), source_width, source_height, w, h, duration,
+                )
+                crop = f"crop@c{index}={w}:{h}:{moves[0][1]}:{moves[0][2]}"
+                commands.extend(f"{t:.3f} crop@c{index} x {mx}, crop@c{index} y {my};\n" for t, mx, my in moves)
+            if fill == "fit":
+                chains.append(fitted_filter(f"[s{index}]{crop},", f"c{index}", (w, h), target_width, height))
+            else:
+                scale = upscale_filter(target_width, height, max(target_width / w, height / h), fit="increase")
+                chains.append(f"[s{index}]{crop},{scale},crop={target_width}:{height},setsar=1[c{index}]")
             labels.append(f"[c{index}]")
+        source = f"[0:v]sendcmd=f={CROP_COMMANDS_FILE}," if commands else "[0:v]"
+        split = f"split={len(cells)}" + "".join(f"[s{i}]" for i in range(len(cells)))
+        stacked = "".join(labels) + f"vstack=inputs={len(cells)}[v]" if len(cells) > 1 else f"{labels[0]}null[v]"
+        graph = source + split + ";" + ";".join(chains) + ";" + stacked
+        if not commands:
+            await self._render_graph(input_path, output_path, start_time, duration, graph, "STACK_RENDER_FAILED")
+            return
+        # The command file is read by bare name from a working directory of its
+        # own, as for tracked crops, so no path is escaped inside the graph.
+        with tempfile.TemporaryDirectory() as workdir:
+            Path(workdir, CROP_COMMANDS_FILE).write_text("".join(commands), encoding="utf-8")
+            await self._render_graph(
+                input_path, output_path, start_time, duration, graph, "STACK_RENDER_FAILED", cwd=workdir,
+            )
+
+    async def render_keyed(
+        self,
+        input_path: str,
+        output_path: str,
+        start_time: float,
+        duration: float,
+        backdrop: tuple[dict, str],
+        person: tuple[dict, int],
+        key_colour: str,
+        target_width: int,
+        target_height: int,
+        source_width: int,
+        source_height: int,
+    ) -> None:
+        """A green-screened person keyed out of the source and stood at the
+        bottom of a full-height backdrop.
+
+        ``backdrop`` is ``(normalised box, fill)``: "fit" shows that region
+        (the graphic behind the person) whole above them, over a blur of
+        itself; "blur" is a desaturated, darkened blur of it, neutral whatever
+        colour the screen was. ``person`` is ``(normalised box, output
+        height)``, keyed on ``key_colour`` (``0xRRGGBB``) with the green spill
+        on their edges removed.
+        """
+        back_box, back_fill = backdrop
+        person_box, person_height = person
+        bw, bh, bx, by = pixel_region(back_box, source_width, source_height)
+        pw, ph, px, py = pixel_region(person_box, source_width, source_height)
+        if back_fill == "fit":
+            fitted_height = min(target_height, int(target_width * bh / bw))
+            top = max(0, (target_height - person_height - fitted_height) // 2)
+            back = fitted_filter(f"[b]crop={bw}:{bh}:{bx}:{by},", "back", (bw, bh), target_width, target_height, top)
+        else:
+            small_w, small_h = target_width // BACKDROP_SCALE // 2 * 2, target_height // BACKDROP_SCALE // 2 * 2
+            back = (
+                f"[b]crop={bw}:{bh}:{bx}:{by},scale={small_w}:{small_h}:force_original_aspect_ratio=increase,"
+                f"crop={small_w}:{small_h},hue=s=0,boxblur=20:3,eq=brightness=-0.25,"
+                f"scale={target_width}:{target_height},setsar=1[back]"
+            )
+        scale = upscale_filter(target_width, person_height, max(target_width / pw, person_height / ph), fit="increase")
         graph = (
-            f"[0:v]split={len(cells)}" + "".join(f"[s{i}]" for i in range(len(cells))) + ";"
-            + ";".join(chains) + ";"
-            + "".join(labels) + f"vstack=inputs={len(cells)}[v]"
+            "[0:v]split=2[b][p];"
+            f"{back};"
+            f"[p]crop={pw}:{ph}:{px}:{py},chromakey={key_colour}:{KEY_SIMILARITY}:{KEY_BLEND},despill=type=green,"
+            f"{scale},crop={target_width}:{person_height},setsar=1[person];"
+            "[back][person]overlay=0:H-h[v]"
         )
-        await self._render_graph(input_path, output_path, start_time, duration, graph, "STACK_RENDER_FAILED")
+        await self._render_graph(input_path, output_path, start_time, duration, graph, "KEYED_RENDER_FAILED")
 
     async def render_fit(
         self,
@@ -500,12 +616,9 @@ class FFmpegService:
         For shots with nobody in them (animation, B-roll, slides), where any
         crop would cut an arbitrary slice out of the picture.
         """
-        back_w = target_width // BACKDROP_SCALE // 2 * 2
-        back_h = target_height // BACKDROP_SCALE // 2 * 2
         graph = (
             "[0:v]split=2[bg][fg];"
-            f"[bg]scale={back_w}:{back_h}:force_original_aspect_ratio=increase,crop={back_w}:{back_h},"
-            f"boxblur=16:3,eq=brightness=-0.12,scale={target_width}:{target_height},setsar=1[back];"
+            f"[bg]{backdrop_filter(target_width, target_height)}[back];"
             f"[fg]{upscale_filter(target_width, -2, target_width / source_width)},setsar=1[front];"
             "[back][front]overlay=(W-w)/2:(H-h)/2[v]"
         )
@@ -519,11 +632,13 @@ class FFmpegService:
         duration: float,
         graph: str,
         error_code: str,
+        cwd: str | None = None,
     ) -> None:
         """Encode ``graph`` (ending in ``[v]``) over a stretch of the source, with
         the same encoder settings as tracked crops so the parts join by stream copy."""
         encoder_args = await self._get_encoder_args()
         source = input_path if "://" in input_path else str(Path(input_path).resolve())
+        output_path = str(Path(output_path).resolve())
         cmd = [
             "ffmpeg", "-y", "-nostdin",
             "-ss", str(start_time), "-i", source,
@@ -536,7 +651,9 @@ class FFmpegService:
             "-movflags", "+faststart",
             output_path,
         ]
-        proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        proc = await asyncio.create_subprocess_exec(
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=cwd,
+        )
         _, stderr = await proc.communicate()
         if proc.returncode != 0 or not Path(output_path).exists():
             raise CustomException(

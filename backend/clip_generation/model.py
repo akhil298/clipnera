@@ -165,6 +165,8 @@ class VideoAnalysis(Base):
         String(100), nullable=True
     )
     category_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # The short-form format the video as a whole was judged to be (formats.taxonomy).
+    content_format: Mapped[str | None] = mapped_column(String(40), nullable=True)
     topic_keywords: Mapped[str | None] = mapped_column(Text, nullable=True)
     scene_changes: Mapped[str | None] = mapped_column(Text, nullable=True)
     frame_descriptions: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -207,6 +209,9 @@ class GeneratedClip(Base):
     score: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
     scores: Mapped[str | None] = mapped_column(Text, nullable=True)
     content_category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # The short-form format the AI cut this clip as (formats.taxonomy); null
+    # for clips made before formats, which were all cut as talking heads.
+    content_format: Mapped[str | None] = mapped_column(String(40), nullable=True)
     s3_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     s3_bucket: Mapped[str | None] = mapped_column(String(255), nullable=True)
     presigned_url: Mapped[str | None] = mapped_column(Text, nullable=True)

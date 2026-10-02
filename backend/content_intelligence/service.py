@@ -24,6 +24,8 @@ from content_intelligence.research import TopicResearcher
 from content_intelligence.scorer import ClipScorer
 from content_intelligence.sentences import Sentence, build_sentences, speaker_legend
 from content_intelligence.signals import AudioSignals, extract_audio_signals
+from formats import DEFAULT_FORMAT, VisualEvidence, evidence_from_dict, merge_evidence, resolve_format
+from formats.visual_probe import evidence_prompt, probe_video
 from video_processor.ffmpeg_service import FFmpegService
 
 log = get_logger(__name__)
@@ -106,7 +108,12 @@ class ContentIntelligenceService:
         if progress_callback:
             await self._notify(progress_callback, "Listening for peaks and reactions...", 10)
         duration = await self._ffmpeg.probe_duration(video_path)
-        audio, scenes = await asyncio.gather(extract_audio_signals(video_path), describe_video(video_path, duration))
+        audio, scenes, windows = await asyncio.gather(
+            extract_audio_signals(video_path),
+            describe_video(video_path, duration),
+            probe_video(video_path, duration, transcript_segments),
+        )
+        evidence = merge_evidence(windows, 0.0, duration)
         sentences = build_sentences(transcript_segments, audio)
         attach_scenes(sentences, scenes)
 
@@ -120,14 +127,17 @@ class ContentIntelligenceService:
                     float((clip_settings or {}).get("max_clips_per_hour") or MAX_CLIPS_PER_HOUR),
                     (clip_settings or {}).get("max_clips"),
                 )
-                video_map = await self._director.map(sentences, duration, speaker_legend(transcript_segments), target)
-                analysis = self._analysis_from_map(video_map, audio, len(sentences))
+                video_map = await self._director.map(
+                    sentences, duration, speaker_legend(transcript_segments), target, evidence=evidence_prompt(windows),
+                )
+                analysis = self._analysis_from_map(video_map, audio, len(sentences), evidence)
             except Exception as exc:
                 log.warning("Map pass failed, falling back to research + classification: %s", exc)
 
         if analysis is None:
             topic_research = await self._research_topic(video_path, transcript_segments)
             classification = await self._classifier.classify(topic_research, transcript_segments)
+            classification.update(format=resolve_format(None, evidence)[0], format_confidence=0.0)
             analysis = {
                 "topic_research": topic_research,
                 "classification": classification,
@@ -135,6 +145,7 @@ class ContentIntelligenceService:
             }
 
         analysis["visual_timeline"] = scenes
+        analysis["format_evidence"] = [window.as_dict() for window in windows]
         await self._persist_analysis(project_id, analysis)
         return analysis
 
@@ -142,7 +153,10 @@ class ContentIntelligenceService:
     def _signal_summary(audio: AudioSignals | None) -> dict[str, Any]:
         return {"audio_peaks": audio.peaks() if audio else [], "scene_changes": [], "descriptions": {}}
 
-    def _analysis_from_map(self, video_map: dict[str, Any], audio: AudioSignals | None, sentence_count: int) -> dict:
+    def _analysis_from_map(
+        self, video_map: dict[str, Any], audio: AudioSignals | None, sentence_count: int,
+        evidence: VisualEvidence | None,
+    ) -> dict:
         topic_research = {
             "title": video_map.get("title", ""),
             "summary": video_map.get("summary", ""),
@@ -157,15 +171,21 @@ class ContentIntelligenceService:
             "sources": [],
             "research_method": "map_pass",
         }
+        # The Map's format stands only if the picture can carry it; otherwise the
+        # probe's own reading replaces it, at no confidence.
+        content_format, kept = resolve_format(video_map.get("format") or DEFAULT_FORMAT, evidence)
         classification = {
             "category": video_map.get("category", "unknown"),
             "confidence": video_map.get("confidence", 0.5),
             "keywords": video_map.get("topics", []),
             "reasoning": "map pass",
+            "format": content_format,
+            "format_confidence": float(video_map.get("format_confidence") or 0.0) if kept else 0.0,
         }
         log.info(
-            "Map: category=%s, %d candidate(s) from %d sentence(s)",
-            classification["category"], len(video_map.get("candidates", [])), sentence_count,
+            "Map: category=%s, format=%s%s, %d candidate(s) from %d sentence(s)",
+            classification["category"], content_format, "" if kept else f" (map said {video_map.get('format')})",
+            len(video_map.get("candidates", [])), sentence_count,
         )
         return {
             "topic_research": topic_research,
@@ -227,9 +247,13 @@ class ContentIntelligenceService:
         category = str(video_map.get("category") or "unknown")
         jump_cuts = bool(settings.get("jump_cuts", True))
         story_count = story_clip_count(settings, max_clips, category)
+        windows = [w for w in map(evidence_from_dict, analysis.get("format_evidence") or []) if w is not None]
+        evidence = evidence_prompt(windows)
         plans, stories = await asyncio.gather(
-            self._director.direct(sentences, video_map, max_clips, min_seconds, max_seconds),
-            self._stories(sentences, video_map, story_count, duration, min_seconds, max_seconds, category, jump_cuts),
+            self._director.direct(sentences, video_map, max_clips, min_seconds, max_seconds, evidence=evidence),
+            self._stories(
+                sentences, video_map, story_count, duration, min_seconds, max_seconds, category, jump_cuts, windows,
+            ),
             return_exceptions=True,
         )
         if isinstance(plans, BaseException):
@@ -240,7 +264,7 @@ class ContentIntelligenceService:
             stories = []
         clips = build_clips(
             plans, sentences, duration, min_seconds, max_seconds, max_clips - len(stories),
-            category=category, jump_cuts=jump_cuts,
+            category=category, jump_cuts=jump_cuts, evidence=windows, video_format=video_map.get("format"),
         )
         return number_clips(clips + stories) if clips else []
 
@@ -254,6 +278,7 @@ class ContentIntelligenceService:
         max_seconds: float,
         category: str,
         jump_cuts: bool,
+        windows: list[VisualEvidence],
     ) -> list[dict]:
         """Story clips that passed the viewer check, at most ``count``.
 
@@ -261,9 +286,12 @@ class ContentIntelligenceService:
         """
         if not count:
             return []
-        plans = await self._director.story(sentences, video_map, count + 1, min_seconds, max_seconds)
+        plans = await self._director.story(
+            sentences, video_map, count + 1, min_seconds, max_seconds, evidence=evidence_prompt(windows),
+        )
         clips = build_story_clips(
             plans, sentences, duration, min_seconds, max_seconds, count + 1, category, jump_cuts,
+            evidence=windows, video_format=video_map.get("format"),
         )
         verdicts = await self._director.check([clip["transcript_excerpt"] for clip in clips])
         return [clip for clip, ok in zip(clips, verdicts) if ok][:count]
@@ -311,6 +339,7 @@ class ContentIntelligenceService:
                     project_id=project_id,
                     content_category=classification.get("category"),
                     category_confidence=classification.get("confidence"),
+                    content_format=classification.get("format"),
                     topic_keywords=json.dumps(topic_research.get("topics", []), ensure_ascii=False),
                     scene_changes=json.dumps(frame_analysis.get("scene_changes", [])),
                     frame_descriptions=json.dumps(frame_analysis.get("descriptions", {}), ensure_ascii=False),

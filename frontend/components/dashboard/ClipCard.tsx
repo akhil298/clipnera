@@ -13,6 +13,7 @@ import {
 import { ViralClip } from '@/lib/types';
 import { ClipPoster } from './ClipPoster';
 import { ScoreRing } from '@/components/ui/ScoreRing';
+import { FormatBadge } from './FormatBadge';
 
 interface ClipCardProps {
   clip: ViralClip;
@@ -175,6 +176,7 @@ export const ClipCard: React.FC<ClipCardProps> = ({
               #{index + 1}
             </span>
           )}
+          <FormatBadge format={clip.contentFormat} className="bg-black/70 text-sky-200 backdrop-blur-sm" />
         </div>
 
         <div className="absolute right-2.5 top-2.5">

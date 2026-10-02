@@ -6,6 +6,10 @@ a clip opening mid-thought is walked back to the thought's start, the stitched
 length is fitted into the allowed band, the teaser is checked against the hook
 rules, and pauses and filler words are cut out of the body (jump cuts).
 
+Each clip's format is the director's choice when the visual probe's evidence
+over the clip supports it (a list also needs two items inside the clip), else
+what the picture shows; the format's recipe sets the jump-cut pause and layout.
+
 Story clips (pieces from across the video) get their own repairs: every piece
 opens on its own thought, slivers are dropped, the payoff at the end is never
 trimmed, and a "story" whose pieces all sit together is refused, since that
@@ -16,12 +20,16 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from clip_generation.hook import MAX_HOOK_SECONDS, MIN_HOOK_OFFSET_SECONDS, MIN_HOOK_SECONDS
-from content_intelligence.director import BEAT_EFFECTS, DIRECTOR_VERSION, LAYOUTS, RUBRIC, STORY_SEPARATOR
+from content_intelligence.director import (
+    BEAT_EFFECTS, DIRECTOR_VERSION, LAYOUTS, LIST_FORMATS, RUBRIC, STORY_SEPARATOR,
+)
 from content_intelligence.sentences import Sentence
 from core.logging_config import get_logger
+from formats import DEFAULT_FORMAT, FORMATS, VisualEvidence, merge_evidence, recipe_for, resolve_format
 from transcription.language import is_hesitation
 
 log = get_logger(__name__)
@@ -29,9 +37,8 @@ log = get_logger(__name__)
 # Padding kept around speech at every cut, so a word's attack and decay survive.
 LEAD_PAD = 0.08
 TAIL_PAD = 0.15
-# Silences longer than this inside a clip are cut out; shorter ones are breath.
-# Short-form pacing: a half-second of dead air already reads as a stall.
-JUMP_CUT_MIN_PAUSE = 0.5
+# Silences longer than the format's recipe allows (jump_cut_min_pause) are cut
+# out of a clip; this much breath is kept either side of each cut.
 JUMP_CUT_KEEP = 0.12
 # No piece of a stitched clip may be shorter than this, or the cut reads as a glitch.
 MIN_PIECE_SECONDS = 0.5
@@ -60,6 +67,18 @@ SIGN_OFF = re.compile(r"^\W*(thank you|thanks|that's all|see you)\b", re.IGNOREC
 # before an outro's first plug its sign-off may start it.
 INTRO_SHARE, OUTRO_SHARE = 0.10, 0.15
 SIGN_OFF_REACH = 5
+ITEM_LABEL_CHARS = 40
+
+
+@dataclass
+class _Format:
+    """A clip's format, whether the AI chose it, the evidence it was judged
+    on, and its items (lists only)."""
+
+    name: str
+    kept: bool
+    evidence: VisualEvidence | None
+    items: list[dict[str, Any]]
 
 
 def build_clips(
@@ -71,14 +90,22 @@ def build_clips(
     max_clips: int,
     category: str,
     jump_cuts: bool = True,
+    *,
+    evidence: list[VisualEvidence] | None = None,
+    video_format: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Validated clips, best first, at most ``max_clips``."""
+    """Validated clips, best first, at most ``max_clips``.
+
+    ``evidence`` is the visual probe's windows; ``video_format`` the Map's
+    format for the whole video, used for plans that name no usable format.
+    """
     by_id = {s.id: s for s in sentences}
     bounds = content_bounds(sentences, duration)
     clips: list[dict[str, Any]] = []
     for plan in plans:
         try:
-            clip = _build_clip(plan, sentences, by_id, duration, min_seconds, max_seconds, category, jump_cuts, bounds)
+            clip = _build_clip(plan, sentences, by_id, duration, min_seconds, max_seconds, category, jump_cuts, bounds,
+                               evidence, video_format)
         except Exception as exc:
             log.warning("Dropped an edit plan that could not be repaired: %s", exc)
             continue
@@ -99,6 +126,9 @@ def build_story_clips(
     max_clips: int,
     category: str,
     jump_cuts: bool = True,
+    *,
+    evidence: list[VisualEvidence] | None = None,
+    video_format: str | None = None,
 ) -> list[dict[str, Any]]:
     """Validated story clips, best first, at most ``max_clips``; not yet numbered."""
     by_id = {s.id: s for s in sentences}
@@ -106,7 +136,8 @@ def build_story_clips(
     clips: list[dict[str, Any]] = []
     for plan in plans:
         try:
-            clip = _build_story(plan, by_id, duration, min_seconds, max_seconds, category, jump_cuts, bounds)
+            clip = _build_story(plan, by_id, duration, min_seconds, max_seconds, category, jump_cuts, bounds,
+                                evidence, video_format)
         except Exception as exc:
             log.warning("Dropped a story plan that could not be repaired: %s", exc)
             continue
@@ -175,6 +206,8 @@ def _build_clip(
     category: str,
     jump_cuts: bool,
     bounds: tuple[int, int],
+    evidence: list[VisualEvidence] | None,
+    video_format: str | None,
 ) -> dict[str, Any] | None:
     ranges = _within_bounds(_ranges(plan.get("segments") or [], by_id), bounds)
     if not ranges:
@@ -182,12 +215,14 @@ def _build_clip(
     first, last = ranges[0]
     ranges[0] = (_thought_start(first, by_id, bounds[0]), last)
     planned_end = ranges[-1][1]
+    # Length is judged at the planned format's pacing; _assemble settles the format on the fitted clip.
+    pause = recipe_for(_clip_format(plan, ranges, by_id, duration, evidence, video_format).name).jump_cut_min_pause
     ranges = _fit_length(
         ranges, sentences, by_id, min_seconds, max_seconds,
-        lambda candidate: _played_seconds(candidate, by_id, duration, jump_cuts), bounds,
+        lambda candidate: _played_seconds(candidate, by_id, duration, jump_cuts, pause), bounds,
     )
     return _assemble(
-        plan, ranges, by_id, duration, category, jump_cuts, "director", " ",
+        plan, ranges, by_id, duration, category, jump_cuts, "director", " ", evidence, video_format,
         payoff_cut=ranges[-1][1] < planned_end,
     )
 
@@ -201,6 +236,8 @@ def _build_story(
     category: str,
     jump_cuts: bool,
     bounds: tuple[int, int],
+    evidence: list[VisualEvidence] | None,
+    video_format: str | None,
 ) -> dict[str, Any] | None:
     ranges = _within_bounds(_ranges(plan.get("segments") or [], by_id, MAX_STORY_PIECES), bounds)
     floor = bounds[0]
@@ -212,7 +249,9 @@ def _build_story(
     ranges = _fit_story_length(ranges, by_id, max_seconds)
     if not _is_story(ranges, by_id) or not min_seconds <= _seconds(ranges, by_id) <= max_seconds:
         return None
-    return _assemble(plan, ranges, by_id, duration, category, jump_cuts, "director_story", STORY_SEPARATOR)
+    return _assemble(
+        plan, ranges, by_id, duration, category, jump_cuts, "director_story", STORY_SEPARATOR, evidence, video_format,
+    )
 
 
 def _assemble(
@@ -224,16 +263,20 @@ def _assemble(
     jump_cuts: bool,
     source: str,
     separator: str,
+    evidence: list[VisualEvidence] | None,
+    video_format: str | None,
     payoff_cut: bool = False,
 ) -> dict[str, Any] | None:
-    """The clip for ``ranges``: word-exact spans, teaser, beats, copy and score.
+    """The clip for ``ranges``: word-exact spans, format, teaser, beats, copy and score.
 
     ``payoff_cut`` marks a clip whose planned closing lines were trimmed away.
     """
     ids = [i for first, last in ranges for i in range(first, last + 1)]
     spans = [_span(first, last, by_id, duration) for first, last in ranges]
+    clip_format = _clip_format(plan, ranges, by_id, duration, evidence, video_format)
+    recipe = recipe_for(clip_format.name)
     if jump_cuts:
-        spans = _tighten(spans, [w for i in ids for w in by_id[i].words])
+        spans = _tighten(spans, [w for i in ids for w in by_id[i].words], recipe.jump_cut_min_pause)
     spans = _merge_close(spans)
     body = sum(end - start for start, end in spans)
     if body <= 0:
@@ -246,7 +289,10 @@ def _assemble(
     hook = _hook(plan.get("hook"), ids, by_id, spans)
     text = separator.join(" ".join(by_id[i].text for i in range(first, last + 1)) for first, last in ranges)
     speakers = list(dict.fromkeys(by_id[i].speaker for i in ids if by_id[i].speaker != "-"))
-    layout = plan.get("layout") if plan.get("layout") in LAYOUTS else "auto"
+    if recipe.layout != "follow":
+        layout = recipe.layout
+    else:
+        layout = plan.get("layout") if plan.get("layout") in LAYOUTS else "auto"
 
     return {
         "start_time": round(spans[0][0], 3),
@@ -261,6 +307,10 @@ def _assemble(
         "hashtags": [str(h).strip() for h in plan.get("hashtags") or [] if str(h).strip()][:5],
         "reason": str(plan.get("why") or "").strip(),
         "layout_hint": layout,
+        "content_format": clip_format.name,
+        "format_source": "ai" if clip_format.kept else "visual",
+        "format_evidence": clip_format.evidence.as_dict() if clip_format.evidence else None,
+        "format_items": clip_format.items,
         "beats": _beats(plan.get("beats") or [], by_id, spans),
         "transcript_excerpt": text[:1500],
         "speakers": speakers,
@@ -269,6 +319,59 @@ def _assemble(
         "director_version": DIRECTOR_VERSION,
         "reasons": [source, "payoff_trimmed"] if payoff_cut else [source],
     }
+
+
+def _clip_format(
+    plan: dict[str, Any],
+    ranges: list[tuple[int, int]],
+    by_id: dict[int, Sentence],
+    duration: float,
+    evidence: list[VisualEvidence] | None,
+    video_format: str | None,
+) -> _Format:
+    """The format to cut ``ranges`` with: the plan's (or else the video's)
+    when the picture over the clip supports it, else what the picture shows.
+
+    A list format also needs two items inside the clip; without them the clip
+    falls back to the video's format unless that is a list too.
+    """
+    spans = [_span(first, last, by_id, duration) for first, last in ranges]
+    clip_evidence = _evidence_over(evidence, spans) if evidence else None
+    ids = {i for first, last in ranges for i in range(first, last + 1)}
+    proposed = plan.get("format") if plan.get("format") in FORMATS else video_format
+    name, kept = resolve_format(proposed, clip_evidence)
+    items: list[dict[str, Any]] = []
+    if name in LIST_FORMATS:
+        items = _items(plan.get("items"), ids, by_id, spans[-1][1])
+        if len(items) < 2:
+            name, kept = resolve_format(None if video_format in LIST_FORMATS else video_format, clip_evidence)
+            items = []
+    return _Format(name, kept, clip_evidence, items)
+
+
+def _evidence_over(windows: list[VisualEvidence], spans: list[tuple[float, float]]) -> VisualEvidence | None:
+    """Evidence over the played ``spans`` only, never the video cut out between them."""
+    pieces = [piece for start, end in spans if (piece := merge_evidence(windows, start, end))]
+    return merge_evidence(pieces, spans[0][0], spans[-1][1]) if pieces else None
+
+
+def _items(value: Any, ids: set[int], by_id: dict[int, Sentence], clip_end: float) -> list[dict[str, Any]]:
+    """List items in source seconds, in time order, kept only inside the clip.
+    Each lasts until the next one starts, the last until the clip ends."""
+    starts: dict[float, tuple[str, int | None]] = {}
+    for item in value if isinstance(value, list) else []:
+        try:
+            sentence_id, rank = int(item.get("at")), int(item.get("rank") or 0)
+        except (AttributeError, TypeError, ValueError):
+            continue
+        label = str(item.get("label") or "").strip()[:ITEM_LABEL_CHARS].strip()
+        if sentence_id in ids and label:
+            sentence = by_id[sentence_id]
+            t = round(sentence.words[0]["start"] if sentence.words else sentence.start, 3)
+            starts.setdefault(t, (label, rank if rank > 0 else None))
+    times = sorted(starts)
+    ends = times[1:] + [round(clip_end, 3)]
+    return [{"t": t, "end": end, "label": starts[t][0], "rank": starts[t][1]} for t, end in zip(times, ends)]
 
 
 def _ranges(segments: list[Any], by_id: dict[int, Sentence], limit: int = MAX_PIECES) -> list[tuple[int, int]]:
@@ -310,13 +413,14 @@ def _seconds(ranges: list[tuple[int, int]], by_id: dict[int, Sentence]) -> float
 
 def _played_seconds(
     ranges: list[tuple[int, int]], by_id: dict[int, Sentence], duration: float, jump_cuts: bool,
+    min_pause: float = recipe_for(DEFAULT_FORMAT).jump_cut_min_pause,
 ) -> float:
     """How long ``ranges`` play once cut: without the pauses and filler that
     jump cuts remove, which a raw sentence span still counts."""
     spans = [_span(first, last, by_id, duration) for first, last in ranges]
     if jump_cuts:
         words = [w for first, last in ranges for i in range(first, last + 1) for w in by_id[i].words]
-        spans = _merge_close(_tighten(spans, words))
+        spans = _merge_close(_tighten(spans, words, min_pause))
     return sum(end - start for start, end in spans)
 
 
@@ -396,8 +500,12 @@ def _span(first: int, last: int, by_id: dict[int, Sentence], duration: float) ->
     return max(0.0, start), min(duration or end, end)
 
 
-def _tighten(spans: list[tuple[float, float]], words: list[dict[str, Any]]) -> list[tuple[float, float]]:
-    """Cut long pauses and every hesitation sound ("um", "हम्म") out of each span.
+def _tighten(
+    spans: list[tuple[float, float]],
+    words: list[dict[str, Any]],
+    min_pause: float = recipe_for(DEFAULT_FORMAT).jump_cut_min_pause,
+) -> list[tuple[float, float]]:
+    """Cut pauses of ``min_pause`` or longer and every hesitation sound ("um", "हम्म") out of each span.
 
     A hesitation is cut however short the gap around it; the cut stops at its
     edges so none of it survives in the breath kept either side.
@@ -413,7 +521,7 @@ def _tighten(spans: list[tuple[float, float]], words: list[dict[str, Any]]) -> l
         pieces: list[list[float]] = [[span_start, inside[0][1]]]
         for (s, e), (_, prev_e) in zip(inside[1:], inside[:-1]):
             fillers = [(hs, he) for hs, he in hesitations if hs >= prev_e and he <= s]
-            if fillers or s - prev_e >= JUMP_CUT_MIN_PAUSE:
+            if fillers or s - prev_e >= min_pause:
                 cut_from = min([prev_e + JUMP_CUT_KEEP] + [hs for hs, _ in fillers])
                 cut_to = max([s - JUMP_CUT_KEEP] + [he for _, he in fillers])
                 pieces[-1][1] = cut_from

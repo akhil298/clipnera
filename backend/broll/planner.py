@@ -24,13 +24,17 @@ MAX_CUTAWAY_SECONDS = 4.0
 NO_CUTAWAY_BEFORE_SECONDS = 2.0
 MIN_GAP_SECONDS = 1.5
 MAX_COVERAGE = 0.4
+# How much of a clip cutaways may cover, and the fewest seconds between them,
+# by density: "normal" for a clip whose format has no B-roll of its own, the
+# others as the format's recipe asks (formats.taxonomy.Recipe.broll).
+DENSITY = {"light": (0.25, 10), "normal": (MAX_COVERAGE, 8), "heavy": (0.6, 5)}
 MAX_WORDS_PER_CLIP = 400
 
 SYSTEM = """You are a short-form video editor adding B-roll cutaways to talking-head clips. You return valid JSON only.
 
 A cutaway briefly replaces the speaker with footage of what they are talking about. Add one only where the speaker names something concrete that footage can show: a place (a city, an office, a beach), an object (money, a phone, food), an activity (running, coding, cooking) or a vivid scene. Never cut away from: the first two seconds, a punchline or emotional moment where the face sells it, abstract ideas with nothing to show, or the speaker describing themself.
 
-For each cutaway give the word range it covers (from/to are word ids, inclusive, 1.5-4 seconds long), a short English stock-footage search query of 2-5 words describing the shot, and its subject: the one or two English nouns the shot must show (for "sunny beach waves", "beach"). Write query and subject in English even when the speech is in Hindi, Telugu or a mix. At most one cutaway per 8 seconds. It is right to return no cutaways for a clip that is about the person."""
+For each cutaway give the word range it covers (from/to are word ids, inclusive, 1.5-4 seconds long), a short English stock-footage search query of 2-5 words describing the shot, and its subject: the one or two English nouns the shot must show (for "sunny beach waves", "beach"). Write query and subject in English even when the speech is in Hindi, Telugu or a mix. At most one cutaway per 8 seconds, unless a clip's header gives its own spacing. It is right to return no cutaways for a clip that is about the person."""
 
 EXAMPLE = '{"clips":[{"index":0,"cutaways":[{"from":12,"to":18,"query":"busy city street night","subject":"city street","why":"names the city"}]}]}'
 
@@ -50,6 +54,8 @@ class ClipWords:
 
     words: list[dict[str, Any]]
     spans: list[tuple[float, float]]
+    # A key of DENSITY.
+    density: str = "normal"
 
 
 def prompt(clips: list[ClipWords]) -> str:
@@ -60,7 +66,10 @@ def prompt(clips: list[ClipWords]) -> str:
             f"{i}:{w['word']}" + (f"@{w['start'] - body_start:.1f}s" if i % 10 == 0 else "")
             for i, w in enumerate(clip.words[:MAX_WORDS_PER_CLIP])
         )
-        blocks.append(f"[{index}] {lines}")
+        header = f"[{index}]"
+        if clip.density != "normal":
+            header += f" (at most one cutaway per {_density(clip)[1]} seconds)"
+        blocks.append(f"{header} {lines}")
     return (
         "Each clip is its index, then its words as id:word (every tenth word shows seconds from the clip start).\n\n"
         + "\n\n".join(blocks)
@@ -94,7 +103,7 @@ def validate(raw: list[Any], clip: ClipWords) -> list[Cutaway]:
     if not words or not clip.spans:
         return []
     body = sum(end - start for start, end in clip.spans)
-    budget = body * MAX_COVERAGE
+    budget = body * _density(clip)[0]
     kept: list[Cutaway] = []
     for item in sorted((r for r in raw if isinstance(r, dict)), key=lambda r: _int(r.get("from"))):
         first, last, query = _int(item.get("from")), _int(item.get("to")), str(item.get("query") or "").strip()
@@ -116,6 +125,10 @@ def validate(raw: list[Any], clip: ClipWords) -> list[Cutaway]:
         subject = str(item.get("subject") or "").strip()[:60]
         kept.append(Cutaway(round(start, 3), round(end, 3), query[:80], subject))
     return kept
+
+
+def _density(clip: ClipWords) -> tuple[float, int]:
+    return DENSITY.get(clip.density, DENSITY["normal"])
 
 
 def _elapsed(t: float, spans: list[tuple[float, float]]) -> float:

@@ -472,6 +472,12 @@ def wrap_title(title: str, measure: Any, max_width: float) -> list[str]:
     )
 
 
+def title_card_height(line_count: int, font_file: str, em: float) -> float:
+    """Height in px of the title card holding ``line_count`` lines at an em of ``em``."""
+    _, cap = face_metrics(font_file)
+    return (2 * TITLE_PAD_Y + cap + (line_count - 1) * TITLE_LINE_PITCH + TITLE_DESCENT_ROOM) * em
+
+
 def rounded_rect(w: float, h: float, r: float) -> str:
     """ASS drawing of a ``w`` x ``h`` rectangle with corners of radius ``r``, from its top-left."""
     r = min(r, w / 2, h / 2)
@@ -558,13 +564,17 @@ class AssGenerator:
         style_overrides: dict[str, Any] | None = None,
         segment_breaks: list[float] | None = None,
         seams: list[tuple[float, float, float]] | None = None,
+        overlay: str = "none",
+        overlay_items: list[dict[str, Any]] | None = None,
     ) -> str:
         """``segment_breaks`` are times (on the words' timeline) where the picture
         cuts to a different segment, e.g. the end of the hook teaser; no caption
         line spans one, or it would carry the hook's words over into the clip.
         ``seams`` are ``(start, end, seam)`` stretches, in seconds from the
         clip's start, where two people are stacked: a line starting in one sits
-        on the seam between them, as a share of the height, not over a face."""
+        on the seam between them, as a share of the height, not over a face.
+        ``overlay`` is the format's list overlay (see ``format_overlay``), drawn
+        from ``overlay_items`` already on the output's timeline."""
         template = {**get_template(style_id), **(style_overrides or {})}
         # A stack starting or ending moves the captions, so no line spans that either.
         seam_edges = [clip_start + edge for low, high, _ in seams or [] for edge in (low, high)]
@@ -706,10 +716,27 @@ class AssGenerator:
             "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
         ])
 
-        if title and title.strip():
+        has_title = bool(title and title.strip())
+        if has_title:
             lines.extend(self._title_card(
                 title_lines, title_file, title_em, title_font_size, title_margin_v, width, min(TITLE_SECONDS, clip_duration),
             ))
+        if overlay_items:
+            from subtitle_styling.format_overlay import overlay_events
+
+            # Kept clear of the title card and every height a caption line can sit at.
+            caption_reach = 0.8 * font_size * rows
+            occupied = [
+                (y - caption_reach, y + caption_reach)
+                for y in (caption_y, *(round(seam * height) for _, _, seam in seams or []))
+            ]
+            if has_title:
+                occupied.append((title_margin_v, title_margin_v + title_card_height(len(title_lines), title_file, title_em)))
+            overlay_styles, overlay_lines = overlay_events(
+                overlay, overlay_items, width, height, clip_duration, highlight_color, occupied,
+            )
+            header_lines[-3:-3] = overlay_styles
+            lines.extend(overlay_lines)
 
         if not transcript_words:
             return colourize("\n".join(header_lines + lines) + "\n")
@@ -856,7 +883,7 @@ class AssGenerator:
         text_w = max(text_width(line, font_file, em, emoji_size) for line in title_lines)
         card_w = text_w + 2 * TITLE_PAD_X * em
         first_baseline = top + (TITLE_PAD_Y + cap) * em
-        card_h = (2 * TITLE_PAD_Y + cap + (len(title_lines) - 1) * TITLE_LINE_PITCH + TITLE_DESCENT_ROOM) * em
+        card_h = title_card_height(len(title_lines), font_file, em)
         left = round((width - card_w) / 2)
         timing = f"{ass_time(0)},{ass_time(max(0.0, seconds))}"
         fade = f"\\fad({TITLE_FADE_IN_MS},{TITLE_FADE_OUT_MS})"
@@ -972,6 +999,8 @@ def build_ass_file(
     style_overrides: dict[str, Any] | None = None,
     segment_breaks: list[float] | None = None,
     seams: list[tuple[float, float, float]] | None = None,
+    overlay: str = "none",
+    overlay_items: list[dict[str, Any]] | None = None,
 ) -> str:
     """Generate an ASS subtitle file and return its path."""
     generator = AssGenerator()
@@ -989,6 +1018,8 @@ def build_ass_file(
         style_overrides=style_overrides,
         segment_breaks=segment_breaks,
         seams=seams,
+        overlay=overlay,
+        overlay_items=overlay_items,
     )
 
     if output_path:

@@ -31,6 +31,7 @@ from clip_generation.repository import ClipRepository
 from core.config import get_settings
 from core.database import AsyncSessionLocal
 from core.logging_config import get_logger
+from formats.taxonomy import recipe_for
 from subscription.service import SubscriptionService
 
 log = get_logger(__name__)
@@ -71,16 +72,28 @@ def clip_words(clip: Any) -> ClipWords:
         w for segment in segments for w in (segment.get("words") or [])
         if any(a <= float(w.get("start", -1)) < b for a, b in spans)
     ]
-    return ClipWords(words=sorted(words, key=lambda w: float(w["start"])), spans=spans)
+    return ClipWords(words=sorted(words, key=lambda w: float(w["start"])), spans=spans, density=broll_density(clip))
+
+
+def broll_density(clip: Any) -> str:
+    """How heavily the clip's format cuts away; a format without B-roll of its own gets the usual amount."""
+    density = recipe_for(getattr(clip, "content_format", None)).broll
+    return "normal" if density == "off" else density
 
 
 async def plan_project_broll(
     project_id: str, user_id: str, is_pro: bool, notify: Callable[[str, int], None] | None = None,
+    formats_only: bool = False,
 ) -> int:
-    """Plan and store cutaways for every clip of a project; returns how many clips got B-roll."""
+    """Plan and store cutaways for a project's clips; returns how many clips got B-roll.
+
+    ``formats_only`` plans only clips whose format is built on cutaways.
+    """
     settings = get_settings()
     async with AsyncSessionLocal() as session:
         clips = await ClipRepository(session).list_clips(project_id, user_id)
+    if formats_only:
+        clips = [clip for clip in clips if recipe_for(clip.content_format).broll != "off"]
     if not clips:
         return 0
     client = get_text_client(is_pro=is_pro, step="broll_planning")

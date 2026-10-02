@@ -104,6 +104,7 @@ class ClipService:
                         "start_time": c.start_time,
                         "end_time": c.end_time,
                         "content_category": c.content_category,
+                        "content_format": c.content_format,
                         "status": c.status,
                         "poster_url": clip_gen_service.poster_url(c),
                         "created_at": c.created_at.isoformat() if c.created_at else None,

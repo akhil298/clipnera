@@ -15,6 +15,12 @@ Design notes:
 * The crop follows the active speaker per frame and is smoothed, rather than
   being a single static window per scene. A change of speaker is a hard cut,
   as an editor would make it, not a pan across the room.
+* The clip's format (chosen by AI upstream, see :mod:`formats.taxonomy`) can
+  ask for a layout of its own: a reaction stack, a screen share zoomed on
+  what changes, a keyed green screen, voice-over footage followed by what
+  stands out. What those layouts look at is measured here from the same
+  samples, and only for the formats that need it, so a talking head costs
+  nothing extra and is cut exactly as before.
 * Output is deliberately caption-free. Subtitles are burned at export time from
   whichever style the user picks, so one cut serves every style.
 * Frames are sampled with a single downscaled FFmpeg pass per clip, which keeps
@@ -26,7 +32,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -36,8 +42,12 @@ import numpy as np
 from core.exceptions import CustomException
 from clip_generation.hook import Hook
 from core.logging_config import get_logger
+from formats.taxonomy import DEFAULT_FORMAT, evidence_from_dict, recipe_for
 from video_processor.editing import (
+    PAIR_FORMATS,
     THUMBNAIL_SIZE,
+    Cell,
+    FormatContext,
     Layout,
     Part,
     Turn,
@@ -45,12 +55,14 @@ from video_processor.editing import (
     framing_stretches,
     picture_difference,
     plan_parts,
+    rhythm_seconds,
     shot_cuts,
     shot_windows,
     speaker_turns,
     tracks_in_shot,
 )
 from video_processor.face_detection import Face, FaceDetector
+from video_processor.focus import activity_boxes, key_colour, salient_boxes
 from video_processor.geometry import (
     Box,
     crop_around,
@@ -135,6 +147,10 @@ class CutRequest:
     # The director's framing choice and beats (source seconds); see video_processor.editing.
     layout_hint: str = "auto"
     beats: list[dict[str, Any]] = field(default_factory=list)
+    # The clip's short-form format (formats.taxonomy) and what the visual probe
+    # saw over it (VisualEvidence.as_dict()); they pick the format's layout.
+    content_format: str = DEFAULT_FORMAT
+    format_evidence: dict[str, Any] | None = None
 
     @property
     def duration(self) -> float:
@@ -221,6 +237,7 @@ class ClipCutter:
                 sum(s.mouth_motion for s in track.samples) / len(track.samples),
             )
         layout = self._classify_layout(tracks, request.content_category)
+        context = await asyncio.to_thread(_format_context, request, frames, cuts, tracks)
         timestamps = _tracking_timestamps(request)
         # cover_subjects needs the speaker too: it falls back to them whenever
         # the group is too wide for the crop.
@@ -266,12 +283,12 @@ class ClipCutter:
             result.crop_tracking[aspect_ratio] = [point.copy() for point in tracking]
             output_path = self._output_path(request, aspect_ratio)
             shots = _plan_shots(
-                request, layout, tracks, cuts, turns, aspect_ratio, source_width, source_height,
+                request, layout, tracks, cuts, turns, aspect_ratio, source_width, source_height, context,
             )
             result.layout = next((frame.kind for _, frame in shots if frame.composite), result.layout)
             result.seams[aspect_ratio] = _stack_seams(shots)
-            log.info("[LAYOUT] clip=%s ratio=%s hint=%s detected=%s used=%s beats=%d",
-                     request.clip_id, aspect_ratio, request.layout_hint, layout,
+            log.info("[LAYOUT] clip=%s ratio=%s format=%s hint=%s detected=%s used=%s beats=%d",
+                     request.clip_id, aspect_ratio, request.content_format, request.layout_hint, layout,
                      " ".join(f"{part.start:.1f}-{part.end:.1f}:{frame.kind}" for part, frame in shots),
                      len(request.beats))
             try:
@@ -609,10 +626,18 @@ class ClipCutter:
                     target_width, target_height, source_width,
                 )
                 return
+            if frame.key:
+                backdrop, person = frame.cells
+                await ffmpeg.render_keyed(
+                    request.source_path, str(path), part.start, part.end - part.start,
+                    (backdrop.box.as_dict(), backdrop.fill), (person.box.as_dict(), person.height), frame.key,
+                    target_width, target_height, source_width, source_height,
+                )
+                return
             if frame.composite:
                 await ffmpeg.render_stack(
                     request.source_path, str(path), part.start, part.end - part.start,
-                    [(cell.box.as_dict(), cell.height) for cell in frame.cells],
+                    [(cell.box.as_dict(), cell.height, cell.fill, _path_tracking(cell)) for cell in frame.cells],
                     target_width, source_width, source_height,
                 )
                 return
@@ -640,13 +665,14 @@ class ClipCutter:
             float(segment.get("start", 0.0)) for segment in request.transcript_segments
             if str(segment.get("text", "")).strip()
         ]
+        rhythm_every = rhythm_seconds(request.content_format)
         parts: list[tuple[Part, Layout]] = []
         for shot, frame in shots:
             if can_reframe and frame.kind == "follow":
                 parts.extend(
                     (part, frame)
                     for part in plan_parts(shot.start, shot.end, request.beats,
-                                           listener_at or (lambda _t: None), sentence_starts)
+                                           listener_at or (lambda _t: None), sentence_starts, rhythm_every)
                 )
             else:
                 parts.append((shot, frame))
@@ -682,16 +708,21 @@ def _plan_shots(
     aspect_ratio: str,
     source_width: int,
     source_height: int,
+    context: FormatContext | None = None,
 ) -> list[tuple[Part, Layout]]:
     """The clip in play order (hook first), one entry per run of shots sharing a layout.
 
     Each shot is framed from the people in that shot alone, and split further
-    where two of them trade replies (see :func:`framing_stretches`).
+    where two of them trade replies (see :func:`framing_stretches`). A
+    format's layout sees only the focus samples of the stretch it frames, and
+    a window that roams is given its path through that stretch.
     Neighbouring stretches that both follow the speaker, or both show the frame
     whole, render as one part: the tracked crop already cuts cleanly at shot
     boundaries, and fewer parts mean fewer encoder runs.
     """
     output_size = output_dimensions(aspect_ratio)
+    context = context or FormatContext()
+    any_pair = context.content_format in PAIR_FORMATS
     spans = ([(request.hook.start, request.hook.end)] if request.hook else []) + request.body_spans
     shots: list[tuple[Part, Layout]] = []
     for span_start, span_end in spans:
@@ -700,13 +731,17 @@ def _plan_shots(
             stretches = framing_stretches(
                 shot_start, shot_end, turns, SAMPLE_INTERVAL_SECONDS, request.transcript_segments,
                 present=tracks_in_shot(tracks, shot_start, shot_end, SAMPLE_INTERVAL_SECONDS),
+                any_pair=any_pair,
             )
             for start, end, pair in stretches:
                 present = tracks_in_shot(tracks, start, end, SAMPLE_INTERVAL_SECONDS)
+                focus = tuple((t, box) for t, box in context.focus if start <= t < end)
                 frame = choose_layout(
                     request.layout_hint, detected, present, aspect_ratio,
                     source_width, source_height, *output_size, pair=pair,
+                    context=replace(context, focus=focus),
                 )
+                frame.cells = [_roam(cell, focus, source_width, source_height) for cell in frame.cells]
                 if joinable and not frame.composite and shots[-1][1].kind == frame.kind:
                     shots[-1] = (Part(shots[-1][0].start, end), frame)
                 else:
@@ -716,17 +751,86 @@ def _plan_shots(
 
 
 def _stack_seams(shots: list[tuple[Part, Layout]]) -> list[tuple[float, float, float]]:
-    """Where two people share the frame, on the rendered file's timeline: the
-    shots play back to back, so each starts where the last one ended."""
+    """Where the frame is a stack of regions (two people, content over a face,
+    a screen over its presenter), on the rendered file's timeline: the shots
+    play back to back, so each starts where the last one ended."""
     seams: list[tuple[float, float, float]] = []
     cursor = 0.0
     for part, frame in shots:
         length = part.end - part.start
-        if frame.kind == "two_speaker_stack":
-            seam = frame.cells[0].height / sum(cell.height for cell in frame.cells)
-            seams.append((round(cursor, 3), round(cursor + length, 3), round(seam, 4)))
+        if frame.seam is not None:
+            seams.append((round(cursor, 3), round(cursor + length, 3), round(frame.seam, 4)))
         cursor += length
     return seams
+
+
+def _format_context(
+    request: CutRequest, frames: list[tuple[float, bytes]], cuts: list[float], tracks: list[SpeakerTrack],
+) -> FormatContext:
+    """The clip's format, its evidence, and what its layout needs measured from
+    the samples: screen activity with faces masked for a screen share, saliency
+    for a voice over, the screen's colour for a green screen. Nothing is
+    measured for any other format."""
+    evidence = evidence_from_dict(request.format_evidence)
+    context = FormatContext(content_format=request.content_format or DEFAULT_FORMAT, evidence=evidence)
+    layout = recipe_for(request.content_format).layout
+    if layout == "screen_focus":
+        webcam = [Box(*evidence.facecam_box)] if evidence and evidence.facecam_box else []
+        focus = activity_boxes(
+            _decode_frames(frames), cuts,
+            lambda t: webcam + [box for box in (track.box_at(t) for track in visible_tracks(t, tracks)) if box],
+        )
+        context = replace(context, focus=tuple(focus))
+    elif layout == "voice_over":
+        context = replace(context, focus=tuple(salient_boxes(_decode_frames(frames), cuts)))
+    elif layout == "green_screen":
+        context = replace(context, key_colour=key_colour(_decode_frames(frames)) or "")
+    if layout != "follow":
+        log.info(
+            "[FORMAT] clip=%s format=%s layout=%s evidence=%s focus=%d/%d key=%s",
+            request.clip_id, context.content_format, layout, "yes" if evidence else "none",
+            sum(1 for _, box in context.focus if box), len(context.focus),
+            context.key_colour if layout == "green_screen" else "-",
+        )
+    return context
+
+
+def _roam(cell: Cell, focus: tuple[tuple[float, Box | None], ...], source_width: int, source_height: int) -> Cell:
+    """``cell`` with its window's path through the stretch, when it roams.
+
+    The window is centred on each sample's focus, held where it was through
+    samples where nothing changed (so a still screen holds still), smoothed
+    as the speaker crop is, and kept inside the cell's ``roam`` region.
+    """
+    if cell.roam is None or not focus:
+        return cell
+    centre = cell.box.center
+    centres = []
+    for _, box in focus:
+        centre = box.center if box is not None else centre
+        centres.append(centre)
+    xs = _smooth_series([c[0] for c in centres], SAMPLE_INTERVAL_SECONDS)
+    ys = _smooth_series([c[1] for c in centres], SAMPLE_INTERVAL_SECONDS)
+    box, roam = cell.box, cell.roam
+
+    def clamp(value: float, low: float, size: float, span: float) -> float:
+        return min(max(low, value - size / 2), low + span - size)
+
+    path = tuple(
+        (round(t, 3), clamp(x, roam.x, box.width, roam.width), clamp(y, roam.y, box.height, roam.height))
+        for (t, _), x, y in zip(focus, xs, ys)
+    )
+    return replace(cell, path=path)
+
+
+def _path_tracking(cell: Cell) -> list[dict[str, Any]] | None:
+    """A roaming cell's path as tracking points, the shape the renderer takes."""
+    if not cell.path:
+        return None
+    return [
+        {"timestamp": t, "bbox": Box(x, y, cell.box.width, cell.box.height).as_dict()}
+        for t, x, y in cell.path
+    ]
 
 
 def _switch_cuts(

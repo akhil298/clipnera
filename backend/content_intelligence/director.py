@@ -4,9 +4,9 @@ Map (cheap model, low effort) reads the whole video once, in windows sized to
 the provider, and answers with what the video is and where the candidate
 moments are, by sentence id. Direct (strong model) reads only those candidates
 with a little context and returns a complete edit plan per clip: which
-sentence ranges to stitch, the teaser line, headline copy, layout, and beats
-for the renderer. An optional Story pass stitches moments from across the
-whole video into one clip, and a Check pass reads each stitched story as a
+sentence ranges to stitch, the teaser line, headline copy, format, layout,
+and beats for the renderer. An optional Story pass stitches moments from
+across the whole video into one clip, and a Check pass reads each stitched story as a
 viewer would before it is kept. Everything the models answer is ids and short strings; code
 turns ids into word-exact times and enforces every rule the models are asked
 to follow (see :mod:`content_intelligence.edit_plan`).
@@ -22,22 +22,27 @@ from typing import Any
 from content_intelligence.classifier import CONTENT_TAXONOMY
 from content_intelligence.sentences import Sentence, format_table
 from core.logging_config import get_logger
+from formats import DEFAULT_FORMAT, FORMATS, RECIPES, prompt_catalogue
 
 log = get_logger(__name__)
 
 # Bump when a prompt, model choice or edit rule changes, so clips made by each
 # version can be compared on how users treat them (see feedback/).
-DIRECTOR_VERSION = "2026-09-29.1"
+DIRECTOR_VERSION = "2026-10-02.1"
 
 LAYOUTS = ("auto", "single_speaker", "two_speaker_stack", "split_gameplay", "screen_with_speaker", "wide")
 BEAT_EFFECTS = ("punch_in", "react_cut", "emphasis")
 RUBRIC = ("hook", "payoff", "standalone", "emotion", "pacing")
+# Formats whose clip is a run of spoken items, each labelled (and ranked) by the director.
+LIST_FORMATS = ("listicle", "ranking")
+# Formats the picture must show; the words alone never make a clip one of these.
+VISUAL_FORMATS = tuple(r.format for r in RECIPES.values() if r.needs - {"face"})
 
 MAP_OUTPUT_TOKENS = 3000
-DIRECT_OUTPUT_TOKENS_PER_CLIP = 260
+DIRECT_OUTPUT_TOKENS_PER_CLIP = 300
 CHECK_OUTPUT_TOKENS_PER_CLIP = 60
 # Instruction text wrapped around each window, reserved out of the input budget.
-PROMPT_OVERHEAD_TOKENS = 900
+PROMPT_OVERHEAD_TOKENS = 1300
 # Sentences shown before and after each candidate so the director can extend it.
 CONTEXT_SENTENCES = 3
 # Sentences repeated between Map windows so a moment on a boundary is whole in one.
@@ -45,6 +50,7 @@ WINDOW_OVERLAP_SENTENCES = 8
 
 _STR_LIST = {"type": "array", "items": {"type": "string"}}
 _ID = {"type": "integer"}
+_FORMAT = {"type": "string", "enum": list(FORMATS)}
 
 MAP_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -55,17 +61,20 @@ MAP_SCHEMA: dict[str, Any] = {
         "confidence": {"type": "number"},
         "topics": _STR_LIST,
         "entities": _STR_LIST,
+        "format": _FORMAT,
+        "format_confidence": {"type": "number"},
         "candidates": {
             "type": "array",
             "items": {
                 "type": "object",
-                "properties": {"from": _ID, "to": _ID, "hook": _ID, "why": {"type": "string"}},
-                "required": ["from", "to", "hook", "why"],
+                "properties": {"from": _ID, "to": _ID, "hook": _ID, "format": _FORMAT, "why": {"type": "string"}},
+                "required": ["from", "to", "hook", "format", "why"],
                 "additionalProperties": False,
             },
         },
     },
-    "required": ["title", "summary", "category", "confidence", "topics", "entities", "candidates"],
+    "required": ["title", "summary", "category", "confidence", "topics", "entities", "format", "format_confidence",
+                 "candidates"],
     "additionalProperties": False,
 }
 
@@ -91,6 +100,16 @@ DIRECTOR_SCHEMA: dict[str, Any] = {
                     "title": {"type": "string"},
                     "description": {"type": "string"},
                     "hashtags": _STR_LIST,
+                    "format": _FORMAT,
+                    "items": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {"at": _ID, "label": {"type": "string"}, "rank": _ID},
+                            "required": ["at", "label", "rank"],
+                            "additionalProperties": False,
+                        },
+                    },
                     "layout": {"type": "string", "enum": list(LAYOUTS)},
                     "beats": {
                         "type": "array",
@@ -113,7 +132,8 @@ DIRECTOR_SCHEMA: dict[str, Any] = {
                     },
                     "why": {"type": "string"},
                 },
-                "required": ["segments", "hook", "title", "description", "hashtags", "layout", "beats", "scores", "why"],
+                "required": ["segments", "hook", "title", "description", "hashtags", "format", "items", "layout",
+                             "beats", "scores", "why"],
                 "additionalProperties": False,
             },
         },
@@ -142,11 +162,12 @@ CHECK_SCHEMA: dict[str, Any] = {
 # Shown in the prompt for providers that do not enforce the schema (Groq).
 MAP_EXAMPLE = (
     '{"title":"...","summary":"...","category":"podcast_interview","confidence":0.8,'
-    '"topics":["..."],"entities":["..."],"candidates":[{"from":12,"to":24,"hook":18,"why":"..."}]}'
+    '"topics":["..."],"entities":["..."],"format":"talking_head","format_confidence":0.7,'
+    '"candidates":[{"from":12,"to":24,"hook":18,"format":"talking_head","why":"..."}]}'
 )
 DIRECTOR_EXAMPLE = (
     '{"clips":[{"segments":[{"from":12,"to":17},{"from":20,"to":24}],"hook":18,"title":"...",'
-    '"description":"...","hashtags":["#..."],"layout":"single_speaker",'
+    '"description":"...","hashtags":["#..."],"format":"talking_head","items":[],"layout":"single_speaker",'
     '"beats":[{"at":18,"fx":"punch_in","word":"..."}],'
     '"scores":{"hook":8,"payoff":7,"standalone":8,"emotion":6,"pacing":7},"why":"..."}]}'
 )
@@ -162,6 +183,11 @@ Flags: !E louder than the surrounding minute (energy peak), !Q question, !P foll
 # Shared by every prompt that reads a transcript or writes viewer-facing copy.
 LANGUAGE_RULE = """The transcript may be in any language or a mix, including Hindi, Telugu, Hinglish and Tenglish, in native or Roman script. Judge meaning, hooks and humour in the language actually spoken, never through a literal English reading. Write every title, description and hashtag in the language mix the speaker uses, in the transcript's script: Roman script for a Roman-script transcript."""
 
+# How a format is chosen, for every prompt that chooses one.
+FORMAT_RULES = f"""Formats (what a clip is):
+{prompt_catalogue()}
+Judge the format from the words together with the measured on-screen evidence and the [sees: ...] notes. {", ".join(VISUAL_FORMATS)} need the picture to show it; never choose them from the words alone. {" and ".join(LIST_FORMATS)} need the spoken words to enumerate or rank the items. A clip's format can differ from the video's: a podcast clip that is a numbered list of three tips is a listicle; a clip of a reaction video is a reaction. If unsure, {DEFAULT_FORMAT}."""
+
 MAP_SYSTEM = f"""You scout long videos for a short-form video editor. You read a transcript and point at the moments worth turning into standalone vertical shorts. You answer with sentence ids, never timestamps, and return valid JSON only.
 
 {TABLE_LEGEND}
@@ -170,11 +196,14 @@ MAP_SYSTEM = f"""You scout long videos for a short-form video editor. You read a
 
 A strong candidate is one complete thought a stranger scrolling past would stop for and understand without the rest of the video: a story with a turn, a surprising claim with its explanation, a sharp disagreement, a joke with its punchline, a concrete how-to with its result, an emotional admission. Setup and payoff must both be inside it. Weak candidates: greetings, housekeeping, sponsor reads, "as I said earlier", lists with no point, anything that needs earlier context.
 
-!E, !R and !Q often mark the heart of a good moment, but judge the words, not the flags."""
+!E, !R and !Q often mark the heart of a good moment, but judge the words, not the flags.
+
+{FORMAT_RULES}"""
 
 # How every clip's fields are filled in, whether it is one moment or a story.
 CLIP_FIELD_RULES = """- hook: the id of the single most gripping line inside the clip, played first as a teaser: a bold claim, a number, a punchline, an emotional peak. 5-15 words, from the middle or end of the clip, never its first line, and it must make sense heard alone. 0 if no line qualifies.
 - title: one sentence, at most 60 characters, about the payoff, not the setup. It is burned above the captions. Do not quote the transcript. description: 1-2 sentences. hashtags: 3-5.
+- format: what this clip is (see Formats). items: for listicle or ranking, at least 2, in the order spoken: at is the id of the line where the item starts, label names the item in at most 5 words, rank is its rank as said (a countdown 5 to 1 gives 5, 4, 3, 2, 1) or 0 when unranked. [] for every other format.
 - layout: single_speaker (one person talking), two_speaker_stack (a back-and-forth between two people on screen), split_gameplay (gameplay with a facecam), screen_with_speaker (slides or a screen share with a presenter), wide (a group or a scene), or auto if unsure.
 - beats (at most 4, only where they help): punch_in on the line where the peak lands, with the key word; react_cut on a line whose listener's reaction is worth showing; emphasis on a key word or number to highlight in captions.
 - scores: 1-10 per criterion, honestly. A 9 is a clip that would go viral on its own; most good clips are 6-8.
@@ -193,6 +222,8 @@ How to edit:
 - The stitched length must fall inside the requested range. Estimate it from the start seconds shown: a line lasts until the next line starts.
 {CLIP_FIELD_RULES}
 
+{FORMAT_RULES}
+
 Choose the best clips, not the most. Fewer excellent clips beat a padded list. Never return two clips about the same moment."""
 
 STORY_SYSTEM = f"""You are the lead editor of a short-form video team. Besides single moments, you cut story clips: one vertical short stitched from moments far apart in the same long video, the way a human editor cuts a recap. Your clips are judged on: hook, payoff, standalone (a stranger understands it), emotion, and pacing. You return valid JSON only.
@@ -203,7 +234,8 @@ STORY_SYSTEM = f"""You are the lead editor of a short-form video team. Besides s
 
 Story shapes that work:
 - Arc: a question, problem or promise from one part of the video, the struggle or turning point from another, and the answer, result or punchline from a later one.
-- List: 2-4 short points on one theme gathered from across the video, each a complete line.
+- List: 2-4 short points on one theme gathered from across the video, each a complete line. Format listicle, one item per point.
+- Ranking: 2-5 items rated across the video (a countdown, verdicts building to the best), each with its verdict. Format ranking, items ranked as said.
 - Change: how a view, plan or mood shifts over the video, the early statement then the later one.
 
 How to edit:
@@ -212,6 +244,8 @@ How to edit:
 - Keep every speaker's meaning. Never join lines so a claim reads differently than it was said, and never pair a question with the answer to a different question.
 - The stitched length must fall inside the requested range. Estimate it from the start seconds shown: a line lasts until the next line starts.
 {CLIP_FIELD_RULES}
+
+{FORMAT_RULES}
 
 Only return a story when it is clearly worth watching on its own. Return an empty list rather than a forced one, and never two stories built from the same moments."""
 
@@ -236,6 +270,8 @@ CATEGORY_PLAYBOOKS: dict[str, str] = {
     "sports": "Sports: favour the decisive play, the reaction, and hot takes with reasoning.",
 }
 
+FORMAT_PLAYBOOKS: dict[str, str] = {r.format: f"{r.label}: {r.playbook}" for r in RECIPES.values()}
+
 
 class VideoDirector:
     def __init__(self, map_client: Any, director_client: Any) -> None:
@@ -250,13 +286,18 @@ class VideoDirector:
         duration: float,
         speakers: dict[str, str],
         target_candidates: int,
+        *,
+        evidence: str = "",
     ) -> dict[str, Any]:
-        """What the video is, and candidate moments across all of it."""
+        """What the video is, and candidate moments across all of it.
+
+        ``evidence`` summarises what the visual probe measured on screen.
+        """
         windows = _windows(sentences, _budget(self._map_client, MAP_OUTPUT_TOKENS))
         per_window = max(4, min(15, math.ceil(target_candidates / len(windows)) + 2))
         log.info("Map pass: %d sentence(s) in %d window(s), %d candidate(s) each", len(sentences), len(windows), per_window)
         results = await asyncio.gather(
-            *(self._map_window(window, index, len(windows), duration, speakers, per_window)
+            *(self._map_window(window, index, len(windows), duration, speakers, per_window, evidence)
               for index, window in enumerate(windows)),
             return_exceptions=True,
         )
@@ -276,9 +317,10 @@ class VideoDirector:
         duration: float,
         speakers: dict[str, str],
         wanted: int,
+        evidence: str,
     ) -> dict[str, Any]:
         legend = ", ".join(f"{letter} = {name}" for letter, name in speakers.items()) or "not identified"
-        prompt = f"""Video length: {duration / 60:.1f} minutes. Speakers: {legend}.
+        prompt = f"""Video length: {duration / 60:.1f} minutes. Speakers: {legend}.{_on_screen(evidence)}
 This is part {index + 1} of {count}: sentences {window[0].id}-{window[-1].id}.
 
 Return:
@@ -286,7 +328,8 @@ Return:
 - summary: 2-3 sentences on this part.
 - category: the video's category. confidence: 0-1.
 - topics, entities: short lists.
-- candidates: up to {wanted} moments, best first. from/to are sentence ids inside this part, one complete thought of roughly 15-75 seconds. hook is the id of its most gripping sentence (not its first) or 0. why is under 12 words.
+- format: what the video mostly is. format_confidence: 0-1.
+- candidates: up to {wanted} moments, best first. from/to are sentence ids inside this part, one complete thought of roughly 15-75 seconds. hook is the id of its most gripping sentence (not its first) or 0. format is what that clip would be. why is under 12 words.
 
 JSON shape: {MAP_EXAMPLE}
 
@@ -307,6 +350,8 @@ Transcript:
         max_clips: int,
         min_seconds: float,
         max_seconds: float,
+        *,
+        evidence: str = "",
     ) -> list[dict[str, Any]]:
         """Edit plans for the best clips among the Map's candidates."""
         candidates = map_result.get("candidates") or []
@@ -320,13 +365,11 @@ Transcript:
         groups = _pack(blocks, budget)
         per_group = max(2, math.ceil(max_clips / len(groups)) + (1 if len(groups) > 1 else 0))
         category = str(map_result.get("category") or "unknown")
-        system = DIRECTOR_SYSTEM
-        if category in CATEGORY_PLAYBOOKS:
-            system += f"\n\n{CATEGORY_PLAYBOOKS[category]}"
+        system = DIRECTOR_SYSTEM + _playbooks(map_result, category)
         log.info("Director pass: %d candidate(s) in %d group(s), up to %d clip(s) each", len(blocks), len(groups), per_group)
 
         async def run(group: list[str]) -> list[dict[str, Any]]:
-            prompt = f"""{_video_header(map_result, category)}
+            prompt = f"""{_video_header(map_result, category, evidence)}
 
 Choose up to {per_group} clips. Each clip's stitched length must be {min_seconds:.0f}-{max_seconds:.0f} seconds.
 
@@ -355,6 +398,8 @@ Candidates (with a few lines of context around each; you may use context lines):
         count: int,
         min_seconds: float,
         max_seconds: float,
+        *,
+        evidence: str = "",
     ) -> list[dict[str, Any]]:
         """Edit plans for clips stitched from moments across the whole video.
 
@@ -374,7 +419,7 @@ Candidates (with a few lines of context around each; you may use context lines):
         )
         category = str(map_result.get("category") or "unknown")
         log.info("Story pass: %d moment(s) shown, up to %d story clip(s)", len(blocks), count)
-        prompt = f"""{_video_header(map_result, category)}
+        prompt = f"""{_video_header(map_result, category, evidence)}
 
 Choose up to {count} story clips. Each clip's stitched length must be {min_seconds:.0f}-{max_seconds:.0f} seconds.
 
@@ -383,7 +428,7 @@ JSON shape: {DIRECTOR_EXAMPLE}
 Moments across the video, in order:
 
 {chr(10).join(blocks)}"""
-        return await self._plans(STORY_SYSTEM, prompt, count)
+        return await self._plans(STORY_SYSTEM + _playbooks(map_result, category, LIST_FORMATS), prompt, count)
 
     async def check(self, transcripts: list[str]) -> list[bool]:
         """Whether each stitched clip reads as one natural clip to a viewer."""
@@ -420,8 +465,23 @@ Moments across the video, in order:
         return [c for c in clips if isinstance(c, dict)] if isinstance(clips, list) else []
 
 
-def _video_header(map_result: dict[str, Any], category: str) -> str:
-    return f"Video: {map_result.get('title', '')}. Category: {category}.\nSummary: {map_result.get('summary', '')}"
+def _video_header(map_result: dict[str, Any], category: str, evidence: str) -> str:
+    return (
+        f"Video: {map_result.get('title', '')}. Category: {category}. Format: {map_result.get('format') or DEFAULT_FORMAT}."
+        f"{_on_screen(evidence)}\nSummary: {map_result.get('summary', '')}"
+    )
+
+
+def _on_screen(evidence: str) -> str:
+    return f"\nOn screen (measured): {evidence.strip()}" if evidence.strip() else ""
+
+
+def _playbooks(map_result: dict[str, Any], category: str, extra: tuple[str, ...] = ()) -> str:
+    """The category's playbook and those of the formats the clips are likely
+    to take: the video's, its candidates', and ``extra``."""
+    formats = [map_result.get("format"), *(c.get("format") for c in map_result.get("candidates") or []), *extra]
+    books = [CATEGORY_PLAYBOOKS.get(category), *(FORMAT_PLAYBOOKS.get(f) for f in dict.fromkeys(formats) if f)]
+    return "".join(f"\n\n{book}" for book in books if book)
 
 
 def _budget(client: Any, output_tokens: int) -> int:
@@ -497,19 +557,21 @@ def _candidate_block(
     lines = [by_id[i].line() for i in range(lo, hi + 1) if i in by_id]
     span = by_id[last].end - by_id[first].start
     return (
-        f"Candidate {number}: sentences {first}-{last} (~{span:.0f}s). Scout's note: {candidate.get('why', '')}\n"
+        f"Candidate {number}: sentences {first}-{last} (~{span:.0f}s), {candidate.get('format') or DEFAULT_FORMAT}. "
+        f"Scout's note: {candidate.get('why', '')}\n"
         + "\n".join(lines)
     )
 
 
 def _merge_maps(parts: list[dict[str, Any]], sentences: list[Sentence]) -> dict[str, Any]:
-    """One video-level map from per-window maps."""
-    votes: dict[str, float] = {}
-    for part in parts:
-        category = str(part.get("category") or "unknown")
-        if category in CONTENT_TAXONOMY:
-            votes[category] = votes.get(category, 0.0) + float(part.get("confidence") or 0.5)
-    category = max(votes, key=votes.get) if votes else "unknown"
+    """One video-level map from per-window maps.
+
+    Category and format are each the value most windows vote for, weighted by
+    their confidence; a missing or unknown value casts no vote.
+    """
+    category, category_confidence = _vote(parts, "category", CONTENT_TAXONOMY, "confidence")
+    video_format, format_confidence = _vote(parts, "format", FORMATS, "format_confidence")
+    video_format = video_format or DEFAULT_FORMAT
 
     valid_ids = {s.id for s in sentences}
     candidates: list[dict[str, Any]] = []
@@ -520,7 +582,11 @@ def _merge_maps(parts: list[dict[str, Any]], sentences: list[Sentence]) -> dict[
             except (TypeError, ValueError):
                 continue
             if first in valid_ids and last in valid_ids and last >= first:
-                candidates.append({"from": first, "to": last, "hook": int(c.get("hook") or 0), "why": str(c.get("why", ""))})
+                candidates.append({
+                    "from": first, "to": last, "hook": int(c.get("hook") or 0),
+                    "format": c.get("format") if c.get("format") in FORMATS else video_format,
+                    "why": str(c.get("why", "")),
+                })
     # Window overlap can surface the same moment twice; keep the first, which
     # its window ranked higher.
     kept: list[dict[str, Any]] = []
@@ -540,12 +606,35 @@ def _merge_maps(parts: list[dict[str, Any]], sentences: list[Sentence]) -> dict[
     return {
         "title": str(parts[0].get("title") or ""),
         "summary": " ".join(str(p.get("summary") or "").strip() for p in parts)[:1200],
-        "category": category,
-        "confidence": round(min(1.0, votes.get(category, 0.5) / max(1, len(parts))), 2),
+        "category": category or "unknown",
+        "confidence": category_confidence if category else round(min(1.0, 0.5 / len(parts)), 2),
         "topics": merged_list("topics", 12),
         "entities": merged_list("entities", 12),
+        "format": video_format,
+        "format_confidence": format_confidence,
         "candidates": kept,
     }
+
+
+def _vote(parts: list[dict[str, Any]], key: str, allowed: Any, weight_key: str) -> tuple[str | None, float]:
+    """The ``allowed`` value of ``key`` with the most confidence-weighted votes
+    across ``parts``, and its share of all parts (0-1)."""
+    votes: dict[str, float] = {}
+    for part in parts:
+        value = part.get(key)
+        if isinstance(value, str) and value in allowed:
+            votes[value] = votes.get(value, 0.0) + _confidence(part.get(weight_key))
+    if not votes:
+        return None, 0.0
+    best = max(votes, key=votes.__getitem__)
+    return best, round(min(1.0, votes[best] / len(parts)), 2)
+
+
+def _confidence(value: Any) -> float:
+    try:
+        return min(1.0, max(0.0, float(value)))
+    except (TypeError, ValueError):
+        return 0.5
 
 
 def _parse_json(text: str) -> dict[str, Any]:

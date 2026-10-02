@@ -21,6 +21,7 @@ from subtitle_styling.ass_generator import (
     CAPTION_ANIMATIONS, FONTS_DIR, AssGenerator, ass_filter, build_ass_file, bundled_family, burn_filter_args,
     escape_filter_value, script_font,
 )
+from subtitle_styling.format_overlay import overlay_kind, place_format_items
 from subtitle_styling.templates import DEFAULT_STYLE, get_template, get_template_info, get_template_names
 from subtitle_styling.phrase_segmenter import segment_phrases, segment_for_captions
 from subtitle_styling.schema import SubtitleBurnRequest
@@ -171,6 +172,8 @@ class SubtitleStylingService:
         transition: Optional[TransitionSpec] = None,
         spans: Optional[list[Span]] = None,
         seams: Optional[list[tuple[float, float, float]]] = None,
+        content_format: Optional[str] = None,
+        format_items: Optional[list[dict[str, Any]]] = None,
     ) -> str:
         """Burn captions into a cut clip, with Clipnera branding when ``enable_watermark``.
 
@@ -179,6 +182,8 @@ class SubtitleStylingService:
         ``spans`` are the source ranges a stitched body was cut from.
         ``seams`` are the cut's stacked stretches, ``(start, end, seam)`` in its
         own seconds (see ``CutResult.seams``); captions sit on the seam there.
+        ``format_items`` (source seconds) draw the list overlay ``content_format``
+        calls for, if any: a listicle's counter or a ranking's board.
         """
         # FFmpeg runs with cwd set to a scratch dir (for the bare caption
         # filename), so a relative clip path like generated_clips/... would not
@@ -201,11 +206,11 @@ class SubtitleStylingService:
                 video_path, clip_start, clip_end, style_type, title_text,
                 enable_watermark, transcript_segments, ai_cues,
                 animation_speed, emoji_collection, _style_overrides(custom_config), hook, transition, spans,
-                seams,
+                seams, content_format, format_items,
             )
         return await self._burn_with_srt(
             video_path, clip_start, clip_end, style_type, custom_config,
-            subtitles, title_text, enable_watermark, hook, transition, spans,
+            subtitles, title_text, enable_watermark, hook, transition, spans, content_format, format_items,
         )
 
     async def render_uncaptioned(
@@ -328,6 +333,8 @@ class SubtitleStylingService:
         transition: Optional[TransitionSpec] = None,
         spans: Optional[list[Span]] = None,
         seams: Optional[list[tuple[float, float, float]]] = None,
+        content_format: Optional[str] = None,
+        format_items: Optional[list[dict[str, Any]]] = None,
     ) -> str:
         template_name = style_type
         if not get_template_names().__contains__(style_type):
@@ -346,6 +353,7 @@ class SubtitleStylingService:
             # starts in source time; rebasing against that origin keeps every
             # word in sync.
             body_start = clip_start
+            overlay_items = place_format_items(format_items, content_format, clip_start, clip_end, hook, spans, gap)
             clip_start, words = on_output_timeline(
                 self._extract_words_for_ass(transcript_segments), clip_start, clip_end, hook, gap, spans,
             )
@@ -376,6 +384,8 @@ class SubtitleStylingService:
                 segment_breaks=_segment_breaks(clip_start, body_start, hook, spans),
                 # Stacks are built for vertical cuts only.
                 seams=_seams_on_output(seams, hook, gap) if media.height > media.width else None,
+                overlay=overlay_kind(content_format),
+                overlay_items=overlay_items,
                 output_path=os.path.join(tmpdir, "captions.ass"),
             )
             return await self._encode(
@@ -420,6 +430,8 @@ class SubtitleStylingService:
         hook: Optional[Hook] = None,
         transition: Optional[TransitionSpec] = None,
         spans: Optional[list[Span]] = None,
+        content_format: Optional[str] = None,
+        format_items: Optional[list[dict[str, Any]]] = None,
     ) -> str:
         """Burn SRT subtitles using a force_style preset.
 
@@ -438,6 +450,7 @@ class SubtitleStylingService:
         with tempfile.TemporaryDirectory() as tmpdir:
             timeline, gap = self._bridge(media, hook, transition, tmpdir)
             body_start = clip_start
+            overlay_items = place_format_items(format_items, content_format, clip_start, clip_end, hook, spans, gap)
             clip_start, subtitles = on_output_timeline(subtitles or [], clip_start, clip_end, hook, gap, spans)
             clip_end = body_start + body_duration(body_start, clip_end, spans)
             duration = clip_end - clip_start
@@ -450,11 +463,12 @@ class SubtitleStylingService:
 
             fonts_dir = escape_filter_value(str(FONTS_DIR))
             filters = [f"subtitles={escaped_srt}:fontsdir={fonts_dir}:force_style='{filter_str}'"]
-            if title_text:
-                # The same headline card the ASS burn draws, without captions.
+            if title_text or overlay_items:
+                # The same headline card and list overlay the ASS burn draws, without captions.
                 title_ass = build_ass_file(
                     [], 0.0, duration, style_type, media.width, media.height, title=title_text,
                     output_path=os.path.join(tmpdir, "title.ass"),
+                    overlay=overlay_kind(content_format), overlay_items=overlay_items,
                 )
                 filters.append(ass_filter(title_ass))
             return await self._encode(

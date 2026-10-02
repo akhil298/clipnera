@@ -124,6 +124,19 @@ class ClipMetadata(BaseModel):
     suggested_emoji: str | None = None
 
 
+class FormatItem(BaseModel):
+    """One item of a listicle or ranking, placed on the clip's own timeline
+    (teaser first, cut-out pauses removed) as captions are."""
+
+    start: float
+    end: float
+    label: str
+    # Place in the order spoken, from 1.
+    number: int
+    # Rank on a ranking's board (1 is best); None on a listicle.
+    rank: Optional[int] = None
+
+
 class GeneratedClipResponse(BaseModel):
     video_id: str
     clip_id: str
@@ -142,6 +155,11 @@ class GeneratedClipResponse(BaseModel):
     score: float
     scores: dict[str, float] = Field(default_factory=dict)
     content_category: Optional[str] = None
+    # The short-form format the AI cut the clip as (formats.taxonomy.FORMATS);
+    # None for clips made before formats, which are talking heads.
+    content_format: Optional[str] = None
+    # Items the format's overlay draws; empty unless it is a listicle or ranking.
+    format_items: list[FormatItem] = Field(default_factory=list)
     presigned_url: Optional[str] = None
     poster_url: Optional[str] = None
     local_path: Optional[str] = None

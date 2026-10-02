@@ -804,13 +804,18 @@ class PipelineOrchestrator:
             "Clip generation complete",
             extra={"project_id": self.project_id, "result_type": type(result).__name__},
         )
-        if self.clip_settings.get("broll"):
-            await self._plan_broll()
+        scope = broll_scope(self.clip_settings)
+        if scope:
+            await self._plan_broll(formats_only=scope == "formats")
         self._notify("Clip generation complete", 100)
         return result
 
-    async def _plan_broll(self) -> None:
-        """Cutaways for the new clips. Never fails the run: a clip without B-roll is still a clip."""
+    async def _plan_broll(self, formats_only: bool = False) -> None:
+        """Cutaways for the new clips. Never fails the run: a clip without B-roll is still a clip.
+
+        ``formats_only`` limits them to clips whose format calls for B-roll
+        (``Recipe.broll``), for a run that neither asked for nor refused it.
+        """
         async with AsyncSessionLocal() as session:
             if not await FeatureFlagService(session).is_enabled(BROLL_CUTAWAYS):
                 log.info("B-roll cutaways are switched off; skipping: project=%s", self.project_id)
@@ -819,6 +824,7 @@ class PipelineOrchestrator:
             count = await plan_project_broll(
                 self.project_id, self.user_id, self.is_pro,
                 notify=lambda message, percent: self._notify(message, 90 + percent // 10),
+                formats_only=formats_only,
             )
             self._notify(f"B-roll added to {count} clip(s)", 99)
         except Exception as exc:
@@ -1329,6 +1335,16 @@ def _apply_entitlements(
     return allowed_ratios, effective_watermark, _clamp_clip_settings(entitlements, clip_settings)
 
 
+def broll_scope(clip_settings: dict) -> str | None:
+    """Which clips get B-roll cutaways: ``all`` when the user asked for them,
+    ``formats`` (clips whose format is built on cutaways) when they neither
+    asked nor refused, and None when they turned them off."""
+    broll = clip_settings.get("broll")
+    if broll is False:
+        return None
+    return "all" if broll is True else "formats"
+
+
 def _clamp_clip_settings(entitlements: Entitlements, clip_settings: dict | None) -> dict:
     """Clamp clip count to the plan's cap and refuse styles it does not include."""
     settings = dict(clip_settings or {})
@@ -1342,7 +1358,10 @@ def _clamp_clip_settings(entitlements: Entitlements, clip_settings: dict | None)
     require_caption_style(entitlements, settings.get("caption_style") or settings.get("style_type"))
     if settings.get("caption_script") not in CAPTION_SCRIPTS:
         settings["caption_script"] = "auto"
-    settings["broll"] = settings.get("broll") is True
+    # True or False is the user's choice; anything else is unset, which lets
+    # formats built on cutaways (B-roll, voice over, green screen) have them.
+    if not isinstance(settings.get("broll"), bool):
+        settings["broll"] = None
     settings["story_clips"] = settings.get("story_clips") is True
     return settings
 
