@@ -1,0 +1,2148 @@
+openapi: 3.1.0
+info:
+  title: Clipnera API — revamp additions and changes
+  version: 0.3.0-wave3
+  summary: New and changed endpoints for the Clipnera revamp (Wave 3).
+  description: |
+    Only NEW and CHANGED endpoints are listed. Unchanged endpoints keep their current
+    contracts until they are migrated to the canonical envelope (see backend.md §11.4).
+
+    Conventions (backend.md §11–§12):
+    - Every JSON response uses the envelope `{data, message, error}`; `error` is an Error object.
+    - Browser auth is cookie based (`cn_at` access JWT, `cn_rt` refresh token) with an
+      `X-CSRF-Token` header on unsafe methods. `Authorization: Bearer` remains for
+      non-browser clients and the migration window.
+    - POSTs that create a run, job, upload or export require `Idempotency-Key`.
+    - Long work returns `202` with a Job or Run; progress arrives on `GET /events/stream`.
+    - Lists use cursor pagination: `?limit&cursor` → `meta.next_cursor`, `meta.has_more`.
+    - All Timeline positions are in frames (Timeline v1). "revision" = an applied batch of
+      operations (the integer clients send as `base_version` today); "version" = a named,
+      user-visible version (one per prompt).
+
+    Placeholders owned by other agents:
+    - B-roll library and curation: see ../05-broll.md
+    - Feature flags and remote config: see ../06-flags.md
+servers:
+  - url: https://api.clipnera.com/api/v1
+    description: Production (target)
+  - url: http://localhost:8000/api/v1
+    description: Local development
+
+security:
+  - cookieAuth: []
+  - bearerAuth: []
+
+tags:
+  - name: auth
+  - name: runs
+    description: Prompt edits (agent runs) on an editor project.
+  - name: versions
+  - name: editor
+  - name: jobs
+  - name: events
+  - name: uploads
+  - name: media
+  - name: pipeline
+  - name: exports
+  - name: notifications
+  - name: placeholders
+
+paths:
+  # ───────────────────────────── auth ─────────────────────────────
+  /auth/oauth/{provider}:
+    post:
+      tags: [auth]
+      operationId: oauthLogin
+      summary: "CHANGED: Sign in with an OAuth provider; sets session cookies."
+      description: |
+        CHANGED from today (auth/route.py:44-53): on success sets `cn_at`, `cn_rt` and `cn_csrf`
+        cookies and returns the user. During migration release A/B the body also carries
+        `access_token`/`expires_in` (deprecated; removed in release C).
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: { type: string, enum: [google] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, redirect_uri]
+              properties:
+                code: { type: string }
+                redirect_uri: { type: string, format: uri }
+                accept_terms: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Signed in.
+          headers:
+            Set-Cookie:
+              description: "`cn_at` (HttpOnly, 15 min), `cn_rt` (HttpOnly, Path=/api/v1/auth, 30 d), `cn_csrf` (readable)."
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/SessionResult' }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      operationId: refreshSession
+      summary: "NEW: Rotate the refresh token and issue a new access token."
+      description: |
+        Reads the `cn_rt` cookie. Rotates it on every call. Presenting a previously rotated
+        token revokes the whole session family (`401 SESSION_REVOKED`). Clients call this
+        single-flight on `401 TOKEN_EXPIRED`, then retry the original request once.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: New cookies set.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/SessionResult' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /auth/session/upgrade:
+    post:
+      tags: [auth]
+      operationId: upgradeLegacySession
+      summary: "NEW (temporary): Exchange a legacy localStorage bearer token for cookies."
+      description: "Accepts only `Authorization: Bearer <legacy token>`. Removed in release C."
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Cookies set; client deletes its localStorage token.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/SessionResult' }
+        '401': { $ref: '#/components/responses/Error' }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      operationId: logout
+      summary: "CHANGED: Revoke this session and clear cookies (was a no-op)."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200': { $ref: '#/components/responses/EmptyOk' }
+
+  /auth/logout-all:
+    post:
+      tags: [auth]
+      operationId: logoutAll
+      summary: "NEW: Revoke every session of the current user."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200': { $ref: '#/components/responses/EmptyOk' }
+
+  /auth/sessions:
+    get:
+      tags: [auth]
+      operationId: listSessions
+      summary: "NEW: List the current user's active sessions."
+      responses:
+        '200':
+          description: Sessions.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/AuthSession' }
+
+  /auth/sessions/{session_id}:
+    delete:
+      tags: [auth]
+      operationId: revokeSession
+      summary: "NEW: Revoke one session."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: session_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { $ref: '#/components/responses/EmptyOk' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  # ───────────────────────────── runs ─────────────────────────────
+  /editor/projects/{project_id}/runs:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      tags: [runs]
+      operationId: createRun
+      summary: "NEW: Send a prompt. Starts a run, or queues it behind the active run."
+      description: |
+        Returns 202 within the API budget; `run.acknowledged` (or `run.queued`) is already
+        written when this returns. Progress: `GET /events/stream`.
+        `rewind_to_version_id` implements "Edit and resend" (01 §7).
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RunCreate' }
+      responses:
+        '202':
+          description: Run accepted (active or queued).
+          headers:
+            Location:
+              schema: { type: string, example: /api/v1/runs/01J9ZK6V... }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Run' }
+        '200':
+          description: Same Idempotency-Key replayed; the existing run is returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Run' }
+        '402': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/Error' }
+    get:
+      tags: [runs]
+      operationId: listRuns
+      summary: "NEW: The project's conversation — runs newest first (cursor paginated)."
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: status
+          in: query
+          description: Filter, e.g. `active` (all active statuses) or `queued`.
+          schema: { type: string, enum: [active, queued, terminal] }
+      responses:
+        '200':
+          description: Runs.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Run' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /editor/projects/{project_id}/runs/estimate:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      tags: [runs]
+      operationId: estimateRun
+      summary: "NEW: Heuristic credit estimate for a prompt (no AI call, no charge)."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [prompt, mode]
+              properties:
+                prompt: { type: string, maxLength: 4000 }
+                mode: { $ref: '#/components/schemas/RunMode' }
+                chips:
+                  type: array
+                  maxItems: 10
+                  items: { $ref: '#/components/schemas/ContextChip' }
+      responses:
+        '200':
+          description: Estimate.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [credits, needs_approval, free]
+                        properties:
+                          credits: { type: integer, minimum: 0 }
+                          free: { type: boolean, description: True when covered by an allowance (e.g. Ask mode). }
+                          needs_approval: { type: boolean }
+                          balance: { type: integer }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /runs/{run_id}:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [runs]
+      operationId: getRun
+      summary: "NEW: Run snapshot (state, plan, open question, summary, last_event_seq)."
+      responses:
+        '200':
+          description: Run.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Run' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [runs]
+      operationId: updateQueuedRun
+      summary: "NEW: Edit or reorder a queued prompt."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                prompt: { type: string, minLength: 1, maxLength: 4000 }
+                chips:
+                  type: array
+                  maxItems: 10
+                  items: { $ref: '#/components/schemas/ContextChip' }
+                queue_position: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Run' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [runs]
+      operationId: removeQueuedRun
+      summary: "NEW: Remove a queued prompt (409 RUN_NOT_QUEUED once started — use /stop)."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200': { $ref: '#/components/responses/EmptyOk' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /runs/{run_id}/events:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    get:
+      tags: [runs, events]
+      operationId: listRunEvents
+      summary: "NEW: Durable run events after a sequence number (gap backfill, Details view)."
+      parameters:
+        - name: after_seq
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Events in seq order.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Event' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /runs/{run_id}/stop:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    post:
+      tags: [runs]
+      operationId: stopRun
+      summary: "NEW: Stop at the next safe point. Completed operations stay as a version."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '202':
+          description: Stop requested (`run.stop_requested` emitted). Idempotent.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Run' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /runs/{run_id}/answer:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    post:
+      tags: [runs]
+      operationId: answerRunQuestion
+      summary: "NEW: Answer the run's open question (choice, free text, or skip)."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question_id]
+              properties:
+                question_id: { type: string }
+                choice_id: { type: string }
+                text: { type: string, maxLength: 1000 }
+                skip: { type: boolean, default: false }
+      responses:
+        '202':
+          description: Recorded (`run.answered`); the run continues.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Run' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /runs/{run_id}/continue:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    post:
+      tags: [runs]
+      operationId: continuePausedRun
+      summary: "NEW: Decide on a paused run — continue (re-hold credits / approve) or finish with what is done."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [continue, finish] }
+      responses:
+        '202':
+          description: Decision applied (`run.resumed` or the run moves to checking).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Run' }
+        '402': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /runs/{run_id}/retry:
+    parameters:
+      - $ref: '#/components/parameters/RunId'
+    post:
+      tags: [runs]
+      operationId: retryRun
+      summary: "NEW: \"Try again\" on a failed or partial run — creates a new run (retry_of_run_id) for the remaining work."
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                step_id: { type: string, description: Retry only from this failed step. }
+                prompt: { type: string, maxLength: 4000, description: Optional revised prompt. }
+      responses:
+        '202':
+          description: New run accepted.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Run' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  # ─────────────────────────── versions ───────────────────────────
+  /editor/projects/{project_id}/versions:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      tags: [versions]
+      operationId: listVersions
+      summary: "NEW: Version history, newest first."
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: bookmarked
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Versions.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/VersionSummary' }
+
+  /editor/projects/{project_id}/versions/checkpoint:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      tags: [versions]
+      operationId: checkpointHandEdits
+      summary: "NEW: Group pending hand-edit revisions into a version (sent when leaving the editor)."
+      description: "No-op (`data: null`) when there are no ungrouped hand edits."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: Version created, or null.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        oneOf:
+                          - $ref: '#/components/schemas/VersionSummary'
+                          - type: 'null'
+
+  /editor/projects/{project_id}/versions/compare:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      tags: [versions]
+      operationId: compareVersions
+      summary: "NEW: Before/after for two versions — both Timelines, changed ranges, changes in plain words."
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Version id (or `base:<version_id>` for the state before that version).
+          schema: { type: string }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Comparison.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/VersionCompare' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /editor/projects/{project_id}/versions/{version_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/VersionId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      tags: [versions]
+      operationId: getVersion
+      summary: "NEW: A version with its read-only Timeline (\"Look without changing\")."
+      responses:
+        '200':
+          description: Version.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Version' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      tags: [versions]
+      operationId: updateVersion
+      summary: "NEW: Rename or bookmark a version."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                bookmarked: { type: boolean }
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/VersionSummary' }
+
+  /editor/projects/{project_id}/versions/{version_id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/VersionId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      tags: [versions]
+      operationId: restoreVersion
+      summary: "NEW: Make that version's state the newest version. Nothing is deleted."
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200':
+          description: Restored.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RevisionResult' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /editor/projects/{project_id}/undo:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      tags: [versions]
+      operationId: undoVersion
+      summary: "NEW: Undo a whole version (default: the newest). One press undoes one AI edit."
+      description: |
+        Phase 1: restores the version's base revision. If later versions exist that are not part
+        of it, returns `409 UNDO_WOULD_DISCARD` with `details.discarded_versions`; resend with
+        `force: true` after the user confirms.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version_id: { type: string }
+                force: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Undone.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RevisionResult' }
+        '409': { $ref: '#/components/responses/Error' }
+        '423': { $ref: '#/components/responses/Error' }
+
+  # ──────────────────────────── editor ────────────────────────────
+  /editor/projects/{project_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      tags: [editor]
+      operationId: getEditorProject
+      summary: "CHANGED: adds `since_revision` (ops since a revision) and `head_version_id`, `locks`."
+      parameters:
+        - name: since_revision
+          in: query
+          description: When set and the gap is small, `data.ops_since` holds the ops after it instead of requiring a full reload.
+          schema: { type: integer, minimum: 0 }
+      responses:
+        '200':
+          description: Project.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/EditorProject' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /editor/projects/{project_id}/ops:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    post:
+      tags: [editor]
+      operationId: applyEditorOps
+      summary: "CHANGED: hand edits — adds client_batch_id (idempotent), 423 ITEM_LOCKED, version grouping."
+      description: |
+        Same body as today (editor/schema.py:25-28) plus `client_batch_id`. `base_version` is the
+        revision. Repeating a `client_batch_id` returns the original result.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [base_version, ops]
+              properties:
+                base_version: { type: integer, minimum: 0, description: The revision the ops were made against. }
+                client_batch_id: { type: string, maxLength: 120 }
+                ops:
+                  type: array
+                  minItems: 1
+                  maxItems: 200
+                  items: { $ref: '#/components/schemas/TimelineOp' }
+      responses:
+        '200':
+          description: Applied as a new revision.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RevisionResult' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '423': { $ref: '#/components/responses/Error' }
+
+  /editor/projects/{project_id}/activity:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/WorkspaceId'
+    get:
+      tags: [jobs]
+      operationId: projectActivity
+      summary: "NEW: Merged, newest-first feed of the project's runs, jobs and versions."
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Activity items.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/ActivityItem' }
+
+  # ───────────────────────────── jobs ─────────────────────────────
+  /jobs:
+    get:
+      tags: [jobs]
+      operationId: listJobs
+      summary: "NEW: Jobs in the workspace (header activity indicator, project cards)."
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - name: status
+          in: query
+          schema: { type: string, enum: [active, terminal, all], default: active }
+        - name: subject_type
+          in: query
+          schema: { $ref: '#/components/schemas/JobSubjectType' }
+        - name: subject_id
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Jobs.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Job' }
+
+  /jobs/{job_id}:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    get:
+      tags: [jobs]
+      operationId: getJob
+      summary: "NEW: Job snapshot."
+      responses:
+        '200':
+          description: Job.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Job' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /jobs/{job_id}/events:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    get:
+      tags: [jobs, events]
+      operationId: listJobEvents
+      summary: "NEW: Durable job events after a sequence number."
+      parameters:
+        - name: after_seq
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Events.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Event' }
+
+  /jobs/{job_id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/JobId'
+    post:
+      tags: [jobs]
+      operationId: cancelJob
+      summary: "NEW: Request cancellation; the worker stops at its next checkpoint. Idempotent."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '202':
+          description: Cancel requested.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Job' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  # ──────────────────────────── events ────────────────────────────
+  /events/stream:
+    get:
+      tags: [events]
+      operationId: eventStream
+      summary: "NEW: One multiplexed Server-Sent Events stream per tab."
+      description: |
+        Carries run, job, project/version and user events (events.md). Resume with the standard
+        `Last-Event-ID` header (sent automatically by EventSource) or `last_event_id` query.
+        Heartbeat comment every 15 s. Not enveloped. Max concurrent streams per user from
+        remote config (`limits.sse.max_streams_per_user`); beyond it the oldest stream is closed
+        with `sync.reset`.
+      parameters:
+        - name: project_id
+          in: query
+          description: Editor project whose run.* / project.* events to include. User-level and job summaries always flow.
+          schema: { type: string }
+        - name: last_event_id
+          in: query
+          description: Alternative to the Last-Event-ID header.
+          schema: { type: string }
+        - name: Last-Event-ID
+          in: header
+          schema: { type: string }
+        - name: accept
+          in: query
+          description: Opt in to newer event versions, e.g. `run.plan@2` (comma separated).
+          schema: { type: string }
+      responses:
+        '200':
+          description: Event stream.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: "SSE frames: `id`, `event` (= type), `data` (JSON Event). See events.md §1."
+        '401': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+
+  /events/poll:
+    get:
+      tags: [events]
+      operationId: eventPoll
+      summary: "NEW: Long-poll fallback for environments where SSE is blocked."
+      parameters:
+        - name: cursor
+          in: query
+          description: Last cursor received (same value space as SSE ids). Omit to start live.
+          schema: { type: string }
+        - name: project_id
+          in: query
+          schema: { type: string }
+        - name: wait
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 25, default: 25 }
+      responses:
+        '200':
+          description: Events since the cursor (possibly empty after `wait` seconds).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [events, cursor]
+                        properties:
+                          events:
+                            type: array
+                            items: { $ref: '#/components/schemas/Event' }
+                          cursor: { type: string }
+                          reset: { type: boolean, description: True when the cursor is older than the buffer — refetch snapshots. }
+
+  # ──────────────────────────── uploads ───────────────────────────
+  /uploads:
+    post:
+      tags: [uploads]
+      operationId: createUpload
+      summary: "NEW (replaces /uploads/video/init, /reels/{id}/assets/init, /edits/{id}/sources/init): start a resumable upload."
+      description: |
+        Creates a media asset and an S3 multipart upload. Returns the first batch of part URLs
+        (1 h TTL). `on_ready.pipeline` makes the server start the clip pipeline once the
+        video is probed — the browser does not need to stay open.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UploadCreate' }
+      responses:
+        '201':
+          description: Upload created.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Upload' }
+        '403': { $ref: '#/components/responses/Error' }
+        '413': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/Error' }
+
+  /uploads/{upload_id}:
+    parameters:
+      - $ref: '#/components/parameters/UploadId'
+    get:
+      tags: [uploads]
+      operationId: getUpload
+      summary: "NEW: Upload status with parts S3 already holds (for resume after reload)."
+      responses:
+        '200':
+          description: Upload.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Upload' }
+        '404': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [uploads]
+      operationId: abortUpload
+      summary: "NEW: Abort the upload and delete the pending asset."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200': { $ref: '#/components/responses/EmptyOk' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /uploads/{upload_id}/parts:
+    parameters:
+      - $ref: '#/components/parameters/UploadId'
+    post:
+      tags: [uploads]
+      operationId: signUploadParts
+      summary: "NEW: Presign more part numbers (batches of up to 50)."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [part_numbers]
+              properties:
+                part_numbers:
+                  type: array
+                  minItems: 1
+                  maxItems: 50
+                  items: { type: integer, minimum: 1, maximum: 10000 }
+      responses:
+        '200':
+          description: Signed part URLs.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [parts]
+                        properties:
+                          parts:
+                            type: array
+                            items: { $ref: '#/components/schemas/SignedPart' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /uploads/{upload_id}/complete:
+    parameters:
+      - $ref: '#/components/parameters/UploadId'
+    post:
+      tags: [uploads]
+      operationId: completeUpload
+      summary: "NEW: Stitch parts, verify size, enqueue probe → proxy (→ pipeline if on_ready)."
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [parts]
+              properties:
+                parts:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [part_number, etag]
+                    properties:
+                      part_number: { type: integer, minimum: 1 }
+                      etag: { type: string }
+                      checksum_sha256: { type: string }
+      responses:
+        '202':
+          description: Accepted; processing job returned.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [upload, job]
+                        properties:
+                          upload: { $ref: '#/components/schemas/Upload' }
+                          job: { $ref: '#/components/schemas/Job' }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+
+  /imports/youtube:
+    post:
+      tags: [uploads]
+      operationId: importYoutube
+      summary: "NEW (replaces POST /clips/download for new clients): server-side link import as a job."
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri }
+                format_id: { type: string }
+                title: { type: string, maxLength: 500 }
+                on_ready: { $ref: '#/components/schemas/OnReady' }
+      responses:
+        '202':
+          description: Import queued.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [project_id, media_asset_id, job]
+                        properties:
+                          project_id: { type: string }
+                          media_asset_id: { type: string }
+                          job: { $ref: '#/components/schemas/Job' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  # ───────────────────────────── media ────────────────────────────
+  /media/session:
+    get:
+      tags: [media]
+      operationId: mediaSession
+      summary: "NEW: Issue CloudFront signed cookies for the workspace's media prefix (6 h)."
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Cookies set for media.clipnera.com.
+          headers:
+            Set-Cookie:
+              description: CloudFront-Policy, CloudFront-Signature, CloudFront-Key-Pair-Id.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [media_base_url, expires_at]
+                        properties:
+                          media_base_url: { type: string, format: uri, example: https://media.clipnera.com/w/ws_123/ }
+                          expires_at: { type: string, format: date-time }
+
+  /media/{media_asset_id}:
+    parameters:
+      - name: media_asset_id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [media]
+      operationId: getMediaAsset
+      summary: "NEW: Asset status and playback paths (proxy, HLS, poster, sprite, waveform)."
+      responses:
+        '200':
+          description: Asset.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/MediaAsset' }
+        '404': { $ref: '#/components/responses/Error' }
+
+  /media/{media_asset_id}/download:
+    parameters:
+      - name: media_asset_id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [media]
+      operationId: downloadMediaAsset
+      summary: "NEW: Short-lived signed download URL (attachment)."
+      responses:
+        '200':
+          description: URL.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [url, expires_at]
+                        properties:
+                          url: { type: string, format: uri }
+                          expires_at: { type: string, format: date-time }
+
+  # ──────────────────────── pipeline / exports ────────────────────
+  /pipeline/start/{project_id}:
+    post:
+      tags: [pipeline]
+      operationId: startPipeline
+      summary: "CHANGED: typed body; accepts not-yet-ready projects (starts when ready); returns 202 + Job."
+      description: |
+        Was `body: dict` (pipeline/route.py:16-18) returning a bare object and 409 VIDEO_NOT_READY
+        while downloading. Now records the intent and returns 202; credits are charged when the
+        run is enqueued (after the real duration is known).
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PipelineOptions' }
+      responses:
+        '202':
+          description: Started, or scheduled to start when the video is ready.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [project_id, status, job]
+                        properties:
+                          project_id: { type: string }
+                          status: { type: string, enum: [started, scheduled, awaiting_credits] }
+                          credits_deducted: { type: integer }
+                          job: { $ref: '#/components/schemas/Job' }
+        '402': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /exports:
+    post:
+      tags: [exports]
+      operationId: createExport
+      summary: "NEW (replaces the blocking POST /pipeline/export/{project_id}): export as a render job."
+      description: |
+        `options` carries the same fields as `SocialExportRequest`
+        (backend/clip_generation/schema.py) — including every CaptionConfig field the burner reads
+        (closes audit C7/C8). Progress and per-clip download paths arrive as job events.
+      parameters:
+        - $ref: '#/components/parameters/WorkspaceId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [source, options]
+              properties:
+                source:
+                  type: object
+                  required: [type, id]
+                  properties:
+                    type: { type: string, enum: [video_project, editor_project] }
+                    id: { type: string }
+                    version_id: { type: string, description: editor_project only; defaults to head. }
+                options:
+                  type: object
+                  description: SocialExportRequest fields (snake_case), validated server-side.
+                  additionalProperties: true
+      responses:
+        '202':
+          description: Export job queued.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Job' }
+        '403': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/Error' }
+
+  # ───────────────────────── notifications ────────────────────────
+  /notifications:
+    get:
+      tags: [notifications]
+      operationId: listNotifications
+      summary: "CHANGED: cursor pagination (was limit only, max 100)."
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: unread
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Notifications.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ListEnvelopeBase'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [notifications, unread_count]
+                        properties:
+                          notifications:
+                            type: array
+                            items: { $ref: '#/components/schemas/InAppNotification' }
+                          unread_count: { type: integer }
+
+  /notifications/{notification_id}/read:
+    post:
+      tags: [notifications]
+      operationId: markNotificationRead
+      summary: "NEW: Mark one notification read."
+      parameters:
+        - name: notification_id
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '200': { $ref: '#/components/responses/EmptyOk' }
+
+  /notifications/stream:
+    get:
+      tags: [notifications]
+      operationId: notificationStreamLegacy
+      deprecated: true
+      summary: "CHANGED (deprecated): alias of /events/stream filtered to notification.created."
+      responses:
+        '200':
+          description: Event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+
+  /me/notification-preferences:
+    put:
+      tags: [notifications]
+      operationId: setNotificationPreferences
+      summary: "NEW: Completion email and browser-notification preferences (01 §9)."
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NotificationPreferences' }
+      responses:
+        '200':
+          description: Saved.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/EnvelopeBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/NotificationPreferences' }
+
+  # ───────────────────────── placeholders ─────────────────────────
+  /broll/library:
+    get:
+      tags: [placeholders]
+      operationId: brollPlaceholder
+      summary: "PLACEHOLDER — B-roll platform and user library endpoints are specified in ../05-broll.md."
+      description: |
+        Owned by the B-roll agent. Must use the canonical envelope, cursor pagination, the
+        `/uploads` flow for user uploads (kind=video|image, purpose=broll), and `broll`-class
+        jobs/events for ingest and indexing.
+      responses:
+        '200':
+          description: See ../05-broll.md.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EnvelopeBase' }
+
+  /config:
+    get:
+      tags: [placeholders]
+      operationId: configPlaceholder
+      summary: "PLACEHOLDER — evaluated flags and remote config for the caller; specified in ../06-flags.md."
+      description: |
+        Owned by the flags agent. The backend consumes it through the `RemoteConfig` interface
+        (backend.md §9.2). `config.changed` events on the stream tell open tabs to refetch.
+      responses:
+        '200':
+          description: See ../06-flags.md.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EnvelopeBase' }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: cn_at
+      description: 15-minute access JWT (HttpOnly). Unsafe methods also need X-CSRF-Token.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Non-browser clients (typ=pat) and the legacy migration window only.
+
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      description: Editor project id.
+      schema: { type: string }
+    RunId:
+      name: run_id
+      in: path
+      required: true
+      schema: { type: string }
+    VersionId:
+      name: version_id
+      in: path
+      required: true
+      schema: { type: string }
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema: { type: string }
+    UploadId:
+      name: upload_id
+      in: path
+      required: true
+      schema: { type: string }
+    WorkspaceId:
+      name: X-Workspace-Id
+      in: header
+      required: false
+      description: Active workspace; defaults to the caller's personal workspace.
+      schema: { type: string }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID per user intent; reused on retry. Kept 24 h. Same key + different body → 422 IDEMPOTENCY_KEY_REUSED.
+      schema: { type: string, maxLength: 80 }
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: false
+      description: Required for cookie-authenticated unsafe requests; must equal the cn_csrf cookie.
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 30 }
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from meta.next_cursor.
+      schema: { type: string }
+
+  responses:
+    Error:
+      description: Error envelope.
+      headers:
+        X-Request-ID:
+          schema: { type: string }
+        Retry-After:
+          description: Present on 429 and 503.
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ValidationError:
+      description: 422 VALIDATION_FAILED with field details.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+          example:
+            data: null
+            message: Some fields need attention.
+            error:
+              code: VALIDATION_FAILED
+              message: Some fields need attention.
+              details:
+                - { field: body.audio_url, issue: missing, message: Field required }
+              request_id: 01J9ZK6V7Q3J2B0V6Q4W8T1X5M
+              retryable: false
+    EmptyOk:
+      description: Success with no payload.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/EnvelopeBase'
+              - type: object
+                properties:
+                  data: { type: 'null' }
+
+  schemas:
+    # ─────────── envelope ───────────
+    EnvelopeBase:
+      type: object
+      required: [data, message, error]
+      properties:
+        data: {}
+        message: { type: [string, 'null'] }
+        error: { type: 'null' }
+    ListEnvelopeBase:
+      allOf:
+        - $ref: '#/components/schemas/EnvelopeBase'
+        - type: object
+          required: [meta]
+          properties:
+            meta: { $ref: '#/components/schemas/PageMeta' }
+    PageMeta:
+      type: object
+      required: [has_more]
+      properties:
+        next_cursor: { type: [string, 'null'] }
+        has_more: { type: boolean }
+    ErrorEnvelope:
+      type: object
+      required: [data, message, error]
+      properties:
+        data: { type: 'null' }
+        message: { type: string }
+        error: { $ref: '#/components/schemas/Error' }
+    Error:
+      type: object
+      required: [code, message, retryable]
+      properties:
+        code: { $ref: '#/components/schemas/ErrorCode' }
+        message: { type: string, description: "Plain-language and user-facing." }
+        details:
+          description: Structured context. Object, or array of field issues for VALIDATION_FAILED.
+          oneOf:
+            - type: object
+              additionalProperties: true
+            - type: array
+              items: { $ref: '#/components/schemas/FieldIssue' }
+        request_id: { type: string }
+        retryable: { type: boolean }
+    FieldIssue:
+      type: object
+      required: [field, issue, message]
+      properties:
+        field: { type: string, example: body.prompt }
+        issue: { type: string, example: string_too_long }
+        message: { type: string }
+    ErrorCode:
+      type: string
+      description: Open set — clients treat unknown codes generically.
+      examples: [VALIDATION_FAILED]
+      enum:
+        - BAD_REQUEST
+        - UNAUTHORIZED
+        - TOKEN_EXPIRED
+        - INVALID_TOKEN
+        - SESSION_REVOKED
+        - CSRF_FAILED
+        - INSUFFICIENT_CREDITS
+        - FORBIDDEN
+        - PRO_REQUIRED
+        - FEATURE_DISABLED
+        - DURATION_NOT_ENTITLED
+        - NOT_FOUND
+        - METHOD_NOT_ALLOWED
+        - STALE_VERSION
+        - RUN_NOT_QUEUED
+        - RUN_NOT_ACTIVE
+        - RUN_NOT_PAUSED
+        - QUESTION_CLOSED
+        - UNDO_WOULD_DISCARD
+        - UPLOAD_NOT_PENDING
+        - UPLOAD_SIZE_MISMATCH
+        - VIDEO_NOT_READY
+        - UPLOAD_TOO_LARGE
+        - UNSUPPORTED_MEDIA
+        - VALIDATION_FAILED
+        - IDEMPOTENCY_KEY_REUSED
+        - ITEM_LOCKED
+        - RATE_LIMITED
+        - LIMIT_REACHED
+        - CONCURRENCY_LIMIT
+        - RUN_QUEUE_FULL
+        - INTERNAL_ERROR
+        - SERVICE_UNAVAILABLE
+
+    # ─────────── auth ───────────
+    SessionResult:
+      type: object
+      required: [user, session_id, access_expires_at]
+      properties:
+        user:
+          type: object
+          required: [id, email]
+          properties:
+            id: { type: string }
+            email: { type: string, format: email }
+            full_name: { type: [string, 'null'] }
+            avatar_url: { type: [string, 'null'] }
+        session_id: { type: string }
+        access_expires_at: { type: string, format: date-time }
+        access_token:
+          type: string
+          deprecated: true
+          description: Migration releases A/B only.
+        expires_in:
+          type: integer
+          deprecated: true
+    AuthSession:
+      type: object
+      required: [id, created_at, last_used_at, current]
+      properties:
+        id: { type: string }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        ip: { type: [string, 'null'] }
+        user_agent: { type: [string, 'null'] }
+        current: { type: boolean }
+
+    # ─────────── runs ───────────
+    RunMode:
+      type: string
+      enum: [edit, ask, plan]
+    RunStatus:
+      type: string
+      enum: [queued, acknowledged, planning, awaiting_input, executing, paused, stopping, checking,
+             succeeded, partial, failed, cancelled]
+    ContextChip:
+      type: object
+      required: [type, ref]
+      properties:
+        type: { type: string, enum: [clip, range, caption_line, asset, moment] }
+        ref:
+          type: object
+          description: |
+            clip → {item_id}; range → {start_frame, end_frame}; caption_line → {start_frame, end_frame, text?};
+            asset → {media_asset_id} or {broll_asset_id} (05-broll); moment → {frame}.
+          additionalProperties: true
+        label: { type: string, maxLength: 120 }
+    RunCreate:
+      type: object
+      required: [prompt, mode]
+      properties:
+        prompt: { type: string, minLength: 1, maxLength: 4000 }
+        mode: { $ref: '#/components/schemas/RunMode' }
+        chips:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/ContextChip' }
+        rewind_to_version_id:
+          type: string
+          description: Edit and resend — restore this version first, then run.
+        approved_plan:
+          type: object
+          description: Plan mode — the edited plan the user approved (from a previous plan-mode run).
+          properties:
+            from_run_id: { type: string }
+            sentences: { type: array, items: { type: string } }
+    Credits:
+      type: object
+      required: [estimate, held, spent]
+      properties:
+        estimate: { type: integer }
+        held: { type: integer }
+        spent: { type: integer }
+    RunStep:
+      type: object
+      required: [id, label, status]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        status: { type: string, enum: [pending, running, completed, failed, skipped] }
+        summary: { type: [string, 'null'] }
+        revisions: { type: array, items: { type: integer } }
+    Run:
+      type: object
+      required: [id, project_id, status, mode, prompt, created_at, last_event_seq, credits]
+      properties:
+        id: { type: string }
+        project_id: { type: string }
+        workspace_id: { type: string }
+        user_id: { type: string }
+        status: { $ref: '#/components/schemas/RunStatus' }
+        mode: { $ref: '#/components/schemas/RunMode' }
+        prompt: { type: string }
+        chips:
+          type: array
+          items: { $ref: '#/components/schemas/ContextChip' }
+        queue_position: { type: [integer, 'null'] }
+        base_revision: { type: [integer, 'null'] }
+        last_revision: { type: [integer, 'null'] }
+        plan:
+          type: [object, 'null']
+          properties:
+            sentences: { type: array, items: { type: string } }
+            steps:
+              type: array
+              items: { $ref: '#/components/schemas/RunStep' }
+        question:
+          type: [object, 'null']
+          properties:
+            question_id: { type: string }
+            text: { type: string }
+            choices:
+              type: array
+              maxItems: 4
+              items:
+                type: object
+                required: [id, label]
+                properties:
+                  id: { type: string }
+                  label: { type: string }
+                  hint: { type: string }
+            expires_at: { type: string, format: date-time }
+        pause:
+          type: [object, 'null']
+          properties:
+            reason: { type: string, enum: [credits, approval] }
+            needed: { type: integer }
+            text: { type: string }
+        summary:
+          type: [object, 'null']
+          properties:
+            done: { type: array, items: { type: string } }
+            not_done:
+              type: array
+              items:
+                type: object
+                properties:
+                  text: { type: string }
+                  reason: { type: string }
+            answer: { type: string }
+            suggestions:
+              type: array
+              maxItems: 3
+              items:
+                type: object
+                properties:
+                  label: { type: string }
+                  prompt: { type: string }
+        version:
+          oneOf:
+            - $ref: '#/components/schemas/VersionSummary'
+            - type: 'null'
+        error:
+          oneOf:
+            - $ref: '#/components/schemas/Error'
+            - type: 'null'
+        credits: { $ref: '#/components/schemas/Credits' }
+        retry_of_run_id: { type: [string, 'null'] }
+        last_event_seq: { type: integer, description: Highest durable event seq — resume point for this run. }
+        created_at: { type: string, format: date-time }
+        started_at: { type: [string, 'null'], format: date-time }
+        finished_at: { type: [string, 'null'], format: date-time }
+
+    # ─────────── versions / editor ───────────
+    VersionSummary:
+      type: object
+      required: [id, project_id, kind, name, author, base_revision, result_revision, bookmarked, created_at]
+      properties:
+        id: { type: string }
+        project_id: { type: string }
+        kind: { type: string, enum: [ai_run, hand, restore, undo, import] }
+        name: { type: string }
+        author: { type: string, description: '"user" or "agent:editor"' }
+        created_by: { type: string }
+        run_id: { type: [string, 'null'] }
+        base_revision: { type: integer }
+        result_revision: { type: integer }
+        restored_from_version_id: { type: [string, 'null'] }
+        thumbnail_path: { type: [string, 'null'], description: Path under the media base URL. }
+        bookmarked: { type: boolean }
+        created_at: { type: string, format: date-time }
+    Version:
+      allOf:
+        - $ref: '#/components/schemas/VersionSummary'
+        - type: object
+          required: [timeline]
+          properties:
+            timeline: { $ref: '#/components/schemas/Timeline' }
+    VersionCompare:
+      type: object
+      required: [from, to, changed_ranges, changes]
+      properties:
+        from:
+          type: object
+          properties:
+            version_id: { type: string }
+            revision: { type: integer }
+            timeline: { $ref: '#/components/schemas/Timeline' }
+        to:
+          type: object
+          properties:
+            version_id: { type: string }
+            revision: { type: integer }
+            timeline: { $ref: '#/components/schemas/Timeline' }
+        changed_ranges:
+          type: array
+          items:
+            type: array
+            prefixItems: [{ type: integer }, { type: integer }]
+            minItems: 2
+            maxItems: 2
+        changes:
+          type: array
+          description: Operations described in plain words (shared describe_op).
+          items:
+            type: object
+            properties:
+              text: { type: string, example: Removed 0:12–0:14 }
+              item_ids: { type: array, items: { type: string } }
+    RevisionResult:
+      type: object
+      required: [revision, timeline]
+      properties:
+        revision: { type: integer, description: New head revision. }
+        timeline: { $ref: '#/components/schemas/Timeline' }
+        version:
+          oneOf:
+            - $ref: '#/components/schemas/VersionSummary'
+            - type: 'null'
+    EditorProject:
+      type: object
+      required: [id, title, version, timeline, created_at, updated_at]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        version: { type: integer, description: Current revision (name kept for compatibility). }
+        duration_s: { type: number }
+        head_version_id: { type: [string, 'null'] }
+        timeline: { $ref: '#/components/schemas/Timeline' }
+        ops_since:
+          type: [array, 'null']
+          items:
+            type: object
+            properties:
+              revision: { type: integer }
+              author: { type: string }
+              ops:
+                type: array
+                items: { $ref: '#/components/schemas/TimelineOp' }
+        locks:
+          type: array
+          items:
+            type: object
+            properties:
+              item_id: { type: string }
+              run_id: { type: string }
+        active_run_id: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Timeline:
+      type: object
+      description: Timeline v1 — backend/editor/timeline.py, mirrored by frontend/lib/editor/timeline.ts. Not restated here.
+      additionalProperties: true
+    TimelineOp:
+      type: object
+      description: One of the 13 Timeline v1 operations (backend/editor/ops.py), discriminated by `op`.
+      required: [op]
+      properties:
+        op:
+          type: string
+          enum: [add_item, remove_item, move_item, trim_item, split_item, update_item, replace_asset,
+                 add_track, add_asset, set_captions, set_project, add_marker, remove_marker]
+      additionalProperties: true
+
+    # ─────────── jobs / activity ───────────
+    JobClass:
+      type: string
+      enum: [media, transcribe, agent, pipeline, render, broll]
+    JobStatus:
+      type: string
+      enum: [queued, running, retrying, succeeded, failed, cancelled, dead]
+    JobSubjectType:
+      type: string
+      enum: [video_project, editor_project, media_asset, run, reel, edit, broll_asset]
+    Job:
+      type: object
+      required: [id, kind, job_class, status, label, created_at, last_event_seq]
+      properties:
+        id: { type: string }
+        kind: { type: string, example: export.clips }
+        job_class: { $ref: '#/components/schemas/JobClass' }
+        status: { $ref: '#/components/schemas/JobStatus' }
+        label: { type: string, description: 'Plain words, e.g. "Exporting 3 clips".' }
+        subject:
+          type: [object, 'null']
+          properties:
+            type: { $ref: '#/components/schemas/JobSubjectType' }
+            id: { type: string }
+            title: { type: string }
+        run_id: { type: [string, 'null'] }
+        progress:
+          type: [object, 'null']
+          properties:
+            step: { type: string }
+            step_label: { type: string }
+            percent: { type: number, minimum: 0, maximum: 100 }
+            message: { type: string }
+            eta_s: { type: integer }
+        result: { type: [object, 'null'], additionalProperties: true }
+        error:
+          oneOf:
+            - $ref: '#/components/schemas/Error'
+            - type: 'null'
+        attempts: { type: integer }
+        last_event_seq: { type: integer }
+        created_at: { type: string, format: date-time }
+        started_at: { type: [string, 'null'], format: date-time }
+        finished_at: { type: [string, 'null'], format: date-time }
+    ActivityItem:
+      type: object
+      required: [kind, id, at]
+      properties:
+        kind: { type: string, enum: [run, job, version] }
+        id: { type: string }
+        at: { type: string, format: date-time }
+        run: { $ref: '#/components/schemas/Run' }
+        job: { $ref: '#/components/schemas/Job' }
+        version: { $ref: '#/components/schemas/VersionSummary' }
+
+    # ─────────── events ───────────
+    Event:
+      type: object
+      description: See events.md §1 for the envelope and §3–§6 for each type's `data`.
+      required: [type, v, stream, seq, durable, ts, workspace_id, data]
+      properties:
+        type: { type: string, example: run.operation.applied }
+        v: { type: integer, minimum: 1 }
+        stream: { type: string, example: run:01J9ZK6V7Q3J2B0V6Q4W8T1X5M }
+        seq: { type: integer, minimum: 0 }
+        sub: { type: integer, minimum: 1 }
+        durable: { type: boolean }
+        ts: { type: string, format: date-time }
+        workspace_id: { type: string }
+        project_id: { type: string }
+        run_id: { type: string }
+        job_id: { type: string }
+        data: { type: object, additionalProperties: true }
+
+    # ─────────── uploads / media ───────────
+    OnReady:
+      type: object
+      description: What the server does once the media is probed and valid.
+      properties:
+        pipeline: { $ref: '#/components/schemas/PipelineOptions' }
+        open_in_editor: { type: boolean, default: false, description: Create an editor project with this asset. }
+    PipelineOptions:
+      type: object
+      description: "Typed replacement for today's `body: dict` (pipeline/route.py:17,49)."
+      properties:
+        steps:
+          type: array
+          items: { type: string }
+          description: PipelineStepType values (pipeline/model.py:23-39); default = server default list.
+        output_aspect_ratios:
+          type: array
+          items: { type: string, enum: ['9:16', '1:1', '4:5', '16:9'] }
+        audio_config: { type: object, additionalProperties: true }
+        clip_settings: { type: object, additionalProperties: true }
+        watermark_enabled: { type: boolean }
+    UploadCreate:
+      type: object
+      required: [filename, size_bytes, content_type, purpose]
+      properties:
+        filename: { type: string, maxLength: 500 }
+        size_bytes: { type: integer, minimum: 1 }
+        content_type:
+          type: string
+          enum: [video/mp4, video/quicktime, video/webm, video/x-matroska,
+                 image/jpeg, image/png, image/webp, audio/mpeg, audio/wav, audio/mp4]
+        duration_seconds: { type: number, minimum: 0, description: Client-probed; re-checked server-side. }
+        sha256: { type: string, description: Optional whole-file hash for de-duplication. }
+        purpose:
+          type: string
+          enum: [source_video, reel_image, reel_voiceover, footage_source, creator_avatar, broll, brand_logo]
+        project_id: { type: string, description: Attach to an existing project/reel/edit when relevant. }
+        on_ready: { $ref: '#/components/schemas/OnReady' }
+    SignedPart:
+      type: object
+      required: [part_number, url, expires_at]
+      properties:
+        part_number: { type: integer }
+        url: { type: string, format: uri }
+        expires_at: { type: string, format: date-time }
+        checksum_algorithm: { type: string, enum: [SHA256] }
+    Upload:
+      type: object
+      required: [id, media_asset_id, status, part_size, parts_total, size_bytes]
+      properties:
+        id: { type: string }
+        media_asset_id: { type: string }
+        project_id: { type: [string, 'null'] }
+        status: { type: string, enum: [open, completing, completed, aborted, expired] }
+        part_size: { type: integer }
+        parts_total: { type: integer }
+        size_bytes: { type: integer }
+        uploaded_parts:
+          type: array
+          description: Parts S3 already has (GET only) — resume skips these.
+          items:
+            type: object
+            properties:
+              part_number: { type: integer }
+              etag: { type: string }
+              size: { type: integer }
+        parts:
+          type: array
+          description: First batch of signed part URLs (POST /uploads only).
+          items: { $ref: '#/components/schemas/SignedPart' }
+        expires_at: { type: string, format: date-time }
+    MediaAsset:
+      type: object
+      required: [id, kind, status]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [video, image, audio] }
+        origin: { type: string, enum: [upload, youtube, broll, render] }
+        status: { type: string, enum: [uploading, validating, processing, ready, rejected] }
+        duration_ms: { type: [integer, 'null'] }
+        width: { type: [integer, 'null'] }
+        height: { type: [integer, 'null'] }
+        has_audio: { type: [boolean, 'null'] }
+        playback:
+          type: object
+          description: Paths relative to media_base_url from GET /media/session.
+          properties:
+            proxy_mp4: { type: [string, 'null'] }
+            hls_master: { type: [string, 'null'] }
+            poster: { type: [string, 'null'] }
+            sprite: { type: [string, 'null'] }
+            waveform: { type: [string, 'null'] }
+        rejection:
+          oneOf:
+            - $ref: '#/components/schemas/Error'
+            - type: 'null'
+        created_at: { type: string, format: date-time }
+        ready_at: { type: [string, 'null'], format: date-time }
+
+    # ─────────── notifications ───────────
+    InAppNotification:
+      type: object
+      description: Same fields as today's InAppNotificationResponse (backend/notifications/schema.py) plus job/run links.
+      required: [id, kind, title, message, read, created_at]
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          description: Open set (today's NotificationKind values plus run_completed, run_failed, run_paused, export_ready).
+        title: { type: string }
+        message: { type: string }
+        project_id: { type: [string, 'null'] }
+        run_id: { type: [string, 'null'] }
+        job_id: { type: [string, 'null'] }
+        read: { type: boolean }
+        created_at: { type: string, format: date-time }
+    NotificationPreferences:
+      type: object
+      required: [email_on_completion, email_after_seconds]
+      properties:
+        email_on_completion: { type: boolean, default: true }
+        email_after_seconds: { type: integer, minimum: 60, default: 300 }
+        browser_notifications: { type: boolean, default: false }

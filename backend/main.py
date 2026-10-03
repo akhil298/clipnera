@@ -17,7 +17,11 @@ from payment.route import payments as payments_router, admin_payments as admin_p
 from admin.route import admin as admin_router
 from depth_captions.route import depth_captions as depth_captions_router
 from hook_transitions.route import hook_transitions as hook_transitions_router
-from feature_flags.route import features as features_router, admin_features as admin_features_router
+from feature_flags.engine import flags
+from feature_flags.route import (
+    features as features_router, admin_features as admin_features_router, flags_router,
+    admin_flags as admin_flags_router, admin_config as admin_config_router, admin_segments as admin_segments_router,
+)
 from usage.route import usage as usage_router, admin_usage as admin_usage_router
 from feedback.route import admin_quality as admin_quality_router
 from social.route import social as social_router, social_webhooks as social_webhooks_router, admin_social as admin_social_router
@@ -57,10 +61,15 @@ async def lifespan(app: FastAPI):
         await FFmpegService.require_caption_support()
     except CustomException as exc:
         log.error(f"{exc.message} Exports will fail until FFmpeg with libass is installed.")
-    # Publishes posts and ends connections past their 7-day lifetime.
-    async with social_worker():
-        yield
-        log.info("Shutting down")
+    # Flag snapshot, LISTEN for changes and the 15 s poll; checks then cost no queries.
+    await flags.start()
+    try:
+        # Publishes posts and ends connections past their 7-day lifetime.
+        async with social_worker():
+            yield
+            log.info("Shutting down")
+    finally:
+        await flags.stop()
 
 
 app = FastAPI(
@@ -99,6 +108,10 @@ app.include_router(depth_captions_router, prefix="/api/v1")
 app.include_router(hook_transitions_router, prefix="/api/v1")
 app.include_router(features_router, prefix="/api/v1")
 app.include_router(admin_features_router, prefix="/api/v1")
+app.include_router(flags_router, prefix="/api/v1")
+app.include_router(admin_flags_router, prefix="/api/v1")
+app.include_router(admin_config_router, prefix="/api/v1")
+app.include_router(admin_segments_router, prefix="/api/v1")
 app.include_router(social_router, prefix="/api/v1")
 app.include_router(social_webhooks_router, prefix="/api/v1")
 app.include_router(admin_social_router, prefix="/api/v1")

@@ -1,91 +1,65 @@
+"""Compatibility facade over the flag engine for the pre-revamp call sites.
+
+Kept with the same methods so existing callers and tests work unchanged; new
+code should call ``feature_flags.engine.flags`` with a ``FlagContext``. Removed
+in phase 3 once every call site has moved.
+"""
+
 from __future__ import annotations
 
-from datetime import datetime
-
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.exceptions import CustomException
-from core.logging_config import get_logger
+from auth.model import User
+from feature_flags.admin_service import AuditActor, FlagAdminService
+from feature_flags.context import GLOBAL_CONTEXT, FlagContext
+from feature_flags.engine import flags
+from feature_flags.evaluation import Evaluator, build_snapshot
 from feature_flags.model import FeatureFlag
 from feature_flags.registry import FLAGS
-from feature_flags.schema import AdminFeatureFlagListResponse, AdminFeatureFlagResponse
-
-log = get_logger(__name__)
+from feature_flags.schema import AdminFeatureFlagListResponse
 
 
 def resolve(stored: dict[str, bool]) -> dict[str, bool]:
-    """Effective state of every declared flag: stored value, and parent on."""
-    effective: dict[str, bool] = {}
-    for key, flag in FLAGS.items():
-        on = stored.get(key, False)
-        if flag.parent is not None:
-            on = on and stored.get(flag.parent, False)
-        effective[key] = on
-    return effective
+    """Effective state of every declared flag for plain stored switches, with code defaults for the rest."""
+    snapshot = build_snapshot(0, [{"key": key, "enabled": on} for key, on in stored.items()])
+    evaluator = Evaluator(snapshot)
+    return {key: bool(evaluator.flag(key).value) for key in FLAGS}
 
 
 class FeatureFlagService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, ctx: FlagContext = GLOBAL_CONTEXT) -> None:
         self._session = session
+        self._ctx = ctx
+
+    async def _evaluator(self) -> Evaluator:
+        return Evaluator(await flags.snapshot_for(self._session), self._ctx)
 
     async def stored(self) -> dict[str, bool]:
-        result = await self._session.execute(select(FeatureFlag.key, FeatureFlag.enabled))
-        return {key: enabled for key, enabled in result.all() if key in FLAGS}
+        snapshot = await flags.snapshot_for(self._session)
+        return {key: state.enabled for key, state in snapshot.flags.items()}
 
     async def effective(self) -> dict[str, bool]:
-        return resolve(await self.stored())
+        evaluator = await self._evaluator()
+        return {key: bool(evaluator.flag(key).value) for key in FLAGS}
 
     async def is_enabled(self, key: str) -> bool:
         if key not in FLAGS:
             raise KeyError(f"Undeclared feature flag {key!r}")
-        return (await self.effective())[key]
+        return bool((await self._evaluator()).flag(key).value)
 
     async def require(self, *keys: str) -> None:
         """403 FEATURE_DISABLED unless every flag in ``keys`` is on."""
-        effective = await self.effective()
-        for key in keys:
-            if not effective[key]:
-                raise CustomException(
-                    message=f"{FLAGS[key].label} is not available right now.",
-                    code="FEATURE_DISABLED",
-                    status_code=403,
-                    extra={"feature": key},
-                )
+        flags.require(*keys, ctx=self._ctx, snapshot=await flags.snapshot_for(self._session))
 
     async def set(self, key: str, enabled: bool, admin_id: str) -> None:
-        if key not in FLAGS:
-            raise CustomException(message="Unknown feature flag", code="NOT_FOUND", status_code=404)
-        now = datetime.utcnow()
-        stmt = pg_insert(FeatureFlag).values(key=key, enabled=enabled, updated_by=admin_id, updated_at=now)
-        stmt = stmt.on_conflict_do_update(
-            index_elements=[FeatureFlag.key],
-            set_={"enabled": enabled, "updated_by": admin_id, "updated_at": now},
-        )
-        await self._session.execute(stmt)
-        await self._session.commit()
-        log.info(f"Feature flag {key} set to {enabled} by admin={admin_id}")
+        email = await self._session.scalar(select(User.email).where(User.id == admin_id))
+        await FlagAdminService(self._session, AuditActor(admin_id, email)).legacy_switch(key, enabled)
 
     async def rows(self) -> dict[str, FeatureFlag]:
         result = await self._session.execute(select(FeatureFlag))
         return {row.key: row for row in result.scalars().all()}
 
     async def admin_list(self) -> AdminFeatureFlagListResponse:
-        """Every declared flag with its stored and effective state."""
-        rows = await self.rows()
-        effective = resolve({key: row.enabled for key, row in rows.items()})
-        return AdminFeatureFlagListResponse(
-            flags=[
-                AdminFeatureFlagResponse(
-                    key=flag.key,
-                    label=flag.label,
-                    description=flag.description,
-                    parent=flag.parent,
-                    enabled=bool(rows.get(flag.key) and rows[flag.key].enabled),
-                    effective=effective[flag.key],
-                    updated_at=rows[flag.key].updated_at if flag.key in rows else None,
-                )
-                for flag in FLAGS.values()
-            ]
-        )
+        """The pre-revamp keys with their stored and effective state."""
+        return await FlagAdminService(self._session).legacy_list()
