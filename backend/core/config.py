@@ -41,6 +41,7 @@ class BaseConfig(BaseSettings):
 
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_ENDPOINT: str = ""
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-opus-5-5"
     # Thinking depth for steps without their own setting: low | medium | high | xhigh | max.

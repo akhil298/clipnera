@@ -27,6 +27,7 @@ _REGISTRY: Registry = {
 TEXT_PROVIDERS: Registry = {
     "groq": Groq,
     "anthropic": Anthropic,
+    "openai": OpenAI,
 }
 
 DEFAULT_TEXT_PROVIDER = "groq"
@@ -85,15 +86,15 @@ def _default_choice(is_pro: bool) -> ModelChoice:
     settings = get_settings()
     if is_pro:
         return ModelChoice(
-            "anthropic",
-            (getattr(settings, "ANTHROPIC_MODEL", "") or "claude-opus-5-5").strip(),
-            (getattr(settings, "ANTHROPIC_EFFORT", "") or "medium").strip(),
+            "openai",
+            (getattr(settings, "OPENAI_MODEL", "") or "gpt-4.1-mini-1").strip(),
+            (getattr(settings, "OPENAI_EFFORT", "") or "medium").strip(),
         )
     return ModelChoice("groq", (getattr(settings, "GROQ_MODEL", "") or "openai/gpt-oss-20b").strip())
 
 
 def _pinned_provider() -> str | None:
-    override = (getattr(get_settings(), "AI_PROVIDER", "") or "").strip().lower()
+    override = (getattr(get_settings(), "AI_PROVIDER", "") or "").strip().lower() 
     return override if override in TEXT_PROVIDERS else None
 
 

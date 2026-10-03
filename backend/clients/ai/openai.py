@@ -13,7 +13,7 @@ settings = get_settings()
 class OpenAI(BaseAI):
     """OpenAI chat completion client with retry and streaming support."""
 
-    BASE_URL = "https://api.openai.com/v1"
+    BASE_URL = settings.OPENAI_ENDPOINT or "https://api.openai.com/v1/"
 
     def __init__(self, api_key: str | None = None, model: str | None = None, timeout: float = 60.0) -> None:
         self.api_key = api_key or settings.OPENAI_API_KEY
