@@ -37,7 +37,7 @@ class BaseConfig(BaseSettings):
     # "auto" picks per plan and per step (see clients.ai.STEP_MODELS). Naming a
     # provider pins every step to it, which is what local work and A/B runs
     # want -- and costs Opus prices on every call if left at "anthropic".
-    AI_PROVIDER: str = "auto"
+    AI_PROVIDER: str = "openai"
 
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
