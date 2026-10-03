@@ -33,11 +33,12 @@ class BaseConfig(BaseSettings):
     SECRET_KEY: str = ""
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
-    # Text provider for the pipeline: "auto" | "groq" | "anthropic".
-    # "auto" picks per plan and per step (see clients.ai.STEP_MODELS). Naming a
-    # provider pins every step to it, which is what local work and A/B runs
-    # want -- and costs Opus prices on every call if left at "anthropic".
-    AI_PROVIDER: str = "openai"
+    # Text provider for the pipeline: "auto" | "groq" | "anthropic" | "openai".
+    # "auto" picks per plan and per step (see clients.ai.STEP_MODELS): Pro runs
+    # on OpenAI, free on Groq. Naming a provider pins every step of every plan
+    # to it, which is what local work and A/B runs want -- and bills free users'
+    # runs to that provider if left pinned in production.
+    AI_PROVIDER: str = "auto"
 
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"

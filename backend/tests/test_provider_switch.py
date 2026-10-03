@@ -3,9 +3,11 @@ from __future__ import annotations
 import pytest
 
 from clients.ai import TEXT_PROVIDERS, get_text_client
+from clients.ai.base import ToolResult, ToolSpec
 from clients.ai.anthropic import THINKING_ALLOWANCE_BY_EFFORT, THINKING_TOKEN_ALLOWANCE, Anthropic
 from clients.ai.groq import DEFAULT_MODEL as GROQ_DEFAULT_MODEL
 from clients.ai.groq import MODEL_PROFILES, Groq
+from clients.ai.openai import OpenAI, _base_url, _priced_model
 from content_intelligence.classifier import CLASSIFICATION_JSON_SCHEMA, CONTENT_TAXONOMY
 from content_intelligence.highlighter import MOMENTS_JSON_SCHEMA
 from content_intelligence.metadata_gen import METADATA_JSON_SCHEMA
@@ -58,12 +60,13 @@ def _capturing_anthropic(
 
 
 class TestProviderSelection:
-    def test_both_providers_are_registered(self):
-        assert set(TEXT_PROVIDERS) == {"groq", "anthropic"}
+    def test_every_text_provider_is_registered(self):
+        assert set(TEXT_PROVIDERS) == {"groq", "anthropic", "openai"}
 
     def test_explicit_provider_wins(self):
         assert isinstance(get_text_client("groq"), Groq)
         assert isinstance(get_text_client("anthropic"), Anthropic)
+        assert isinstance(get_text_client("openai"), OpenAI)
 
     def test_provider_name_is_case_and_space_insensitive(self):
         assert isinstance(get_text_client("  AnThRoPiC "), Anthropic)
@@ -74,15 +77,15 @@ class TestProviderSelection:
 
 
 class TestSharedClientContract:
-    """Both clients must satisfy what the content-intelligence steps call."""
+    """Every client must satisfy what the content-intelligence steps call."""
 
-    @pytest.mark.parametrize("factory", [Groq, Anthropic])
+    @pytest.mark.parametrize("factory", [Groq, Anthropic, OpenAI])
     def test_exposes_a_token_budget(self, factory):
         budget = factory().input_token_budget(2600)
         assert isinstance(budget, int)
         assert budget > 0
 
-    @pytest.mark.parametrize("factory", [Groq, Anthropic])
+    @pytest.mark.parametrize("factory", [Groq, Anthropic, OpenAI])
     def test_has_the_methods_callers_use(self, factory):
         client = factory()
         assert callable(client.chat)
@@ -202,6 +205,91 @@ class TestAnthropicRequestShape:
         client, _ = _capturing_anthropic("", stop_reason="max_tokens")
         with pytest.raises(RuntimeError, match="spent on thinking"):
             await client.chat([{"role": "user", "content": "hi"}], max_tokens=500)
+
+
+class _FakeResponse:
+    is_error = False
+
+    def __init__(self, data: dict) -> None:
+        self._data = data
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict:
+        return self._data
+
+
+def _capturing_openai(message: dict, finish_reason: str = "stop") -> tuple[OpenAI, dict]:
+    """An OpenAI client whose outgoing request is captured, not sent."""
+    client = OpenAI(api_key="test", model="my-deployment")
+    captured: dict = {}
+
+    async def fake_post(path, json):
+        captured.update(json, path=path)
+        return _FakeResponse({
+            "model": "gpt-4.1-mini-2025-04-14",
+            "choices": [{"message": message, "finish_reason": finish_reason}],
+            "usage": {"prompt_tokens": 3, "completion_tokens": 2},
+        })
+
+    client._client.post = fake_post
+    return client, captured
+
+
+class TestOpenAIRequestShape:
+    @pytest.mark.asyncio
+    async def test_callers_arguments_become_an_openai_request(self):
+        client, captured = _capturing_openai({"content": '{"moments": []}'})
+        reply = await client.chat(
+            [{"role": "user", "content": "hi"}],
+            max_tokens=500, temperature=0.2, json_mode=True, json_schema=MOMENTS_JSON_SCHEMA,
+        )
+        assert reply == '{"moments": []}'
+        assert captured["path"] == "chat/completions"
+        assert captured["model"] == "my-deployment"
+        assert captured["max_completion_tokens"] == 500
+        assert captured["response_format"] == {"type": "json_object"}
+        # Neither is an API parameter here; forwarding either fails the request.
+        assert "max_tokens" not in captured and "json_schema" not in captured and "json_mode" not in captured
+
+    @pytest.mark.asyncio
+    async def test_empty_reply_raises_instead_of_returning_blank(self):
+        client, _ = _capturing_openai({"content": "  "}, finish_reason="length")
+        with pytest.raises(RuntimeError, match="no content"):
+            await client.chat([{"role": "user", "content": "hi"}], max_tokens=500)
+
+    @pytest.mark.asyncio
+    async def test_tool_calls_are_parsed_and_echoed_back_unchanged(self):
+        raw = [{"id": "call_1", "type": "function", "function": {"name": "trim", "arguments": '{"clip_id": "c1"}'}}]
+        client, captured = _capturing_openai({"content": None, "tool_calls": raw}, finish_reason="tool_calls")
+        reply = await client.chat_with_tools(
+            [{"role": "user", "content": "trim c1"}],
+            [ToolSpec("trim", "Trim a clip", {"type": "object", "properties": {}})],
+        )
+        assert captured["tools"][0]["function"]["name"] == "trim"
+        assert [(c.id, c.name, c.arguments) for c in reply.calls] == [("call_1", "trim", {"clip_id": "c1"})]
+        assert reply.message == {"role": "assistant", "content": "", "tool_calls": raw}
+        assert client.tool_results([ToolResult("call_1", "bad", is_error=True)]) == [
+            {"role": "tool", "tool_call_id": "call_1", "content": "Error: bad"},
+        ]
+
+    def test_a_call_is_priced_at_the_model_that_served_it(self):
+        # An Azure deployment name is arbitrary; the served model is what has a price.
+        assert _priced_model("gpt-4.1-mini-2025-04-14", "my-deployment") == "gpt-4.1-mini"
+        assert _priced_model(None, "gpt-4o-mini") == "gpt-4o-mini"
+
+    @pytest.mark.parametrize("endpoint,expected", [
+        ("", "https://api.openai.com/v1/"),
+        ("https://proxy.example.com/v1/", "https://proxy.example.com/v1/"),
+        ("https://res.services.ai.azure.com/api/projects/p", "https://res.services.ai.azure.com/api/projects/p/openai/v1/"),
+        ("https://res.openai.azure.com/openai/v1/", "https://res.openai.azure.com/openai/v1/"),
+    ])
+    def test_endpoint_is_accepted_as_copied_from_the_portal(self, monkeypatch, endpoint, expected):
+        import clients.ai.openai as openai_module
+
+        monkeypatch.setattr(openai_module.settings, "OPENAI_ENDPOINT", endpoint)
+        assert _base_url() == expected
 
 
 class TestGroqIgnoresAnthropicOnlyArguments:

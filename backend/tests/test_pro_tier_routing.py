@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 
 from clients.ai import FREE_TEXT_PROVIDER, PRO_TEXT_PROVIDER, get_text_client, provider_for_tier
-from clients.ai.anthropic import Anthropic
 from clients.ai.groq import Groq
+from clients.ai.openai import OpenAI
 from content_intelligence.service import ContentIntelligenceService
 from pipeline.model import PipelineStepType
 from pipeline.service import PipelineOrchestrator
@@ -83,6 +83,21 @@ class TestIsProUser:
         assert await service.is_pro_user("u1") is False
 
 
+class _AutoSettings:
+    AI_PROVIDER = "auto"
+    GROQ_API_KEY = "x"
+    OPENAI_API_KEY = "x"
+    ANTHROPIC_API_KEY = "x"
+
+
+@pytest.fixture(autouse=True)
+def auto_settings(monkeypatch):
+    # The routing under test is the per-plan policy, not whatever this machine pins.
+    import clients.ai as ai
+
+    monkeypatch.setattr(ai, "get_settings", lambda: _AutoSettings())
+
+
 class TestProviderForTier:
     def test_pro_and_free_map_to_different_providers(self):
         assert provider_for_tier(True) == PRO_TEXT_PROVIDER
@@ -90,7 +105,7 @@ class TestProviderForTier:
         assert PRO_TEXT_PROVIDER != FREE_TEXT_PROVIDER
 
     def test_client_follows_the_flag(self):
-        assert isinstance(get_text_client(is_pro=True), Anthropic)
+        assert isinstance(get_text_client(is_pro=True), OpenAI)
         assert isinstance(get_text_client(is_pro=False), Groq)
 
     def test_explicit_provider_overrides_the_flag(self):
@@ -111,7 +126,7 @@ class TestProviderForTier:
 
 
 class TestTierReachesTheClient:
-    @pytest.mark.parametrize("is_pro,expected", [(True, Anthropic), (False, Groq)])
+    @pytest.mark.parametrize("is_pro,expected", [(True, OpenAI), (False, Groq)])
     def test_content_service_uses_the_tier_provider(self, is_pro, expected):
         # There is no single service-wide client any more: STEP_POLICY gives
         # each step its own. Highlight detection is the step that follows the

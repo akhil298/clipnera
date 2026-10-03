@@ -1,7 +1,8 @@
 """List prices, in US dollars, for every model the pipeline calls.
 
 Anthropic rates are the first-party API prices; cache reads bill at 0.1x the
-input rate and five-minute cache writes at 1.25x. Groq rates are as listed on
+input rate and five-minute cache writes at 1.25x. OpenAI rates are the list
+prices on openai.com/api/pricing, which Azure matches. Groq rates are as listed on
 groq.com/pricing when this table was written -- check them there when Groq
 changes a price, since nothing else in the code knows about it.
 
@@ -33,6 +34,8 @@ TOKEN_PRICES: dict[tuple[str, str], TokenPrice] = {
     ("anthropic", "claude-opus-4-8"): TokenPrice(5.00, 25.00),
     ("anthropic", "claude-sonnet-5"): TokenPrice(2.00, 10.00),
     ("anthropic", "claude-haiku-4-5"): TokenPrice(1.00, 5.00),
+    ("openai", "gpt-4.1-mini"): TokenPrice(0.40, 1.60),
+    ("openai", "gpt-4o-mini"): TokenPrice(0.15, 0.60),
     ("groq", "openai/gpt-oss-20b"): TokenPrice(0.075, 0.30),
     ("groq", "openai/gpt-oss-120b"): TokenPrice(0.15, 0.60),
     # Gemini paid-tier rates for text, image and video input (ai.google.dev/gemini-api/docs/pricing).

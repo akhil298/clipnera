@@ -5,6 +5,7 @@ import pytest
 from clients.ai import STEP_MODELS, get_text_client, model_for_step, provider_for_tier
 from clients.ai.anthropic import Anthropic
 from clients.ai.groq import Groq
+from clients.ai.openai import OpenAI
 from content_intelligence.highlighter import MAX_CLIPS_PER_HOUR, MIN_CLIPS, HighlightDetector
 from content_intelligence.metadata_gen import (
     METADATA_JSON_SCHEMA,
@@ -23,6 +24,8 @@ class _Settings:
     AI_PROVIDER = "auto"
     GROQ_API_KEY = "x"
     ANTHROPIC_API_KEY = "x"
+    OPENAI_API_KEY = "x"
+    OPENAI_MODEL = "gpt-4.1-mini"
     ANTHROPIC_MODEL = "claude-opus-5"
     ANTHROPIC_EFFORT = "medium"
     GROQ_MODEL = "openai/gpt-oss-20b"
@@ -45,26 +48,25 @@ class TestStepPolicy:
 
     @pytest.mark.parametrize("step", FOLLOWS_TIER)
     def test_judgement_steps_follow_the_tier(self, auto_settings, step):
-        assert provider_for_tier(True, step) == "anthropic"
+        assert provider_for_tier(True, step) == "openai"
         assert provider_for_tier(False, step) == "groq"
 
-    def test_pro_uses_opus_only_where_clips_are_chosen(self, auto_settings):
-        # The costly model is reserved for picking and editing the moments.
-        for step, (_, pro) in STEP_MODELS.items():
-            if pro.model.startswith("claude-opus"):
-                assert step in ("highlight_detection", "director")
+    def test_no_step_runs_on_claude_by_default(self, auto_settings):
+        # Claude is opt-in (the reel editor's Opus flag, or a pin), never the policy.
+        for free, pro in STEP_MODELS.values():
+            assert "anthropic" not in (free.provider, pro.provider)
 
-    def test_no_pro_step_runs_at_high_effort(self, auto_settings):
-        # Hidden thinking at high effort on every call was most of the old bill.
-        for _, pro in STEP_MODELS.values():
-            assert pro.effort in (None, "low", "medium")
+    def test_pro_steps_use_the_configured_openai_model(self, auto_settings):
+        assert model_for_step(True, "director").model == "gpt-4.1-mini"
+        auto_settings.OPENAI_MODEL = "my-deployment"
+        assert model_for_step(True, "director").model == "my-deployment"
 
     def test_free_director_uses_the_larger_groq_model(self, auto_settings):
         assert model_for_step(False, "director").model == "openai/gpt-oss-120b"
 
     def test_unlisted_step_follows_the_tier(self, auto_settings):
         # A new step must never be silently downgraded.
-        assert provider_for_tier(True, "some_future_step") == "anthropic"
+        assert provider_for_tier(True, "some_future_step") == "openai"
         assert provider_for_tier(False, "some_future_step") == "groq"
 
     def test_pinned_provider_outranks_the_policy(self, auto_settings):
@@ -77,26 +79,47 @@ class TestStepPolicy:
         auto_settings.AI_PROVIDER = "groq"
         for step in ALWAYS_FREE + FOLLOWS_TIER:
             assert provider_for_tier(True, step) == "groq"
+        auto_settings.AI_PROVIDER = "openai"
+        for step in ALWAYS_FREE + FOLLOWS_TIER:
+            assert provider_for_tier(True, step) == "openai"
+            assert provider_for_tier(False, step) == "openai"
+
+    def test_pinned_claude_step_thinks_cheaply(self, auto_settings):
+        auto_settings.AI_PROVIDER = "anthropic"
+        choice = model_for_step(True, "titles")
+        assert (choice.model, choice.effort) == ("claude-opus-5", "low")
 
     def test_client_factory_builds_the_steps_model(self, auto_settings):
         client = get_text_client(is_pro=True, step="titles")
-        assert isinstance(client, Anthropic)
-        assert (client.model, client.effort) == ("claude-sonnet-5", "low")
-        director = get_text_client(is_pro=True, step="highlight_detection")
-        assert (director.model, director.effort) == ("claude-opus-5-5", "medium")
+        assert isinstance(client, OpenAI)
+        assert client.model == "gpt-4.1-mini"
         assert isinstance(get_text_client(is_pro=True, step="classification"), Groq)
 
-    def test_missing_key_falls_back_to_the_other_provider(self, auto_settings):
-        auto_settings.ANTHROPIC_API_KEY = ""
-        assert isinstance(get_text_client(is_pro=True, step="titles"), Groq)
+    def test_exact_choice_still_reaches_claude(self, auto_settings):
+        from clients.ai import REEL_DIRECTOR_OPUS
+
+        client = get_text_client(choice=REEL_DIRECTOR_OPUS, step="reel_director")
+        assert isinstance(client, Anthropic)
+        assert (client.model, client.effort) == ("claude-opus-5-5", "medium")
+
+    def test_missing_key_falls_back_to_the_free_provider(self, auto_settings):
+        auto_settings.OPENAI_API_KEY = ""
+        client = get_text_client(is_pro=True, step="director")
+        assert isinstance(client, Groq)
+        # The step keeps its own model on the provider it lands on.
+        assert client.model == "openai/gpt-oss-120b"
+
+    def test_missing_groq_key_falls_back_to_the_pro_provider(self, auto_settings):
+        auto_settings.GROQ_API_KEY = ""
+        assert isinstance(get_text_client(is_pro=False, step="titles"), OpenAI)
 
 
 class TestServiceWiring:
     def test_pro_run_splits_across_both_providers(self, auto_settings):
         service = ContentIntelligenceService(is_pro=True)
-        assert isinstance(service._researcher._text_client, Anthropic)
-        assert isinstance(service._highlighter._text_client, Anthropic)
-        assert isinstance(service._metadata_gen._text_client, Anthropic)
+        assert isinstance(service._researcher._text_client, OpenAI)
+        assert isinstance(service._highlighter._text_client, OpenAI)
+        assert isinstance(service._metadata_gen._text_client, OpenAI)
         assert isinstance(service._classifier._text_client, Groq)
 
     def test_free_run_is_entirely_on_groq(self, auto_settings):

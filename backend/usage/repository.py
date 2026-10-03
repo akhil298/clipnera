@@ -9,6 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from usage.model import LlmUsage
 
+# Providers only a Pro run calls; Claude stays listed so earlier runs keep their tier.
+PAID_TEXT_PROVIDERS = ("openai", "anthropic")
+
 _TOTALS = (
     func.count(LlmUsage.id).label("calls"),
     func.coalesce(func.sum(LlmUsage.input_tokens), 0).label("input_tokens"),
@@ -62,14 +65,14 @@ class UsageRepository:
         return list(result.all())
 
     async def project_costs_with_length(self, days: int) -> list:
-        """(project cost, source seconds, used Claude) for every project with AI calls in the window."""
+        """(project cost, source seconds, used a paid model) for every project with AI calls in the window."""
         from clip.model import VideoProject
 
         result = await self._session.execute(
             select(
                 func.sum(LlmUsage.cost_usd),
                 func.max(VideoProject.duration_seconds),
-                func.bool_or(LlmUsage.provider == "anthropic"),
+                func.bool_or(LlmUsage.provider.in_(PAID_TEXT_PROVIDERS)),
             )
             .join(VideoProject, VideoProject.id == LlmUsage.project_id)
             .where(LlmUsage.created_at >= self._since(days))

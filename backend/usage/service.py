@@ -72,12 +72,12 @@ class UsageService:
 
 
 def cost_per_minute(rows: list) -> list[CostPerMinute]:
-    """AI dollars per source minute, for Pro runs (any Claude call) and Free runs separately."""
+    """AI dollars per source minute, for Pro runs (any OpenAI or Claude call) and Free runs separately."""
     tiers: dict[str, list[float]] = {"pro": [0, 0.0, 0.0], "free": [0, 0.0, 0.0]}
-    for cost, seconds, used_claude in rows:
+    for cost, seconds, used_paid_model in rows:
         if not seconds:
             continue
-        tier = tiers["pro" if used_claude else "free"]
+        tier = tiers["pro" if used_paid_model else "free"]
         tier[0] += 1
         tier[1] += seconds / 60
         tier[2] += float(cost or 0)
