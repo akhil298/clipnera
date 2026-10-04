@@ -84,3 +84,7 @@ broll_library/
 
 # Asset harvester output (tools/asset_harvester)
 asset_library/
+
+# Local motion library: animated emoji, overlays, transitions (see backend/motion_library)
+motion_assets/
+library/

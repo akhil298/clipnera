@@ -60,6 +60,12 @@ TOPICS: dict[str, list[str]] = {
         "abstract background", "smoke", "fire", "light leaks", "particles",
         "ink in water", "bokeh lights", "clock ticking", "hourglass", "fireworks",
     ],
+    # Animated, not filmed: backdrops and accents for stats, lists and transitions.
+    "motion_graphics": [
+        "motion graphics background", "abstract loop animation", "animated gradient background",
+        "geometric shapes animation", "glitch effect", "particles animation", "neon lines animation",
+        "countdown animation", "data visualization animation", "digital grid animation",
+    ],
     "science": [
         "space earth", "rocket launch", "astronaut", "planets", "laboratory",
         "microscope", "galaxy", "moon", "satellite", "solar flare",

@@ -115,6 +115,18 @@ class BaseConfig(BaseSettings):
     # Clips cut (and burned) at once. 0 sizes it to the host's cores.
     CLIP_CUT_CONCURRENCY: int = 3
 
+    # Folder holding catalog.json and the motion assets it lists (see motion_library).
+    # Empty uses <repo>/motion_assets; a missing folder just means an empty library.
+    MOTION_LIBRARY_DIR: str = ""
+    # Reel inbox (motion_library.telegram_inbox): a private Telegram bot that saves
+    # the Instagram reels shared to it as motion references. Off without a token.
+    # Only the listed chats (comma-separated ids) are served; the bot tells an
+    # unlisted chat its id while the list is empty.
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_ALLOWED_CHAT_IDS: str = ""
+    # Exported cookies.txt of a logged-in Instagram session, for reels yt-dlp cannot fetch signed out.
+    INSTAGRAM_COOKIES_PATH: str = ""
+
     # B-roll library. Pixabay stays off until its API caching terms are confirmed.
     BROLL_SOURCES: str = "pexels,nasa,wikimedia"
     PEXELS_API_KEY: str = ""

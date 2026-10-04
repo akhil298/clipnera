@@ -16,6 +16,7 @@ from agent_runtime.tools import AgentTool, ToolBox
 from editor.ops import Op
 from editor.service import EditorService
 from editor.timeline import ClipItem, MusicItem, SfxItem, TextItem, Timeline
+from motion_library.agent_tool import FIND_EDITING_ASSET, FIND_MOTION_ASSET
 
 
 @dataclass
@@ -82,4 +83,6 @@ EDITOR_TOOLS = ToolBox([
     AgentTool("apply_edits", "Change the project with Timeline operations made against base_version. "
                              "Returns the new version, or an error naming the operation that failed.",
               EditInput, _apply_edits),
+    FIND_MOTION_ASSET,
+    FIND_EDITING_ASSET,
 ])
