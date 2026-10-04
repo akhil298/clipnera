@@ -84,3 +84,5 @@ broll_library/
 
 # Asset harvester output (tools/asset_harvester)
 asset_library/
+library/
+motion_assets/
