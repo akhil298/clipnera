@@ -14,6 +14,8 @@ cannot tell it:
     !Q  a question
     !P  follows a long pause (a new thought usually starts here)
     !R  a loud burst with no speech right after it (laughter, applause, reaction)
+    !C  continues the line before it: that line stopped mid-sentence, at a
+        short pause or the word limit, so this one is not where a thought opens
 """
 
 from __future__ import annotations
@@ -33,6 +35,10 @@ LONG_PAUSE_SECONDS = 1.5
 # A reaction is a loud stretch this soon after a sentence with no words in it.
 REACTION_WINDOW_SECONDS = 1.5
 REACTION_Z = 1.8
+# A transcript is punctuated, so a line without a terminal mark really is
+# unfinished, when at least this share of its lines end on one. Below it
+# (a model or script that writes no full stops) punctuation says nothing.
+PUNCTUATED_SHARE = 0.3
 
 _TERMINAL = SENTENCE_TERMINALS
 _CONTINUATION = CONTINUATION_WORDS
@@ -49,13 +55,21 @@ class Sentence:
     words: list[dict[str, Any]] = field(default_factory=list)
     # What is on screen while it is spoken, when a visual pass supplied it.
     scene: str = ""
+    # The line before stopped mid-sentence and this one carries it on.
+    continues: bool = False
 
     @property
     def duration(self) -> float:
         return self.end - self.start
 
     @property
+    def finished(self) -> bool:
+        return self.text.rstrip().rstrip("\"')\u201d").endswith(_TERMINAL)
+
+    @property
     def opens_mid_thought(self) -> bool:
+        if self.continues:
+            return True
         first = self.text.split(" ", 1)[0].strip(string.punctuation).lower()
         return first in _CONTINUATION
 
@@ -104,6 +118,12 @@ def build_sentences(segments: list[dict[str, Any]], audio: AudioSignals | None =
         current.append(word)
     flush()
 
+    punctuated = sum(s.finished for s in sentences) >= PUNCTUATED_SHARE * len(sentences)
+    for previous, sentence in zip(sentences, sentences[1:]):
+        sentence.continues = (
+            punctuated and not previous.finished and sentence.speaker == previous.speaker
+            and sentence.start - previous.end < LONG_PAUSE_SECONDS
+        )
     for index, sentence in enumerate(sentences):
         sentence.flags = _flags(sentence, sentences[index - 1] if index else None,
                                 sentences[index + 1] if index + 1 < len(sentences) else None, audio)
@@ -138,6 +158,8 @@ def _flags(sentence: Sentence, previous: Sentence | None, following: Sentence | 
             window_end = min(window_end, following.start)
         if window_end - sentence.end >= 0.4 and audio.peak_between(sentence.end, window_end) >= REACTION_Z:
             flags += "R"
+    if sentence.continues:
+        flags += "C"
     return flags
 
 

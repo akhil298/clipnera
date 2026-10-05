@@ -49,6 +49,9 @@ FACECAM_MAX_DRIFT = 0.05
 # A shot shorter than this joins its neighbour; re-laying the frame for a flash
 # of footage reads as a glitch.
 MIN_SHOT_SECONDS = 1.0
+# Face samples either side of a faceless run compared with it, so a dissolve
+# that shows the face before its picture settles still counts as a change.
+PRESENCE_SETTLE_SAMPLES = 4
 # A person is in a shot when seen in at least this share of its sampled frames.
 MIN_SHOT_PRESENCE = 0.4
 # A stacked speaker's cell is centred this many face heights below the face, so
@@ -163,6 +166,47 @@ def shot_cuts(frames: Iterable[tuple[float, np.ndarray]]) -> list[float]:
         if difference >= SHOT_CUT_DIFFERENCE and difference >= typical * SHOT_CUT_DIFFERENCE_RATIO:
             cuts.add(stamps[index])
     return sorted(cuts)
+
+
+def presence_cuts(frames: Iterable[tuple[float, np.ndarray]], faces_per_frame: Iterable[list[Any]]) -> list[float]:
+    """Where the picture turns into, or out of, a stretch with nobody in it.
+
+    A title card or disclaimer that fades into the speaker never jumps from
+    one sample to the next, so :func:`shot_cuts` misses it and the card is
+    cropped like the speaker's shot. A faceless run lasting ``MIN_SHOT_SECONDS``
+    whose picture differs from the face beside it by ``SHOT_CUT_DIFFERENCE`` is
+    its own shot. A speaker who only looks away keeps the same picture, so it
+    never qualifies. Each cut is stamped at the first sample of the new shot.
+    """
+    samples = [
+        (timestamp, thumbnail(frame), bool(faces))
+        for (timestamp, frame), faces in zip(frames, faces_per_frame)
+        if frame is not None and frame.size >= 3
+    ]
+    cuts: list[float] = []
+    index = 0
+    while index < len(samples):
+        if samples[index][2]:
+            index += 1
+            continue
+        after = index
+        while after < len(samples) and not samples[after][2]:
+            after += 1
+        last = samples[after - 1][0] + (samples[after - 1][0] - samples[after - 2][0] if after - index > 1 else 0.0)
+        if (samples[after][0] if after < len(samples) else last) - samples[index][0] >= MIN_SHOT_SECONDS:
+            middle = samples[(index + after - 1) // 2][1]
+
+            def differs(beside: list[tuple[float, np.ndarray, bool]]) -> bool:
+                # A dissolve shows the face before the picture settles, so the
+                # settled frames a little further in are compared too.
+                return any(picture_difference(thumb, middle) >= SHOT_CUT_DIFFERENCE for _, thumb, _ in beside)
+
+            if index > 0 and differs(samples[max(0, index - PRESENCE_SETTLE_SAMPLES):index]):
+                cuts.append(round(samples[index][0], 3))
+            if after < len(samples) and differs(samples[after:after + PRESENCE_SETTLE_SAMPLES]):
+                cuts.append(round(samples[after][0], 3))
+        index = after
+    return cuts
 
 
 def shot_windows(start: float, end: float, cuts: list[float]) -> list[tuple[float, float]]:

@@ -2,8 +2,9 @@
 
 The model is told the rules; this module enforces them, so a slightly wrong
 answer is repaired instead of rendered: ranges are sorted and de-overlapped,
-a clip opening mid-thought is walked back to the thought's start, the stitched
-length is fitted into the allowed band, the teaser is checked against the hook
+a piece opening mid-thought is walked back to the thought's start and one
+stopping mid-sentence is carried on to its end, the stitched length is fitted
+into the allowed band on finished sentences, the teaser is checked against the hook
 rules, and pauses and filler words are cut out of the body (jump cuts).
 
 Story clips (pieces from across the video) get their own repairs: every piece
@@ -60,6 +61,8 @@ SIGN_OFF = re.compile(r"^\W*(thank you|thanks|that's all|see you)\b", re.IGNOREC
 # before an outro's first plug its sign-off may start it.
 INTRO_SHARE, OUTRO_SHARE = 0.10, 0.15
 SIGN_OFF_REACH = 5
+# How many lines a piece's edge may move to reach the start or end of its thought.
+THOUGHT_REACH = 3
 
 
 def build_clips(
@@ -179,8 +182,10 @@ def _build_clip(
     ranges = _within_bounds(_ranges(plan.get("segments") or [], by_id), bounds)
     if not ranges:
         return None
-    first, last = ranges[0]
-    ranges[0] = (_thought_start(first, by_id, bounds[0]), last)
+    ranges = _merge_ranges([
+        (_thought_start(first, by_id, bounds[0]), _thought_end(last, by_id, bounds[1]))
+        for first, last in ranges
+    ])
     planned_end = ranges[-1][1]
     ranges = _fit_length(
         ranges, sentences, by_id, min_seconds, max_seconds,
@@ -206,7 +211,7 @@ def _build_story(
     floor = bounds[0]
     opened: list[tuple[int, int]] = []
     for first, last in ranges:
-        opened.append((_thought_start(first, by_id, floor), last))
+        opened.append((_thought_start(first, by_id, floor), _thought_end(last, by_id, bounds[1])))
         floor = last + 1
     ranges = [r for r in _merge_ranges(opened) if _seconds([r], by_id) >= MIN_STORY_PIECE_SECONDS]
     ranges = _fit_story_length(ranges, by_id, max_seconds)
@@ -298,10 +303,25 @@ def _merge_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
 def _thought_start(first: int, by_id: dict[int, Sentence], floor: int = 0) -> int:
     """Walk an opening back past lines that continue an earlier one, not below ``floor``."""
     steps = 0
-    while by_id[first].opens_mid_thought and first - 1 in by_id and first - 1 >= floor and steps < 2:
+    while by_id[first].opens_mid_thought and first - 1 in by_id and first - 1 >= floor and steps < THOUGHT_REACH:
         first -= 1
         steps += 1
     return first
+
+
+def _ends_mid_thought(last: int, by_id: dict[int, Sentence]) -> bool:
+    """Whether the line after ``last`` carries on the sentence ``last`` left unfinished."""
+    following = by_id.get(last + 1)
+    return following is not None and following.continues
+
+
+def _thought_end(last: int, by_id: dict[int, Sentence], ceiling: int) -> int:
+    """Carry an ending on past lines that finish its sentence, not beyond ``ceiling``."""
+    steps = 0
+    while _ends_mid_thought(last, by_id) and last + 1 <= ceiling and steps < THOUGHT_REACH:
+        last += 1
+        steps += 1
+    return last
 
 
 def _seconds(ranges: list[tuple[int, int]], by_id: dict[int, Sentence]) -> float:
@@ -330,22 +350,38 @@ def _fit_length(
     bounds: tuple[int, int] | None = None,
 ) -> list[tuple[int, int]]:
     """``ranges`` brought inside the length band, measured by ``length``
-    (default: the raw sentence spans), growing no further than ``bounds``."""
+    (default: the raw sentence spans), growing no further than ``bounds``.
+
+    Where it can, the clip ends on a finished sentence: a trim keeps going
+    back to one while the clip stays long enough, and growth carries on to one
+    while it stays short enough.
+    """
     length = length or (lambda candidate: _seconds(candidate, by_id))
     ranges = list(ranges)
     # Too long: drop sentences from the end, keeping at least the first one.
+    trimmed = False
     while length(ranges) > max_seconds:
-        first, last = ranges[-1]
-        if last > first:
-            ranges[-1] = (first, last - 1)
-        elif len(ranges) > 1:
-            ranges.pop()
-        else:
+        shorter = _drop_last(ranges)
+        if shorter is None:
             break
+        ranges, trimmed = shorter, True
+    if trimmed:
+        settled = ranges
+        for _ in range(THOUGHT_REACH):
+            if not _ends_mid_thought(settled[-1][1], by_id):
+                break
+            shorter = _drop_last(settled)
+            if shorter is None or length(shorter) < min_seconds:
+                break
+            settled = shorter
+        if not _ends_mid_thought(settled[-1][1], by_id):
+            ranges = settled
     # Too short: grow forward, then backward, a sentence at a time.
     first_id = bounds[0] if bounds else (sentences[0].id if sentences else 0)
     last_id = bounds[1] if bounds else (sentences[-1].id if sentences else 0)
+    grew = False
     while length(ranges) < min_seconds:
+        grew = True
         first, last = ranges[-1]
         if last + 1 <= last_id and length(ranges[:-1] + [(first, last + 1)]) <= max_seconds:
             ranges[-1] = (first, last + 1)
@@ -355,7 +391,22 @@ def _fit_length(
             ranges[0] = (head_first - 1, head_last)
             continue
         break
+    if grew:
+        first, last = ranges[-1]
+        finished = (first, _thought_end(last, by_id, last_id))
+        if length(ranges[:-1] + [finished]) <= max_seconds:
+            ranges[-1] = finished
     return ranges
+
+
+def _drop_last(ranges: list[tuple[int, int]]) -> list[tuple[int, int]] | None:
+    """``ranges`` one sentence shorter at the end, or None when only one sentence is left."""
+    first, last = ranges[-1]
+    if last > first:
+        return ranges[:-1] + [(first, last - 1)]
+    if len(ranges) > 1:
+        return ranges[:-1]
+    return None
 
 
 def _fit_story_length(

@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from clip_generation.hook import body_duration, on_output_timeline, parse_spans, trim_spans, Hook
-from content_intelligence.director import CHECK_SCHEMA, DIRECTOR_SCHEMA, MAP_SCHEMA, VideoDirector, _merge_maps, _spread, _windows
+from content_intelligence.director import CHECK_SCHEMA, DIRECTOR_SCHEMA, EDGES_SCHEMA, MAP_SCHEMA, VideoDirector, _merge_maps, _spread, _windows
 from content_intelligence.edit_plan import TRIMMED_PAYOFF_SCORE, build_clips, build_story_clips, content_bounds
 from content_intelligence.service import story_clip_count
 from video_processor.clip_cutter import CutRequest
@@ -59,6 +59,22 @@ class TestSentences:
     def test_continuation_detection(self):
         assert Sentence(1, 0, 1, "And then it broke.").opens_mid_thought
         assert not Sentence(1, 0, 1, "It broke then.").opens_mid_thought
+
+    def test_a_line_finishing_the_sentence_before_continues_it(self):
+        sentences = build_sentences([
+            _segment(0.0, "We drove all night to the"),
+            _segment(2.9, "market and bought fish."),
+            _segment(6.0, "It was closed."),
+        ])
+        assert [s.continues for s in sentences] == [False, True, False]
+        assert "C" in sentences[1].flags and sentences[1].opens_mid_thought
+
+    def test_continuation_needs_a_punctuated_transcript_and_one_voice(self):
+        unpunctuated = build_sentences([_segment(0.0, "we drove all night to the"), _segment(2.9, "market and bought fish")])
+        assert not unpunctuated[1].continues
+        two_voices = build_sentences([_segment(0.0, "So you went to the", speaker="A"),
+                                      _segment(2.9, "Market, yes.", speaker="B")])
+        assert not two_voices[1].continues
 
 
 class TestSignals:
@@ -122,6 +138,22 @@ class TestEditPlan:
         sentences = build_sentences(segments)
         clips = build_clips([{"segments": [{"from": 5, "to": 9}]}], sentences, 50.0, 10.0, 60.0, 5, "vlog", False)
         assert clips[0]["start_time"] < sentences[4].start
+
+    def test_an_ending_mid_sentence_carries_on_to_its_end(self):
+        segments = _talk(10)
+        segments[5:6] = [_segment(25.0, "word word word word word"), _segment(27.5, "word word word end5.")]
+        sentences = build_sentences(segments)
+        assert sentences[6].continues
+        clips = build_clips([{"segments": [{"from": 2, "to": 6}]}], sentences, 60.0, 10.0, 60.0, 5, "vlog", False)
+        assert clips[0]["end_time"] >= sentences[6].end
+
+    def test_a_trim_lands_on_a_finished_sentence(self):
+        segments = _talk(20)
+        segments[5] = _segment(25.0, " ".join(["word"] * 12))  # unfinished; the line after carries it on
+        sentences = build_sentences(segments)
+        assert sentences[6].continues
+        clips = build_clips([{"segments": [{"from": 1, "to": 15}]}], sentences, 100.0, 20.0, 32.0, 5, "vlog", False)
+        assert clips[0]["end_time"] <= sentences[5].start + 1e-6
 
     def test_a_trimmed_ending_counts_against_the_payoff(self):
         scores = {"hook": 9, "payoff": 9, "standalone": 9, "emotion": 9, "pacing": 9}
@@ -198,19 +230,20 @@ class _Client:
     def __init__(self, replies: list[dict]):
         self._replies = list(replies)
         self.prompts: list[str] = []
+        self.systems: list[str] = []
 
     def input_token_budget(self, output_tokens: int) -> int:
         return 100_000
 
     async def chat(self, messages, **kwargs):
         self.prompts.append(messages[-1]["content"])
-        self.system = messages[0]["content"]
+        self.systems.append(messages[0]["content"])
         return json.dumps(self._replies.pop(0))
 
 
 class TestDirector:
     def test_schemas_are_closed(self):
-        for schema in (MAP_SCHEMA, DIRECTOR_SCHEMA, CHECK_SCHEMA):
+        for schema in (MAP_SCHEMA, DIRECTOR_SCHEMA, CHECK_SCHEMA, EDGES_SCHEMA):
             assert schema["additionalProperties"] is False
 
     def test_windows_overlap_and_cover_everything(self):
@@ -241,15 +274,40 @@ class TestDirector:
                                                "description": "d", "hashtags": ["#a"], "layout": "single_speaker",
                                                "beats": [{"at": 5, "fx": "punch_in", "word": "word"}],
                                                "scores": {"hook": 8, "payoff": 8, "standalone": 8, "emotion": 7, "pacing": 7},
-                                               "why": "w"}]}])
+                                               "why": "w"}]},
+                                    {"edges": [{"clip": 1, "start": 3, "end": 9}]}])
         director = VideoDirector(map_client, director_client)
         video_map = await director.map(sentences, 200.0, {"A": "Speaker 1"}, 10)
         plans = await director.direct(sentences, video_map, 5, 20.0, 60.0)
         clips = build_clips(plans, sentences, 200.0, 20.0, 60.0, 5, video_map["category"])
         assert len(clips) == 1
         assert clips[0]["beats"] and clips[0]["beats"][0]["fx"] == "punch_in"
-        assert "podcast" in director_client.system.lower()  # the category playbook rode along
+        assert "podcast" in director_client.systems[0].lower()  # the category playbook rode along
         assert format_table(sentences[:1]) in map_client.prompts[0]
+
+
+class TestEdges:
+    @pytest.mark.asyncio
+    async def test_edges_move_within_the_lines_shown(self):
+        sentences = build_sentences(_talk(40))
+        plans = [{"segments": [{"from": 10, "to": 14}, {"from": 17, "to": 20}], "title": "T"}]
+        client = _Client([{"edges": [{"clip": 1, "start": 12, "end": 22}]}])
+        await VideoDirector(None, client).edges(sentences, plans)
+        assert plans[0]["segments"] == [{"from": 12, "to": 14}, {"from": 17, "to": 22}]
+        assert "> 10 " in client.prompts[0] and "> 20 " in client.prompts[0]
+
+    @pytest.mark.asyncio
+    async def test_ids_not_shown_or_missing_clips_keep_their_edges(self):
+        sentences = build_sentences(_talk(40))
+        plans = [{"segments": [{"from": 10, "to": 20}]}, {"segments": [{"from": 25, "to": 30}]}]
+        client = _Client([{"edges": [{"clip": 1, "start": 2, "end": 20}, {"clip": 7, "start": 1, "end": 2}]}])
+        await VideoDirector(None, client).edges(sentences, plans)
+        assert plans[0]["segments"] == [{"from": 10, "to": 20}] and plans[1]["segments"] == [{"from": 25, "to": 30}]
+
+    def test_category_near_misses_still_count(self):
+        merged = _merge_maps([{"category": "Podcast Interview", "confidence": 0.9, "candidates": []}],
+                             build_sentences(_talk(5)))
+        assert merged["category"] == "podcast_interview"
 
 
 class TestCutToSource:
@@ -332,7 +390,7 @@ class TestStoryClips:
         map_client = _Client([{"verdicts": [{"clip": 1, "ok": True, "issue": ""}, {"clip": 2, "ok": False, "issue": "x"}]}])
         director = VideoDirector(map_client, director_client)
         plans = await director.story(sentences, video_map, 2, 15.0, 60.0)
-        assert "far apart" in director_client.system and "Moment 1" not in director_client.prompts[0]
+        assert "far apart" in director_client.systems[-1] and "Moment 1" not in director_client.prompts[0]
         assert "Candidate 2: sentences 150-152" in director_client.prompts[0]
         clips = build_story_clips(plans, sentences, 1000.0, 15.0, 60.0, 2, "podcast_interview")
         assert len(clips) == 1

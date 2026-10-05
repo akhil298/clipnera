@@ -15,6 +15,7 @@ from video_processor.editing import (
     choose_layout,
     framing_stretches,
     plan_parts,
+    presence_cuts,
     region_around,
     shot_cuts,
     shot_windows,
@@ -275,6 +276,32 @@ class TestShotCuts:
             frame[30:60, 20 + i * 4:60 + i * 4] = 200  # someone moving across the frame
             frames.append((i / 6, frame))
         assert shot_cuts(frames) == []
+
+
+class TestPresenceCuts:
+    @staticmethod
+    def _fade(card: np.ndarray, speaker: np.ndarray, steps: int) -> list[np.ndarray]:
+        return [(card * (1 - k / steps) + speaker * (k / steps)).astype(np.uint8) for k in range(1, steps + 1)]
+
+    def test_a_card_fading_into_the_speaker_is_its_own_shot(self):
+        card = np.full((90, 160, 3), 10, np.uint8)
+        speaker = np.full((90, 160, 3), 150, np.uint8)
+        pictures = [card] * 10 + self._fade(card, speaker, 6) + [speaker] * 12
+        frames = [(i / 6, p) for i, p in enumerate(pictures)]
+        faces = [[] if i < 13 else ["face"] for i in range(len(pictures))]  # the face shows mid-fade
+        assert presence_cuts(frames, faces) == [round(13 / 6, 3)]
+
+    def test_looking_away_is_not_a_new_shot(self):
+        room = np.full((90, 160, 3), 120, np.uint8)
+        frames = [(i / 6, room) for i in range(30)]
+        faces = [[] if 10 <= i < 20 else ["face"] for i in range(30)]
+        assert presence_cuts(frames, faces) == []
+
+    def test_a_brief_miss_is_not_a_new_shot(self):
+        card, speaker = np.full((90, 160, 3), 10, np.uint8), np.full((90, 160, 3), 150, np.uint8)
+        frames = [(i / 6, card if i == 5 else speaker) for i in range(12)]
+        faces = [[] if i == 5 else ["face"] for i in range(12)]
+        assert presence_cuts(frames, faces) == []
 
 
 @pytest.mark.skipif(not HAS_FFMPEG, reason="ffmpeg not installed")

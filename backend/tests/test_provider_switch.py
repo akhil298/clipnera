@@ -249,9 +249,37 @@ class TestOpenAIRequestShape:
         assert captured["path"] == "chat/completions"
         assert captured["model"] == "my-deployment"
         assert captured["max_completion_tokens"] == 500
-        assert captured["response_format"] == {"type": "json_object"}
+        # A strict-ready schema is enforced, so an enum can only come back as one of its values.
+        assert captured["response_format"] == {
+            "type": "json_schema", "json_schema": {"name": "reply", "schema": MOMENTS_JSON_SCHEMA, "strict": True},
+        }
         # Neither is an API parameter here; forwarding either fails the request.
         assert "max_tokens" not in captured and "json_schema" not in captured and "json_mode" not in captured
+
+    @pytest.mark.asyncio
+    async def test_a_loose_schema_falls_back_to_json_mode(self):
+        client, captured = _capturing_openai({"content": "{}"})
+        loose = {"type": "object", "properties": {"a": {"type": "string"}}}
+        await client.chat([{"role": "user", "content": "hi"}], json_mode=True, json_schema=loose)
+        assert captured["response_format"] == {"type": "json_object"}
+
+    @pytest.mark.asyncio
+    async def test_a_deployment_refusing_schemas_is_retried_in_json_mode(self):
+        import httpx
+
+        client = OpenAI(api_key="test", model="old-deployment")
+        formats: list[dict] = []
+
+        async def fake_post(path, json):
+            formats.append(json["response_format"])
+            if json["response_format"]["type"] == "json_schema":
+                request = httpx.Request("POST", "https://x/chat/completions")
+                return httpx.Response(400, request=request, text="response_format json_schema unsupported")
+            return _FakeResponse({"model": "m", "choices": [{"message": {"content": "{}"}, "finish_reason": "stop"}]})
+
+        client._client.post = fake_post
+        assert await client.chat([{"role": "user", "content": "hi"}], json_mode=True, json_schema=MOMENTS_JSON_SCHEMA) == "{}"
+        assert [f["type"] for f in formats] == ["json_schema", "json_object"]
 
     @pytest.mark.asyncio
     async def test_empty_reply_raises_instead_of_returning_blank(self):

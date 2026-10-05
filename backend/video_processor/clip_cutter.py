@@ -45,6 +45,7 @@ from video_processor.editing import (
     framing_stretches,
     picture_difference,
     plan_parts,
+    presence_cuts,
     shot_cuts,
     shot_windows,
     speaker_turns,
@@ -209,7 +210,9 @@ class ClipCutter:
         frames = await self._sample_frames(request)
         faces_per_frame = await asyncio.to_thread(self._detect_faces, request.clip_id, frames)
         cuts = await asyncio.to_thread(shot_cuts, _decode_frames(frames))
-        cuts = [await self._refine_cut(request, cut) for cut in cuts]
+        faded = await asyncio.to_thread(presence_cuts, _decode_frames(frames), faces_per_frame)
+        cuts += [c for c in faded if all(abs(c - other) > SAMPLE_INTERVAL_SECONDS * 1.5 for other in cuts)]
+        cuts = [await self._refine_cut(request, cut) for cut in sorted(cuts)]
         # A jump between windows is a cut, so the crop never glides across it.
         cuts = sorted(set(cuts) | {start for start, _ in request.windows[1:]})
         tracks = build_tracks(_decode_frames(frames), faces_per_frame, cuts)

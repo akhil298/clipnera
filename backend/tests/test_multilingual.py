@@ -7,7 +7,7 @@ import pytest
 
 from content_intelligence.edit_plan import _tighten
 from transcription import groq_whisper
-from transcription.groq_whisper import dominant_language, group_words
+from transcription.groq_whisper import dominant_language, echoes_prompt, group_words
 from transcription.language import (
     is_hesitation,
     normalize_language,
@@ -84,6 +84,42 @@ class TestGroqWhisper:
         transcriber = groq_whisper.GroqWhisperTranscriber.__new__(groq_whisper.GroqWhisperTranscriber)
         segments, language = await transcriber.transcribe("a.wav", 30.0)
         assert calls == [None, "hi"] and language == "hi"
+
+
+    def test_a_transcript_repeating_its_prompt_is_an_echo(self):
+        def words(*phrases):
+            out, t = [], 0.0
+            for phrase in phrases:
+                for token in phrase.split():
+                    out.append({"start": t, "end": t + 0.3, "word": token})
+                    t += 0.35
+                t += 2.0
+            return out
+
+        title = "Stop Mindless Scrolling: Program Your Brain for Success! | Joe Dispenza"
+        assert echoes_prompt(words("So gratitude matters.", "Program Your Brain for Success!"), title)
+        assert echoes_prompt(words("And that's when the door opens.", "Sampani Joe Dispenza"), title)
+        assert not echoes_prompt(words("And that's when the door opens.", "Joe said your brain is plastic and so you can change"), title)
+
+    @pytest.mark.asyncio
+    async def test_an_echoing_chunk_is_redone_without_the_prompt(self, monkeypatch):
+        prompts = []
+
+        async def encode(audio_path, start, length, out):
+            return out
+
+        async def transcribe_chunk(self, path, offset, length, language, prompt=None):
+            prompts.append(prompt)
+            if prompt:
+                return [{"start": 0.0, "end": 1.0, "word": "My"}, {"start": 1.1, "end": 2.0, "word": "Great"},
+                        {"start": 2.1, "end": 3.0, "word": "Title"}], "en"
+            return [{"start": t, "end": t + 0.5, "word": "word"} for t in range(20)], "en"
+
+        monkeypatch.setattr(groq_whisper, "_encode_chunk", encode)
+        monkeypatch.setattr(groq_whisper.GroqWhisperTranscriber, "_transcribe_chunk", transcribe_chunk)
+        transcriber = groq_whisper.GroqWhisperTranscriber.__new__(groq_whisper.GroqWhisperTranscriber)
+        segments, _ = await transcriber.transcribe("a.wav", 30.0, prompt="My Great Title")
+        assert prompts == ["My Great Title", None] and sum(len(s["words"]) for s in segments) == 20
 
 
 class FakeClient:

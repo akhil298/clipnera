@@ -389,7 +389,7 @@ class WhisperXTranscriptionService(TranscriptionService):
         """A function returning speaker turns for an audio file, or None if unavailable."""
         try:
             from whisperx.diarize import DiarizationPipeline
-            hf_token = os.getenv("HF_TOKEN", "")
+            hf_token = (get_settings().HF_TOKEN or "").strip()
             if not hf_token:
                 log.warning("HF_TOKEN not set; diarization disabled")
                 return None

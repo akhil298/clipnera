@@ -9,6 +9,7 @@ word once, from whichever chunk saw it first.
 from __future__ import annotations
 
 import asyncio
+import re
 import tempfile
 import time
 from pathlib import Path
@@ -31,6 +32,16 @@ MAX_PARALLEL_REQUESTS = 4
 # A new segment starts after a pause this long, or once a segment is this many words.
 SEGMENT_PAUSE_SECONDS = 0.8
 MAX_SEGMENT_WORDS = 40
+# Whisper treats its prompt as text already said, and on some audio it repeats
+# the prompt instead of transcribing: a video titled "Program Your Brain for
+# Success!" came back with that line in place of whole minutes of speech, half
+# its words gone. A chunk showing the prompt this way is redone without it.
+# Echoes are a run of this many of the prompt's words in order, or a phrase
+# standing alone between pauses of ECHO_PAUSE_SECONDS made mostly of them.
+ECHO_RUN_WORDS = 3
+ECHO_PAUSE_SECONDS = 1.0
+ECHO_PHRASE_WORDS = 6
+ECHO_PHRASE_SHARE = 0.6
 
 
 class GroqWhisperTranscriber:
@@ -55,6 +66,14 @@ class GroqWhisperTranscriber:
                 async with semaphore:
                     path = await _encode_chunk(audio_path, start, length, Path(workdir) / f"chunk{index}.mp3")
                     words, detected = await self._transcribe_chunk(path, start, length, language, prompt)
+                    if prompt and echoes_prompt(words, prompt):
+                        plain, plain_language = await self._transcribe_chunk(path, start, length, language, None)
+                        log.warning(
+                            "Chunk %d echoed the transcription prompt (%d words); without it: %d words",
+                            index, len(words), len(plain),
+                        )
+                        if len(plain) > len(words):
+                            words, detected = plain, plain_language
                     if language is None and spoken_hindi_misread_as_urdu(detected):
                         log.info("Chunk %d detected as Urdu; re-transcribing as Hindi", index)
                         words, detected = await self._transcribe_chunk(path, start, length, "hi", prompt)
@@ -108,6 +127,33 @@ class GroqWhisperTranscriber:
                 if str(s.get("text", "")).strip()
             ]
         return words, normalize_language(str(data.get("language") or ""))
+
+
+def _tokens(text: str) -> list[str]:
+    return [t for t in re.findall(r"\w+", text.lower()) if t]
+
+
+def echoes_prompt(words: list[dict[str, Any]], prompt: str) -> bool:
+    """Whether a chunk's transcript repeats ``prompt`` rather than the speech."""
+    vocabulary = _tokens(prompt)
+    if not vocabulary:
+        return False
+    runs = {tuple(vocabulary[i:i + ECHO_RUN_WORDS]) for i in range(len(vocabulary) - ECHO_RUN_WORDS + 1)}
+    tokens = [t for w in words for t in _tokens(w["word"])]
+    if any(tuple(tokens[i:i + ECHO_RUN_WORDS]) in runs for i in range(len(tokens) - ECHO_RUN_WORDS + 1)):
+        return True
+
+    # Phrases are split at pauses, so each one stands alone.
+    known = set(vocabulary)
+    phrase: list[str] = []
+    for index, word in enumerate(words):
+        phrase.extend(_tokens(word["word"]))
+        following = words[index + 1] if index + 1 < len(words) else None
+        if following is None or following["start"] - word["end"] >= ECHO_PAUSE_SECONDS:
+            if 2 <= len(phrase) <= ECHO_PHRASE_WORDS and sum(t in known for t in phrase) >= ECHO_PHRASE_SHARE * len(phrase):
+                return True
+            phrase = []
+    return False
 
 
 def dominant_language(results: list[tuple[list[dict[str, Any]], str]], requested: str | None) -> str:

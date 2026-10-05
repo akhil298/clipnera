@@ -5,7 +5,9 @@ the provider, and answers with what the video is and where the candidate
 moments are, by sentence id. Direct (strong model) reads only those candidates
 with a little context and returns a complete edit plan per clip: which
 sentence ranges to stitch, the teaser line, headline copy, layout, and beats
-for the renderer. An optional Story pass stitches moments from across the
+for the renderer. An Edges pass then rereads only the lines around each
+clip's opening and ending, as an editor scrubs a cut's first and last
+seconds, and moves either edge to where the thought really starts and lands. An optional Story pass stitches moments from across the
 whole video into one clip, and a Check pass reads each stitched story as a
 viewer would before it is kept. Everything the models answer is ids and short strings; code
 turns ids into word-exact times and enforces every rule the models are asked
@@ -27,7 +29,7 @@ log = get_logger(__name__)
 
 # Bump when a prompt, model choice or edit rule changes, so clips made by each
 # version can be compared on how users treat them (see feedback/).
-DIRECTOR_VERSION = "2026-09-29.1"
+DIRECTOR_VERSION = "2026-10-04.1"
 
 LAYOUTS = ("auto", "single_speaker", "two_speaker_stack", "split_gameplay", "screen_with_speaker", "wide")
 BEAT_EFFECTS = ("punch_in", "react_cut", "emphasis")
@@ -36,6 +38,9 @@ RUBRIC = ("hook", "payoff", "standalone", "emotion", "pacing")
 MAP_OUTPUT_TOKENS = 3000
 DIRECT_OUTPUT_TOKENS_PER_CLIP = 260
 CHECK_OUTPUT_TOKENS_PER_CLIP = 60
+EDGES_OUTPUT_TOKENS_PER_CLIP = 40
+# Lines shown either side of each edge in the Edges pass; an edge can move this far.
+EDGE_LINES = 4
 # Instruction text wrapped around each window, reserved out of the input budget.
 PROMPT_OVERHEAD_TOKENS = 900
 # Sentences shown before and after each candidate so the director can extend it.
@@ -139,6 +144,23 @@ CHECK_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+EDGES_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "edges": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"clip": _ID, "start": _ID, "end": _ID},
+                "required": ["clip", "start", "end"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["edges"],
+    "additionalProperties": False,
+}
+
 # Shown in the prompt for providers that do not enforce the schema (Groq).
 MAP_EXAMPLE = (
     '{"title":"...","summary":"...","category":"podcast_interview","confidence":0.8,'
@@ -150,13 +172,15 @@ DIRECTOR_EXAMPLE = (
     '"beats":[{"at":18,"fx":"punch_in","word":"..."}],'
     '"scores":{"hook":8,"payoff":7,"standalone":8,"emotion":6,"pacing":7},"why":"..."}]}'
 )
+EDGES_EXAMPLE = '{"edges":[{"clip":1,"start":40,"end":57},{"clip":2,"start":88,"end":101}]}'
 CHECK_EXAMPLE = '{"verdicts":[{"clip":1,"ok":true,"issue":""},{"clip":2,"ok":false,"issue":"..."}]}'
 
 # Joins a story clip's pieces in its transcript, for the Check pass and for display.
 STORY_SEPARATOR = " … "
 
 TABLE_LEGEND = """Transcript lines read: id start_second speaker flags text.
-Flags: !E louder than the surrounding minute (energy peak), !Q question, !P follows a long pause, !R loud reaction right after (laughter, applause, gasp).
+Flags: !E louder than the surrounding minute (energy peak), !Q question, !P follows a long pause, !R loud reaction right after (laughter, applause, gasp), !C carries on the sentence the line before left unfinished.
+A clip never starts on a !C line, and never ends on a line whose next line is !C: that would cut a sentence in half.
 [sees: ...], when present, is what is on screen during the line. Favour moments that are strong to watch as well as to hear, and never pick a line whose words point at something the picture does not show."""
 
 # Shared by every prompt that reads a transcript or writes viewer-facing copy.
@@ -189,7 +213,7 @@ DIRECTOR_SYSTEM = f"""You are the lead editor of a short-form video team. From c
 How to edit:
 - segments: the sentence id ranges the clip is stitched from, in ascending order, inclusive. Use one range unless cutting a tangent, a repetition, a false start or a slow stretch out of the middle clearly improves it; then use up to four. Never reorder sentences and never splice together separate topics.
 - Start on the sentence that opens the thought: a question, a claim, a surprise, the first line of a story. Never start on a line that continues a previous one ("And...", "So...", "Which...").
-- End right after the payoff. Never end on a setup line that promises what comes next.
+- End right after the payoff, on a line that finishes its sentence. Never end on a setup line that promises what comes next, on a question still waiting for its answer, or partway through a list. If the payoff is followed at once by a line that clinches it ("I promise you...", the laugh, the one-line verdict), end after that line.
 - The stitched length must fall inside the requested range. Estimate it from the start seconds shown: a line lasts until the next line starts.
 {CLIP_FIELD_RULES}
 
@@ -220,6 +244,17 @@ CHECK_SYSTEM = f"""You review stitched short-form clips before they are posted. 
 {LANGUAGE_RULE}
 
 Mark a clip ok false when any of these hold: a line refers to something or someone the clip never shows; a piece begins or ends so it sounds cut off; a join makes a speaker seem to say something they did not mean; the pieces do not add up to one point or story. Otherwise ok true. issue: under 12 words, empty when ok. Return valid JSON only."""
+
+EDGES_SYSTEM = f"""You make the final trim on short-form clips cut from one long video. For each clip you see the lines around where it opens and around where it ends; ">" marks the clip's current first and last lines. A viewer hears only the clip.
+
+{TABLE_LEGEND}
+
+{LANGUAGE_RULE}
+
+For each clip choose:
+- start: the id of the line a stranger should hear first. It opens the clip's thought: the question, the claim, the first line of the story. Move it later when the current first line finishes or answers the point before it; move it earlier when the current first line leans on a line just before it ("that", "this", "it", an answer without its question).
+- end: the id of the last line to keep. The payoff has landed and the sentence is finished. Move it later when the current ending is a setup, a question still waiting for its answer, or partway through a list or a sentence; move it earlier when the lines after the payoff wander into a new point.
+Only ids shown for that clip's opening (start) and ending (end) are allowed. Keep the current id when it is already right; most are. Return valid JSON only."""
 
 CATEGORY_PLAYBOOKS: dict[str, str] = {
     "podcast_interview": "Podcasts: favour stories with a turn, contrarian opinions with their reasoning, and confessions. A guest's answer usually needs the host's question as its opening line. Use two_speaker_stack when the exchange itself is the point; react_cut when the host's face sells the moment.",
@@ -284,7 +319,7 @@ This is part {index + 1} of {count}: sentences {window[0].id}-{window[-1].id}.
 Return:
 - title: a concise title for the whole video as far as this part shows it.
 - summary: 2-3 sentences on this part.
-- category: the video's category. confidence: 0-1.
+- category: the video's category, exactly one of: {", ".join(CONTENT_TAXONOMY)}. confidence: 0-1.
 - topics, entities: short lists.
 - candidates: up to {wanted} moments, best first. from/to are sentence ids inside this part, one complete thought of roughly 15-75 seconds. hook is the id of its most gripping sentence (not its first) or 0. why is under 12 words.
 
@@ -344,7 +379,11 @@ Candidates (with a few lines of context around each; you may use context lines):
                 log.warning("Director group failed: %s", result)
                 continue
             plans.extend(result)
-        return plans
+        try:
+            return await self.edges(sentences, plans)
+        except Exception as exc:
+            log.warning("Edges pass failed; keeping the director's edges: %s", exc)
+            return plans
 
     # ---- Story -----------------------------------------------------------
 
@@ -385,6 +424,47 @@ Moments across the video, in order:
 {chr(10).join(blocks)}"""
         return await self._plans(STORY_SYSTEM, prompt, count)
 
+    async def edges(self, sentences: list[Sentence], plans: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """``plans`` with each opening and ending moved to where its thought starts and lands.
+
+        One call for every clip, reading only the lines around each edge. A
+        clip the model skips, or answers with an id it was not shown, keeps
+        its edges.
+        """
+        by_id = {s.id: s for s in sentences}
+        shown: list[tuple[dict[str, Any], range, range]] = []
+        blocks: list[str] = []
+        for plan in plans:
+            ids = _plan_ids(plan, by_id)
+            if ids is None:
+                continue
+            first, last = ids
+            opening = range(max(1, first - EDGE_LINES), min(last, first + EDGE_LINES) + 1)
+            ending = range(max(first, last - EDGE_LINES), min(len(sentences), last + EDGE_LINES) + 1)
+            shown.append((plan, opening, ending))
+            blocks.append(
+                f"Clip {len(shown)}: {plan.get('title', '')}\nOpening:\n{_edge_lines(opening, first, by_id)}"
+                f"\nEnding:\n{_edge_lines(ending, last, by_id)}"
+            )
+        if not blocks:
+            return plans
+        reply = await self._director_client.chat([
+            {"role": "system", "content": EDGES_SYSTEM},
+            {"role": "user", "content": f"JSON shape: {EDGES_EXAMPLE}\n\n" + "\n\n".join(blocks)},
+        ], temperature=0.0, max_tokens=EDGES_OUTPUT_TOKENS_PER_CLIP * len(blocks) + 100,
+            json_mode=True, json_schema=EDGES_SCHEMA)
+        moved = 0
+        for edge in _parse_json(reply).get("edges") or []:
+            try:
+                plan, opening, ending = shown[int(edge.get("clip")) - 1]
+                start, end = int(edge.get("start")), int(edge.get("end"))
+            except (AttributeError, IndexError, TypeError, ValueError):
+                continue
+            if start in opening and end in ending and start <= end and _move_edges(plan, start, end):
+                moved += 1
+        log.info("Edges pass: %d of %d clip(s) retrimmed", moved, len(shown))
+        return plans
+
     async def check(self, transcripts: list[str]) -> list[bool]:
         """Whether each stitched clip reads as one natural clip to a viewer."""
         if not transcripts:
@@ -418,6 +498,43 @@ Moments across the video, in order:
             json_mode=True, json_schema=DIRECTOR_SCHEMA)
         clips = _parse_json(reply).get("clips")
         return [c for c in clips if isinstance(c, dict)] if isinstance(clips, list) else []
+
+
+def _segments(plan: dict[str, Any]) -> list[tuple[int, int]]:
+    """A plan's ``(from, to)`` id pairs, sorted, skipping malformed ones."""
+    pairs: list[tuple[int, int]] = []
+    for segment in plan.get("segments") or []:
+        try:
+            first, last = int(segment.get("from")), int(segment.get("to"))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        pairs.append((min(first, last), max(first, last)))
+    return sorted(pairs)
+
+
+def _plan_ids(plan: dict[str, Any], by_id: dict[int, Sentence]) -> tuple[int, int] | None:
+    """First and last sentence ids a plan covers, or None when its segments are unusable."""
+    pairs = [(a, b) for a, b in _segments(plan) if a in by_id and b in by_id]
+    return (pairs[0][0], max(b for _, b in pairs)) if pairs else None
+
+
+def _edge_lines(ids: range, marked: int, by_id: dict[int, Sentence]) -> str:
+    return "\n".join(f"{'>' if i == marked else ' '} {by_id[i].line()}" for i in ids if i in by_id)
+
+
+def _move_edges(plan: dict[str, Any], start: int, end: int) -> bool:
+    """Open a plan at ``start`` and end it at ``end``; True when either edge moved.
+
+    Pieces wholly outside the new edges are dropped.
+    """
+    before = _segments(plan)
+    kept = [(max(a, start), min(b, end)) for a, b in before if b >= start and a <= end]
+    if not kept:
+        return False
+    kept[0] = (start, kept[0][1])
+    kept[-1] = (kept[-1][0], end)
+    plan["segments"] = [{"from": a, "to": b} for a, b in kept]
+    return kept != before
 
 
 def _video_header(map_result: dict[str, Any], category: str) -> str:
@@ -506,7 +623,7 @@ def _merge_maps(parts: list[dict[str, Any]], sentences: list[Sentence]) -> dict[
     """One video-level map from per-window maps."""
     votes: dict[str, float] = {}
     for part in parts:
-        category = str(part.get("category") or "unknown")
+        category = str(part.get("category") or "unknown").strip().lower().replace(" ", "_").replace("-", "_")
         if category in CONTENT_TAXONOMY:
             votes[category] = votes.get(category, 0.0) + float(part.get("confidence") or 0.5)
     category = max(votes, key=votes.get) if votes else "unknown"

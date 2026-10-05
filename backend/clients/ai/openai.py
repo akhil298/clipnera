@@ -55,6 +55,30 @@ def _priced_model(reported: str | None, configured: str) -> str:
     return re.sub(r"-\d{4}-\d{2}-\d{2}$", "", reported or configured)
 
 
+def _response_format(schema: dict[str, Any] | None) -> dict[str, Any]:
+    """Structured outputs when ``schema`` meets their strict rules, else JSON mode.
+
+    Enforced, an enum such as the director's category or layout can only come
+    back as one of its values instead of a near miss that is then discarded.
+    """
+    if schema is None or not _strict_compatible(schema):
+        return {"type": "json_object"}
+    return {"type": "json_schema", "json_schema": {"name": "reply", "schema": schema, "strict": True}}
+
+
+def _strict_compatible(schema: Any) -> bool:
+    """Whether every object in ``schema`` closes its properties and requires all of them."""
+    if isinstance(schema, list):
+        return all(_strict_compatible(item) for item in schema)
+    if not isinstance(schema, dict):
+        return True
+    if schema.get("type") == "object":
+        properties = schema.get("properties") or {}
+        if schema.get("additionalProperties") is not False or set(schema.get("required") or []) != set(properties):
+            return False
+    return all(_strict_compatible(value) for value in schema.values())
+
+
 def _is_retryable_openai_error(exc: BaseException) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code == 429 or exc.response.status_code >= 500
@@ -96,12 +120,19 @@ class OpenAI(BaseAI):
         pointed at either provider.
         """
         check_budget()
+        schema = kwargs.pop("json_schema", None)
         if kwargs.pop("json_mode", False):
-            kwargs.setdefault("response_format", {"type": "json_object"})
-        # The pipeline's schemas are written for Claude's enforced output; here,
-        # as on Groq, the prompt and JSON mode carry the shape.
-        kwargs.pop("json_schema", None)
-        choice = (await self._create(messages, mode="chat", **kwargs))["choices"][0]
+            kwargs.setdefault("response_format", _response_format(schema))
+        try:
+            choice = (await self._create(messages, mode="chat", **kwargs))["choices"][0]
+        except httpx.HTTPStatusError as exc:
+            # A deployment on an older API version refuses structured outputs;
+            # JSON mode with the shape in the prompt still works there.
+            if exc.response.status_code != 400 or kwargs.get("response_format", {}).get("type") != "json_schema":
+                raise
+            log.warning("OpenAI model %s refused a JSON schema; retrying in JSON mode", self.model)
+            kwargs["response_format"] = {"type": "json_object"}
+            choice = (await self._create(messages, mode="chat", **kwargs))["choices"][0]
         content = choice["message"].get("content") or ""
         finish_reason = choice.get("finish_reason")
         if not content.strip():
