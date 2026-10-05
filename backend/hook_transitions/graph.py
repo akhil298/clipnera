@@ -5,6 +5,12 @@ split at the hook boundary and re-laid as ``[hook][bridge][clip]`` in the same
 pass that burns captions, so a transition never costs an
 extra encode and switching transitions never needs a re-cut.
 
+A bridge built from the clip's own frames reads them from a second input of
+the same file. Taking them from a ``split`` of the first would make FFmpeg
+hold every body frame in memory until ``concat`` reached the body: a sneak
+peek near the end of a 1080x1920 clip queued gigabytes of raw frames and
+stalled the render.
+
 Every id in ``catalog.py`` has a builder here. Builders return filter-chain
 text; all timing is in seconds on each segment's own zero-based timeline.
 """
@@ -12,7 +18,7 @@ text; all timing is in seconds on each segment's own zero-based timeline.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
 from hook_transitions.catalog import IMPACT_EFFECTS
 from hook_transitions.resolver import TransitionSpec
@@ -115,7 +121,8 @@ AUDIO_NORM = f"aformat=sample_fmts=fltp:sample_rates={SAMPLE_RATE}:channel_layou
 
 # --- Gap sources ----------------------------------------------------------------
 # Each takes the context and returns (needs_input, chain). An input chain is
-# applied to a copy of the cut file whose timeline starts at zero.
+# applied to the cut file's second input, rebased to start at zero; it must end
+# (trim) once it has what it needs so that input stops decoding.
 
 def _tail(c: _Ctx, length: float) -> tuple[float, float]:
     length = max(1.0 / c.fps, min(length, c.teaser))
@@ -161,7 +168,8 @@ def _src_flash_forward(c: _Ctx) -> tuple[bool, str]:
         f"between(t,{_n(start)},{_n(start + piece)})"
         for start in (_body_window(c, at, piece) for at in (0.35, 0.6, 0.85))
     )
-    return True, f"select='{windows}',setpts=N/({_n(c.fps)}*TB)"
+    last = _body_window(c, 0.85, piece) + piece
+    return True, f"trim=end={_n(last)},select='{windows}',setpts=N/({_n(c.fps)}*TB)"
 
 
 def _peek(c: _Ctx, wanted: float) -> tuple[bool, str]:
@@ -381,11 +389,22 @@ def _effects(c: _Ctx, effects: tuple[str, ...], seconds: float) -> str:
     return "".join(f",{EFFECT_BUILDERS[effect](c, seconds)}" for effect in effects)
 
 
-def timeline_graph(plan: BridgePlan, text_filter: str | None = None) -> tuple[list[str], str, str]:
+class Timeline(NamedTuple):
+    """A ``[hook][bridge][clip]`` filter graph over the cut file.
+
+    The caller appends captions to ``video`` and maps ``audio``. When
+    ``inputs`` is 2, the cut file must be given twice (``-i cut -i cut``).
+    """
+
+    chains: list[str]
+    video: str
+    audio: str
+    inputs: int = 1
+
+
+def timeline_graph(plan: BridgePlan, text_filter: str | None = None) -> Timeline:
     """Filter chains that lay input 0 out as ``[hook][bridge][clip]``.
 
-    Returns ``(chains, video_label, audio_label)``; the caller appends captions
-    to ``video_label`` and maps ``audio_label``.
     ``text_filter`` (e.g. an ``ass`` filter) is drawn over the bridge only.
     """
     spec = plan.spec
@@ -400,8 +419,7 @@ def timeline_graph(plan: BridgePlan, text_filter: str | None = None) -> tuple[li
     chains: list[str] = []
 
     # --- video ---
-    outs = ["vt", "vb"] + (["vs"] if needs_input else [])
-    chains.append(f"[0:v]setpts=PTS-STARTPTS,split={len(outs)}{''.join(f'[{o}]' for o in outs)}")
+    chains.append("[0:v]setpts=PTS-STARTPTS,split=2[vt][vb]")
     chains.append(f"[vt]trim=end={_n(c.teaser)},setpts=PTS-STARTPTS,{norm}[tv]")
 
     body_trim = f"trim=start={_n(c.teaser)},setpts=PTS-STARTPTS,{norm}"
@@ -416,7 +434,7 @@ def timeline_graph(plan: BridgePlan, text_filter: str | None = None) -> tuple[li
     else:
         chains.append(f"[vb]{body_trim}[bv]")
 
-    gap_head = f"[vs]{source}" if needs_input else source
+    gap_head = f"[1:v]setpts=PTS-STARTPTS,{source}" if needs_input else source
     text = f",{text_filter}" if text_filter else ""
     chains.append(
         f"{gap_head},setpts=PTS-STARTPTS,{norm}{_effects(c, spec.effects, c.gap)},{norm},"
@@ -448,4 +466,4 @@ def timeline_graph(plan: BridgePlan, text_filter: str | None = None) -> tuple[li
     # concat reports no frame rate when its inputs' time bases differ, and the
     # encoder then assumed the microsecond time base: 1,000,000 fps.
     chains.append(f"[vjoin]fps={_n(c.fps)}[vcat]")
-    return chains, "vcat", "acat"
+    return Timeline(chains, "vcat", "acat", 2 if needs_input else 1)

@@ -274,6 +274,10 @@ Environment=PYTHONPATH=${BACKEND_DIR}
 ExecStart=${VENV_DIR}/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000
 Restart=on-failure
 RestartSec=5
+# Stopping signals uvicorn alone, which finishes open requests first; the
+# default also signalled their FFmpeg renders and failed every export in flight.
+KillMode=mixed
+TimeoutStopSec=300
 StandardOutput=append:${BACKEND_DIR}/backend.log
 StandardError=append:${BACKEND_DIR}/backend.log
 

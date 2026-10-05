@@ -12,6 +12,7 @@ from typing import Any
 from PIL import ImageFont
 
 from core.logging_config import get_logger
+from hook_transitions.graph import Timeline
 from subtitle_styling.emoji_annotator import annotate_caption_words
 from subtitle_styling.emoji_art import EMOJI, GHOST, colourize
 from subtitle_styling.templates import DEFAULT_STYLE, get_template
@@ -163,24 +164,22 @@ def ass_filter(ass_path: str) -> str:
 
 def burn_filter_args(
     video_filters: list[str],
-    timeline: tuple[list[str], str, str] | None = None,
+    timeline: Timeline | None = None,
 ) -> list[str]:
     """FFmpeg args applying ``video_filters`` to input 0.
 
-    Place them after the source video's ``-i``. ``timeline`` is
-    ``(chains, video_label, audio_label)`` from
+    Place them after the source video's ``-i``. ``timeline`` is from
     ``hook_transitions.graph.timeline_graph``: when given, the filters apply to
     its re-laid output instead of the raw input, and its rebuilt audio is
-    mapped. The watermark is not burned here: ``branding.service`` adds it,
+    mapped; the source must then be given ``timeline.inputs`` times. The watermark is not burned here: ``branding.service`` adds it,
     with the intro and end card, to the finished file.
     """
     chain = ",".join(video_filters)
     if timeline is None:
         return ["-vf", chain]
-    chains, video_in, audio_out = timeline
     return [
-        "-filter_complex", ";".join([*chains, f"[{video_in}]{chain}[v]"]),
-        "-map", "[v]", "-map", f"[{audio_out}]",
+        "-filter_complex", ";".join([*timeline.chains, f"[{timeline.video}]{chain}[v]"]),
+        "-map", "[v]", "-map", f"[{timeline.audio}]",
     ]
 
 
