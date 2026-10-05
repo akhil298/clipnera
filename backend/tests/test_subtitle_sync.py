@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from hook_transitions.graph import Timeline
 from subtitle_styling.ass_generator import TITLE_SECONDS, ass_filter, AssGenerator, ass_time, burn_filter_args
 from subtitle_styling.service import SubtitleStylingService
 
@@ -115,11 +116,16 @@ class TestBurnCommand:
     def test_captions_ride_on_the_bridge_timeline(self, tmp_path) -> None:
         """With a hook transition the captions apply to the re-laid clip and
         its rebuilt audio is mapped, not the input's."""
-        timeline = (["[0:v]null[vcat]", "[0:a]anull[acat]"], "vcat", "acat")
+        timeline = Timeline(["[0:v]null[vcat]", "[0:a]anull[acat]"], "vcat", "acat")
         cmd = self._cmd(tmp_path, timeline=timeline)
         graph = cmd[cmd.index("-filter_complex") + 1]
         assert graph.startswith("[0:v]null[vcat];[0:a]anull[acat];[vcat]ass=captions.ass") and graph.endswith("[v]")
         assert cmd[cmd.index("-map") + 1] == "[v]" and "[acat]" in cmd
+
+    def test_bridge_from_the_clip_reads_it_twice(self, tmp_path) -> None:
+        timeline = Timeline(["[1:v]null[vcat]", "[0:a]anull[acat]"], "vcat", "acat", inputs=2)
+        cmd = self._cmd(tmp_path, timeline=timeline)
+        assert cmd.count("-i") == 2 and cmd.count("clip.mp4") == 2
 
     def test_plain_burn_is_a_simple_filter(self) -> None:
         assert burn_filter_args(["ass=captions.ass"]) == ["-vf", "ass=captions.ass"]

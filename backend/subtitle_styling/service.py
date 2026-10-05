@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from clip_generation.hook import Hook, Span, body_duration, on_output_timeline
-from hook_transitions.graph import BridgePlan, MediaInfo, timeline_graph
+from hook_transitions.graph import BridgePlan, MediaInfo, Timeline, timeline_graph
 from hook_transitions.resolver import TransitionSpec
 from hook_transitions.text import write_bridge_ass
 from core.database import AsyncSessionLocal
@@ -53,6 +53,15 @@ _STYLE_FLAG_FIELDS: dict[str, str] = {
     "emojis_enabled": "emoji",
 }
 _GENERIC_FONT_FAMILIES = {"serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui"}
+
+
+def _ffmpeg_failure(returncode: Optional[int], stderr: bytes) -> str:
+    """Why an FFmpeg run failed, for the error message."""
+    err = stderr.decode("utf-8", errors="ignore").strip()[-500:]
+    if returncode is not None and returncode < 0:
+        # Killed from outside, typically a server restart mid-render.
+        return f"stopped by signal {-returncode}" + (f": {err}" if err else "")
+    return err or f"exit code {returncode}"
 
 
 def _css_color_to_hex(value: Any) -> Optional[str]:
@@ -242,7 +251,7 @@ class SubtitleStylingService:
         hook: Optional[Hook],
         transition: Optional[TransitionSpec],
         work_dir: str,
-    ) -> tuple[Optional[tuple[list[str], str, str]], float]:
+    ) -> tuple[Optional[Timeline], float]:
         """The hook transition's filter timeline and its length; (None, 0) if none applies."""
         plan = BridgePlan.make(transition, hook.duration if hook else None, media)
         if plan is None:
@@ -260,7 +269,7 @@ class SubtitleStylingService:
         enable_watermark: bool,
         duration: float,
         work_dir: str,
-        timeline: Optional[tuple[list[str], str, str]],
+        timeline: Optional[Timeline],
         label: str,
         error_code: str = "BURN_IN_FAILED",
     ) -> str:
@@ -272,8 +281,10 @@ class SubtitleStylingService:
         )
         _, stderr = await proc.communicate()
         if proc.returncode != 0 or not os.path.exists(output_path):
-            err = stderr.decode("utf-8", errors="ignore")[-500:]
-            raise CustomException(message=f"FFmpeg {label} render failed: {err}", code=error_code, status_code=500)
+            raise CustomException(
+                message=f"FFmpeg {label} render failed: {_ffmpeg_failure(proc.returncode, stderr)}",
+                code=error_code, status_code=500,
+            )
         if enable_watermark:
             try:
                 output_path = str(await apply_branding(Path(output_path), Path(work_dir) / f"branded_{Path(output_path).name}"))
@@ -290,14 +301,16 @@ class SubtitleStylingService:
         output_path: str,
         video_filters: list[str],
         duration: float,
-        timeline: Optional[tuple[list[str], str, str]] = None,
+        timeline: Optional[Timeline] = None,
     ) -> list[str]:
         # No -ss: the input is already the trimmed clip. veryfast renders about
         # twice as fast as fast at the same quality. This is the last encode
         # the viewer sees, so CRF 18 keeps it visually lossless against the cut.
+        # Errors only: progress lines would bury the reason for a failure.
+        reads = timeline.inputs if timeline else 1
         return [
-            "ffmpeg", "-y",
-            "-i", video_path,
+            "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
+            *["-i", video_path] * reads,
             *burn_filter_args(video_filters, timeline),
             "-t", str(duration),
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
