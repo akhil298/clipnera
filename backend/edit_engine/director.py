@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from clients.ai import REEL_DIRECTOR_OPUS, get_text_client
+from clients.ai import REEL_DIRECTOR_OPUS, get_text_client, openai_only
 from core.logging_config import get_logger
 from edit_engine.looks import DEFAULT_LOOK, LOOKS
 from edit_engine.music import MOODS
@@ -102,7 +102,8 @@ def footage_log(analysis: dict[str, Any], mode: str, script: str | None, intent:
 
 
 def director_client(is_pro: bool, opus: bool) -> Any:
-    if is_pro and opus:
+    # The Opus flag yields to LLM_ROUTING=openai, which sends every step to OpenAI.
+    if is_pro and opus and not openai_only():
         return get_text_client(choice=REEL_DIRECTOR_OPUS, step="reel_director")
     return get_text_client(is_pro=is_pro, step="reel_director")
 

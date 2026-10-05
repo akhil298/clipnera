@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, NamedTuple
 
 from hook_transitions.catalog import IMPACT_EFFECTS
+from hook_transitions.graphics import Graphic, library
 from hook_transitions.resolver import TransitionSpec
 
 SAMPLE_RATE = 48000
@@ -393,13 +394,35 @@ class Timeline(NamedTuple):
     """A ``[hook][bridge][clip]`` filter graph over the cut file.
 
     The caller appends captions to ``video`` and maps ``audio``. When
-    ``inputs`` is 2, the cut file must be given twice (``-i cut -i cut``).
+    ``inputs`` is 2, the cut file must be given twice (``-i cut -i cut``);
+    ``extra_inputs`` (the bridge graphic and its sound) follow, in order.
     """
 
     chains: list[str]
     video: str
     audio: str
     inputs: int = 1
+    extra_inputs: tuple[str, ...] = ()
+
+
+# The bridge's own sound under a graphic's sound effect, so the two do not fight.
+UNDER_GRAPHIC_VOLUME = 0.4
+
+
+def _graphic_chains(c: _Ctx, graphic: Graphic, video_in: int, base: str, out: str) -> list[str]:
+    """Lay ``graphic`` (packed alpha: colour left, matte right) over ``base``, stretched to the gap.
+
+    Scaled to cover the output, so a square or landscape render gets it cropped, not squashed.
+    """
+    cover = f"scale={c.w}:{c.h}:force_original_aspect_ratio=increase,crop={c.w}:{c.h},setsar=1"
+    stretch = _n(c.gap / max(graphic.duration, 1e-3))
+    return [
+        f"[{video_in}:v]setpts=(PTS-STARTPTS)*{stretch},fps={_n(c.fps)},split=2[gfc][gfm]",
+        f"[gfc]crop=iw/2:ih:0:0,{cover},format=yuv420p[gfcol]",
+        f"[gfm]crop=iw/2:ih:iw/2:0,{cover},format=gray[gfmat]",
+        f"[gfcol][gfmat]alphamerge,trim=duration={_n(c.gap)},setpts=PTS-STARTPTS[gfx]",
+        f"[{base}][gfx]overlay=0:0:eof_action=pass:format=auto,format=yuv420p[{out}]",
+    ]
 
 
 def timeline_graph(plan: BridgePlan, text_filter: str | None = None) -> Timeline:
@@ -435,11 +458,20 @@ def timeline_graph(plan: BridgePlan, text_filter: str | None = None) -> Timeline
         chains.append(f"[vb]{body_trim}[bv]")
 
     gap_head = f"[1:v]setpts=PTS-STARTPTS,{source}" if needs_input else source
-    text = f",{text_filter}" if text_filter else ""
+    graphic = library().get(spec.graphic) if spec.graphic else None
+    reads = 2 if needs_input else 1
+    extra_inputs: list[str] = []
     chains.append(
         f"{gap_head},setpts=PTS-STARTPTS,{norm}{_effects(c, spec.effects, c.gap)},{norm},"
-        f"trim=duration={_n(c.gap)},setpts=PTS-STARTPTS{text}[gv]"
+        f"trim=duration={_n(c.gap)},setpts=PTS-STARTPTS[gv0]"
     )
+    gap_video = "gv0"
+    if graphic is not None:
+        chains.extend(_graphic_chains(c, graphic, reads, gap_video, "gv1"))
+        extra_inputs.append(str(graphic.video))
+        gap_video = "gv1"
+    # The bridge line is drawn last, above any graphic, so it stays readable.
+    chains.append(f"[{gap_video}]{text_filter or 'null'}[gv]")
 
     # --- audio ---
     hook_audio: str | None = None
@@ -454,7 +486,17 @@ def timeline_graph(plan: BridgePlan, text_filter: str | None = None) -> Timeline
         chains.append(f"{_silence(c, c.teaser, None)},{AUDIO_NORM}[ta]")
         chains.append(f"{_silence(c, c.body, None)},{AUDIO_NORM}[ba0]")
 
-    chains.append(_sound(c, spec.sound, c.gap, hook_audio, "ga"))
+    if graphic is not None and graphic.sfx is not None:
+        sfx_in = reads + len(extra_inputs)
+        extra_inputs.append(str(graphic.sfx))
+        chains.append(_sound(c, spec.sound, c.gap, hook_audio, "ga0"))
+        chains.append(
+            f"[{sfx_in}:a]asetpts=PTS-STARTPTS,{AUDIO_NORM},apad=whole_dur={_n(c.gap)},atrim=duration={_n(c.gap)}[gsfx]"
+        )
+        chains.append(f"[ga0]volume={UNDER_GRAPHIC_VOLUME}[ga1]")
+        chains.append("[ga1][gsfx]amix=inputs=2:duration=first:normalize=0[ga]")
+    else:
+        chains.append(_sound(c, spec.sound, c.gap, hook_audio, "ga"))
 
     if spec.impact_sound:
         chains.append(_sound(c, spec.impact_sound, min(MAX_IMPACT_SOUND_SECONDS, c.body), None, "isfx"))
@@ -466,4 +508,4 @@ def timeline_graph(plan: BridgePlan, text_filter: str | None = None) -> Timeline
     # concat reports no frame rate when its inputs' time bases differ, and the
     # encoder then assumed the microsecond time base: 1,000,000 fps.
     chains.append(f"[vjoin]fps={_n(c.fps)}[vcat]")
-    return Timeline(chains, "vcat", "acat", 2 if needs_input else 1)
+    return Timeline(chains, "vcat", "acat", reads, tuple(extra_inputs))

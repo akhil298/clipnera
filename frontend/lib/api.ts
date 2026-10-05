@@ -215,6 +215,10 @@ export interface BackendClip {
   user_id: string;
   title: string;
   description: string | null;
+  /** The Instagram caption to post with the clip; null on clips made before it existed. */
+  social_caption: string | null;
+  /** 3-5 hashtags to post with the clip. */
+  hashtags: string[];
   start_time: number;
   end_time: number;
   duration_seconds: number;
@@ -477,7 +481,7 @@ export function mapBackendClip(clip: BackendClip): ViralClip {
     autoZoom: { enabled: false, frequency: 'subtle', scale: 1.1 },
     autoReframe: { mode: 'center', speakerCropX: 0.5, speakerSmoothing: 0.5 },
     socialOptimization: {
-      hashtags: [],
+      hashtags: clip.hashtags ?? [],
       optimizedHooks: [],
       targetPlatforms: ['tiktok', 'instagram', 'youtube'],
       postStatus: 'draft',

@@ -271,6 +271,9 @@ User=$(id -un)
 WorkingDirectory=${BACKEND_DIR}
 Environment=PATH=${HOME}/.deno/bin:/usr/local/bin:/usr/bin:/bin
 Environment=PYTHONPATH=${BACKEND_DIR}
+# glibc gives every thread its own malloc arena and rarely returns them; with
+# FFmpeg, ONNX and asyncio's thread pool that held hundreds of MB idle.
+Environment=MALLOC_ARENA_MAX=2
 ExecStart=${VENV_DIR}/bin/python -m uvicorn main:app --host 0.0.0.0 --port 8000
 Restart=on-failure
 RestartSec=5
@@ -323,6 +326,44 @@ UNIT
     sudo systemctl restart "${PUBLISHER}"
 else
     echo "Skipping ${PUBLISHER}: SOCIAL_TOKEN_ENCRYPTION_KEYS is not set." >&2
+fi
+
+# The job worker (python -m jobs.worker) runs pipelines, renders and other
+# background jobs outside the API once JOB_QUEUE_BACKEND=postgres is set (after
+# `alembic upgrade head` has created background_jobs).
+JOBS=clipnera-jobs
+if grep -qsE '^JOB_QUEUE_BACKEND="?postgres"?\s*$' .env .env.production; then
+    sudo tee "/etc/systemd/system/${JOBS}.service" >/dev/null <<UNIT
+[Unit]
+Description=Clipnera background job worker
+After=network-online.target ${SERVICE}.service
+Wants=network-online.target
+
+[Service]
+User=$(id -un)
+WorkingDirectory=${BACKEND_DIR}
+Environment=PATH=${HOME}/.deno/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONPATH=${BACKEND_DIR}
+Environment=MALLOC_ARENA_MAX=2
+ExecStart=${VENV_DIR}/bin/python -m jobs.worker
+Restart=on-failure
+RestartSec=5
+# The worker hands its running jobs back to the queue on SIGTERM; the next
+# start resumes each pipeline from its last finished step.
+KillMode=mixed
+TimeoutStopSec=60
+StandardOutput=append:${BACKEND_DIR}/jobs.log
+StandardError=append:${BACKEND_DIR}/jobs.log
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    sudo systemctl daemon-reload
+    sudo systemctl enable --quiet "${JOBS}"
+    sudo systemctl restart "${JOBS}"
+elif systemctl list-unit-files "${JOBS}.service" >/dev/null 2>&1; then
+    # Back on in-process jobs: a leftover worker would sit idle, so stop it.
+    sudo systemctl disable --now --quiet "${JOBS}" 2>/dev/null || true
 fi
 
 for _ in {1..60}; do

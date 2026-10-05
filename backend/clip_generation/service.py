@@ -37,6 +37,7 @@ from core.config import get_settings
 from core.database import AsyncSessionLocal
 from core.exceptions import CustomException
 from core.logging_config import get_logger
+from transcription.language import spoken_language
 from creator_intro.service import ExportIntro, export_intro
 from feedback.model import ClipEventKind
 from feedback.service import record_clip_event
@@ -854,7 +855,9 @@ class ClipService:
         if final_clips is None:
             if progress_callback:
                 await self._notify(progress_callback, "Generating clip metadata...", 75)
-            final_clips = await self._content_ai.generate_metadata_for_clips(scored_highlights)
+            final_clips = await self._content_ai.generate_metadata_for_clips(
+                scored_highlights, spoken_language(transcript_segments or []),
+            )
 
         # Fallback: if no AI highlights were generated, create clips from transcript segments
         if not final_clips and transcript_segments:
@@ -1167,6 +1170,8 @@ class ClipService:
                     user_id=user_id,
                     title=_sanitize_str(str(clip.get("title") or f"Clip {clip_id}")),
                     description=_sanitize_str(clip.get("description")),
+                    social_caption=_sanitize_str(clip.get("social_caption")),
+                    hashtags=_json_dumps(clip.get("hashtags") or []),
                     start_time=start,
                     end_time=end,
                     duration_seconds=float(clip.get("duration", end - start)),
@@ -1688,6 +1693,9 @@ class ClipService:
             "user_id": clip.user_id,
             "title": clip.title,
             "description": clip.description,
+            # The Instagram caption and hashtags to post with the clip.
+            "social_caption": clip.social_caption,
+            "hashtags": self._loads(clip.hashtags, []),
             "start_time": clip.start_time,
             "end_time": clip.end_time,
             "duration_seconds": clip.duration_seconds,

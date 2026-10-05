@@ -20,6 +20,8 @@ fi
 
 export PATH="${HOME}/.deno/bin:${PATH}"
 export PYTHONPATH="${BACKEND_DIR}"
+# glibc gives every thread its own malloc arena and rarely returns them.
+export MALLOC_ARENA_MAX="${MALLOC_ARENA_MAX:-2}"
 
 if ! command -v deno >/dev/null 2>&1; then
   echo "Warning: deno was not found on PATH; yt-dlp JavaScript solving may fail." >&2

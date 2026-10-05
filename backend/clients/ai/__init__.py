@@ -59,7 +59,7 @@ GROQ_SMALL = ModelChoice("groq", "openai/gpt-oss-20b")
 GROQ_LARGE = ModelChoice("groq", "openai/gpt-oss-120b")
 # Pro runs on the deployment's OpenAI model (OPENAI_MODEL at OPENAI_ENDPOINT).
 OPENAI_PRO = ModelChoice("openai")
-OPUS_MEDIUM = ModelChoice("anthropic", "claude-opus-5-5", "medium")
+OPUS_HIGH = ModelChoice("anthropic", "claude-opus-5-5", "high")
 
 # (free, pro) per step. Pro pays for OpenAI wherever the step needs judgement or
 # writes what the viewer reads; the free tier runs entirely on Groq, and so do
@@ -71,6 +71,8 @@ STEP_MODELS: dict[str, tuple[ModelChoice, ModelChoice]] = {
     "highlight_detection": (GROQ_LARGE, OPENAI_PRO),
     "director": (GROQ_LARGE, OPENAI_PRO),
     "titles": (GROQ_SMALL, OPENAI_PRO),
+    # The Instagram caption and hashtags posted with each clip: what the viewer reads.
+    "social_copy": (GROQ_LARGE, OPENAI_PRO),
     # Spelling words in Roman script needs no judgement; the large open model is plenty.
     "transliteration": (GROQ_SMALL, GROQ_LARGE),
     # Where to cut away and what to search for: editorial, but low stakes per call.
@@ -86,7 +88,7 @@ STEP_MODELS: dict[str, tuple[ModelChoice, ModelChoice]] = {
     "intro_copy": (GROQ_SMALL, OPENAI_PRO),
 }
 
-REEL_DIRECTOR_OPUS = OPUS_MEDIUM
+REEL_DIRECTOR_OPUS = OPUS_HIGH
 
 
 def _configured(choice: ModelChoice) -> ModelChoice:
@@ -101,8 +103,15 @@ def _configured(choice: ModelChoice) -> ModelChoice:
     return ModelChoice(choice.provider, (getattr(settings, model_setting, "") or fallback).strip(), effort)
 
 
+def openai_only() -> bool:
+    """Whether LLM_ROUTING sends every text step to OpenAI, whatever the plan."""
+    return (getattr(get_settings(), "LLM_ROUTING", "tiered") or "tiered").strip().lower() == "openai"
+
+
 def _step_choices(step: str | None) -> tuple[ModelChoice, ModelChoice]:
     """(free, pro) for a step. Unlisted steps follow the tier at the configured model."""
+    if openai_only():
+        return OPENAI_PRO, OPENAI_PRO
     return STEP_MODELS.get(step or "", (ModelChoice(FREE_TEXT_PROVIDER), ModelChoice(PRO_TEXT_PROVIDER)))
 
 
@@ -111,8 +120,8 @@ def _on_provider(provider: str, step: str | None) -> ModelChoice:
     for choice in _step_choices(step):
         if choice.provider == provider:
             return choice
-    # No model was chosen for this step on this provider; on Claude keep the thinking cheap.
-    return ModelChoice(provider, effort="low" if provider == "anthropic" else None)
+    # No model was chosen for this step on this provider: the configured model and effort.
+    return ModelChoice(provider)
 
 
 def _pinned_provider() -> str | None:
@@ -201,6 +210,7 @@ def get_text_client(
 
 __all__ = [
     "BaseAI",
+    "openai_only",
     "provider_for_tier",
     "model_for_step",
     "ModelChoice",

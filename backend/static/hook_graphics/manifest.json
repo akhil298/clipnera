@@ -1,0 +1,186 @@
+{
+  "version": 1,
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "duration": 1.0,
+  "layout": "packed_alpha_side_by_side",
+  "graphics": [
+    {
+      "id": "light_leak",
+      "name": "Light Leak",
+      "file": "light_leak.mp4",
+      "sfx": "sfx/shimmer_swell.wav",
+      "moods": [
+        "story",
+        "emotional",
+        "general"
+      ]
+    },
+    {
+      "id": "flash_burst",
+      "name": "Flash Burst",
+      "file": "flash_burst.mp4",
+      "sfx": "sfx/flash_hit.wav",
+      "moods": [
+        "shock",
+        "hype",
+        "general"
+      ]
+    },
+    {
+      "id": "shockwave",
+      "name": "Shockwave",
+      "file": "shockwave.mp4",
+      "sfx": "sfx/boom_wave.wav",
+      "moods": [
+        "shock",
+        "hype",
+        "money"
+      ]
+    },
+    {
+      "id": "speed_lines",
+      "name": "Speed Lines",
+      "file": "speed_lines.mp4",
+      "sfx": "sfx/speed_whoosh.wav",
+      "moods": [
+        "hype",
+        "sports",
+        "gaming"
+      ]
+    },
+    {
+      "id": "glitch_bars",
+      "name": "Glitch Bars",
+      "file": "glitch_bars.mp4",
+      "sfx": "sfx/glitch_stutter.wav",
+      "moods": [
+        "tech",
+        "gaming",
+        "shock"
+      ]
+    },
+    {
+      "id": "diagonal_swipe",
+      "name": "Diagonal Swipe",
+      "file": "diagonal_swipe.mp4",
+      "sfx": "sfx/swipe_air.wav",
+      "moods": [
+        "general",
+        "educational",
+        "news"
+      ]
+    },
+    {
+      "id": "particle_burst",
+      "name": "Particle Burst",
+      "file": "particle_burst.mp4",
+      "sfx": "sfx/sparkle_burst.wav",
+      "moods": [
+        "hype",
+        "money",
+        "funny"
+      ]
+    },
+    {
+      "id": "lens_flare",
+      "name": "Lens Flare",
+      "file": "lens_flare.mp4",
+      "sfx": "sfx/flare_swoosh.wav",
+      "moods": [
+        "story",
+        "music",
+        "general"
+      ]
+    },
+    {
+      "id": "bokeh",
+      "name": "Bokeh Drift",
+      "file": "bokeh.mp4",
+      "sfx": "sfx/soft_chime.wav",
+      "moods": [
+        "emotional",
+        "story",
+        "food"
+      ]
+    },
+    {
+      "id": "film_burn",
+      "name": "Film Burn",
+      "file": "film_burn.mp4",
+      "sfx": "sfx/burn_crackle.wav",
+      "moods": [
+        "story",
+        "music",
+        "emotional"
+      ]
+    },
+    {
+      "id": "neon_frame",
+      "name": "Neon Frame",
+      "file": "neon_frame.mp4",
+      "sfx": "sfx/neon_buzz.wav",
+      "moods": [
+        "tech",
+        "music",
+        "gaming"
+      ]
+    },
+    {
+      "id": "zoom_tunnel",
+      "name": "Zoom Tunnel",
+      "file": "zoom_tunnel.mp4",
+      "sfx": "sfx/tunnel_rush.wav",
+      "moods": [
+        "question",
+        "educational",
+        "hype"
+      ]
+    },
+    {
+      "id": "vhs_scan",
+      "name": "VHS Scan",
+      "file": "vhs_scan.mp4",
+      "sfx": "sfx/tape_rewind.wav",
+      "moods": [
+        "funny",
+        "story",
+        "podcast"
+      ]
+    },
+    {
+      "id": "confetti",
+      "name": "Confetti Pop",
+      "file": "confetti.mp4",
+      "sfx": "sfx/pop_party.wav",
+      "moods": [
+        "funny",
+        "hype",
+        "money"
+      ]
+    },
+    {
+      "id": "lightning",
+      "name": "Lightning",
+      "file": "lightning.mp4",
+      "sfx": "sfx/thunder_zap.wav",
+      "moods": [
+        "shock",
+        "sports",
+        "hype"
+      ]
+    },
+    {
+      "id": "iris_wipe",
+      "name": "Iris Wipe",
+      "file": "iris_wipe.mp4",
+      "sfx": "sfx/iris_thump.wav",
+      "moods": [
+        "question",
+        "podcast",
+        "general"
+      ]
+    }
+  ]
+}

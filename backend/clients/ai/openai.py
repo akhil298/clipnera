@@ -29,6 +29,21 @@ CONTEXT_TOKENS = 128_000
 DEFAULT_MAX_TOKENS = 4096
 
 
+# Model families that take ``reasoning_effort``; their "-chat" variants do not.
+_REASONING_MODEL = re.compile(r"^(o\d|gpt-5)(?!.*chat)")
+# Output tokens added on top of the reply a caller asked for, so a reasoning
+# model can think at its effort and still answer instead of returning nothing.
+REASONING_ALLOWANCE = {"minimal": 1024, "low": 2048, "medium": 8192, "high": 16384, "xhigh": 32768}
+
+
+def reasoning_effort(model: str) -> str | None:
+    """OPENAI_REASONING_EFFORT for a reasoning model; None for any other model."""
+    if not _REASONING_MODEL.match((model or "").strip().lower()):
+        return None
+    effort = (getattr(settings, "OPENAI_REASONING_EFFORT", "") or "").strip().lower()
+    return effort if effort in REASONING_ALLOWANCE else None
+
+
 def input_token_budget(max_output_tokens: int) -> int:
     """Largest prompt we may send, given the reply we have asked for."""
     return CONTEXT_TOKENS - max_output_tokens - TOKEN_ESTIMATE_SAFETY_MARGIN
@@ -176,6 +191,13 @@ class OpenAI(BaseAI):
     def _build_payload(self, messages: list[dict[str, Any]], stream: bool, **kwargs: Any) -> dict[str, Any]:
         # ``max_tokens`` is the callers' name for the cap; current models take it as ``max_completion_tokens``.
         max_tokens = int(kwargs.pop("max_tokens", None) or DEFAULT_MAX_TOKENS)
+        effort = kwargs.pop("reasoning_effort", None) or reasoning_effort(self.model)
+        if effort:
+            # Reasoning models accept only their default sampling.
+            kwargs.pop("temperature", None)
+            kwargs.pop("top_p", None)
+            kwargs["reasoning_effort"] = effort
+            max_tokens += REASONING_ALLOWANCE.get(effort, 0)
         return {
             "model": self.model,
             "messages": messages,

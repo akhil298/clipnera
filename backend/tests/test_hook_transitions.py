@@ -166,7 +166,7 @@ class TestTimeline:
 
     def test_graph_concats_three_segments(self):
         spec = resolve_transition({"mode": "preset", "preset_id": "viral_rewind"}, ClipContext("c"))
-        chains, video, audio, inputs = timeline_graph(BridgePlan.make(spec, 2.0, MEDIA), "ass=bridge.ass")
+        chains, video, audio, inputs = timeline_graph(BridgePlan.make(spec, 2.0, MEDIA), "ass=bridge.ass")[:4]
         graph = ";".join(chains)
         assert (video, audio, inputs) == ("vcat", "acat", 2)
         assert "concat=n=3:v=1:a=1[vjoin][acat]" in graph and "[vjoin]fps=30[vcat]" in graph
@@ -185,9 +185,10 @@ class TestTimeline:
         assert "[0:v]setpts=PTS-STARTPTS,split=2[vt][vb]" in graph and "[1:v]" in graph
 
     def test_generated_bridge_reads_once(self):
-        spec = resolve_transition({"mode": "custom", "source": "black_card"}, ClipContext("c"))
+        spec = resolve_transition({"mode": "custom", "source": "black_card", "graphic": "none"}, ClipContext("c"))
         timeline = timeline_graph(BridgePlan.make(spec, 2.0, MEDIA))
         assert timeline.inputs == 1 and "[1:v]" not in ";".join(timeline.chains)
+        assert timeline.extra_inputs == ()
 
     def test_silent_clip_gets_generated_audio(self):
         silent = MediaInfo(540, 960, 25.0, 8.0, has_audio=False)
@@ -225,10 +226,12 @@ class TestRender:
              "impact": "punch_zoom", "impact_sound": "boom", "text_id": "none", "duration": 1.0},
             ClipContext("c"),
         )
-        chains, video, audio, inputs = timeline_graph(BridgePlan.make(spec, 1.5, media))
+        timeline = timeline_graph(BridgePlan.make(spec, 1.5, media))
+        chains, video, audio, inputs = timeline[:4]
         out = tmp_path / "out.mp4"
         subprocess.run(
-            ["ffmpeg", "-y", "-loglevel", "error", *["-i", str(src)] * inputs, "-filter_complex", ";".join(chains),
+            ["ffmpeg", "-y", "-loglevel", "error", *["-i", str(src)] * inputs,
+             *[a for extra in timeline.extra_inputs for a in ("-i", extra)], "-filter_complex", ";".join(chains),
              "-map", f"[{video}]", "-map", f"[{audio}]", "-c:v", "libx264", "-preset", "ultrafast", str(out)],
             check=True,
         )
@@ -250,10 +253,12 @@ class TestRender:
         )
         spec = resolve_transition({"mode": "custom", "source": "blur_card", "sound": "whoosh", "text_id": "none",
                                    "duration": 1.0}, ClipContext("c"))
-        chains, video, audio, inputs = timeline_graph(BridgePlan.make(spec, 1.5, MediaInfo(320, 568, 30.0, 5.0, True)))
+        timeline = timeline_graph(BridgePlan.make(spec, 1.5, MediaInfo(320, 568, 30.0, 5.0, True)))
+        chains, video, audio, inputs = timeline[:4]
         out = tmp_path / "out.mp4"
         subprocess.run(
-            ["ffmpeg", "-y", "-loglevel", "error", *["-i", str(src)] * inputs, "-filter_complex", ";".join(chains),
+            ["ffmpeg", "-y", "-loglevel", "error", *["-i", str(src)] * inputs,
+             *[a for extra in timeline.extra_inputs for a in ("-i", extra)], "-filter_complex", ";".join(chains),
              "-map", f"[{video}]", "-map", f"[{audio}]", "-c:v", "libx264", "-preset", "ultrafast", str(out)],
             check=True,
         )
@@ -262,3 +267,66 @@ class TestRender:
              "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", str(out)],
         )
         assert int(frames) == pytest.approx(6.0 * 30, abs=2)
+
+
+
+class TestBridgeGraphics:
+    """Motion graphics from static/hook_graphics laid over the bridge, each with its sound."""
+
+    def test_library_has_every_rendered_graphic_with_its_sound(self):
+        from hook_transitions.graphics import library
+
+        graphics = library()
+        assert len(graphics) >= 10
+        for graphic in graphics.values():
+            assert graphic.video.exists() and graphic.sfx is not None and graphic.sfx.exists()
+
+    def test_auto_picks_a_graphic_and_varies_it_across_clips(self):
+        picks = {resolve_transition(None, ClipContext(f"clip-{i}", "podcast_interview", "Why?")).graphic for i in range(40)}
+        assert None not in picks
+        assert len(picks) >= 6
+
+    def test_a_clip_keeps_its_graphic_on_re_export(self):
+        first = resolve_transition(None, ClipContext("same", "comedy", "lol"))
+        assert resolve_transition(None, ClipContext("same", "comedy", "lol")).graphic == first.graphic
+
+    def test_graphic_can_be_chosen_or_turned_off(self):
+        assert resolve_transition({"mode": "auto", "graphic": "lightning"}, ClipContext("c")).graphic == "lightning"
+        assert resolve_transition({"mode": "auto", "graphic": "none"}, ClipContext("c")).graphic is None
+        with pytest.raises(ValueError):
+            resolve_transition({"mode": "auto", "graphic": "not_a_graphic"}, ClipContext("c"))
+
+    def test_graph_overlays_the_graphic_under_the_bridge_text_and_mixes_its_sound(self):
+        spec = resolve_transition({"mode": "auto", "graphic": "shockwave"}, ClipContext("c"))
+        timeline = timeline_graph(BridgePlan.make(spec, 2.0, MEDIA), "ass=bridge.ass")
+        graph = ";".join(timeline.chains)
+        assert timeline.extra_inputs[0].endswith("shockwave.mp4") and timeline.extra_inputs[1].endswith(".wav")
+        assert "alphamerge" in graph and "[gv1]ass=bridge.ass[gv]" in graph
+        assert "[ga1][gsfx]amix" in graph
+
+    @pytest.mark.parametrize("ratio", [(320, 568), (568, 320)])
+    def test_bridge_with_a_graphic_renders_at_the_planned_length(self, tmp_path, ratio):
+        width, height = ratio
+        src = tmp_path / "cut.mp4"
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", f"testsrc2=size={width}x{height}:rate=30:duration=5",
+             "-f", "lavfi", "-i", "sine=frequency=330:duration=5", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+             "-c:a", "aac", "-shortest", str(src)],
+            check=True,
+        )
+        spec = resolve_transition({"mode": "custom", "source": "freeze_frame", "graphic": "particle_burst",
+                                   "text_id": "none", "duration": 0.8}, ClipContext("c"))
+        timeline = timeline_graph(BridgePlan.make(spec, 1.5, MediaInfo(width, height, 30.0, 5.0, True)))
+        out = tmp_path / "out.mp4"
+        subprocess.run(
+            ["ffmpeg", "-y", "-loglevel", "error", *["-i", str(src)] * timeline.inputs,
+             *[a for extra in timeline.extra_inputs for a in ("-i", extra)],
+             "-filter_complex", ";".join(timeline.chains), "-map", f"[{timeline.video}]", "-map", f"[{timeline.audio}]",
+             "-c:v", "libx264", "-preset", "ultrafast", str(out)],
+            check=True,
+        )
+        frames = subprocess.check_output(
+            ["ffprobe", "-v", "error", "-select_streams", "v", "-count_frames",
+             "-show_entries", "stream=nb_read_frames", "-of", "csv=p=0", str(out)],
+        )
+        assert int(frames) == pytest.approx(5.8 * 30, abs=2)

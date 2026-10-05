@@ -1,9 +1,9 @@
 """Background jobs: one interface, two backends.
 
 ``inprocess`` (the default) runs a job as a task in the API process, which is
-how pipelines have always run. ``sqs`` sends it to an SQS queue that
-``python -m jobs.worker`` processes consume, so the API can restart, and
-workers can scale, without losing or duplicating runs.
+how pipelines have always run. ``postgres`` (see ``jobs.postgres``) and
+``sqs`` queue it for ``python -m jobs.worker`` processes, so the API can
+restart, and workers can scale, without losing or duplicating runs.
 
 A job is a ``kind`` plus a JSON-serialisable ``payload``; its handler is
 registered with :func:`handler` and must be safe to run again after a crash
@@ -103,14 +103,18 @@ _queue: JobQueue | None = None
 
 def uses_workers() -> bool:
     """True when jobs run in separate worker processes rather than in the API."""
-    return get_settings().JOB_QUEUE_BACKEND == "sqs"
+    return get_settings().JOB_QUEUE_BACKEND in ("postgres", "sqs")
 
 
 def get_queue() -> JobQueue:
     global _queue
     if _queue is None:
         settings = get_settings()
-        if uses_workers():
+        if settings.JOB_QUEUE_BACKEND == "postgres":
+            from jobs.postgres import PostgresQueue
+
+            _queue = PostgresQueue()
+        elif uses_workers():
             if not settings.SQS_JOBS_QUEUE_URL:
                 raise RuntimeError("JOB_QUEUE_BACKEND=sqs needs SQS_JOBS_QUEUE_URL")
             _queue = SqsQueue(settings.SQS_JOBS_QUEUE_URL, sqs_client())

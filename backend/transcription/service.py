@@ -21,6 +21,7 @@ from core.config import get_settings
 from core.exceptions import CustomException
 from core.logging_config import get_logger
 from transcription.groq_whisper import GroqWhisperTranscriber
+from transcription.diarize_worker import diarize
 
 log = get_logger(__name__)
 
@@ -51,10 +52,9 @@ class WhisperXTranscriptionService(TranscriptionService):
             audio_path = await TranscriptionChunker.ensure_wav_audio(input_path)
 
         duration = await asyncio.to_thread(TranscriptionChunker.estimate_duration, audio_path)
-        diarize_fn = await asyncio.to_thread(self._try_load_diarizer) if request.diarization else None
         # Speaker turns are computed over the whole file once, alongside the
         # transcription, so labels agree from the first minute to the last.
-        turns_task = asyncio.create_task(asyncio.to_thread(diarize_fn, audio_path)) if diarize_fn else None
+        turns_task = asyncio.create_task(diarize(audio_path)) if request.diarization else None
 
         hosted = await self._transcribe_hosted(request, audio_path, duration, progress_callback)
         if hosted is not None:
@@ -384,33 +384,6 @@ class WhisperXTranscriptionService(TranscriptionService):
         """
         segments_iter, info = model.transcribe(audio_path, **kwargs)
         return list(segments_iter), info
-
-    def _try_load_diarizer(self) -> Callable[[str], list[dict]] | None:
-        """A function returning speaker turns for an audio file, or None if unavailable."""
-        try:
-            from whisperx.diarize import DiarizationPipeline
-            hf_token = (get_settings().HF_TOKEN or "").strip()
-            if not hf_token:
-                log.warning("HF_TOKEN not set; diarization disabled")
-                return None
-            diarize_model = DiarizationPipeline(use_auth_token=hf_token, device="cpu")
-            return lambda audio_path: self._diarization_turns(diarize_model, audio_path)
-        except Exception as exc:
-            log.warning(f"Could not load diarization model: {exc}")
-            return None
-
-    @staticmethod
-    def _diarization_turns(diarize_model: Any, audio_path: str) -> list[dict]:
-        import librosa
-        audio, _ = librosa.load(audio_path, sr=16000)
-        # No min_speakers: forcing two split every solo talker into two people.
-        turns = diarize_model(audio, max_speakers=6)
-        if hasattr(turns, "to_dict"):
-            turns = turns.to_dict("records")
-        return [
-            {"start": float(t.get("start", 0.0)), "end": float(t.get("end", 0.0)), "speaker": str(t.get("speaker"))}
-            for t in (turns or [])
-        ]
 
 
 def assign_speakers(segments: list[dict], turns: list[dict]) -> None:

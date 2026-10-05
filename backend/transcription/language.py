@@ -202,3 +202,37 @@ def romanize_word(word: str) -> str:
         text = re.sub(r"ee$", "i", text)
         text = re.sub(r"oo$", "u", text)
     return text
+
+
+# Share of a transcript's words in an Indic script (counting romanised words by
+# their original spelling) above which the speech is taken to be that language.
+INDIC_SPEECH_SHARE = 0.1
+
+
+def spoken_language(segments: list, reported: str | None = None) -> str:
+    """ISO code of the speech in ``segments``: "te" or "hi" when their script shows, else ``reported``.
+
+    Whisper often labels Tenglish or Hinglish as English, and romanised
+    captions hide the script, so each word's ``native`` spelling (kept by the
+    romaniser) is counted too.
+    """
+    code = normalize_language(reported)
+    if code in ("te", "hi"):
+        return code
+    words: list[str] = []
+    for segment in segments:
+        segment_words = segment.get("words") if isinstance(segment, dict) else getattr(segment, "words", None)
+        if segment_words:
+            words.extend(str(w.get("native") or w.get("word") or "") for w in segment_words if isinstance(w, dict))
+        else:
+            text = segment.get("text", "") if isinstance(segment, dict) else getattr(segment, "text", "")
+            words.extend(str(text).split())
+    indic = [word for word in words if is_indic(word)]
+    if words and len(indic) >= INDIC_SPEECH_SHARE * len(words):
+        return "te" if script_of(" ".join(indic)) == "telugu" else "hi"
+    return code or "en"
+
+
+def romanize_text(text: str) -> str:
+    """``text`` with every Hindi or Telugu-script word spelled in Roman script, spacing kept."""
+    return re.sub(r"\S+", lambda match: romanize_word(match.group()) if is_indic(match.group()) else match.group(), text)

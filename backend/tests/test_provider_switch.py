@@ -375,3 +375,29 @@ class TestSchemas:
         assert moment["additionalProperties"] is False
         for field in ("start_time", "end_time", "title", "score", "scores"):
             assert field in moment["required"]
+
+
+class TestOpenAIReasoningEffort:
+    """Only reasoning models get ``reasoning_effort``; others keep their request unchanged."""
+
+    def _payload(self, model: str, **kwargs):
+        from clients.ai.openai import OpenAI
+
+        client = OpenAI.__new__(OpenAI)
+        client.model = model
+        return client._build_payload([{"role": "user", "content": "hi"}], stream=False, **kwargs)
+
+    def test_non_reasoning_model_is_left_alone(self):
+        payload = self._payload("gpt-4.1-mini", max_tokens=500, temperature=0.7)
+        assert "reasoning_effort" not in payload
+        assert payload["temperature"] == 0.7
+        assert payload["max_completion_tokens"] == 500
+
+    def test_reasoning_model_thinks_at_high_effort_with_room_to_answer(self):
+        payload = self._payload("gpt-5-mini", max_tokens=500, temperature=0.7)
+        assert payload["reasoning_effort"] == "high"
+        assert "temperature" not in payload
+        assert payload["max_completion_tokens"] > 500
+
+    def test_chat_variant_gets_no_effort(self):
+        assert "reasoning_effort" not in self._payload("gpt-5-chat-latest")

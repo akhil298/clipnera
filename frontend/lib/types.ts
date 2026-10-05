@@ -224,6 +224,8 @@ export interface HookTransitionConfig {
   custom_text?: string | null;
   text_style?: string | null;
   duration?: number | null;
+  /** A motion-graphic id from the catalog's `graphics`, "auto" (or unset) for a random one, or "none". */
+  graphic?: string | null;
 }
 
 /** Mirrors backend HookTransitionApplied: the concrete transition a render used. */
@@ -237,6 +239,8 @@ export interface HookTransitionApplied {
   text: string | null;
   text_style: string;
   duration: number;
+  /** The motion graphic laid over the bridge, with its sound; null for none. */
+  graphic: string | null;
 }
 
 export interface HookTransitionPart {
@@ -278,6 +282,7 @@ export interface HookTransitionCatalog {
   phrases: HookTransitionPhrase[];
   groups: string[];
   presets: HookTransitionPreset[];
+  graphics: HookTransitionPart[];
   limits: {
     min_duration: number;
     max_duration: number;

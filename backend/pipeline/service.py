@@ -21,6 +21,7 @@ from audio.enhancement.service import AudioService
 from audio.enhancement.schema import AudioEnhanceRequest
 from transcription.service import WhisperXTranscriptionService
 from transcription.schema import TranscriptionRequest
+from transcription.language import spoken_language
 from transcription.transliterate import CAPTION_SCRIPTS, romanize_transcript, wants_roman
 from clients.ai import get_text_client
 from broll.cutaways import plan_project_broll
@@ -147,6 +148,9 @@ class PipelineOrchestrator:
         self._background_tasks: set[asyncio.Task] = set()
         # Cap set once the source's length is known, at the start of run().
         self._budget = RunBudget(cap_usd=0.0)
+        # Loudness cues and the visual timeline need no transcript, so they
+        # start beside transcription and topic research picks them up.
+        self._media_signals: asyncio.Task | None = None
 
     def cancel(self) -> None:
         self._cancel = True
@@ -292,6 +296,8 @@ class PipelineOrchestrator:
             await self._mark_pipeline_failed(str(exc))
             raise
         finally:
+            if self._media_signals is not None and not self._media_signals.done():
+                self._media_signals.cancel()
             # Cut clips are deleted as soon as they reach S3, and later renders
             # fetch them back from there. This sweeps whatever is left (cuts
             # that failed to upload, aborted renders) on every outcome.
@@ -564,6 +570,7 @@ class PipelineOrchestrator:
 
         log.info("Starting transcription", extra={"project_id": self.project_id, "video_path": video_path})
         self._notify("Transcribing audio...", 10)
+        await self._prefetch_media_signals(video_path)
 
         audio_result = context.get(PipelineStepType.AUDIO_EXTRACTION.value, {})
         noise_result = context.get(PipelineStepType.AI_NOISE_CANCELLATION.value, {})
@@ -617,6 +624,21 @@ class PipelineOrchestrator:
         self._notify("Transcription complete", 100)
         return {"transcription_result": result}
 
+    async def _prefetch_media_signals(self, video_path: str) -> None:
+        """Start the Map pass's non-transcript inputs now, when topic research will need them."""
+        step = PipelineStepType.TOPIC_RESEARCH
+        if step not in self.selected_steps or self._step_statuses.get(step.value) == "completed":
+            return
+        from content_intelligence.service import media_signals
+        from video_processor.ffmpeg_service import FFmpegService
+
+        duration = await FFmpegService().probe_duration(video_path)
+        # Spend from this run's budget, attributed to topic research.
+        with llm_scope(step=step.value):
+            self._media_signals = asyncio.create_task(media_signals(video_path, duration))
+        # A failure is retried inline by topic research; never let it go unobserved.
+        self._media_signals.add_done_callback(lambda task: task.cancelled() or task.exception())
+
     async def _romanize_captions(self, segments: list) -> None:
         """Hindi and Telugu speech gets Roman-script captions unless the user chose native script."""
         if not wants_roman(self.clip_settings.get("caption_script"), segments):
@@ -647,6 +669,7 @@ class PipelineOrchestrator:
             transcript_segments=segments,
             progress_callback=lambda msg, pct, _: self._notify(msg, pct),
             clip_settings=self.clip_settings,
+            signals=self._media_signals,
         )
         log.info(
             "Topic research complete",
@@ -765,7 +788,8 @@ class PipelineOrchestrator:
         from content_intelligence.service import ContentIntelligenceService
         service = ContentIntelligenceService(is_pro=self.is_pro)
 
-        final_clips = await service.generate_metadata_for_clips(scored)
+        language = spoken_language(self._transcript_segments(context), self._reported_language(context))
+        final_clips = await service.generate_metadata_for_clips(scored, language)
         log.info(
             "Metadata generation complete",
             extra={"project_id": self.project_id, "final_clip_count": len(final_clips)},
@@ -839,6 +863,15 @@ class PipelineOrchestrator:
         async with AsyncSessionLocal() as session:
             project = await ClipRepository(session).get_project(self.project_id, self.user_id)
         return (project.title or "")[:300] or None if project else None
+
+    @staticmethod
+    def _reported_language(context: dict) -> str | None:
+        """The language Whisper reported for the transcript, if any."""
+        transcription = context.get(PipelineStepType.TRANSCRIPTION.value, {})
+        result = transcription.get("transcription_result") if isinstance(transcription, dict) else None
+        if isinstance(result, dict):
+            return result.get("language")
+        return getattr(result, "language", None)
 
     def _transcript_segments(self, context: dict) -> list[dict]:
         transcription = context.get(PipelineStepType.TRANSCRIPTION.value, {})

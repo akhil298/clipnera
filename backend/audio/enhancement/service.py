@@ -8,7 +8,6 @@ import httpx
 import numpy as np
 from scipy import signal
 from scipy.io import wavfile
-import noisereduce as nr
 
 from audio.enhancement.schema import AudioEnhanceRequest, AudioEnhanceResponse, AudioPreviewRequest
 from core.exceptions import CustomException
@@ -132,6 +131,10 @@ def _apply_vocal_eq(audio: np.ndarray, sr: int) -> np.ndarray:
 
 
 def _apply_ai_denoise(audio: np.ndarray, sr: int, preset: dict) -> np.ndarray:
+    # Imported here: noisereduce pulls in torch, which held a few hundred MB
+    # in every API process from boot whether or not anything was denoised.
+    import noisereduce as nr
+
     try:
         reduced = nr.reduce_noise(
             y=audio,

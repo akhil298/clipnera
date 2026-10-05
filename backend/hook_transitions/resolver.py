@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 from hook_transitions.catalog import PHRASES, PRESET_LIST, PRESETS, Preset
+from hook_transitions.graphics import pick_graphic
 from hook_transitions.schema import HookTransitionConfig
 
 CUSTOM_DEFAULTS = Preset(
@@ -72,6 +73,8 @@ class TransitionSpec:
     text: str | None
     text_style: str
     duration: float
+    # A graphics-library id laid over the bridge, with its sound; None for none.
+    graphic: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -84,6 +87,7 @@ class TransitionSpec:
             "text": self.text,
             "text_style": self.text_style,
             "duration": self.duration,
+            "graphic": self.graphic,
         }
 
 
@@ -131,6 +135,9 @@ def resolve_transition(
         text=_bridge_text(config, base, context, intents),
         text_style=config.text_style or base.text_style,
         duration=config.duration or base.duration,
+        graphic=None if config.graphic == "none" else (
+            config.graphic if config.graphic not in (None, "auto") else pick_graphic(context.clip_id, intents)
+        ),
     )
 
 
