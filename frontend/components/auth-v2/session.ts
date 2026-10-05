@@ -1,3 +1,4 @@
+import { peekPendingPrompt } from '@/components/home/handoff';
 import { safeNextPath } from '@/lib/routing/auth-rules';
 
 /**
@@ -7,8 +8,6 @@ import { safeNextPath } from '@/lib/routing/auth-rules';
  * convenience, never the sign-in.
  */
 
-/** Written by the landing page, read once by Home (`components/home/handoff.ts`). Sign-in only peeks. */
-const PENDING_PROMPT_KEY = 'cn.pendingPrompt';
 /** Where to go after the callback lands on /dashboard. */
 const NEXT_KEY = 'cn.signInNext';
 /** Set when Google was started without the consent tick; cleared by any successful sign-in. */
@@ -39,25 +38,7 @@ function write(storage: () => Storage, key: string, value: string | null): void 
 const session = () => window.sessionStorage;
 const local = () => window.localStorage;
 
-export interface PromptPreview {
-  text: string;
-  url: string | null;
-}
-
-/** The landing page's kept prompt, without consuming it: Home reads and clears it after sign-in. */
-export function peekPendingPrompt(): PromptPreview | null {
-  const raw = read(session, PENDING_PROMPT_KEY);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as { text?: unknown; url?: unknown };
-    const text = typeof parsed.text === 'string' ? parsed.text.trim() : '';
-    const url = typeof parsed.url === 'string' && parsed.url ? parsed.url : null;
-    return text || url ? { text, url } : null;
-  } catch {
-    return null;
-  }
-}
-
+/** A landing-page draft is waiting for Home (`components/home/handoff.ts` owns it). */
 export const hasPendingPrompt = (): boolean => peekPendingPrompt() !== null;
 
 /** Saved just before leaving for Google; ignored unless it is a safe same-origin path. */

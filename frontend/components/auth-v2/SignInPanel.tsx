@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { peekPendingPrompt, type PendingPrompt } from '@/components/home/handoff';
 import { useOnline } from '@/components/home/useOnline';
 import { Button, Checkbox, InlineAlert } from '@/components/ui';
 import { getToken } from '@/lib/auth';
@@ -15,10 +16,8 @@ import { KeptPromptNote } from './KeptPromptNote';
 import {
   consentWasSkipped,
   hasSignedInBefore,
-  peekPendingPrompt,
   rememberSignInNext,
   setConsentSkipped,
-  type PromptPreview,
 } from './session';
 
 const LINK = cx('rounded-cn-xs text-cn-accent-text underline underline-offset-2', focusRing);
@@ -28,7 +27,7 @@ interface DeviceState {
   returning: boolean;
   /** The last attempt went to Google without the tick and didn't come back signed in. */
   consentRetry: boolean;
-  prompt: PromptPreview | null;
+  prompt: PendingPrompt | null;
 }
 
 export interface SignInPanelProps {

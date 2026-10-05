@@ -11,9 +11,10 @@ import type { ProjectClip } from '@/lib/api/clips';
 import { isApiError, isPlanError } from '@/lib/api/errors';
 import type { PipelineStepLog, ProjectCredits } from '@/lib/api/jobs';
 import { formatTimecode } from '@/lib/design/timecode';
+import { stepWords } from '@/lib/projects/run';
 
 import { formatTagOf } from './moments';
-import { elapsedSeconds, type Phase, runSteps, stepWords } from './run';
+import { elapsedSeconds, type Phase, runSteps } from './run';
 
 export interface RunOutcomeProps {
   phase: Extract<Phase, 'done' | 'failed' | 'stopped' | 'not_started'>;

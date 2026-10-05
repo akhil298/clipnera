@@ -3,15 +3,16 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { runPercent, stepWords } from '@/components/projects/detail/run';
 import { isRunning, useRecentProjects } from '@/components/shell/useAccount';
-import type { RecentProject } from '@/lib/api/account';
 import { CANCELLED_ERROR, type PipelineStatus } from '@/lib/api/jobs';
 import { getRunStatuses } from '@/lib/api/jobs-activity';
+import type { ProjectSummary } from '@/lib/api/projects';
+import { runPercent, stepWords } from '@/lib/projects/run';
 import { accountKeys } from '@/lib/query/keys/account';
 import { activityKeys } from '@/lib/query/keys/activity';
 import { creditKeys } from '@/lib/query/keys/credits';
 import { notificationKeys } from '@/lib/query/keys/notifications';
+import { projectKeys } from '@/lib/query/keys/projects';
 
 /** Fast enough that the step line feels live; only while something runs and the tab is visible. */
 const LIVE_POLL_MS = 5_000;
@@ -27,7 +28,7 @@ export interface ActivityJob {
 }
 
 /** One working project's row, or null once it is no longer working (done, stopped, never started). */
-function jobOf(project: RecentProject, run: PipelineStatus | undefined): ActivityJob | null {
+function jobOf(project: ProjectSummary, run: PipelineStatus | undefined): ActivityJob | null {
   const base = { projectId: project.id, title: project.title, percent: null, failed: false };
   if (project.status === 'pending') return { ...base, step: stepWords('download') };
   if (!run || run.status === 'not_started') return project.status === 'processing' ? { ...base, step: 'Starting' } : null;
@@ -85,7 +86,7 @@ export function useActivity() {
       .filter((job) => failedNow.some((row) => row.projectId === job.projectId) || rows.find((row) => row.id === job.projectId)?.status === 'failed')
       .map((job) => ({ ...job, step: 'Stopped with an error', percent: null, failed: true }));
     if (newlyFailed.length) setFailed((list) => [...list.filter((job) => !newlyFailed.some((row) => row.projectId === job.projectId)), ...newlyFailed]);
-    for (const key of [accountKeys.recentProjects(), accountKeys.me(), notificationKeys.inbox(), creditKeys.entitlements()]) {
+    for (const key of [projectKeys.recent(), accountKeys.me(), notificationKeys.inbox(), creditKeys.entitlements()]) {
       void queryClient.invalidateQueries({ queryKey: key });
     }
   }, [live, jobs, projects.data, queryClient]);

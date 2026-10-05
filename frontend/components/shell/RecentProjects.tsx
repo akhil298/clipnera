@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { type RefObject, useRef } from 'react';
 
 import { Portal, Skeleton, SidebarSection, StatusBadge, useSidebarCollapsed, VideoThumb } from '@/components/ui';
-import type { RecentProject } from '@/lib/api/account';
+import type { ProjectSummary } from '@/lib/api/projects';
 import { useAnchoredPosition } from '@/lib/design/useAnchoredPosition';
 import { useHoverIntent } from '@/lib/design/useHoverIntent';
 import { cx, floatingSurface, focusRing } from '@/lib/design/styles';
@@ -18,21 +18,21 @@ const PEEK_DELAY_MS = 300;
 export const projectHref = (id: string) => `/dashboard/projects/${id}`;
 
 /** Status in words: no "processing" (screens/01 copy rules). */
-export function ProjectStatusBadge({ project }: { project: RecentProject }) {
+export function ProjectStatusBadge({ project }: { project: ProjectSummary }) {
   if (project.status === 'completed') return <StatusBadge status="ready" />;
   if (project.status === 'failed') return <StatusBadge status="failed" />;
   return <StatusBadge status="processing">{project.status === 'pending' ? 'Queued' : 'Making clips'}</StatusBadge>;
 }
 
 /** "9 clips · added 2 h ago". */
-export function projectMeta(project: RecentProject): string {
+export function projectMeta(project: ProjectSummary): string {
   const clips = project.clips.length;
   const parts = [clips ? `${clips} ${clips === 1 ? 'clip' : 'clips'}` : null, project.created_at ? `added ${formatRelativeTime(project.created_at)}` : null];
   return parts.filter(Boolean).join(' · ');
 }
 
 /** The hover peek: poster, title, status, meta. Decorative; the row's link already names the project. */
-function Peek({ project, anchorRef }: { project: RecentProject; anchorRef: RefObject<HTMLElement | null> }) {
+function Peek({ project, anchorRef }: { project: ProjectSummary; anchorRef: RefObject<HTMLElement | null> }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const { style } = useAnchoredPosition(true, anchorRef, panelRef, { side: 'right', align: 'start', offset: 12 });
   const poster = project.clips.find((clip) => clip.poster_url)?.poster_url ?? undefined;
@@ -52,7 +52,7 @@ function Peek({ project, anchorRef }: { project: RecentProject; anchorRef: RefOb
   );
 }
 
-function RecentRow({ project }: { project: RecentProject }) {
+function RecentRow({ project }: { project: ProjectSummary }) {
   const rowRef = useRef<HTMLAnchorElement>(null);
   const { active, handlers } = useHoverIntent(PEEK_DELAY_MS);
   const running = isRunning(project.status);

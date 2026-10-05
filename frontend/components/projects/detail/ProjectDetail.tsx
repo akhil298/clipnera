@@ -8,13 +8,14 @@ import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { WorkingText } from '@/components/ui/WorkingText';
 import { isForbidden, isNotFound } from '@/lib/api/errors';
+import { stepWords } from '@/lib/projects/run';
 
 import { ClipsSection } from './ClipsSection';
 import { ProjectHeader } from './ProjectHeader';
 import { ProjectSkeleton } from './ProjectSkeleton';
 import { RunOutcome } from './RunOutcome';
 import { RunProgress } from './RunProgress';
-import { type Phase, stagesOf, stepWords } from './run';
+import { type Phase, stagesOf } from './run';
 import { useProjectRun } from './useProjectRun';
 
 function statusWord(phase: Phase, run: ReturnType<typeof useProjectRun>): string | undefined {

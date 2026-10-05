@@ -2,8 +2,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 
-import { getMe, listRecentProjects, listWorkspaces, type ProjectStatus } from '@/lib/api/account';
+import { getMe, listWorkspaces } from '@/lib/api/me';
+import { listRecentProjects, type ProjectRowStatus } from '@/lib/api/projects';
 import { accountKeys } from '@/lib/query/keys/account';
+import { projectKeys } from '@/lib/query/keys/projects';
 
 const MINUTE = 60_000;
 
@@ -16,12 +18,12 @@ export function useWorkspaces() {
   return useQuery({ queryKey: accountKeys.workspaces(), queryFn: ({ signal }) => listWorkspaces(signal), staleTime: 5 * MINUTE, gcTime: 30 * MINUTE });
 }
 
-export const isRunning = (status: ProjectStatus) => status === 'pending' || status === 'processing' || status === 'uploaded';
+export const isRunning = (status: ProjectRowStatus) => status === 'pending' || status === 'processing' || status === 'uploaded';
 
 /** Polls every 20 s only while something runs and the tab is visible: the fallback until the event stream lands. */
 export function useRecentProjects() {
   return useQuery({
-    queryKey: accountKeys.recentProjects(),
+    queryKey: projectKeys.recent(),
     queryFn: ({ signal }) => listRecentProjects(signal),
     staleTime: 30_000,
     refetchInterval: (query) => (query.state.data?.some((project) => isRunning(project.status)) ? 20_000 : false),

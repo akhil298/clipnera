@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { Breadcrumbs, type Crumb, Wordmark } from '@/components/ui';
-import type { RecentProject } from '@/lib/api/account';
+import type { ProjectSummary } from '@/lib/api/projects';
 import { cx, focusRing } from '@/lib/design/styles';
 
 import { dashboardSegments, HOME_HREF } from './nav';
@@ -36,14 +36,14 @@ const NO_PAGE = new Set(['footage']);
 /** Names for an id segment, by the segment before it. */
 const ID_LABELS: Record<string, string> = { projects: 'Project', reels: 'Reel', footage: 'Edit' };
 
-function labelFor(segment: string, previous: string | undefined, projects: ReadonlyArray<RecentProject> | undefined): string {
+function labelFor(segment: string, previous: string | undefined, projects: ReadonlyArray<ProjectSummary> | undefined): string {
   if (LABELS[segment] && previous !== 'projects') return LABELS[segment];
   if (previous === 'projects') return projects?.find((project) => project.id === segment)?.title || ID_LABELS.projects;
   return (previous && ID_LABELS[previous]) ?? segment;
 }
 
 /** The URL as a trail: Projects / Episode 40. Home alone on /dashboard. */
-export function crumbsFor(pathname: string, projects: ReadonlyArray<RecentProject> | undefined, override: string | null): Crumb[] {
+export function crumbsFor(pathname: string, projects: ReadonlyArray<ProjectSummary> | undefined, override: string | null): Crumb[] {
   const segments = dashboardSegments(pathname) ?? [];
   const crumbs: Crumb[] =
     segments.length === 0

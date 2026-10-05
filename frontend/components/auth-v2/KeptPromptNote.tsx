@@ -1,6 +1,6 @@
 import { Sparkles } from 'lucide-react';
 
-import type { PromptPreview } from './session';
+import type { PendingPrompt } from '@/components/home/handoff';
 
 const hostAndPath = (url: string) => {
   try {
@@ -12,7 +12,7 @@ const hostAndPath = (url: string) => {
 };
 
 /** The landing page's prompt, visibly waiting (07 §7): one line of preview, and the promise that nothing runs. */
-export function KeptPromptNote({ prompt }: { prompt: PromptPreview }) {
+export function KeptPromptNote({ prompt }: { prompt: PendingPrompt }) {
   const preview = [prompt.text && `“${prompt.text}”`, prompt.url && hostAndPath(prompt.url)].filter(Boolean).join(' · ');
   return (
     <div className="flex items-start gap-2.5 rounded-cn-md border border-cn-border bg-cn-bg p-3 text-left">

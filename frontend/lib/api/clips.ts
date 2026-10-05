@@ -5,40 +5,10 @@ import { apiFetch } from './client';
 import { ApiError } from './errors';
 
 /**
- * Typed wrappers for a project's clips. Shapes mirror the dicts built in
- * backend/clip/service.py (`list_projects_with_clips`) and
- * backend/clip_generation/service.py (`_serialize_clip`), and the Pydantic
+ * Typed wrappers for a project's clips (the project row itself is in ./projects.ts).
+ * Shapes mirror the dicts built in backend/clip_generation/service.py (`_serialize_clip`), and the Pydantic
  * models in backend/clip_generation/schema.py.
  */
-
-/** backend/clip/model.py ProjectStatus. */
-export type ProjectStatus = 'pending' | 'processing' | 'uploaded' | 'completed' | 'failed';
-
-/** A clip as GET /clips/projects lists it. */
-export interface ProjectClipSummary {
-  id: string;
-  title: string | null;
-  score: number | null;
-  duration_seconds: number | null;
-  start_time: number;
-  end_time: number;
-  content_category: string | null;
-  status: string | null;
-  poster_url: string | null;
-  created_at: string | null;
-}
-
-/** One row of GET /clips/projects. */
-export interface ProjectRecord {
-  id: string;
-  title: string;
-  source_type: 'youtube' | 'upload' | string;
-  source_url: string | null;
-  status: ProjectStatus;
-  duration_seconds: number;
-  created_at: string | null;
-  clips: ProjectClipSummary[];
-}
 
 /** clip_generation/schema.py TranscriptEdits. */
 export interface TranscriptEdits {
@@ -133,20 +103,6 @@ export interface SocialExportResponse {
   watermark_enabled: boolean;
   channel_intro: boolean;
   bundle_presigned_url: string | null;
-}
-
-/**
- * NEEDS-BACKEND: GET /projects/{id} (screens/01 API-9). Until it exists the
- * project comes from the caller's list. Replace with lib/api/projects.ts once
- * the Projects builder ships it. A missing project throws a 404 ApiError.
- */
-export async function getProject(projectId: string, signal?: AbortSignal): Promise<ProjectRecord> {
-  const { projects } = await apiFetch<{ projects: ProjectRecord[]; total: number }>('/clips/projects', { signal });
-  const project = projects.find((item) => item.id === projectId);
-  if (!project) {
-    throw new ApiError({ status: 404, code: 'NOT_FOUND', message: 'Project not found', requestId: crypto.randomUUID() });
-  }
-  return project;
 }
 
 export const listProjectClips = (projectId: string, signal?: AbortSignal) =>

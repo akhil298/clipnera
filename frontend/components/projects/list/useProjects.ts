@@ -51,9 +51,12 @@ export function useProjectViews() {
     const now = new Set(views.filter(isRunning).map((v) => v.project.id));
     const finished = [...running.current].some((id) => !now.has(id));
     running.current = now;
-    // A run ended: its clips and posters are only in the list.
-    if (finished) void refetchList();
-  }, [views, refetchList]);
+    // A run ended: its clips and posters are only in the list, and the sidebar's Recent rows change too.
+    if (finished) {
+      void refetchList();
+      void client.invalidateQueries({ queryKey: projectKeys.recent() });
+    }
+  }, [views, refetchList, client]);
 
   return { list, views };
 }
@@ -79,6 +82,7 @@ export function useRenameProject() {
     },
     onSettled: (_data, _err, { id }) => {
       void client.invalidateQueries({ queryKey: projectKeys.list() });
+      void client.invalidateQueries({ queryKey: projectKeys.recent() });
       void client.invalidateQueries({ queryKey: projectKeys.detail(id) });
     },
   });
@@ -101,7 +105,8 @@ export function useDeleteProjects() {
       deleted.forEach((id) => client.removeQueries({ queryKey: projectKeys.detail(id) }));
       return { deleted, failed: targets.length - deleted.length };
     },
-    onSettled: () => client.invalidateQueries({ queryKey: projectKeys.list() }),
+    onSettled: () =>
+      Promise.all([client.invalidateQueries({ queryKey: projectKeys.list() }), client.invalidateQueries({ queryKey: projectKeys.recent() })]),
   });
 }
 

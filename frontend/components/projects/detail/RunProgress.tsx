@@ -13,8 +13,9 @@ import { TimeCode } from '@/components/ui/TimeCode';
 import { WorkingText } from '@/components/ui/WorkingText';
 import type { DownloadProgress, PipelineStepLog } from '@/lib/api/jobs';
 import { formatTimecode } from '@/lib/design/timecode';
+import { stepWords } from '@/lib/projects/run';
 
-import { elapsedSeconds, importLine, type Phase, parseUtc, runSteps, type StageView, stagesOf, stepWords } from './run';
+import { elapsedSeconds, importLine, type Phase, parseUtc, runSteps, type StageView, stagesOf } from './run';
 import { useNow } from './useProjectRun';
 
 export interface RunProgressProps {

@@ -35,6 +35,18 @@ Collected from builder reports by the lead. An integration agent works through t
 - Move the export custom_config mapping out of lib/api.ts into a shared helper (lib/api/clips.ts repeats it).
 - The scheduler should accept `?project=&clip=` so Publish arrives with the clip preselected.
 
+## Header actions follow-ups
+- Desktop has two credit entry points (the sidebar CreditSummary and the header CreditsPopover). Reuse CreditsPopover in the sidebar, or hide the header one at lg+ (owner question).
+- Toasts sit at bottom-4 and overlap the 56 px phone tab bar (DS).
+- Credits buttons should link to /dashboard/plans and /dashboard/payment?pack= once Area 9 builds them.
+- Move `stepWords` and `runPercent` from components/projects/detail/run.ts into lib/ (they're shared with header actions).
+
+## Sign-in follow-ups
+- Home (Area 3): mount `<FirstRunGate carriedIntent={restored} />` in HomeScreen, or onboarding never shows. Also export a non-consuming `peekPendingPrompt` from components/home/handoff.ts (the key is duplicated in auth-v2/session.ts).
+- Platform: wire `authRedirect` from lib/routing/auth-rules.ts into middleware. Add /dashboard/welcome to the new_ui_dashboard rewrites with a full-page fallback.
+- Move onboarding/connections.ts into a shared lib/api/social.ts plus lib/query/keys/social.ts.
+- **Owner decision (legacy file):** app/login/google/page.tsx should go to `takeSignInNext() ?? '/dashboard'` and call `markSignedIn()`. Without this, `?next=` only works once the dashboard is on the new UI. This edits a legacy file, so it needs the owner's OK.
+
 ## Backend registry
 - New flags: share_links, post_analytics (spec 04).
 
@@ -50,6 +62,12 @@ Collected from builder reports by the lead. An integration agent works through t
 - GET /projects/{id} (API-9) with credits charged/returned and the chosen run options. Credits are summed from the ledger for now.
 - Persist run options on PipelineState so Retry keeps the settings
 - The status payload needs an explicit cancelled state (today a stopped run is detected by matching the error text)
+- POST /notifications/{id}/read (opening a row can't mark it read yet)
+- DELETE /notifications should return the deleted ids, plus POST /notifications/restore (API-10), for a safe Undo
+- GET /jobs?status=active (activity only covers clip runs; no reels, exports or renders)
+- /pipeline/status/batch has no schema
+- PATCH /me/preferences and onboarding_completed_at on /me (API-3); onboarding state is in localStorage per account for now
+- Optional CONSENT_REQUIRED error code (API-2); the backend returns 400 TERMS_NOT_ACCEPTED for new accounts without consent
 - GET /projects?sort=recent&limit= with a schema; today /clips/projects returns every clip (shell)
 - Spec 04 §22: about 40 items (share endpoints, reel publish, live post updates, reel chat reply, admin permissions endpoint, admin audit log, platform analytics)
 - Spec 02 and spec 03 have their own lists in their API-needs sections

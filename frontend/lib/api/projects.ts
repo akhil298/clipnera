@@ -14,6 +14,7 @@
 import type { HookTransitionApplied } from '@/lib/types';
 
 import { apiFetch } from './client';
+import { ApiError } from './errors';
 
 /** backend/clip/model.py `ProjectStatus`. */
 export type ProjectRowStatus = 'pending' | 'processing' | 'uploaded' | 'completed' | 'failed';
@@ -107,18 +108,31 @@ export interface ProjectFolder {
 
 const PROJECTS = '/clips/projects';
 
-/** Every project of the signed-in user, newest first, with clip summaries. */
+/** Every project of the signed-in user, with clip summaries. */
 export function listProjects(signal?: AbortSignal): Promise<ProjectListResponse> {
   return apiFetch<ProjectListResponse>(PROJECTS, { signal });
 }
 
 /**
- * One project with its clip summaries.
- * NEEDS-BACKEND: GET /clips/projects/{project_id} — until then this reads the list and picks the row.
+ * Every project, newest first: the sidebar's Recent list, ⌘K and the header's activity.
+ * NEEDS-BACKEND: GET /projects?sort=recent&limit= with a Pydantic response schema; today the route returns every clip too.
  */
-export async function getProject(projectId: string, signal?: AbortSignal): Promise<ProjectSummary | null> {
+export async function listRecentProjects(signal?: AbortSignal): Promise<ProjectSummary[]> {
   const { projects } = await listProjects(signal);
-  return projects.find((project) => project.id === projectId) ?? null;
+  return [...projects].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+}
+
+/**
+ * One project with its clip summaries. A missing project throws a 404 `ApiError`.
+ * NEEDS-BACKEND: GET /clips/projects/{project_id} (API-9) — until then this reads the list and picks the row.
+ */
+export async function getProject(projectId: string, signal?: AbortSignal): Promise<ProjectSummary> {
+  const { projects } = await listProjects(signal);
+  const project = projects.find((item) => item.id === projectId);
+  if (!project) {
+    throw new ApiError({ status: 404, code: 'NOT_FOUND', message: 'Project not found', requestId: crypto.randomUUID() });
+  }
+  return project;
 }
 
 /** NEEDS-BACKEND: PATCH /clips/projects/{project_id} {title} (API-6). Legacy rename never reached the server. */

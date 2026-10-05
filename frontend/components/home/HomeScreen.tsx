@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { FirstRunGate } from '@/components/onboarding/FirstRunGate';
 import { InlineAlert } from '@/components/ui';
 
 import { takePendingPrompt } from './handoff';
@@ -77,6 +78,8 @@ export function HomeScreen() {
           onUseTemplate={applyTemplate}
         />
       </div>
+
+      <FirstRunGate carriedIntent={restored} />
     </div>
   );
 }

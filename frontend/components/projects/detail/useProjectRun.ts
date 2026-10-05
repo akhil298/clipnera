@@ -3,10 +3,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
-import { getProject, listProjectClips } from '@/lib/api/clips';
+import { listProjectClips } from '@/lib/api/clips';
 import { cancelPipeline, getDownloadProgress, getPipelineStatus, getProjectCredits, resumePipeline, startPipeline } from '@/lib/api/jobs';
+import { getProject } from '@/lib/api/projects';
 import { clipKeys } from '@/lib/query/keys/clips';
 import { jobKeys } from '@/lib/query/keys/jobs';
+import { projectKeys } from '@/lib/query/keys/projects';
 
 import { isLive, phaseOf, STAGES } from './run';
 
@@ -27,7 +29,7 @@ export function useProjectRun(projectId: string) {
   const queryClient = useQueryClient();
 
   const project = useQuery({
-    queryKey: clipKeys.project(projectId),
+    queryKey: projectKeys.detail(projectId),
     queryFn: ({ signal }) => getProject(projectId, signal),
     refetchInterval: (query) => (query.state.data?.status === 'pending' ? PROJECT_POLL_MS : false),
   });
@@ -77,7 +79,8 @@ export function useProjectRun(projectId: string) {
     if (was === 'importing') void queryClient.invalidateQueries({ queryKey: jobKeys.status(projectId) });
     if (isLive(was) && !live) {
       void queryClient.invalidateQueries({ queryKey: clipKeys.list(projectId) });
-      void queryClient.invalidateQueries({ queryKey: clipKeys.project(projectId) });
+      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+      void queryClient.invalidateQueries({ queryKey: projectKeys.recent() });
       void queryClient.invalidateQueries({ queryKey: jobKeys.credits(projectId) });
     }
   }, [phase, live, projectId, queryClient]);
@@ -85,7 +88,7 @@ export function useProjectRun(projectId: string) {
   const refreshRun = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: jobKeys.status(projectId) }),
-      queryClient.invalidateQueries({ queryKey: clipKeys.project(projectId) }),
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) }),
       queryClient.invalidateQueries({ queryKey: jobKeys.credits(projectId) }),
     ]);
 

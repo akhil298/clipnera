@@ -4,6 +4,4 @@ export const accountKeys = {
   /** `GET /me`. Invalidate after anything that changes the profile, plan or credits. */
   me: () => [...accountKeys.all, 'me'] as const,
   workspaces: () => [...accountKeys.all, 'workspaces'] as const,
-  /** The sidebar's Recent list and the ⌘K project rows. */
-  recentProjects: () => [...accountKeys.all, 'recent-projects'] as const,
 };

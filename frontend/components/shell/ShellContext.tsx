@@ -2,7 +2,7 @@
 
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 
-import type { Workspace } from '@/lib/api/account';
+import type { Workspace } from '@/lib/api/me';
 import { usePersistentState } from '@/lib/design/usePersistentState';
 
 import { useMe, useWorkspaces } from './useAccount';

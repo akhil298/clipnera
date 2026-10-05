@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 import { type Status, StatusBadge } from '@/components/ui/Badge';
 import { TimeCode } from '@/components/ui/TimeCode';
-import type { ProjectRecord } from '@/lib/api/clips';
+import type { ProjectSummary } from '@/lib/api/projects';
 import type { ProjectCredits } from '@/lib/api/jobs';
 import { cx, focusRing } from '@/lib/design/styles';
 
@@ -29,7 +29,7 @@ const FALLBACK_WORD: Record<Phase, string> = {
 };
 
 export interface ProjectHeaderProps {
-  project: ProjectRecord;
+  project: ProjectSummary;
   phase: Phase;
   /** The live step or the count: "Transcribing", "9 clips ready". */
   statusWord?: string;

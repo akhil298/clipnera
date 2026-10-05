@@ -1,22 +1,23 @@
-import { Captions, Clock, Film, Image as ImageIcon, MoveHorizontal, X } from 'lucide-react';
+import { Captions, Clock, Film, Image as ImageIcon, MoveHorizontal, Video, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { cx, focusRing } from '@/lib/design/styles';
 
-export type ContextKind = 'clip' | 'range' | 'caption' | 'asset' | 'moment';
+export type ContextKind = 'source' | 'clip' | 'range' | 'caption' | 'asset' | 'moment';
 
 export interface PromptContext {
   id: string;
   kind: ContextKind;
-  /** Clip title, `0:12 – 0:31`, first words of a caption line, asset name, or timecode. */
+  /** Source video title, clip title, `0:12 – 0:31`, first words of a caption line, asset name, or timecode. */
   label: string;
   /** Secondary detail, e.g. a clip's duration. */
   meta?: string;
-  /** Asset thumbnail. Decorative; the label names the asset. */
+  /** Poster or asset thumbnail (16:9 for a source video). Decorative; the label names it. */
   thumbnailUrl?: string;
 }
 
 const KIND: Record<ContextKind, { icon: ReactNode; noun: string }> = {
+  source: { icon: <Video />, noun: 'Source video' },
   clip: { icon: <Film />, noun: 'Clip' },
   range: { icon: <MoveHorizontal />, noun: 'Range' },
   caption: { icon: <Captions />, noun: 'Caption line' },
@@ -47,7 +48,7 @@ export function ContextChip({ context, onRemove, className }: ContextChipProps) 
       )}
     >
       {thumbnailUrl ? (
-        <img src={thumbnailUrl} alt="" className="size-5 shrink-0 rounded-cn-xs object-cover" />
+        <img src={thumbnailUrl} alt="" className={cx('h-5 shrink-0 rounded-cn-xs object-cover', kind === 'source' ? 'aspect-video' : 'aspect-square')} />
       ) : (
         <span aria-hidden className="inline-flex shrink-0 text-cn-accent-text [&_svg]:size-3.5">
           {icon}
