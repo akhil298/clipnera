@@ -1,0 +1,283 @@
+/* Generated from lib/design/tokens.ts by `node lib/design/write-tokens-css.mts`. Do not edit by hand. */
+/* Only --cn-* variables, cn-* keyframes and [data-theme] colour-scheme: nothing here restyles an existing screen. */
+
+:root,
+[data-theme="dark"] {
+  --cn-bg: 10 10 10;
+  --cn-surface: 23 23 23;
+  --cn-surface-raised: 32 32 32;
+  --cn-surface-sunken: 17 17 17;
+  --cn-stage: 0 0 0;
+  --cn-field: 17 17 17;
+  --cn-surface-hover: 38 38 38;
+  --cn-surface-active: 46 46 46;
+  --cn-overlay: 0 0 0;
+  --cn-state-layer: 255 255 255;
+  --cn-border: 38 38 38;
+  --cn-border-strong: 64 64 64;
+  --cn-control-border: 107 107 107;
+  --cn-fg: 250 250 250;
+  --cn-fg-secondary: 163 163 163;
+  --cn-fg-muted: 140 140 140;
+  --cn-fg-disabled: 82 82 82;
+  --cn-accent: 245 158 11;
+  --cn-accent-hover: 251 191 36;
+  --cn-accent-pressed: 217 119 6;
+  --cn-accent-fg: 10 10 10;
+  --cn-accent-text: 251 191 36;
+  --cn-accent-subtle: 54 42 21;
+  --cn-accent-border: 245 158 11;
+  --cn-success: 16 185 129;
+  --cn-success-text: 52 211 153;
+  --cn-success-subtle: 22 46 38;
+  --cn-danger: 244 63 94;
+  --cn-danger-text: 251 113 133;
+  --cn-danger-subtle: 54 29 33;
+  --cn-danger-solid: 225 29 72;
+  --cn-danger-solid-hover: 190 18 60;
+  --cn-on-danger: 255 255 255;
+  --cn-info: 14 165 233;
+  --cn-info-text: 56 189 248;
+  --cn-info-subtle: 22 43 52;
+  --cn-focus: 251 191 36;
+  --cn-shadow-1: 0 1px 2px 0 rgb(0 0 0 / 0.5);
+  --cn-shadow-2: 0 8px 24px -6px rgb(0 0 0 / 0.6), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --cn-shadow-3: 0 24px 64px -12px rgb(0 0 0 / 0.75), 0 0 0 1px rgb(255 255 255 / 0.05);
+  --cn-state-hover: 0.06;
+  --cn-state-press: 0.1;
+  --cn-state-media-edge: 0.16;
+  --cn-radius-xs: 4px;
+  --cn-radius-sm: 6px;
+  --cn-radius-md: 8px;
+  --cn-radius-lg: 12px;
+  --cn-radius-xl: 16px;
+  --cn-radius-2xl: 20px;
+  --cn-radius-3xl: 24px;
+  --cn-radius-full: 9999px;
+  --cn-z-base: 0;
+  --cn-z-raised: 10;
+  --cn-z-sticky: 100;
+  --cn-z-banner: 200;
+  --cn-z-drawer: 300;
+  --cn-z-dialog: 400;
+  --cn-z-popover: 500;
+  --cn-z-toast: 600;
+  --cn-z-tooltip: 700;
+  --cn-z-skiplink: 800;
+  --cn-duration-instant: 0ms;
+  --cn-duration-stream: 120ms;
+  --cn-duration-fast: 120ms;
+  --cn-duration-base: 180ms;
+  --cn-duration-slow: 280ms;
+  --cn-duration-highlight: 600ms;
+  --cn-loop-shimmer: 2400ms;
+  --cn-loop-sweep: 1600ms;
+  --cn-loop-pulse: 1600ms;
+  --cn-loop-sheen: 3600ms;
+  --cn-layout-sidebar: 240px;
+  --cn-layout-sidebar-rail: 56px;
+  --cn-layout-top-bar: 48px;
+  --cn-layout-tab-bar: 56px;
+  --cn-layout-content-max: 1280px;
+  --cn-layout-composer-max: 672px;
+  --cn-layout-reading-max: 720px;
+  --cn-layout-settings-nav: 224px;
+  --cn-layout-settings-content: 672px;
+  --cn-layout-editor-tool-rail: 48px;
+  --cn-layout-editor-panel: 288px;
+  --cn-layout-editor-panel-min: 240px;
+  --cn-layout-editor-panel-max: 400px;
+  --cn-layout-editor-conversation: 384px;
+  --cn-layout-editor-conversation-min: 320px;
+  --cn-layout-editor-conversation-max: 512px;
+  --cn-layout-editor-timeline: 256px;
+  --cn-layout-editor-timeline-min: 160px;
+  --cn-layout-editor-preview-min: 480px;
+  --cn-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --cn-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --cn-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --cn-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --cn-font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --cn-font-display: Syne, "Plus Jakarta Sans", sans-serif;
+  --cn-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+[data-theme="light"] {
+  --cn-bg: 250 250 250;
+  --cn-surface: 255 255 255;
+  --cn-surface-raised: 255 255 255;
+  --cn-surface-sunken: 245 245 245;
+  --cn-stage: 0 0 0;
+  --cn-field: 255 255 255;
+  --cn-surface-hover: 245 245 245;
+  --cn-surface-active: 229 229 229;
+  --cn-overlay: 10 10 10;
+  --cn-state-layer: 10 10 10;
+  --cn-border: 229 229 229;
+  --cn-border-strong: 212 212 212;
+  --cn-control-border: 138 138 138;
+  --cn-fg: 10 10 10;
+  --cn-fg-secondary: 82 82 82;
+  --cn-fg-muted: 107 107 107;
+  --cn-fg-disabled: 163 163 163;
+  --cn-accent: 245 158 11;
+  --cn-accent-hover: 251 191 36;
+  --cn-accent-pressed: 217 119 6;
+  --cn-accent-fg: 10 10 10;
+  --cn-accent-text: 180 83 9;
+  --cn-accent-subtle: 255 251 235;
+  --cn-accent-border: 180 83 9;
+  --cn-success: 16 185 129;
+  --cn-success-text: 4 120 87;
+  --cn-success-subtle: 236 253 245;
+  --cn-danger: 244 63 94;
+  --cn-danger-text: 190 18 60;
+  --cn-danger-subtle: 255 241 242;
+  --cn-danger-solid: 225 29 72;
+  --cn-danger-solid-hover: 190 18 60;
+  --cn-on-danger: 255 255 255;
+  --cn-info: 14 165 233;
+  --cn-info-text: 3 105 161;
+  --cn-info-subtle: 240 249 255;
+  --cn-focus: 180 83 9;
+  --cn-shadow-1: 0 1px 2px 0 rgb(10 10 10 / 0.06);
+  --cn-shadow-2: 0 8px 24px -6px rgb(10 10 10 / 0.12), 0 0 0 1px rgb(10 10 10 / 0.04);
+  --cn-shadow-3: 0 24px 64px -12px rgb(10 10 10 / 0.22), 0 0 0 1px rgb(10 10 10 / 0.05);
+  --cn-state-hover: 0.04;
+  --cn-state-press: 0.08;
+  --cn-state-media-edge: 0.12;
+}
+
+/* Native controls and scrollbars follow the theme only where a theme is set explicitly. */
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* Working text: a slow light sweep across the active step. Static under reduced motion. */
+@keyframes cn-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+.cn-shimmer-text {
+  background-image: linear-gradient(90deg, rgb(var(--cn-fg-secondary)) 0%, rgb(var(--cn-fg-secondary)) 40%, rgb(var(--cn-fg)) 50%, rgb(var(--cn-fg-secondary)) 60%, rgb(var(--cn-fg-secondary)) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: cn-shimmer var(--cn-loop-shimmer) linear infinite;
+}
+
+/* An operation landing on the timeline: amber outline that fades over 600 ms. */
+@keyframes cn-highlight {
+  from { box-shadow: 0 0 0 2px rgb(var(--cn-accent)); }
+  to { box-shadow: 0 0 0 2px rgb(var(--cn-accent) / 0); }
+}
+
+/* Indeterminate bars: a short segment travels along the track. Replaces spinners. */
+@keyframes cn-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+
+/* State layer (07 §2.4): hover and press on non-neutral fills. On instantly, off over `fast`. */
+@property --cn-state-opacity {
+  syntax: '<number>';
+  inherits: false;
+  initial-value: 0;
+}
+
+.cn-state {
+  background-image: linear-gradient(rgb(var(--cn-state-layer) / var(--cn-state-opacity)) 0 0);
+  transition: --cn-state-opacity var(--cn-duration-fast) var(--cn-ease-standard);
+}
+
+@media (hover: hover) {
+  .cn-state:hover {
+    --cn-state-opacity: var(--cn-state-hover);
+    transition-duration: 0ms;
+  }
+}
+
+.cn-state:active {
+  --cn-state-opacity: var(--cn-state-press);
+  transition-duration: 0ms;
+}
+
+.cn-state:disabled,
+.cn-state[aria-disabled="true"] {
+  --cn-state-opacity: 0;
+}
+
+/* Inner hairline over thumbnails and video, so the edge reads on any picture. */
+.cn-media-edge {
+  position: relative;
+}
+
+.cn-media-edge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px rgb(var(--cn-state-layer) / var(--cn-state-media-edge));
+  pointer-events: none;
+}
+
+/* The composer while a run is active: a short amber segment travels along its bottom edge. */
+@keyframes cn-edge-sweep {
+  from { background-position: -67% 0; }
+  to { background-position: 167% 0; }
+}
+
+.cn-working-edge {
+  position: relative;
+}
+
+.cn-working-edge::after {
+  content: '';
+  position: absolute;
+  inset-inline: var(--cn-radius-xl);
+  bottom: 0;
+  height: 2px;
+  background-image: linear-gradient(90deg, rgb(var(--cn-accent) / 0), rgb(var(--cn-accent)), rgb(var(--cn-accent) / 0));
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: cn-edge-sweep var(--cn-loop-sweep) var(--cn-ease-in-out) infinite;
+  pointer-events: none;
+}
+
+/* A known object still being made: a slow sheen. Skeletons (unknown shape) pulse instead. */
+.cn-pending-sheen {
+  background-image: linear-gradient(100deg, rgb(var(--cn-state-layer) / 0) 30%, rgb(var(--cn-state-layer) / var(--cn-state-hover)) 50%, rgb(var(--cn-state-layer) / 0) 70%);
+  background-size: 200% 100%;
+  animation: cn-shimmer var(--cn-loop-sheen) linear infinite;
+}
+
+/* Skeleton blocks. */
+@keyframes cn-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cn-shimmer-text {
+    animation: none;
+    background-image: none;
+    color: rgb(var(--cn-fg-secondary));
+  }
+
+  .cn-working-edge::after {
+    animation: none;
+    background-image: none;
+    background-color: rgb(var(--cn-accent) / 0.4);
+  }
+
+  .cn-pending-sheen {
+    animation: none;
+    background-image: none;
+  }
+}
