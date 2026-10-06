@@ -631,9 +631,10 @@ export const clipApi = {
       method: 'PUT',
       body: JSON.stringify(settings),
     }),
-  downloadYoutube: (url: string, formatId?: string) => authedRequest<Record<string, any>>('/clips/download', {
+  /** `pipeline` is started by the server once the video is stored. */
+  downloadYoutube: (url: string, formatId?: string, pipeline?: PipelineStartRequest) => authedRequest<Record<string, any>>('/clips/download', {
     method: 'POST',
-    body: JSON.stringify({ url, format_id: formatId }),
+    body: JSON.stringify({ url, format_id: formatId, ...(pipeline ? { pipeline } : {}) }),
   }),
   exportProject: (
     projectId: string,
@@ -849,6 +850,16 @@ export interface PipelineClipSettings {
   broll?: boolean;
   /** Also cut story clips: moments from across the video stitched into one clip. */
   story_clips?: boolean;
+}
+
+/** Run settings; mirrors backend pipeline/schema.py PipelineStartRequest. Sent to
+ * /pipeline/start, or with a download/upload so the server starts the run itself. */
+export interface PipelineStartRequest {
+  steps?: string[];
+  audio_config?: Record<string, any>;
+  output_aspect_ratios?: string[];
+  clip_settings?: PipelineClipSettings;
+  watermark_enabled?: boolean;
 }
 
 export const pipelineApi = {
@@ -1859,6 +1870,8 @@ export interface UploadedPart {
 export interface VideoUploadCompleteRequest {
   upload_id: string;
   parts: UploadedPart[];
+  /** Started by the server once the upload is ready. */
+  pipeline?: PipelineStartRequest;
 }
 
 export interface VideoUploadAbortRequest {
@@ -1885,6 +1898,8 @@ export interface VideoUploadOptions {
   durationSeconds?: number;
   onProgress?: (percent: number) => void;
   signal?: AbortSignal;
+  /** Run to start once the upload is ready. */
+  pipeline?: PipelineStartRequest;
 }
 
 /** PUTs one part and resolves its ETag; `onBytes` reports bytes sent so far for this part. */
@@ -1934,7 +1949,7 @@ export const uploadApi = {
    * ready for the pipeline once `clipApi` progress for it reports `done`.
    */
   async uploadVideo(file: File, options: VideoUploadOptions = {}): Promise<string> {
-    const { durationSeconds, onProgress, signal } = options;
+    const { durationSeconds, onProgress, signal, pipeline } = options;
     const init = await uploadApi.initVideo({
       filename: file.name,
       content_type: file.type as VideoContentType,
@@ -1966,7 +1981,7 @@ export const uploadApi = {
 
     try {
       await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, init.part_urls.length) }, worker));
-      await uploadApi.completeVideo(init.project_id, { upload_id: init.upload_id, parts });
+      await uploadApi.completeVideo(init.project_id, { upload_id: init.upload_id, parts, ...(pipeline ? { pipeline } : {}) });
     } catch (err) {
       await uploadApi.abortVideo(init.project_id, { upload_id: init.upload_id }).catch(() => undefined);
       throw err;

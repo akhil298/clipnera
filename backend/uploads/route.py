@@ -44,7 +44,7 @@ async def complete_video_upload(
 ):
     """Stitch the parts; the video is ready once ``/clips/progress/{project_id}`` reports done."""
     result = await service.complete(user["user_id"], project_id, data)
-    asyncio.create_task(prepare_uploaded_video(project_id, user["user_id"]))
+    asyncio.create_task(prepare_uploaded_video(project_id, user["user_id"], data.pipeline))
     return ok(result)
 
 

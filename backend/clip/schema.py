@@ -3,6 +3,7 @@ from typing import Annotated, Optional, Union
 from datetime import datetime
 
 from clip.youtube_url import canonical_youtube_url
+from pipeline.schema import PipelineStartRequest
 
 YouTubeVideoURL = Annotated[str, AfterValidator(canonical_youtube_url), Field(description="YouTube video URL")]
 
@@ -14,6 +15,9 @@ class YouTubeURLRequest(BaseModel):
 class YouTubeDownloadRequest(BaseModel):
     url: YouTubeVideoURL
     format_id: Optional[str] = Field(None, description="yt-dlp format selector string")
+    # Started by the server once the video is stored, so closing or reloading
+    # the page during the download cannot leave the project unprocessed.
+    pipeline: Optional[PipelineStartRequest] = None
 
 
 class YouTubeMetadataResponse(BaseModel):

@@ -38,6 +38,7 @@ from depth_captions.schema import DepthCaptionRequest, StylePreset, DepthMode, T
 from core.database import AsyncSessionLocal
 
 from pipeline.model import PipelineStepType, StepStatus
+from pipeline.schema import PipelineStartRequest
 from core.exceptions import CustomException
 from notifications.service import notify_pipeline_outcome
 from subscription.entitlements import Entitlements
@@ -1981,3 +1982,21 @@ class PipelineRunService:
             bundle=request.bundle,
             channel_intro=request.channel_intro and entitlements.creator_intro,
         )
+
+
+async def start_when_source_ready(project_id: str, user_id: str, request: PipelineStartRequest) -> str | None:
+    """Start the run a download or upload asked for, once its source is stored.
+
+    Runs on the server, so the run starts even if the browser that asked for
+    it has been reloaded or closed. Returns why it could not start, if it
+    could not (the caller shows that as the download's error).
+    """
+    try:
+        await PipelineRunService().start(project_id, {"user_id": user_id}, request.body())
+    except CustomException as exc:
+        log.warning("Pipeline not started after download: project=%s reason=%s", project_id, exc.message)
+        return exc.message
+    except Exception:
+        log.exception("Pipeline not started after download: project=%s", project_id)
+        return "Processing could not be started. Please try again."
+    return None

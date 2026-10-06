@@ -15,6 +15,7 @@ from clip.youtube_service import YouTubeService
 from clip.model import ProjectStatus
 from clip_generation.repository import ClipRepository as ClipGenRepository
 from clients.services.s3 import S3
+from pipeline.schema import PipelineStartRequest
 from core.exceptions import CustomException
 from core.logging_config import get_logger
 from datetime import datetime
@@ -150,7 +151,7 @@ class ClipService:
             status=ProjectStatus.PROCESSING,
         )
 
-        asyncio.create_task(self._background_download(data.url, user_id, project.id, data.format_id))
+        asyncio.create_task(self._background_download(data.url, user_id, project.id, data.format_id, data.pipeline))
 
         resolution, aspect_ratio = _video_shape(prefetch, "Unknown")
 
@@ -193,7 +194,10 @@ class ClipService:
 
         await self._repo.delete_project(project_id, user_id)
 
-    async def _background_download(self, url: str, user_id: str, project_id: str, format_id: str | None = None) -> None:
+    async def _background_download(
+        self, url: str, user_id: str, project_id: str, format_id: str | None = None,
+        pipeline: PipelineStartRequest | None = None,
+    ) -> None:
         try:
             result = await self._youtube.download_and_store(url, user_id, project_id, format_id)
             await self._repo.update_project_s3(
@@ -206,6 +210,14 @@ class ClipService:
                 status=ProjectStatus.UPLOADED,
                 local_path=result.get("local_path"),
             )
+            # Imported here: pipeline.service imports notifications, which imports clip.
+            from pipeline.service import start_when_source_ready
+
+            # Started before "done" is reported, so a client that sees "done"
+            # also finds the run.
+            if pipeline and (error := await start_when_source_ready(project_id, user_id, pipeline)):
+                await YouTubeService.set_progress(project_id, {"status": "error", "percent": 100.0, "message": error})
+                return
             await YouTubeService.set_progress(project_id, {
                 "status": "done",
                 "percent": 100.0,

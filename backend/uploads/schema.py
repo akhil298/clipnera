@@ -4,6 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from pipeline.schema import PipelineStartRequest
+
 VideoContentType = Literal["video/mp4", "video/quicktime", "video/webm", "video/x-matroska"]
 
 
@@ -31,6 +33,8 @@ class UploadedPart(BaseModel):
 class VideoUploadCompleteRequest(BaseModel):
     upload_id: str = Field(..., min_length=1)
     parts: list[UploadedPart] = Field(..., min_length=1)
+    # Started by the server once the upload is ready, as for YouTube downloads.
+    pipeline: PipelineStartRequest | None = None
 
     @field_validator("parts")
     @classmethod

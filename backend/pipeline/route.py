@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from auth.dependencies import CurrentUserDep
 from clip_generation.schema import SocialExportRequest, SocialExportResponse
+from pipeline.schema import PipelineStartRequest
 from pipeline.service import PipelineRunService
 
 pipeline = APIRouter(prefix="/pipeline", tags=["pipeline"])
@@ -14,8 +15,8 @@ _service = PipelineRunService()
 
 
 @pipeline.post("/start/{project_id}")
-async def start_pipeline(project_id: str, user: CurrentUserDep, body: dict | None = None):
-    return await _service.start(project_id, user, body)
+async def start_pipeline(project_id: str, user: CurrentUserDep, body: PipelineStartRequest | None = None):
+    return await _service.start(project_id, user, body.body() if body else None)
 
 
 @pipeline.post("/cancel/{project_id}")

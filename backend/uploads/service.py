@@ -20,6 +20,7 @@ from core.config import get_settings
 from core.database import AsyncSessionLocal
 from core.exceptions import CustomException
 from core.logging_config import get_logger
+from pipeline.schema import PipelineStartRequest
 from subscription.service import SubscriptionService
 from uploads.schema import (
     VideoUploadAbortRequest,
@@ -146,8 +147,9 @@ class VideoUploadService:
         return project
 
 
-async def prepare_uploaded_video(project_id: str, user_id: str) -> None:
-    """Probe a completed upload's real duration and mark it ready.
+async def prepare_uploaded_video(project_id: str, user_id: str, pipeline: PipelineStartRequest | None = None) -> None:
+    """Probe a completed upload's real duration, mark it ready and start the
+    run the client asked for, if any.
 
     Runs after ``complete`` returns; the frontend polls the same progress
     endpoint it uses for YouTube downloads.
@@ -169,6 +171,12 @@ async def prepare_uploaded_video(project_id: str, user_id: str) -> None:
                 presigned_url="", file_size=project.file_size or 0, duration=math.ceil(duration),
                 status=ProjectStatus.UPLOADED,
             )
+            # Imported here: pipeline.service imports notifications, which imports clip.
+            from pipeline.service import start_when_source_ready
+
+            if pipeline and (error := await start_when_source_ready(project.id, user_id, pipeline)):
+                await YouTubeService.set_progress(project.id, _progress("error", error))
+                return
             await YouTubeService.set_progress(project.id, _progress("done", "Video ready."))
             log.info("Upload ready: project=%s duration=%.1fs", project.id, duration)
         except Exception as exc:
