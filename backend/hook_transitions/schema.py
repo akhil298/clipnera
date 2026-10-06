@@ -4,6 +4,7 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from hook_transitions.graphics import library
 from hook_transitions.catalog import (
     EFFECTS,
     FRAMING_EFFECTS,
@@ -49,6 +50,16 @@ class HookTransitionConfig(BaseModel):
     custom_text: Optional[str] = Field(default=None, max_length=60)
     text_style: Optional[str] = None
     duration: Optional[float] = Field(default=None, ge=MIN_DURATION, le=MAX_DURATION)
+    # A motion graphic over the bridge: an id from the graphics library,
+    # "auto" (or unset) for a random one suited to the hook, or "none".
+    graphic: Optional[str] = None
+
+    @field_validator("graphic")
+    @classmethod
+    def _graphic(cls, value: Optional[str]) -> Optional[str]:
+        if value in (None, "auto", "none"):
+            return value
+        return _known(value, library(), "bridge graphic")
 
     @field_validator("preset_id")
     @classmethod
@@ -126,6 +137,7 @@ class HookTransitionCatalogResponse(BaseModel):
     phrases: list[dict[str, Any]]
     groups: list[str]
     presets: list[dict[str, Any]]
+    graphics: list[dict[str, Any]]
     limits: dict[str, Any]
     default_preset: str
 
@@ -142,6 +154,7 @@ class HookTransitionApplied(BaseModel):
     text: Optional[str] = None
     text_style: str
     duration: float
+    graphic: Optional[str] = None
 
 
 class HookTransitionResolveResponse(BaseModel):

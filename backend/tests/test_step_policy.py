@@ -27,7 +27,7 @@ class _Settings:
     OPENAI_API_KEY = "x"
     OPENAI_MODEL = "gpt-4.1-mini"
     ANTHROPIC_MODEL = "claude-opus-5"
-    ANTHROPIC_EFFORT = "medium"
+    ANTHROPIC_EFFORT = "high"
     GROQ_MODEL = "openai/gpt-oss-20b"
 
 
@@ -84,10 +84,10 @@ class TestStepPolicy:
             assert provider_for_tier(True, step) == "openai"
             assert provider_for_tier(False, step) == "openai"
 
-    def test_pinned_claude_step_thinks_cheaply(self, auto_settings):
+    def test_pinned_claude_step_uses_the_configured_effort(self, auto_settings):
         auto_settings.AI_PROVIDER = "anthropic"
         choice = model_for_step(True, "titles")
-        assert (choice.model, choice.effort) == ("claude-opus-5", "low")
+        assert (choice.model, choice.effort) == ("claude-opus-5", "high")
 
     def test_client_factory_builds_the_steps_model(self, auto_settings):
         client = get_text_client(is_pro=True, step="titles")
@@ -100,7 +100,7 @@ class TestStepPolicy:
 
         client = get_text_client(choice=REEL_DIRECTOR_OPUS, step="reel_director")
         assert isinstance(client, Anthropic)
-        assert (client.model, client.effort) == ("claude-opus-5-5", "medium")
+        assert (client.model, client.effort) == ("claude-opus-5-5", "high")
 
     def test_missing_key_falls_back_to_the_free_provider(self, auto_settings):
         auto_settings.OPENAI_API_KEY = ""
@@ -213,3 +213,30 @@ class TestClipDensity:
 
     def test_explicit_setting_still_overrides(self):
         assert HighlightDetector._max_clips(3600.0, MAX_CLIPS_PER_HOUR, explicit=8) == 8
+
+
+class TestOpenAIRouting:
+    """LLM_ROUTING=openai runs every step of every plan on OpenAI; Groq stays the fallback."""
+
+    @pytest.mark.parametrize("step", ALWAYS_FREE + FOLLOWS_TIER + ("social_copy", "reel_director", None))
+    def test_every_step_runs_on_openai_for_both_plans(self, auto_settings, step):
+        auto_settings.LLM_ROUTING = "openai"
+        assert provider_for_tier(False, step) == "openai"
+        assert provider_for_tier(True, step) == "openai"
+        assert model_for_step(False, step).model == "gpt-4.1-mini"
+
+    def test_missing_openai_key_still_falls_back_to_groq(self, auto_settings):
+        auto_settings.LLM_ROUTING = "openai"
+        auto_settings.OPENAI_API_KEY = ""
+        assert isinstance(get_text_client(is_pro=False, step="director"), Groq)
+
+    def test_tiered_routing_restores_the_groq_policy(self, auto_settings):
+        auto_settings.LLM_ROUTING = "tiered"
+        assert provider_for_tier(False, "director") == "groq"
+        assert provider_for_tier(True, "director") == "openai"
+
+    def test_opus_flag_yields_to_openai_routing(self, auto_settings):
+        from edit_engine.director import director_client
+
+        auto_settings.LLM_ROUTING = "openai"
+        assert isinstance(director_client(is_pro=True, opus=True), OpenAI)

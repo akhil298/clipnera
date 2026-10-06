@@ -188,6 +188,9 @@ class GeneratedClip(Base):
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The Instagram caption and the hashtags (a JSON list) to post with the clip.
+    social_caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    hashtags: Mapped[str | None] = mapped_column(Text, nullable=True)
     start_time: Mapped[float] = mapped_column(Float, nullable=False)
     end_time: Mapped[float] = mapped_column(Float, nullable=False)
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)

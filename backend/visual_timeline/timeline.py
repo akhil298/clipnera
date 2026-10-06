@@ -33,7 +33,8 @@ CHUNK_SECONDS = 120.0
 MIN_CHUNK_SECONDS = 20.0
 PARALLEL_CALLS = 4
 PROXY_HEIGHT = 360
-MAX_OUTPUT_TOKENS = 2048
+# Thinking tokens share this cap; 2048 cut busy two-minute pieces off mid-JSON.
+MAX_OUTPUT_TOKENS = 8192
 REQUEST_TIMEOUT_SECONDS = 120.0
 MAX_SHOWS_CHARS = 100
 
@@ -146,15 +147,17 @@ async def _call_gemini(video: bytes, length: float) -> str:
     response.raise_for_status()
     payload = response.json()
     usage = payload.get("usageMetadata") or {}
+    parts = ((payload.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+    text = "".join(str(part.get("text") or "") for part in parts)
     await record_llm_call(
         "gemini", model,
         input_tokens=int(usage.get("promptTokenCount") or 0),
         # Thinking tokens bill as output.
         output_tokens=int(usage.get("candidatesTokenCount") or 0) + int(usage.get("thoughtsTokenCount") or 0),
         latency_ms=round((time.monotonic() - started) * 1000),
+        response=text,
     )
-    parts = ((payload.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
-    return "".join(str(part.get("text") or "") for part in parts)
+    return text
 
 
 def parse_moments(reply: str, offset: float, length: float) -> list[dict[str, Any]]:
@@ -162,8 +165,9 @@ def parse_moments(reply: str, offset: float, length: float) -> list[dict[str, An
     try:
         items = json.loads(reply).get("moments") or []
     except (json.JSONDecodeError, AttributeError):
-        log.warning("Visual timeline reply was not JSON: %s", reply[:200])
-        return []
+        items = _complete_entries(reply)
+        log.warning("Visual timeline reply was not JSON, kept %d complete entr(ies): %s",
+                    len(items), reply[:200])
     moments = []
     for item in items:
         start, end = _seconds(item.get("from")), _seconds(item.get("to"))
@@ -175,6 +179,17 @@ def parse_moments(reply: str, offset: float, length: float) -> list[dict[str, An
         moments.append({"start": round(offset + start, 2), "end": round(offset + max(end, start + 1.0), 2),
                         "shows": shows})
     return moments
+
+
+def _complete_entries(reply: str) -> list[dict[str, Any]]:
+    """The whole entry objects in a reply that was cut off before its JSON closed."""
+    entries = []
+    for match in re.finditer(r"\{[^{}]*\}", reply):
+        try:
+            entries.append(json.loads(match.group()))
+        except json.JSONDecodeError:
+            continue
+    return entries
 
 
 def _seconds(value: Any) -> float | None:

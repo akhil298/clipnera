@@ -8,7 +8,7 @@ existing watermark switch: always on for Free, on by default for paid plans, whi
 |---|---|
 | `motion-library/` | Every motion, grouped by type (intros, transitions, end cards, watermarks). Each folder has a preview video and a README with its details. |
 | `motion/source/` | The motion code (`kit.js` for round 2, `reel.html` for round 1), `catalog.json` with every motion's details, bundled fonts, and `render.mjs`. |
-| `../backend/static/branding/` | The files exports are made with: the intro and end card for 9:16, 16:9 and 1:1, the watermark pieces, and `manifest.json`. |
+| `../backend/static/motion/branding/` | The files exports are made with: the intro and end card for 9:16, 16:9 and 1:1, the watermark pieces, and `manifest.json`. |
 | `../backend/branding/` | The branding pass: `service.py` joins intro, clip and end card; `watermark.py` makes the watermark follow the clip's sound. |
 
 ## Changing a motion

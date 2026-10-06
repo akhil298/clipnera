@@ -26,6 +26,9 @@ const TYPE_BY_KIND: Record<InAppNotificationResponse['kind'], AppNotification['t
   reel_failed: 'render_failed',
   social_expiring: 'scheduled_post',
   social_expired: 'scheduled_post',
+  // A reward changed the balance, so it refreshes the account like a payment does.
+  referral_reward: 'credit_update',
+  referral_update: 'virality_alert',
 };
 
 function toAppNotification(n: InAppNotificationResponse): AppNotification {

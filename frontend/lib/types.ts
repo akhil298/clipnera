@@ -224,6 +224,8 @@ export interface HookTransitionConfig {
   custom_text?: string | null;
   text_style?: string | null;
   duration?: number | null;
+  /** A motion-graphic id from the catalog's `graphics`, "auto" (or unset) for a random one, or "none". */
+  graphic?: string | null;
 }
 
 /** Mirrors backend HookTransitionApplied: the concrete transition a render used. */
@@ -237,6 +239,8 @@ export interface HookTransitionApplied {
   text: string | null;
   text_style: string;
   duration: number;
+  /** The motion graphic laid over the bridge, with its sound; null for none. */
+  graphic: string | null;
 }
 
 export interface HookTransitionPart {
@@ -278,6 +282,7 @@ export interface HookTransitionCatalog {
   phrases: HookTransitionPhrase[];
   groups: string[];
   presets: HookTransitionPreset[];
+  graphics: HookTransitionPart[];
   limits: {
     min_duration: number;
     max_duration: number;
@@ -342,6 +347,7 @@ export type TabType =
   | 'brand_kit'
   | 'reels'
   | 'video_editor'
+  | 'referrals'
   | 'settings';
 
 export interface UserProfile {
@@ -357,6 +363,7 @@ export interface UserProfile {
   providers: string[];
   role: 'user' | 'admin';
   emailNotifications: boolean;
+  onboardingCompleted: boolean;
 }
 
 export interface Workspace {
@@ -438,4 +445,168 @@ export interface PipelineProgressEvent {
   status: 'idle' | 'running' | 'completed' | 'error' | 'cancelled';
   current_step?: string;
   step_status?: string;
+}
+
+// -- Welcome form: mirrors backend/onboarding/schema.py ----------------------
+
+export const ONBOARDING_ROLES = [
+  { value: 'youtuber', label: 'YouTuber' },
+  { value: 'podcaster', label: 'Podcaster' },
+  { value: 'streamer', label: 'Streamer' },
+  { value: 'agency', label: 'Agency' },
+  { value: 'marketer', label: 'Marketer' },
+  { value: 'educator', label: 'Educator' },
+  { value: 'business', label: 'Business' },
+  { value: 'other', label: 'Other' },
+] as const;
+export const ONBOARDING_SOURCES = [
+  { value: 'youtube', label: 'YouTube' },
+  { value: 'instagram', label: 'Instagram' },
+  { value: 'friend', label: 'Friend or referral' },
+  { value: 'google', label: 'Google' },
+  { value: 'x', label: 'X' },
+  { value: 'linkedin', label: 'LinkedIn' },
+  { value: 'other', label: 'Other' },
+] as const;
+export type OnboardingRole = (typeof ONBOARDING_ROLES)[number]['value'];
+export type OnboardingSource = (typeof ONBOARDING_SOURCES)[number]['value'];
+
+export interface OnboardingStatusResponse {
+  completed: boolean;
+  can_use_referral_code: boolean;
+}
+
+export interface OnboardingRequest {
+  role: OnboardingRole;
+  role_other?: string | null;
+  heard_from: OnboardingSource;
+  heard_from_other?: string | null;
+  referral_code?: string | null;
+}
+
+export interface OnboardingResponse {
+  completed_at: string;
+  referral: InvitedByResponse | null;
+}
+
+// -- Referrals: mirrors backend/referral/schema.py ---------------------------
+
+export type ReferralStatus =
+  | 'pending_pro' | 'awaiting_approval' | 'pending_video' | 'succeeded' | 'partial' | 'failed' | 'void';
+export type ReferralFailReason =
+  | 'pro_not_bought' | 'payment_rejected' | 'approval_timeout' | 'no_video' | 'payment_reversed'
+  | 'account_deleted' | 'referrer_unavailable' | 'voided_by_admin';
+export type ReferralRewardKind = 'referee_pro' | 'referrer_pro' | 'referrer_video';
+
+export interface ReferralRules {
+  referee_pro_credits: number;
+  referrer_pro_credits: number;
+  referrer_video_credits: number;
+  bonus_expiry_days: number;
+  pro_window_hours: number;
+  video_window_hours: number;
+  monthly_cap: number;
+  min_video_seconds: number;
+  approval_wait_days: number;
+}
+
+export interface ReferralReward {
+  kind: ReferralRewardKind;
+  credits: number;
+  granted_at: string;
+  expires_at: string;
+}
+
+export interface ReferralItem {
+  id: string;
+  name: string;
+  email_masked: string;
+  status: ReferralStatus;
+  fail_reason: ReferralFailReason | null;
+  signed_up_at: string;
+  pro_deadline_at: string;
+  pro_activated_at: string | null;
+  video_deadline_at: string | null;
+  video_completed_at: string | null;
+  on_hold: boolean;
+  rewards: ReferralReward[];
+  rules: ReferralRules;
+}
+
+export interface ReferralStats {
+  invited: number;
+  in_progress: number;
+  succeeded: number;
+  partial: number;
+  failed: number;
+  credits_earned: number;
+}
+
+export interface MyReferralsResponse {
+  enabled: boolean;
+  code: string | null;
+  share_url: string | null;
+  rules: ReferralRules;
+  used_this_month: number;
+  stats: ReferralStats;
+  referrals: ReferralItem[];
+}
+
+export interface InvitedByResponse {
+  referrer_name: string;
+  status: ReferralStatus;
+  fail_reason: ReferralFailReason | null;
+  signed_up_at: string;
+  pro_deadline_at: string;
+  pro_activated_at: string | null;
+  video_deadline_at: string | null;
+  bonus_credits: number;
+  reward: ReferralReward | null;
+}
+
+export interface ValidateCodeResponse {
+  valid: boolean;
+  referrer_name: string | null;
+  reason: string | null;
+  /** What joining with a valid code earns, under the current rules. */
+  bonus_credits: number | null;
+  pro_window_hours: number | null;
+  bonus_expiry_days: number | null;
+}
+
+export interface AdminReferralResponse {
+  id: string;
+  referrer_id: string | null;
+  referrer_email: string | null;
+  referee_id: string | null;
+  referee_email: string | null;
+  referee_name: string;
+  code: string;
+  status: ReferralStatus;
+  fail_reason: ReferralFailReason | null;
+  review_state: 'clear' | 'held' | 'approved';
+  flagged_reason: string | null;
+  signed_up_at: string;
+  pro_deadline_at: string;
+  pro_activated_at: string | null;
+  video_deadline_at: string | null;
+  video_completed_at: string | null;
+  rewards: ReferralReward[];
+  created_at: string;
+}
+
+export interface AdminReferralVoidRequest {
+  reason: string;
+}
+
+export interface ReferralSettingsChange {
+  admin_email: string | null;
+  changes: Record<string, { from: number; to: number }>;
+  created_at: string;
+}
+
+export interface AdminReferralSettingsResponse {
+  rules: ReferralRules;
+  updated_at: string | null;
+  history: ReferralSettingsChange[];
 }

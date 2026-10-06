@@ -4,9 +4,11 @@ from types import SimpleNamespace
 
 import pytest
 
+import payment.service as payment_service
 from payment.service import PaymentService
 from core.exceptions import CustomException
 from subscription.entitlements import CREDIT_PACKS, PLAN_PRICES, BillingPeriod
+from subscription.repository import Balances
 from subscription.service import CREDIT_PACK_REFERENCE, InsufficientCreditsError, SubscriptionService
 
 
@@ -21,22 +23,44 @@ class _Ledger:
     async def get_latest_balance(self, user_id):
         return self.balance
 
-    async def get_latest_balances(self, user_id):
-        return self.balance, self.purchased
+    async def lock_user(self, user_id):
+        pass
 
-    async def get_latest_charge(self, user_id, reference_id):
-        charges = [e for e in self.entries if e["reference_id"] == reference_id and e["amount"] < 0]
-        return SimpleNamespace(**charges[-1]) if charges else None
+    async def get_latest_balances(self, user_id):
+        return Balances(self.balance, self.purchased)
+
+    async def purchased_spent(self, user_id, reference_id):
+        return -sum(e["purchased_amount"] for e in self.entries if e["reference_id"] == reference_id)
+
+    async def grants_spent(self, user_id, reference_id):
+        return []
+
+    async def open_grants(self, user_id, now):
+        return []
+
+    async def due_grants(self, user_id, now):
+        return []
 
     async def add_entry(self, **fields):
         self.entries.append(fields)
-        self.balance = fields["balance_after"]
-        self.purchased = fields["purchased_balance_after"]
-        return SimpleNamespace(id=f"entry-{len(self.entries)}", **fields)
+        self.balance = fields["balances_after"].total
+        self.purchased = fields["balances_after"].purchased
+        after = fields["balances_after"]
+        return SimpleNamespace(
+            id=f"entry-{len(self.entries)}", balance_after=after.total, purchased_balance_after=after.purchased, **fields
+        )
+
+
+class _NoSubscription:
+    async def get_active_by_user(self, user_id):
+        return None
+
+    async def get_account_created_at(self, user_id):
+        return None
 
 
 def _service(ledger: _Ledger, monkeypatch) -> SubscriptionService:
-    service = SubscriptionService(None, None, None, ledger)
+    service = SubscriptionService(None, _NoSubscription(), None, ledger)
 
     async def no_reset(user_id, commit=True):
         return False
@@ -96,7 +120,7 @@ async def test_grant_purchased_credits(monkeypatch):
     await _service(ledger, monkeypatch).grant_purchased_credits("u", 200, "Bought 200 credits", reference_id="tx-1")
 
     [entry] = ledger.entries
-    assert (entry["balance_after"], entry["purchased_balance_after"]) == (220, 200)
+    assert entry["balances_after"] == Balances(220, 200)
     assert entry["reference_type"] == CREDIT_PACK_REFERENCE
 
 
@@ -135,6 +159,14 @@ def _payment_service(tx, subscriptions) -> PaymentService:
 
     service.get_for_admin = admin_view
     return service
+
+
+@pytest.fixture(autouse=True)
+def _no_referral_checks(monkeypatch):
+    async def skip(user_id):
+        pass
+
+    monkeypatch.setattr(payment_service, "refresh_referrals_of", skip)
 
 
 @pytest.mark.asyncio

@@ -6,7 +6,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from clip_generation.hook import Hook, Span, body_duration, on_output_timeline
 from hook_transitions.graph import BridgePlan, MediaInfo, Timeline, timeline_graph
@@ -16,10 +16,10 @@ from core.database import AsyncSessionLocal
 from core.logging_config import get_logger
 from core.exceptions import CustomException
 from video_processor.ffmpeg_service import FFmpegService
-from branding.service import apply_branding
+from branding.service import apply_branding, assets as branding_assets
 from subtitle_styling.ass_generator import (
-    CAPTION_ANIMATIONS, FONTS_DIR, AssGenerator, ass_filter, build_ass_file, bundled_family, burn_filter_args,
-    escape_filter_value, script_font,
+    CAPTION_ANIMATIONS, FONTS_DIR, TITLE_SECONDS, AssGenerator, ass_filter, build_ass_file, bundled_family,
+    burn_filter_args, escape_filter_value, script_font,
 )
 from subtitle_styling.templates import DEFAULT_STYLE, get_template, get_template_info, get_template_names
 from subtitle_styling.phrase_segmenter import segment_phrases, segment_for_captions
@@ -27,6 +27,9 @@ from subtitle_styling.schema import SubtitleBurnRequest
 from subscription.service import SubscriptionService, require_caption_style, require_hook_transition
 
 log = get_logger(__name__)
+
+if TYPE_CHECKING:  # motion draws with this package's caption helpers, so it is imported where used
+    from motion.overlay import MotionSource, Overlay
 
 # Editor custom_config key -> (template key, min, max, scale). Ranges mirror the
 # editor's sliders; positions arrive as a percentage of frame height.
@@ -180,6 +183,7 @@ class SubtitleStylingService:
         transition: Optional[TransitionSpec] = None,
         spans: Optional[list[Span]] = None,
         seams: Optional[list[tuple[float, float, float]]] = None,
+        motion: Optional[MotionSource] = None,
     ) -> str:
         """Burn captions into a cut clip, with Clipnera branding when ``enable_watermark``.
 
@@ -188,6 +192,8 @@ class SubtitleStylingService:
         ``spans`` are the source ranges a stitched body was cut from.
         ``seams`` are the cut's stacked stretches, ``(start, end, seam)`` in its
         own seconds (see ``CutResult.seams``); captions sit on the seam there.
+        ``motion`` is the clip's motion plan and the cut's layout stretches; its
+        graphics and sounds go in the same pass, and captions step aside under cards.
         """
         # FFmpeg runs with cwd set to a scratch dir (for the bare caption
         # filename), so a relative clip path like generated_clips/... would not
@@ -210,11 +216,11 @@ class SubtitleStylingService:
                 video_path, clip_start, clip_end, style_type, title_text,
                 enable_watermark, transcript_segments, ai_cues,
                 animation_speed, emoji_collection, _style_overrides(custom_config), hook, transition, spans,
-                seams,
+                seams, motion,
             )
         return await self._burn_with_srt(
             video_path, clip_start, clip_end, style_type, custom_config,
-            subtitles, title_text, enable_watermark, hook, transition, spans,
+            subtitles, title_text, enable_watermark, hook, transition, spans, motion,
         )
 
     async def render_uncaptioned(
@@ -226,21 +232,51 @@ class SubtitleStylingService:
         hook: Optional[Hook] = None,
         transition: Optional[TransitionSpec] = None,
         spans: Optional[list[Span]] = None,
+        motion: Optional[MotionSource] = None,
     ) -> str:
-        """Re-encode a cut clip without captions: branding and transition only.
+        """Re-encode a cut clip without captions: branding, transition and motion graphics.
 
         Returns a new file the caller owns; ``video_path`` is left untouched.
         """
         video_path = str(Path(video_path).resolve())
+        body_start, source_end = clip_start, clip_end
         clip_end = clip_start + body_duration(clip_start, clip_end, spans)
         with tempfile.TemporaryDirectory() as tmpdir:
             media = await self._media(video_path)
             timeline, gap = self._bridge(media, hook, transition, tmpdir)
             origin, _ = on_output_timeline([], clip_start, clip_end, hook, gap)
+            overlay = self._overlay(motion, body_start, source_end, hook, spans, gap, media, title_seconds=0.0)
+            filters = [ass_filter(self._write_overlay(overlay, tmpdir))] if overlay else ["null"]
             return await self._encode(
-                video_path, ["null"], enable_watermark, clip_end - origin, tmpdir, timeline,
-                label="plain", error_code="EXPORT_FAILED",
+                video_path, filters, enable_watermark, clip_end - origin, tmpdir, timeline,
+                label="plain", error_code="EXPORT_FAILED", overlay=overlay, has_audio=media.has_audio,
             )
+
+    @staticmethod
+    def _overlay(
+        motion: Optional[MotionSource], clip_start: float, clip_end: float, hook: Optional[Hook],
+        spans: Optional[list[Span]], gap: float, media: MediaInfo, title_seconds: float,
+    ) -> Optional[Overlay]:
+        """The clip's motion graphics on this render, or None. A bad plan never fails an export."""
+        if motion is None:
+            return None
+        from motion.overlay import build_overlay
+
+        try:
+            return build_overlay(
+                motion.plan, motion.frames, clip_start, clip_end, hook, spans, gap, media.width, media.height,
+                title_seconds,
+            )
+        except Exception as exc:
+            log.warning("Motion graphics skipped for this render: %s", exc)
+            return None
+
+    @staticmethod
+    def _write_overlay(overlay: Overlay, work_dir: str) -> str:
+        path = os.path.join(work_dir, "motion.ass")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(overlay.ass)
+        return path
 
     async def _media(self, video_path: str) -> MediaInfo:
         return MediaInfo.from_probe(await self._ffmpeg.get_video_info(video_path))
@@ -272,10 +308,17 @@ class SubtitleStylingService:
         timeline: Optional[Timeline],
         label: str,
         error_code: str = "BURN_IN_FAILED",
+        overlay: Optional[Overlay] = None,
+        has_audio: bool = True,
     ) -> str:
         """Run one render in ``work_dir`` and return a copy the caller owns."""
         output_path = os.path.join(work_dir, f"{label}_{Path(video_path).stem}.mp4")
-        cmd = self._encode_cmd(video_path, output_path, video_filters, duration, timeline)
+        # With branding on, this file is re-encoded once more by apply_branding.
+        branded = enable_watermark and branding_assets() is not None
+        cmd = self._encode_cmd(
+            video_path, output_path, video_filters, duration, timeline, intermediate=branded,
+            sounds=overlay.sounds if overlay else None, has_audio=has_audio,
+        )
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, cwd=work_dir
         )
@@ -285,7 +328,7 @@ class SubtitleStylingService:
                 message=f"FFmpeg {label} render failed: {_ffmpeg_failure(proc.returncode, stderr)}",
                 code=error_code, status_code=500,
             )
-        if enable_watermark:
+        if branded:
             try:
                 output_path = str(await apply_branding(Path(output_path), Path(work_dir) / f"branded_{Path(output_path).name}"))
             except RuntimeError as exc:
@@ -302,18 +345,46 @@ class SubtitleStylingService:
         video_filters: list[str],
         duration: float,
         timeline: Optional[Timeline] = None,
+        intermediate: bool = False,
+        sounds: Optional[list] = None,
+        has_audio: bool = True,
     ) -> list[str]:
         # No -ss: the input is already the trimmed clip. veryfast renders about
-        # twice as fast as fast at the same quality. This is the last encode
-        # the viewer sees, so CRF 18 keeps it visually lossless against the cut.
+        # twice as fast as fast at the same quality. When this is the last
+        # encode the viewer sees, CRF 18 keeps it visually lossless against the
+        # cut. An ``intermediate`` file is only read back by the branding pass:
+        # ultrafast at CRF 14 encodes it 2.5x faster than veryfast at 18 and the
+        # branded result comes out slightly closer to the source (SSIM 0.9927
+        # vs 0.9916 on a 71s 1080x1920 clip), at the cost of a larger temp file.
         # Errors only: progress lines would bury the reason for a failure.
         reads = timeline.inputs if timeline else 1
+        extras = list(timeline.extra_inputs) if timeline else []
+        preset, crf = ("ultrafast", "14") if intermediate else ("veryfast", "18")
+        filter_args = burn_filter_args(video_filters, timeline)
+        if sounds:
+            from motion.sound import mix_graph, sound_path
+
+            # Motion sounds join the clip's own audio (or the hook timeline's) in one mix.
+            chain = ",".join(video_filters)
+            if timeline:
+                chains = [*timeline.chains, f"[{timeline.video}]{chain}[v]"]
+                base = timeline.audio
+            else:
+                chains = [f"[0:v]{chain}[v]"]
+                base = "0:a"
+                if not has_audio:
+                    chains.append(f"anullsrc=r=48000:cl=stereo,atrim=duration={duration}[silence]")
+                    base = "silence"
+            chains += mix_graph(sounds, base, reads + len(extras), out="mixed")
+            filter_args = ["-filter_complex", ";".join(chains), "-map", "[v]", "-map", "[mixed]"]
         return [
             "ffmpeg", "-y", "-nostdin", "-hide_banner", "-loglevel", "error",
             *["-i", video_path] * reads,
-            *burn_filter_args(video_filters, timeline),
+            *[arg for extra in extras for arg in ("-i", extra)],
+            *[arg for sound in sounds or [] for arg in ("-i", _sound_path(sound.name))],
+            *filter_args,
             "-t", str(duration),
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+            "-c:v", "libx264", "-preset", preset, "-crf", crf, "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-b:a", "128k",
             "-movflags", "+faststart",
             output_path,
@@ -341,6 +412,7 @@ class SubtitleStylingService:
         transition: Optional[TransitionSpec] = None,
         spans: Optional[list[Span]] = None,
         seams: Optional[list[tuple[float, float, float]]] = None,
+        motion: Optional[MotionSource] = None,
     ) -> str:
         template_name = style_type
         if not get_template_names().__contains__(style_type):
@@ -358,10 +430,15 @@ class SubtitleStylingService:
             # A teaser (and any bridge) ahead of the clip moves where the output
             # starts in source time; rebasing against that origin keeps every
             # word in sync.
-            body_start = clip_start
+            body_start, source_end = clip_start, clip_end
             clip_start, words = on_output_timeline(
                 self._extract_words_for_ass(transcript_segments), clip_start, clip_end, hook, gap, spans,
             )
+            overlay = self._overlay(
+                motion, body_start, source_end, hook, spans, gap, media,
+                title_seconds=TITLE_SECONDS if title_text and title_text.strip() else 0.0,
+            )
+            style_overrides = _title_clear_of_content(style_overrides, motion)
             clip_end = body_start + body_duration(body_start, clip_end, spans)
             duration = max(0.0, clip_end - clip_start)
             if duration <= 0:
@@ -389,11 +466,15 @@ class SubtitleStylingService:
                 segment_breaks=_segment_breaks(clip_start, body_start, hook, spans),
                 # Stacks are built for vertical cuts only.
                 seams=_seams_on_output(seams, hook, gap) if media.height > media.width else None,
+                quiet=overlay.quiet if overlay else None,
                 output_path=os.path.join(tmpdir, "captions.ass"),
             )
+            filters = [ass_filter(ass_path)]
+            if overlay:
+                filters.append(ass_filter(self._write_overlay(overlay, tmpdir)))
             return await self._encode(
-                video_path, [ass_filter(ass_path)], enable_watermark, duration, tmpdir, timeline,
-                label="burned",
+                video_path, filters, enable_watermark, duration, tmpdir, timeline,
+                label="burned", overlay=overlay, has_audio=media.has_audio,
             )
 
     @staticmethod
@@ -433,6 +514,7 @@ class SubtitleStylingService:
         hook: Optional[Hook] = None,
         transition: Optional[TransitionSpec] = None,
         spans: Optional[list[Span]] = None,
+        motion: Optional[MotionSource] = None,
     ) -> str:
         """Burn SRT subtitles using a force_style preset.
 
@@ -450,7 +532,7 @@ class SubtitleStylingService:
         media = await self._media(video_path)
         with tempfile.TemporaryDirectory() as tmpdir:
             timeline, gap = self._bridge(media, hook, transition, tmpdir)
-            body_start = clip_start
+            body_start, source_end = clip_start, clip_end
             clip_start, subtitles = on_output_timeline(subtitles or [], clip_start, clip_end, hook, gap, spans)
             clip_end = body_start + body_duration(body_start, clip_end, spans)
             duration = clip_end - clip_start
@@ -470,9 +552,15 @@ class SubtitleStylingService:
                     output_path=os.path.join(tmpdir, "title.ass"),
                 )
                 filters.append(ass_filter(title_ass))
+            overlay = self._overlay(
+                motion, body_start, source_end, hook, spans, gap, media,
+                title_seconds=TITLE_SECONDS if title_text else 0.0,
+            )
+            if overlay:
+                filters.append(ass_filter(self._write_overlay(overlay, tmpdir)))
             return await self._encode(
                 video_path, filters, enable_watermark, duration, tmpdir, timeline,
-                label="burned_srt",
+                label="burned_srt", overlay=overlay, has_audio=media.has_audio,
             )
 
     def _generate_srt(self, subtitles: list[dict], clip_start: float, output_dir: str | None = None) -> str:
@@ -643,3 +731,26 @@ def _segment_breaks(
             cursor += end - start
             breaks.append(cursor)
     return breaks or None
+
+
+def _title_clear_of_content(overrides: Optional[dict[str, Any]], motion: Optional["MotionSource"]) -> dict[str, Any]:
+    """``overrides`` with the title moved off shown content when the clip opens on it.
+
+    A position the user chose in the editor is kept as it is.
+    """
+    overrides = dict(overrides or {})
+    if "title_position_y" in overrides or motion is None or not motion.frames:
+        return overrides
+    from motion.graphics import LayoutSpan, title_position
+
+    first = next((item for item in motion.frames if isinstance(item, dict) and "kind" in item), None)
+    moved = title_position(LayoutSpan.from_stored(first)) if first else None
+    if moved is not None:
+        overrides["title_position_y"] = round(moved, 4)
+    return overrides
+
+
+def _sound_path(name: str) -> str:
+    from motion.sound import sound_path
+
+    return sound_path(name)

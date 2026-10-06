@@ -98,7 +98,7 @@ class YouTubeService:
         1. YOUTUBE_COOKIES_BROWSER: yt-dlp reads cookies directly from browser.
            Set to browser name, e.g. "chrome", "firefox", "edge".
         2. YOUTUBE_COOKIES_PATH: path to an exported cookies.txt file
-           (default ~/.clipnera/youtube_cookies.txt, where update_ec2.sh puts it).
+           (default ~/.clipnera/youtube_cookies.txt, where update_ec2.sh puts it on the API machine).
 
         If neither resolves, a local backend/youtube_cookies.txt is used when present.
         """
@@ -120,17 +120,17 @@ class YouTubeService:
         if deno_path:
             options["js_runtimes"] = {"deno": {}}
             options["remote_components"] = ["ejs:github"]
-            log.info(f"yt-dlp JavaScript runtime enabled: {deno_path}")
+            log.debug(f"yt-dlp JavaScript runtime enabled: {deno_path}")
 
         if settings.YOUTUBE_COOKIES_BROWSER:
             options["cookiesfrombrowser"] = (settings.YOUTUBE_COOKIES_BROWSER,)
-            log.info(f"YouTube cookies will be read from browser: {settings.YOUTUBE_COOKIES_BROWSER}")
+            log.debug(f"YouTube cookies will be read from browser: {settings.YOUTUBE_COOKIES_BROWSER}")
             return options
 
         cookie_file = self._resolve_cookie_file()
         if cookie_file:
             options["cookiefile"] = str(cookie_file)
-            log.info(f"YouTube cookies file loaded from {cookie_file}")
+            log.debug(f"YouTube cookies file loaded from {cookie_file}")
         else:
             log.warning("No YouTube cookies file found; downloads may be blocked as a bot")
 
@@ -343,11 +343,12 @@ class YouTubeService:
         os.makedirs(download_dir, exist_ok=True)
         output_template = os.path.join(download_dir, "%(id)s.%(ext)s")
 
-        log.info(f"[{project_id}] Starting download of video: {video_id}")
+        log.info(f"[{project_id}] DOWNLOAD START youtube video={video_id}")
         await self.set_progress(project_id, {"status": "downloading", "percent": 0.0, "total": None, "speed": None, "eta": None})
 
         def make_progress_hook(pid: str):
             last_update_time = [None]  # Track time for speed calculation
+            logged_tenth = [-1]  # last 10% step written to the log
             
             def hook(d: dict):
                 if d['status'] == 'downloading':
@@ -393,8 +394,11 @@ class YouTubeService:
                         except Exception:
                             eta = None
                     
-                    # Log progress to terminal
-                    log.info(f"[{pid}] Download: {percent:.1f}% | {self._format_bytes(downloaded)}/{self._format_bytes(total) if total else '?'} | Speed: {speed or '?'} | ETA: {eta or '?'}")
+                    if percent < logged_tenth[0] * 10:  # yt-dlp moved on to the next stream (video, then audio)
+                        logged_tenth[0] = -1
+                    if int(percent // 10) > logged_tenth[0]:
+                        logged_tenth[0] = int(percent // 10)
+                        log.info(f"[{pid}] DOWNLOAD {percent:.0f}% | {self._format_bytes(downloaded)}/{self._format_bytes(total) if total else '?'} | {speed or '?'} | eta {eta or '?'}")
                     
                     asyncio.run_coroutine_threadsafe(
                         self.set_progress(pid, {
@@ -407,7 +411,7 @@ class YouTubeService:
                         loop,
                     )
                 elif d['status'] == 'finished':
-                    log.info(f"[{pid}] ✓ Download completed, video merging finished")
+                    log.debug(f"[{pid}] yt-dlp finished a stream")
             return hook
 
         loop = asyncio.get_event_loop()
@@ -452,9 +456,8 @@ class YouTubeService:
         title = prefetch.title or os.path.splitext(os.path.basename(downloaded_file))[0]
         duration = prefetch.duration or 0
 
-        log.info(f"[{project_id}] ✓ Video file ready: {os.path.basename(downloaded_file)} ({self._format_bytes(file_size)})")
-        log.info(f"[{project_id}] Starting S3 upload to {self._bucket}...")
-        log.info(f"[{project_id}] File: {os.path.basename(downloaded_file)} | Size: {self._format_bytes(file_size)}")
+        log.info(f"[{project_id}] DOWNLOAD DONE {os.path.basename(downloaded_file)} ({self._format_bytes(file_size)})")
+        log.debug(f"[{project_id}] Starting S3 upload to {self._bucket}")
         await self.set_progress(project_id, {"status": "uploading", "percent": 5.0, "total": self._format_bytes(file_size), "speed": None, "eta": "Uploading to cloud..."})
 
         s3_key = f"videos/{user_id}/{project_id}/{video_id}.mp4"
@@ -475,16 +478,17 @@ class YouTubeService:
             """Upload file to S3 using fast parallel multipart upload (10 workers, 50MB chunks)."""
             import time as _time
 
-            log.info(f"[{project_id}] Using existing S3 bucket: {self._bucket}")
-            log.info(f"[{project_id}] [UPLOAD_START] Starting fast upload: {self._format_bytes(file_size)}")
+            log.debug(f"[{project_id}] Using existing S3 bucket: {self._bucket}")
+            log.debug(f"[{project_id}] Starting S3 upload: {self._format_bytes(file_size)}")
 
             uploaded_bytes = 0
             start_time = _time.monotonic()
             last_log_time = start_time
             last_log_bytes = 0
+            logged_quarter = -1
 
             def _callback(bytes_amount: int) -> None:
-                nonlocal uploaded_bytes, last_log_time, last_log_bytes
+                nonlocal uploaded_bytes, last_log_time, last_log_bytes, logged_quarter
                 uploaded_bytes += bytes_amount
                 now = _time.monotonic()
                 elapsed = now - start_time
@@ -502,10 +506,12 @@ class YouTubeService:
                     upload_percent = (uploaded_bytes / file_size) * 100 if file_size else 0
                     overall_percent = 5.0 + (upload_percent / 100.0) * 70.0
 
-                    log.info(
-                        f"[{project_id}] Uploaded {self._format_bytes(uploaded_bytes)}/{self._format_bytes(file_size)} "
-                        f"({(uploaded_bytes / file_size * 100):.1f}%) | {self._format_bytes(int(window_speed))}/s"
-                    )
+                    if int(upload_percent // 25) > logged_quarter:
+                        logged_quarter = int(upload_percent // 25)
+                        log.info(
+                            f"[{project_id}] S3 UPLOAD {upload_percent:.0f}% | {self._format_bytes(uploaded_bytes)}/"
+                            f"{self._format_bytes(file_size)} | {self._format_bytes(int(window_speed))}/s"
+                        )
 
                     self.set_progress_sync(project_id, {
                         "status": "uploading",
@@ -529,11 +535,11 @@ class YouTubeService:
                 callback=_callback,
             )
 
-            log.info(f"[{project_id}] [UPLOAD_DONE] ✓ File successfully uploaded to S3 ({self._format_bytes(file_size)})")
+            log.debug(f"[{project_id}] S3 upload finished ({self._format_bytes(file_size)})")
             return True
 
         # Run upload in executor to avoid blocking
-        log.info(f"[{project_id}] Queuing S3 upload task (parallel, 50MB chunks)...")
+        log.debug(f"[{project_id}] Queuing S3 upload task (parallel, 50MB chunks)")
         try:
             await loop.run_in_executor(None, _upload_to_s3)
         except Exception as e:
@@ -541,17 +547,17 @@ class YouTubeService:
             await self.set_progress(project_id, {"status": "error", "message": f"S3 upload failed: {str(e)}"})
             raise ValueError(f"S3 upload failed: {str(e)}")
 
-        log.info(f"[{project_id}] ✓ S3 upload completed ({self._format_bytes(file_size)}) -> s3://{self._bucket}/{s3_key}")
+        log.info(f"[{project_id}] S3 UPLOAD DONE {self._format_bytes(file_size)} -> s3://{self._bucket}/{s3_key}")
         await self.set_progress(project_id, {"status": "uploading", "percent": 75.0, "total": self._format_bytes(file_size), "speed": None, "eta": "Generating link..."})
 
-        log.info(f"[{project_id}] Generating presigned URL (expires in 1 hour)...")
+        log.debug(f"[{project_id}] Generating presigned URL")
         try:
             presigned_url = self._s3.generate_presigned_url(
                 bucket=self._bucket,
                 key=s3_key,
                 expires_in=3600,
             )
-            log.info(f"[{project_id}] ✓ Presigned URL generated")
+            log.debug(f"[{project_id}] Presigned URL generated")
         except Exception as e:
             log.error(f"[{project_id}] Failed to generate presigned URL: {str(e)}")
             presigned_url = ""
@@ -561,7 +567,7 @@ class YouTubeService:
             "percent": 100.0,
             "message": "Upload complete; saving video metadata...",
         })
-        log.info(f"[{project_id}] Upload complete; waiting for database metadata commit. File: s3://{self._bucket}/{s3_key}")
+        log.debug(f"[{project_id}] Upload complete; saving metadata")
 
         return {
             "title": title,

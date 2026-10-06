@@ -23,6 +23,7 @@ from core.logging_config import get_logger
 from subscription.entitlements import PURCHASABLE_PLAN
 from subscription.model import PlanSlug
 from subscription.repository import PlanRepository
+from referral.service import reverse_referral_pro
 from subscription.service import SubscriptionService
 
 log = get_logger(__name__)
@@ -140,6 +141,8 @@ class AdminService:
         else:
             await self._require_user(user_id)
             await self._subscription_service.revoke_paid_plan(user_id)
+            # Pro taken away: a referral it completed no longer counts.
+            await reverse_referral_pro(user_id)
         log.info(f"Admin plan change: user={user_id} plan={body.plan} days={body.days} by={admin_id}")
         return await self._get_user(user_id)
 

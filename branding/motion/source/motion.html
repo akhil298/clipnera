@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Clipnera motion templates · render harness</title>
+<!-- render.mjs loads this page in headless Chrome and asks for transparent template frames. -->
+<link rel="stylesheet" href="fonts.css">
+<script src="kit.js"></script>
+<script src="templates.js"></script>
+<script>
+const FACES = ['800 40px Syne', '800 20px "Plus Jakarta Sans"', '700 20px "Plus Jakarta Sans"', '600 20px "Plus Jakarta Sans"'];
+Promise.all(FACES.map(f => document.fonts.load(f))).then(found => {
+  const missing = FACES.filter((_, i) => !found[i].length);
+  if (missing.length) window.harnessError = `Fonts not loaded: ${missing.join(', ')}`;
+  else window.harnessReady = true;
+});
+const canvas = document.createElement('canvas'), ctx = canvas.getContext('2d');
+window.Motion = {
+  /** Throws on a spec the template cannot draw, before any frame is rendered. */
+  check({ template, fields = {} }) {
+    const spec = TEMPLATES[template];
+    if (!spec) throw new Error(`Unknown motion template "${template}"`);
+    const missing = spec.requires.filter(k => fields[k] === undefined || fields[k] === '');
+    if (missing.length) throw new Error(`${template} needs ${missing.join(', ')}`);
+  },
+  /** One transparent frame of ``template`` at ``t`` seconds, as a PNG data URL. */
+  frame({ template, t, dur, W, H, fields = {}, accent = AMBER }) {
+    canvas.width = W; canvas.height = H;
+    TEMPLATES[template].draw(ctx, W, H, t, dur, fields, accent);
+    return canvas.toDataURL('image/png');
+  },
+};
+</script>

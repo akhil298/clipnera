@@ -159,6 +159,25 @@ class TestTransliterate:
         assert sorted(client.batches[0]) == sorted(spell)
 
     @pytest.mark.asyncio
+    async def test_a_clip_transcribed_on_its_own_still_gets_tenglish(self, monkeypatch):
+        """A clip cut missed by the project transcript is transcribed again; it must not come back in Telugu script."""
+        import clients.ai
+        from clip_generation.service import ClipService
+
+        seg = {"text": "నేను మీటింగ్", "words": [{"start": 0, "end": 1, "word": "నేను"}, {"start": 1, "end": 2, "word": "మీటింగ్"}]}
+
+        class Transcriber:
+            async def transcribe(self, request, progress_callback=None):
+                return {"segments": [seg]}
+
+        monkeypatch.setattr("transcription.service.WhisperXTranscriptionService", Transcriber)
+        spell = {"నేను": "nenu", "మీటింగ్": "meeting"}
+        monkeypatch.setattr(clients.ai, "get_text_client",
+                            lambda **_: FakeClient(reply=lambda batch: [spell[w] for w in batch]))
+        segments = await ClipService()._transcribe_if_missing("project", "cut.mp4")
+        assert segments[0]["text"] == "nenu meeting"
+
+    @pytest.mark.asyncio
     async def test_bad_llm_answers_fall_back_to_rules(self):
         seg = segment("क्या", "हाल", "है")
         answers = {"क्या": "kyaa", "हाल": "हाल", "है": "two words"}
@@ -362,3 +381,33 @@ class TestWordTimings:
         with tempfile.NamedTemporaryFile(suffix=".mp3") as f:
             await transcriber._transcribe_chunk(Path(f.name), 0.0, 10.0, None, "Alex Hormozi on $100M Leads")
         assert seen["prompt"] == "Alex Hormozi on $100M Leads"
+
+
+class TestPunctuate:
+    @pytest.mark.asyncio
+    async def test_unpunctuated_speech_gets_its_full_stops_back(self):
+        from transcription.punctuate import punctuate_transcript
+
+        heard = "what if i practice gratitude before bed versus instagram some people cant think for themselves".split()
+        fixed = "What if I practice gratitude before bed versus Instagram? Some people cant think for themselves.".split()
+        seg = segment(*heard)
+        changed = await punctuate_transcript([seg], FakeClient(reply=lambda batch: fixed))
+        assert seg.text == " ".join(fixed)
+        assert changed == sum(a != b for a, b in zip(heard, fixed))
+
+    @pytest.mark.asyncio
+    async def test_a_reworded_answer_keeps_what_was_said(self):
+        from transcription.punctuate import punctuate_transcript
+
+        seg = segment("i", "gonna", "go")
+        await punctuate_transcript([seg], FakeClient(reply=lambda batch: ["I", "going to", "go."]))
+        assert seg.text == "I gonna go."
+
+    @pytest.mark.asyncio
+    async def test_punctuated_speech_is_left_alone(self):
+        from transcription.punctuate import punctuate_transcript
+
+        client = FakeClient(reply=lambda batch: batch)
+        assert await punctuate_transcript([segment("Hello.", "How", "are", "you?")], client) == 0
+        assert client.batches == []
+

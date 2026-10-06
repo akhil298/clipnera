@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, Clapperboard, Coins, Cpu, CreditCard, LayoutDashboard, Share2, ToggleRight, Users } from 'lucide-react';
+import { ArrowLeft, Clapperboard, Coins, Cpu, CreditCard, LayoutDashboard, Share2, ToggleRight, Users, Gift } from 'lucide-react';
 import { LogoMark } from '@/components/ui/LogoMark';
 
 const NAV: { href: string; label: string; icon: React.FC<{ className?: string }> }[] = [
@@ -11,6 +11,7 @@ const NAV: { href: string; label: string; icon: React.FC<{ className?: string }>
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/payments', label: 'Payments', icon: CreditCard },
   { href: '/admin/credits', label: 'Credits', icon: Coins },
+  { href: '/admin/referrals', label: 'Referrals', icon: Gift },
   { href: '/admin/social', label: 'Social', icon: Share2 },
   { href: '/admin/usage', label: 'AI usage', icon: Cpu },
   { href: '/admin/broll', label: 'B-roll library', icon: Clapperboard },

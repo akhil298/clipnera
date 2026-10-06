@@ -23,6 +23,9 @@ class NotificationKind(str, enum.Enum):
     REEL_FAILED = "reel_failed"
     SOCIAL_EXPIRING = "social_expiring"
     SOCIAL_EXPIRED = "social_expired"
+    # A referral milestone that changed the balance, and one that did not.
+    REFERRAL_REWARD = "referral_reward"
+    REFERRAL_UPDATE = "referral_update"
 
 
 class Notification(Base):

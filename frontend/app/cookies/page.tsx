@@ -7,6 +7,8 @@ const STORAGE = [
   { name: 'token, token_expires_at', where: 'Local storage', purpose: 'Keeps you signed in.', kept: 'Until you sign out or the session expires' },
   { name: 'google_oauth_state, google_accept_terms', where: 'Session storage', purpose: 'Protects Google sign-in from forged requests and carries your sign-up confirmation to the next page.', kept: 'Until the sign-in finishes or the tab closes' },
   { name: COOKIE_NOTICE_KEY, where: 'Local storage', purpose: 'Remembers that you closed this notice.', kept: 'Until you clear site data' },
+  { name: 'clipnera_referral_code', where: 'Local storage', purpose: 'Holds the code from a referral link you opened, to fill in the welcome form.', kept: 'Until you finish the welcome form' },
+  { name: 'clipnera_referral_card_dismissed', where: 'Local storage', purpose: 'Remembers that you closed the referral card on Home.', kept: 'Until you clear site data' },
 ];
 
 export default function CookiePolicyPage() {

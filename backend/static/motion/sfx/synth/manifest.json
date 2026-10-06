@@ -1,0 +1,3260 @@
+{
+  "whoosh_0p4_dark_up": {
+    "file": "whoosh_0p4_dark_up.wav",
+    "seconds": 0.396,
+    "peak": 0.253,
+    "loudness_db": -14.0,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=0p4, tone=dark, direction=up)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_0p4_dark_down": {
+    "file": "whoosh_0p4_dark_down.wav",
+    "seconds": 0.391,
+    "peak": 0.132,
+    "loudness_db": -14.7,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=0p4, tone=dark, direction=down)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_0p4_mid_up": {
+    "file": "whoosh_0p4_mid_up.wav",
+    "seconds": 0.395,
+    "peak": 0.217,
+    "loudness_db": -15.2,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=0p4, tone=mid, direction=up)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_0p4_mid_down": {
+    "file": "whoosh_0p4_mid_down.wav",
+    "seconds": 0.392,
+    "peak": 0.169,
+    "loudness_db": -15.9,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=0p4, tone=mid, direction=down)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_0p4_bright_up": {
+    "file": "whoosh_0p4_bright_up.wav",
+    "seconds": 0.395,
+    "peak": 0.212,
+    "loudness_db": -16.1,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=0p4, tone=bright, direction=up)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_0p4_bright_down": {
+    "file": "whoosh_0p4_bright_down.wav",
+    "seconds": 0.393,
+    "peak": 0.152,
+    "loudness_db": -15.4,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=0p4, tone=bright, direction=down)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_0p7_dark_up": {
+    "file": "whoosh_0p7_dark_up.wav",
+    "seconds": 0.692,
+    "peak": 0.414,
+    "loudness_db": -14.6,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=0p7, tone=dark, direction=up)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_0p7_dark_down": {
+    "file": "whoosh_0p7_dark_down.wav",
+    "seconds": 0.689,
+    "peak": 0.24,
+    "loudness_db": -16.1,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=0p7, tone=dark, direction=down)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_0p7_mid_up": {
+    "file": "whoosh_0p7_mid_up.wav",
+    "seconds": 0.692,
+    "peak": 0.461,
+    "loudness_db": -16.8,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=0p7, tone=mid, direction=up)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_0p7_mid_down": {
+    "file": "whoosh_0p7_mid_down.wav",
+    "seconds": 0.69,
+    "peak": 0.285,
+    "loudness_db": -16.0,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=0p7, tone=mid, direction=down)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_0p7_bright_up": {
+    "file": "whoosh_0p7_bright_up.wav",
+    "seconds": 0.692,
+    "peak": 0.399,
+    "loudness_db": -17.8,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=0p7, tone=bright, direction=up)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_0p7_bright_down": {
+    "file": "whoosh_0p7_bright_down.wav",
+    "seconds": 0.685,
+    "peak": 0.245,
+    "loudness_db": -16.4,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=0p7, tone=bright, direction=down)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_1_dark_up": {
+    "file": "whoosh_1_dark_up.wav",
+    "seconds": 0.989,
+    "peak": 0.569,
+    "loudness_db": -15.6,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=1, tone=dark, direction=up)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_1_dark_down": {
+    "file": "whoosh_1_dark_down.wav",
+    "seconds": 0.986,
+    "peak": 0.389,
+    "loudness_db": -15.6,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=1, tone=dark, direction=down)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_1_mid_up": {
+    "file": "whoosh_1_mid_up.wav",
+    "seconds": 0.99,
+    "peak": 0.517,
+    "loudness_db": -16.3,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=1, tone=mid, direction=up)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_1_mid_down": {
+    "file": "whoosh_1_mid_down.wav",
+    "seconds": 0.981,
+    "peak": 0.377,
+    "loudness_db": -15.4,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=1, tone=mid, direction=down)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_1_bright_up": {
+    "file": "whoosh_1_bright_up.wav",
+    "seconds": 0.991,
+    "peak": 0.65,
+    "loudness_db": -17.0,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=1, tone=bright, direction=up)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_1_bright_down": {
+    "file": "whoosh_1_bright_down.wav",
+    "seconds": 0.98,
+    "peak": 0.434,
+    "loudness_db": -17.1,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=1, tone=bright, direction=down)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_1p4_dark_up": {
+    "file": "whoosh_1p4_dark_up.wav",
+    "seconds": 1.383,
+    "peak": 0.795,
+    "loudness_db": -16.2,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=1p4, tone=dark, direction=up)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_1p4_dark_down": {
+    "file": "whoosh_1p4_dark_down.wav",
+    "seconds": 1.371,
+    "peak": 0.542,
+    "loudness_db": -17.2,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=1p4, tone=dark, direction=down)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_1p4_mid_up": {
+    "file": "whoosh_1p4_mid_up.wav",
+    "seconds": 1.385,
+    "peak": 0.61,
+    "loudness_db": -16.7,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=1p4, tone=mid, direction=up)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_1p4_mid_down": {
+    "file": "whoosh_1p4_mid_down.wav",
+    "seconds": 1.379,
+    "peak": 0.47,
+    "loudness_db": -15.7,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=1p4, tone=mid, direction=down)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_1p4_bright_up": {
+    "file": "whoosh_1p4_bright_up.wav",
+    "seconds": 1.386,
+    "peak": 0.892,
+    "loudness_db": -17.4,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=1p4, tone=bright, direction=up)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "whoosh_1p4_bright_down": {
+    "file": "whoosh_1p4_bright_down.wav",
+    "seconds": 1.379,
+    "peak": 0.559,
+    "loudness_db": -16.6,
+    "source": "scripts/build_synth_sfx.py whoosh(seconds=1p4, tone=bright, direction=down)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "whoosh",
+      "movement",
+      "cut"
+    ]
+  },
+  "swoosh_0p18_mid": {
+    "file": "swoosh_0p18_mid.wav",
+    "seconds": 0.178,
+    "peak": 0.098,
+    "loudness_db": -16.4,
+    "source": "scripts/build_synth_sfx.py swoosh(seconds=0p18, tone=mid)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "swoosh",
+      "fast",
+      "swipe"
+    ]
+  },
+  "swoosh_0p18_bright": {
+    "file": "swoosh_0p18_bright.wav",
+    "seconds": 0.178,
+    "peak": 0.115,
+    "loudness_db": -15.4,
+    "source": "scripts/build_synth_sfx.py swoosh(seconds=0p18, tone=bright)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "swoosh",
+      "fast",
+      "swipe"
+    ]
+  },
+  "swoosh_0p18_air": {
+    "file": "swoosh_0p18_air.wav",
+    "seconds": 0.177,
+    "peak": 0.099,
+    "loudness_db": -17.1,
+    "source": "scripts/build_synth_sfx.py swoosh(seconds=0p18, tone=air)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "swoosh",
+      "fast",
+      "swipe"
+    ]
+  },
+  "swoosh_0p25_mid": {
+    "file": "swoosh_0p25_mid.wav",
+    "seconds": 0.247,
+    "peak": 0.156,
+    "loudness_db": -17.0,
+    "source": "scripts/build_synth_sfx.py swoosh(seconds=0p25, tone=mid)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "swoosh",
+      "fast",
+      "swipe"
+    ]
+  },
+  "swoosh_0p25_bright": {
+    "file": "swoosh_0p25_bright.wav",
+    "seconds": 0.247,
+    "peak": 0.117,
+    "loudness_db": -16.8,
+    "source": "scripts/build_synth_sfx.py swoosh(seconds=0p25, tone=bright)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "swoosh",
+      "fast",
+      "swipe"
+    ]
+  },
+  "swoosh_0p25_air": {
+    "file": "swoosh_0p25_air.wav",
+    "seconds": 0.247,
+    "peak": 0.123,
+    "loudness_db": -15.2,
+    "source": "scripts/build_synth_sfx.py swoosh(seconds=0p25, tone=air)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "swoosh",
+      "fast",
+      "swipe"
+    ]
+  },
+  "swoosh_0p35_mid": {
+    "file": "swoosh_0p35_mid.wav",
+    "seconds": 0.346,
+    "peak": 0.196,
+    "loudness_db": -16.1,
+    "source": "scripts/build_synth_sfx.py swoosh(seconds=0p35, tone=mid)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "swoosh",
+      "fast",
+      "swipe"
+    ]
+  },
+  "swoosh_0p35_bright": {
+    "file": "swoosh_0p35_bright.wav",
+    "seconds": 0.346,
+    "peak": 0.18,
+    "loudness_db": -15.9,
+    "source": "scripts/build_synth_sfx.py swoosh(seconds=0p35, tone=bright)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "swoosh",
+      "fast",
+      "swipe"
+    ]
+  },
+  "swoosh_0p35_air": {
+    "file": "swoosh_0p35_air.wav",
+    "seconds": 0.346,
+    "peak": 0.17,
+    "loudness_db": -16.4,
+    "source": "scripts/build_synth_sfx.py swoosh(seconds=0p35, tone=air)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "swoosh",
+      "fast",
+      "swipe"
+    ]
+  },
+  "riser_1_tonal": {
+    "file": "riser_1_tonal.wav",
+    "seconds": 1.0,
+    "peak": 0.973,
+    "loudness_db": -18.8,
+    "source": "scripts/build_synth_sfx.py riser(seconds=1, flavour=tonal)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "riser",
+      "tension",
+      "build-up"
+    ]
+  },
+  "riser_1_noise": {
+    "file": "riser_1_noise.wav",
+    "seconds": 1.0,
+    "peak": 0.97,
+    "loudness_db": -20.1,
+    "source": "scripts/build_synth_sfx.py riser(seconds=1, flavour=noise)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "riser",
+      "tension",
+      "build-up"
+    ]
+  },
+  "riser_1_both": {
+    "file": "riser_1_both.wav",
+    "seconds": 1.0,
+    "peak": 0.953,
+    "loudness_db": -19.7,
+    "source": "scripts/build_synth_sfx.py riser(seconds=1, flavour=both)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "riser",
+      "tension",
+      "build-up"
+    ]
+  },
+  "riser_2_tonal": {
+    "file": "riser_2_tonal.wav",
+    "seconds": 2.0,
+    "peak": 1.948,
+    "loudness_db": -19.5,
+    "source": "scripts/build_synth_sfx.py riser(seconds=2, flavour=tonal)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "riser",
+      "tension",
+      "build-up"
+    ]
+  },
+  "riser_2_noise": {
+    "file": "riser_2_noise.wav",
+    "seconds": 2.0,
+    "peak": 1.864,
+    "loudness_db": -19.2,
+    "source": "scripts/build_synth_sfx.py riser(seconds=2, flavour=noise)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "riser",
+      "tension",
+      "build-up"
+    ]
+  },
+  "riser_2_both": {
+    "file": "riser_2_both.wav",
+    "seconds": 2.0,
+    "peak": 1.943,
+    "loudness_db": -20.3,
+    "source": "scripts/build_synth_sfx.py riser(seconds=2, flavour=both)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "riser",
+      "tension",
+      "build-up"
+    ]
+  },
+  "riser_3_tonal": {
+    "file": "riser_3_tonal.wav",
+    "seconds": 2.999,
+    "peak": 2.922,
+    "loudness_db": -19.5,
+    "source": "scripts/build_synth_sfx.py riser(seconds=3, flavour=tonal)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "riser",
+      "tension",
+      "build-up"
+    ]
+  },
+  "riser_3_noise": {
+    "file": "riser_3_noise.wav",
+    "seconds": 3.0,
+    "peak": 2.869,
+    "loudness_db": -21.0,
+    "source": "scripts/build_synth_sfx.py riser(seconds=3, flavour=noise)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "riser",
+      "tension",
+      "build-up"
+    ]
+  },
+  "riser_3_both": {
+    "file": "riser_3_both.wav",
+    "seconds": 3.0,
+    "peak": 2.954,
+    "loudness_db": -20.8,
+    "source": "scripts/build_synth_sfx.py riser(seconds=3, flavour=both)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "riser",
+      "tension",
+      "build-up"
+    ]
+  },
+  "riser_4_tonal": {
+    "file": "riser_4_tonal.wav",
+    "seconds": 4.0,
+    "peak": 3.896,
+    "loudness_db": -19.5,
+    "source": "scripts/build_synth_sfx.py riser(seconds=4, flavour=tonal)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "riser",
+      "tension",
+      "build-up"
+    ]
+  },
+  "riser_4_noise": {
+    "file": "riser_4_noise.wav",
+    "seconds": 4.0,
+    "peak": 3.802,
+    "loudness_db": -20.6,
+    "source": "scripts/build_synth_sfx.py riser(seconds=4, flavour=noise)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "riser",
+      "tension",
+      "build-up"
+    ]
+  },
+  "riser_4_both": {
+    "file": "riser_4_both.wav",
+    "seconds": 4.0,
+    "peak": 3.945,
+    "loudness_db": -20.3,
+    "source": "scripts/build_synth_sfx.py riser(seconds=4, flavour=both)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "riser",
+      "tension",
+      "build-up"
+    ]
+  },
+  "downlifter_0p8_tonal": {
+    "file": "downlifter_0p8_tonal.wav",
+    "seconds": 0.788,
+    "peak": 0.014,
+    "loudness_db": -15.9,
+    "source": "scripts/build_synth_sfx.py downlifter(seconds=0p8, flavour=tonal)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "downlifter",
+      "release",
+      "fall"
+    ]
+  },
+  "downlifter_0p8_noise": {
+    "file": "downlifter_0p8_noise.wav",
+    "seconds": 0.77,
+    "peak": 0.035,
+    "loudness_db": -18.8,
+    "source": "scripts/build_synth_sfx.py downlifter(seconds=0p8, flavour=noise)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "downlifter",
+      "release",
+      "fall"
+    ]
+  },
+  "downlifter_1p5_tonal": {
+    "file": "downlifter_1p5_tonal.wav",
+    "seconds": 1.48,
+    "peak": 0.014,
+    "loudness_db": -15.9,
+    "source": "scripts/build_synth_sfx.py downlifter(seconds=1p5, flavour=tonal)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "downlifter",
+      "release",
+      "fall"
+    ]
+  },
+  "downlifter_1p5_noise": {
+    "file": "downlifter_1p5_noise.wav",
+    "seconds": 1.454,
+    "peak": 0.038,
+    "loudness_db": -19.8,
+    "source": "scripts/build_synth_sfx.py downlifter(seconds=1p5, flavour=noise)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "downlifter",
+      "release",
+      "fall"
+    ]
+  },
+  "downlifter_2p5_tonal": {
+    "file": "downlifter_2p5_tonal.wav",
+    "seconds": 2.467,
+    "peak": 0.013,
+    "loudness_db": -15.9,
+    "source": "scripts/build_synth_sfx.py downlifter(seconds=2p5, flavour=tonal)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "downlifter",
+      "release",
+      "fall"
+    ]
+  },
+  "downlifter_2p5_noise": {
+    "file": "downlifter_2p5_noise.wav",
+    "seconds": 2.406,
+    "peak": 0.204,
+    "loudness_db": -20.1,
+    "source": "scripts/build_synth_sfx.py downlifter(seconds=2p5, flavour=noise)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "downlifter",
+      "release",
+      "fall"
+    ]
+  },
+  "reverse_cymbal_0p8": {
+    "file": "reverse_cymbal_0p8.wav",
+    "seconds": 0.8,
+    "peak": 0.785,
+    "loudness_db": -19.4,
+    "source": "scripts/build_synth_sfx.py reverse_cymbal(seconds=0p8)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "reverse",
+      "cymbal",
+      "swell"
+    ]
+  },
+  "reverse_cymbal_1p5": {
+    "file": "reverse_cymbal_1p5.wav",
+    "seconds": 1.5,
+    "peak": 1.481,
+    "loudness_db": -20.7,
+    "source": "scripts/build_synth_sfx.py reverse_cymbal(seconds=1p5)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "reverse",
+      "cymbal",
+      "swell"
+    ]
+  },
+  "reverse_cymbal_2p5": {
+    "file": "reverse_cymbal_2p5.wav",
+    "seconds": 2.5,
+    "peak": 2.439,
+    "loudness_db": -20.9,
+    "source": "scripts/build_synth_sfx.py reverse_cymbal(seconds=2p5)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "build",
+    "tags": [
+      "reverse",
+      "cymbal",
+      "swell"
+    ]
+  },
+  "boom_42_short_soft": {
+    "file": "boom_42_short_soft.wav",
+    "seconds": 1.211,
+    "peak": 0.01,
+    "loudness_db": -15.0,
+    "source": "scripts/build_synth_sfx.py boom(freq=42, tail=short, attack=soft)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "boom",
+      "impact",
+      "cinematic"
+    ]
+  },
+  "boom_42_short_hard": {
+    "file": "boom_42_short_hard.wav",
+    "seconds": 1.176,
+    "peak": 0.01,
+    "loudness_db": -16.8,
+    "source": "scripts/build_synth_sfx.py boom(freq=42, tail=short, attack=hard)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "boom",
+      "impact",
+      "cinematic"
+    ]
+  },
+  "boom_42_long_soft": {
+    "file": "boom_42_long_soft.wav",
+    "seconds": 2.201,
+    "peak": 0.009,
+    "loudness_db": -17.7,
+    "source": "scripts/build_synth_sfx.py boom(freq=42, tail=long, attack=soft)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "boom",
+      "impact",
+      "cinematic"
+    ]
+  },
+  "boom_42_long_hard": {
+    "file": "boom_42_long_hard.wav",
+    "seconds": 2.2,
+    "peak": 0.009,
+    "loudness_db": -21.0,
+    "source": "scripts/build_synth_sfx.py boom(freq=42, tail=long, attack=hard)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "boom",
+      "impact",
+      "cinematic"
+    ]
+  },
+  "boom_55_short_soft": {
+    "file": "boom_55_short_soft.wav",
+    "seconds": 1.012,
+    "peak": 0.008,
+    "loudness_db": -14.9,
+    "source": "scripts/build_synth_sfx.py boom(freq=55, tail=short, attack=soft)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "boom",
+      "impact",
+      "cinematic"
+    ]
+  },
+  "boom_55_short_hard": {
+    "file": "boom_55_short_hard.wav",
+    "seconds": 1.183,
+    "peak": 0.008,
+    "loudness_db": -19.2,
+    "source": "scripts/build_synth_sfx.py boom(freq=55, tail=short, attack=hard)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "boom",
+      "impact",
+      "cinematic"
+    ]
+  },
+  "boom_55_long_soft": {
+    "file": "boom_55_long_soft.wav",
+    "seconds": 2.205,
+    "peak": 0.008,
+    "loudness_db": -16.0,
+    "source": "scripts/build_synth_sfx.py boom(freq=55, tail=long, attack=soft)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "boom",
+      "impact",
+      "cinematic"
+    ]
+  },
+  "boom_55_long_hard": {
+    "file": "boom_55_long_hard.wav",
+    "seconds": 2.21,
+    "peak": 0.009,
+    "loudness_db": -19.1,
+    "source": "scripts/build_synth_sfx.py boom(freq=55, tail=long, attack=hard)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "boom",
+      "impact",
+      "cinematic"
+    ]
+  },
+  "boom_70_short_soft": {
+    "file": "boom_70_short_soft.wav",
+    "seconds": 1.196,
+    "peak": 0.006,
+    "loudness_db": -16.2,
+    "source": "scripts/build_synth_sfx.py boom(freq=70, tail=short, attack=soft)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "boom",
+      "impact",
+      "cinematic"
+    ]
+  },
+  "boom_70_short_hard": {
+    "file": "boom_70_short_hard.wav",
+    "seconds": 1.165,
+    "peak": 0.006,
+    "loudness_db": -21.3,
+    "source": "scripts/build_synth_sfx.py boom(freq=70, tail=short, attack=hard)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "boom",
+      "impact",
+      "cinematic"
+    ]
+  },
+  "boom_70_long_soft": {
+    "file": "boom_70_long_soft.wav",
+    "seconds": 2.259,
+    "peak": 0.006,
+    "loudness_db": -17.3,
+    "source": "scripts/build_synth_sfx.py boom(freq=70, tail=long, attack=soft)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "boom",
+      "impact",
+      "cinematic"
+    ]
+  },
+  "boom_70_long_hard": {
+    "file": "boom_70_long_hard.wav",
+    "seconds": 2.225,
+    "peak": 0.006,
+    "loudness_db": -22.0,
+    "source": "scripts/build_synth_sfx.py boom(freq=70, tail=long, attack=hard)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "boom",
+      "impact",
+      "cinematic"
+    ]
+  },
+  "sub_drop_0p6_90": {
+    "file": "sub_drop_0p6_90.wav",
+    "seconds": 0.6,
+    "peak": 0.013,
+    "loudness_db": -8.4,
+    "source": "scripts/build_synth_sfx.py sub_drop(seconds=0p6, start_hz=90)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "sub",
+      "drop",
+      "bass"
+    ]
+  },
+  "sub_drop_0p6_130": {
+    "file": "sub_drop_0p6_130.wav",
+    "seconds": 0.6,
+    "peak": 0.009,
+    "loudness_db": -8.5,
+    "source": "scripts/build_synth_sfx.py sub_drop(seconds=0p6, start_hz=130)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "sub",
+      "drop",
+      "bass"
+    ]
+  },
+  "sub_drop_1p2_90": {
+    "file": "sub_drop_1p2_90.wav",
+    "seconds": 1.2,
+    "peak": 0.013,
+    "loudness_db": -8.4,
+    "source": "scripts/build_synth_sfx.py sub_drop(seconds=1p2, start_hz=90)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "sub",
+      "drop",
+      "bass"
+    ]
+  },
+  "sub_drop_1p2_130": {
+    "file": "sub_drop_1p2_130.wav",
+    "seconds": 1.2,
+    "peak": 0.009,
+    "loudness_db": -8.6,
+    "source": "scripts/build_synth_sfx.py sub_drop(seconds=1p2, start_hz=130)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "sub",
+      "drop",
+      "bass"
+    ]
+  },
+  "sub_drop_2_90": {
+    "file": "sub_drop_2_90.wav",
+    "seconds": 2.0,
+    "peak": 0.013,
+    "loudness_db": -8.5,
+    "source": "scripts/build_synth_sfx.py sub_drop(seconds=2, start_hz=90)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "sub",
+      "drop",
+      "bass"
+    ]
+  },
+  "sub_drop_2_130": {
+    "file": "sub_drop_2_130.wav",
+    "seconds": 2.0,
+    "peak": 0.009,
+    "loudness_db": -8.6,
+    "source": "scripts/build_synth_sfx.py sub_drop(seconds=2, start_hz=130)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "sub",
+      "drop",
+      "bass"
+    ]
+  },
+  "punch_tight_low": {
+    "file": "punch_tight_low.wav",
+    "seconds": 0.5,
+    "peak": 0.004,
+    "loudness_db": -17.7,
+    "source": "scripts/build_synth_sfx.py punch(room_size=tight, pitch=low)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "punch",
+      "hit"
+    ]
+  },
+  "punch_tight_mid": {
+    "file": "punch_tight_mid.wav",
+    "seconds": 0.498,
+    "peak": 0.003,
+    "loudness_db": -18.4,
+    "source": "scripts/build_synth_sfx.py punch(room_size=tight, pitch=mid)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "punch",
+      "hit"
+    ]
+  },
+  "punch_tight_high": {
+    "file": "punch_tight_high.wav",
+    "seconds": 0.5,
+    "peak": 0.002,
+    "loudness_db": -18.1,
+    "source": "scripts/build_synth_sfx.py punch(room_size=tight, pitch=high)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "punch",
+      "hit"
+    ]
+  },
+  "punch_roomy_low": {
+    "file": "punch_roomy_low.wav",
+    "seconds": 0.979,
+    "peak": 0.001,
+    "loudness_db": -17.9,
+    "source": "scripts/build_synth_sfx.py punch(room_size=roomy, pitch=low)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "punch",
+      "hit"
+    ]
+  },
+  "punch_roomy_mid": {
+    "file": "punch_roomy_mid.wav",
+    "seconds": 0.938,
+    "peak": 0.001,
+    "loudness_db": -19.4,
+    "source": "scripts/build_synth_sfx.py punch(room_size=roomy, pitch=mid)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "punch",
+      "hit"
+    ]
+  },
+  "punch_roomy_high": {
+    "file": "punch_roomy_high.wav",
+    "seconds": 0.955,
+    "peak": 0.002,
+    "loudness_db": -18.2,
+    "source": "scripts/build_synth_sfx.py punch(room_size=roomy, pitch=high)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "punch",
+      "hit"
+    ]
+  },
+  "pop_400_short": {
+    "file": "pop_400_short.wav",
+    "seconds": 0.12,
+    "peak": 0.002,
+    "loudness_db": -12.5,
+    "source": "scripts/build_synth_sfx.py pop(freq=400, length=short)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "pop",
+      "appear"
+    ]
+  },
+  "pop_400_long": {
+    "file": "pop_400_long.wav",
+    "seconds": 0.25,
+    "peak": 0.002,
+    "loudness_db": -13.1,
+    "source": "scripts/build_synth_sfx.py pop(freq=400, length=long)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "pop",
+      "appear"
+    ]
+  },
+  "pop_600_short": {
+    "file": "pop_600_short.wav",
+    "seconds": 0.12,
+    "peak": 0.001,
+    "loudness_db": -12.6,
+    "source": "scripts/build_synth_sfx.py pop(freq=600, length=short)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "pop",
+      "appear"
+    ]
+  },
+  "pop_600_long": {
+    "file": "pop_600_long.wav",
+    "seconds": 0.25,
+    "peak": 0.001,
+    "loudness_db": -13.1,
+    "source": "scripts/build_synth_sfx.py pop(freq=600, length=long)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "pop",
+      "appear"
+    ]
+  },
+  "pop_800_short": {
+    "file": "pop_800_short.wav",
+    "seconds": 0.12,
+    "peak": 0.001,
+    "loudness_db": -12.5,
+    "source": "scripts/build_synth_sfx.py pop(freq=800, length=short)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "pop",
+      "appear"
+    ]
+  },
+  "pop_800_long": {
+    "file": "pop_800_long.wav",
+    "seconds": 0.25,
+    "peak": 0.001,
+    "loudness_db": -13.0,
+    "source": "scripts/build_synth_sfx.py pop(freq=800, length=long)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "pop",
+      "appear"
+    ]
+  },
+  "pop_1100_short": {
+    "file": "pop_1100_short.wav",
+    "seconds": 0.12,
+    "peak": 0.001,
+    "loudness_db": -12.5,
+    "source": "scripts/build_synth_sfx.py pop(freq=1100, length=short)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "pop",
+      "appear"
+    ]
+  },
+  "pop_1100_long": {
+    "file": "pop_1100_long.wav",
+    "seconds": 0.25,
+    "peak": 0.001,
+    "loudness_db": -13.0,
+    "source": "scripts/build_synth_sfx.py pop(freq=1100, length=long)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "pop",
+      "appear"
+    ]
+  },
+  "pop_1500_short": {
+    "file": "pop_1500_short.wav",
+    "seconds": 0.12,
+    "peak": 0.001,
+    "loudness_db": -12.5,
+    "source": "scripts/build_synth_sfx.py pop(freq=1500, length=short)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "pop",
+      "appear"
+    ]
+  },
+  "pop_1500_long": {
+    "file": "pop_1500_long.wav",
+    "seconds": 0.25,
+    "peak": 0.001,
+    "loudness_db": -13.0,
+    "source": "scripts/build_synth_sfx.py pop(freq=1500, length=long)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "pop",
+      "appear"
+    ]
+  },
+  "bubble_300": {
+    "file": "bubble_300.wav",
+    "seconds": 0.177,
+    "peak": 0.046,
+    "loudness_db": -8.2,
+    "source": "scripts/build_synth_sfx.py bubble(freq=300)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "bubble",
+      "appear",
+      "cute"
+    ]
+  },
+  "bubble_450": {
+    "file": "bubble_450.wav",
+    "seconds": 0.177,
+    "peak": 0.047,
+    "loudness_db": -8.2,
+    "source": "scripts/build_synth_sfx.py bubble(freq=450)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "bubble",
+      "appear",
+      "cute"
+    ]
+  },
+  "bubble_600": {
+    "file": "bubble_600.wav",
+    "seconds": 0.177,
+    "peak": 0.046,
+    "loudness_db": -8.2,
+    "source": "scripts/build_synth_sfx.py bubble(freq=600)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "bubble",
+      "appear",
+      "cute"
+    ]
+  },
+  "bubble_800": {
+    "file": "bubble_800.wav",
+    "seconds": 0.177,
+    "peak": 0.046,
+    "loudness_db": -8.2,
+    "source": "scripts/build_synth_sfx.py bubble(freq=800)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "bubble",
+      "appear",
+      "cute"
+    ]
+  },
+  "bubble_1000": {
+    "file": "bubble_1000.wav",
+    "seconds": 0.177,
+    "peak": 0.045,
+    "loudness_db": -8.2,
+    "source": "scripts/build_synth_sfx.py bubble(freq=1000)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "pop",
+    "tags": [
+      "bubble",
+      "appear",
+      "cute"
+    ]
+  },
+  "click_tone_1500": {
+    "file": "click_tone_1500.wav",
+    "seconds": 0.05,
+    "peak": 0.001,
+    "loudness_db": -15.0,
+    "source": "scripts/build_synth_sfx.py click(kind=tone, freq=1500)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "click",
+      "tap"
+    ]
+  },
+  "click_tone_2500": {
+    "file": "click_tone_2500.wav",
+    "seconds": 0.05,
+    "peak": 0.001,
+    "loudness_db": -15.0,
+    "source": "scripts/build_synth_sfx.py click(kind=tone, freq=2500)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "click",
+      "tap"
+    ]
+  },
+  "click_tone_4000": {
+    "file": "click_tone_4000.wav",
+    "seconds": 0.05,
+    "peak": 0.001,
+    "loudness_db": -14.9,
+    "source": "scripts/build_synth_sfx.py click(kind=tone, freq=4000)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "click",
+      "tap"
+    ]
+  },
+  "click_noise_2000": {
+    "file": "click_noise_2000.wav",
+    "seconds": 0.036,
+    "peak": 0.001,
+    "loudness_db": -20.0,
+    "source": "scripts/build_synth_sfx.py click(kind=noise, freq=2000)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "click",
+      "tap"
+    ]
+  },
+  "click_noise_5000": {
+    "file": "click_noise_5000.wav",
+    "seconds": 0.035,
+    "peak": 0.002,
+    "loudness_db": -20.9,
+    "source": "scripts/build_synth_sfx.py click(kind=noise, freq=5000)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "click",
+      "tap"
+    ]
+  },
+  "click_wood_700": {
+    "file": "click_wood_700.wav",
+    "seconds": 0.06,
+    "peak": 0.006,
+    "loudness_db": -14.8,
+    "source": "scripts/build_synth_sfx.py click(kind=wood, freq=700)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "click",
+      "wood",
+      "knock"
+    ]
+  },
+  "click_wood_1200": {
+    "file": "click_wood_1200.wav",
+    "seconds": 0.06,
+    "peak": 0.006,
+    "loudness_db": -16.1,
+    "source": "scripts/build_synth_sfx.py click(kind=wood, freq=1200)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "click",
+      "wood",
+      "knock"
+    ]
+  },
+  "click_wood_1800": {
+    "file": "click_wood_1800.wav",
+    "seconds": 0.06,
+    "peak": 0.001,
+    "loudness_db": -16.7,
+    "source": "scripts/build_synth_sfx.py click(kind=wood, freq=1800)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "click",
+      "wood",
+      "knock"
+    ]
+  },
+  "tick_1800_single": {
+    "file": "tick_1800_single.wav",
+    "seconds": 0.049,
+    "peak": 0.001,
+    "loudness_db": -14.9,
+    "source": "scripts/build_synth_sfx.py tick(freq=1800, pattern=single)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "counter",
+    "tags": [
+      "tick",
+      "count",
+      "clock"
+    ]
+  },
+  "tick_1800_ticktock": {
+    "file": "tick_1800_ticktock.wav",
+    "seconds": 0.328,
+    "peak": 0.003,
+    "loudness_db": -23.3,
+    "source": "scripts/build_synth_sfx.py tick(freq=1800, pattern=ticktock)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "counter",
+    "tags": [
+      "tick",
+      "count",
+      "clock"
+    ]
+  },
+  "tick_2600_single": {
+    "file": "tick_2600_single.wav",
+    "seconds": 0.05,
+    "peak": 0.003,
+    "loudness_db": -14.1,
+    "source": "scripts/build_synth_sfx.py tick(freq=2600, pattern=single)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "counter",
+    "tags": [
+      "tick",
+      "count",
+      "clock"
+    ]
+  },
+  "tick_2600_ticktock": {
+    "file": "tick_2600_ticktock.wav",
+    "seconds": 0.329,
+    "peak": 0.001,
+    "loudness_db": -22.2,
+    "source": "scripts/build_synth_sfx.py tick(freq=2600, pattern=ticktock)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "counter",
+    "tags": [
+      "tick",
+      "count",
+      "clock"
+    ]
+  },
+  "tick_3400_single": {
+    "file": "tick_3400_single.wav",
+    "seconds": 0.05,
+    "peak": 0.002,
+    "loudness_db": -17.9,
+    "source": "scripts/build_synth_sfx.py tick(freq=3400, pattern=single)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "counter",
+    "tags": [
+      "tick",
+      "count",
+      "clock"
+    ]
+  },
+  "tick_3400_ticktock": {
+    "file": "tick_3400_ticktock.wav",
+    "seconds": 0.33,
+    "peak": 0.001,
+    "loudness_db": -24.2,
+    "source": "scripts/build_synth_sfx.py tick(freq=3400, pattern=ticktock)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "counter",
+    "tags": [
+      "tick",
+      "count",
+      "clock"
+    ]
+  },
+  "chime_3": {
+    "file": "chime_3.wav",
+    "seconds": 1.846,
+    "peak": 0.004,
+    "loudness_db": -21.4,
+    "source": "scripts/build_synth_sfx.py chime(semitones=3)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "chime",
+    "tags": [
+      "chime",
+      "bell",
+      "ding",
+      "reveal"
+    ]
+  },
+  "chime_5": {
+    "file": "chime_5.wav",
+    "seconds": 1.76,
+    "peak": 0.017,
+    "loudness_db": -18.0,
+    "source": "scripts/build_synth_sfx.py chime(semitones=5)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "chime",
+    "tags": [
+      "chime",
+      "bell",
+      "ding",
+      "reveal"
+    ]
+  },
+  "chime_7": {
+    "file": "chime_7.wav",
+    "seconds": 1.643,
+    "peak": 0.003,
+    "loudness_db": -17.7,
+    "source": "scripts/build_synth_sfx.py chime(semitones=7)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "chime",
+    "tags": [
+      "chime",
+      "bell",
+      "ding",
+      "reveal"
+    ]
+  },
+  "chime_10": {
+    "file": "chime_10.wav",
+    "seconds": 1.789,
+    "peak": 0.003,
+    "loudness_db": -19.7,
+    "source": "scripts/build_synth_sfx.py chime(semitones=10)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "chime",
+    "tags": [
+      "chime",
+      "bell",
+      "ding",
+      "reveal"
+    ]
+  },
+  "chime_12": {
+    "file": "chime_12.wav",
+    "seconds": 1.735,
+    "peak": 0.008,
+    "loudness_db": -17.6,
+    "source": "scripts/build_synth_sfx.py chime(semitones=12)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "chime",
+    "tags": [
+      "chime",
+      "bell",
+      "ding",
+      "reveal"
+    ]
+  },
+  "chime_15": {
+    "file": "chime_15.wav",
+    "seconds": 1.814,
+    "peak": 0.002,
+    "loudness_db": -17.7,
+    "source": "scripts/build_synth_sfx.py chime(semitones=15)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "chime",
+    "tags": [
+      "chime",
+      "bell",
+      "ding",
+      "reveal"
+    ]
+  },
+  "chime_17": {
+    "file": "chime_17.wav",
+    "seconds": 1.765,
+    "peak": 0.009,
+    "loudness_db": -18.2,
+    "source": "scripts/build_synth_sfx.py chime(semitones=17)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "chime",
+    "tags": [
+      "chime",
+      "bell",
+      "ding",
+      "reveal"
+    ]
+  },
+  "chime_19": {
+    "file": "chime_19.wav",
+    "seconds": 1.763,
+    "peak": 0.008,
+    "loudness_db": -18.2,
+    "source": "scripts/build_synth_sfx.py chime(semitones=19)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "chime",
+    "tags": [
+      "chime",
+      "bell",
+      "ding",
+      "reveal"
+    ]
+  },
+  "success_0-4-7_0p08_sine_3": {
+    "file": "success_0-4-7_0p08_sine_3.wav",
+    "seconds": 0.741,
+    "peak": 0.167,
+    "loudness_db": -14.2,
+    "source": "scripts/build_synth_sfx.py arpeggio(steps=0-4-7, gap=0p08, wave=sine, root=3)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "success",
+      "correct",
+      "done"
+    ]
+  },
+  "success_0-4-7_0p12_sine_3": {
+    "file": "success_0-4-7_0p12_sine_3.wav",
+    "seconds": 0.762,
+    "peak": 0.249,
+    "loudness_db": -13.1,
+    "source": "scripts/build_synth_sfx.py arpeggio(steps=0-4-7, gap=0p12, wave=sine, root=3)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "success",
+      "correct",
+      "done"
+    ]
+  },
+  "success_0-7-12_0p08_sine_3": {
+    "file": "success_0-7-12_0p08_sine_3.wav",
+    "seconds": 0.668,
+    "peak": 0.087,
+    "loudness_db": -13.1,
+    "source": "scripts/build_synth_sfx.py arpeggio(steps=0-7-12, gap=0p08, wave=sine, root=3)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "success",
+      "correct",
+      "done"
+    ]
+  },
+  "success_0-7-12_0p12_sine_3": {
+    "file": "success_0-7-12_0p12_sine_3.wav",
+    "seconds": 0.801,
+    "peak": 0.127,
+    "loudness_db": -12.8,
+    "source": "scripts/build_synth_sfx.py arpeggio(steps=0-7-12, gap=0p12, wave=sine, root=3)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "success",
+      "correct",
+      "done"
+    ]
+  },
+  "success_0-4-7-12_0p08_sine_3": {
+    "file": "success_0-4-7-12_0p08_sine_3.wav",
+    "seconds": 0.765,
+    "peak": 0.167,
+    "loudness_db": -13.6,
+    "source": "scripts/build_synth_sfx.py arpeggio(steps=0-4-7-12, gap=0p08, wave=sine, root=3)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "success",
+      "correct",
+      "done"
+    ]
+  },
+  "success_0-4-7-12_0p12_sine_3": {
+    "file": "success_0-4-7-12_0p12_sine_3.wav",
+    "seconds": 0.971,
+    "peak": 0.126,
+    "loudness_db": -12.7,
+    "source": "scripts/build_synth_sfx.py arpeggio(steps=0-4-7-12, gap=0p12, wave=sine, root=3)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "success",
+      "correct",
+      "done"
+    ]
+  },
+  "error_0--3_0p15_square_-2": {
+    "file": "error_0--3_0p15_square_-2.wav",
+    "seconds": 0.71,
+    "peak": 0.161,
+    "loudness_db": -13.6,
+    "source": "scripts/build_synth_sfx.py arpeggio(steps=0--3, gap=0p15, wave=square, root=-2)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "error",
+      "wrong",
+      "fail"
+    ]
+  },
+  "error_0--6_0p15_square_-2": {
+    "file": "error_0--6_0p15_square_-2.wav",
+    "seconds": 0.77,
+    "peak": 0.161,
+    "loudness_db": -14.2,
+    "source": "scripts/build_synth_sfx.py arpeggio(steps=0--6, gap=0p15, wave=square, root=-2)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "error",
+      "wrong",
+      "fail"
+    ]
+  },
+  "error_0--1--2_0p15_square_-2": {
+    "file": "error_0--1--2_0p15_square_-2.wav",
+    "seconds": 0.833,
+    "peak": 0.16,
+    "loudness_db": -11.3,
+    "source": "scripts/build_synth_sfx.py arpeggio(steps=0--1--2, gap=0p15, wave=square, root=-2)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "error",
+      "wrong",
+      "fail"
+    ]
+  },
+  "notify_0-5_0p1_triangle_10": {
+    "file": "notify_0-5_0p1_triangle_10.wav",
+    "seconds": 0.671,
+    "peak": 0.105,
+    "loudness_db": -15.5,
+    "source": "scripts/build_synth_sfx.py arpeggio(steps=0-5, gap=0p1, wave=triangle, root=10)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "notification",
+      "message",
+      "alert"
+    ]
+  },
+  "notify_0-12_0p1_triangle_10": {
+    "file": "notify_0-12_0p1_triangle_10.wav",
+    "seconds": 0.705,
+    "peak": 0.104,
+    "loudness_db": -16.1,
+    "source": "scripts/build_synth_sfx.py arpeggio(steps=0-12, gap=0p1, wave=triangle, root=10)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "notification",
+      "message",
+      "alert"
+    ]
+  },
+  "notify_7-0_0p1_triangle_10": {
+    "file": "notify_7-0_0p1_triangle_10.wav",
+    "seconds": 0.639,
+    "peak": 0.104,
+    "loudness_db": -14.4,
+    "source": "scripts/build_synth_sfx.py arpeggio(steps=7-0, gap=0p1, wave=triangle, root=10)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "notification",
+      "message",
+      "alert"
+    ]
+  },
+  "beep_440_short": {
+    "file": "beep_440_short.wav",
+    "seconds": 0.12,
+    "peak": 0.007,
+    "loudness_db": -4.5,
+    "source": "scripts/build_synth_sfx.py beep(freq=440, length=short)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "beep",
+      "tone"
+    ]
+  },
+  "beep_440_long": {
+    "file": "beep_440_long.wav",
+    "seconds": 0.45,
+    "peak": 0.007,
+    "loudness_db": -4.1,
+    "source": "scripts/build_synth_sfx.py beep(freq=440, length=long)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "beep",
+      "tone"
+    ]
+  },
+  "beep_880_short": {
+    "file": "beep_880_short.wav",
+    "seconds": 0.12,
+    "peak": 0.008,
+    "loudness_db": -4.4,
+    "source": "scripts/build_synth_sfx.py beep(freq=880, length=short)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "beep",
+      "tone"
+    ]
+  },
+  "beep_880_long": {
+    "file": "beep_880_long.wav",
+    "seconds": 0.45,
+    "peak": 0.008,
+    "loudness_db": -4.1,
+    "source": "scripts/build_synth_sfx.py beep(freq=880, length=long)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "beep",
+      "tone"
+    ]
+  },
+  "beep_1000_short": {
+    "file": "beep_1000_short.wav",
+    "seconds": 0.12,
+    "peak": 0.007,
+    "loudness_db": -4.4,
+    "source": "scripts/build_synth_sfx.py beep(freq=1000, length=short)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "beep",
+      "tone"
+    ]
+  },
+  "beep_1000_long": {
+    "file": "beep_1000_long.wav",
+    "seconds": 0.45,
+    "peak": 0.007,
+    "loudness_db": -4.1,
+    "source": "scripts/build_synth_sfx.py beep(freq=1000, length=long)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "beep",
+      "tone"
+    ]
+  },
+  "beep_1760_short": {
+    "file": "beep_1760_short.wav",
+    "seconds": 0.12,
+    "peak": 0.007,
+    "loudness_db": -4.4,
+    "source": "scripts/build_synth_sfx.py beep(freq=1760, length=short)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "beep",
+      "tone"
+    ]
+  },
+  "beep_1760_long": {
+    "file": "beep_1760_long.wav",
+    "seconds": 0.45,
+    "peak": 0.007,
+    "loudness_db": -4.1,
+    "source": "scripts/build_synth_sfx.py beep(freq=1760, length=long)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "beep",
+      "tone"
+    ]
+  },
+  "beep_1000_censor": {
+    "file": "beep_1000_censor.wav",
+    "seconds": 0.8,
+    "peak": 0.317,
+    "loudness_db": -3.1,
+    "source": "scripts/build_synth_sfx.py beep(freq=1000, length=censor)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "beep",
+      "censor",
+      "bleep"
+    ]
+  },
+  "glitch_0p15": {
+    "file": "glitch_0p15.wav",
+    "seconds": 0.15,
+    "peak": 0.133,
+    "loudness_db": -8.9,
+    "source": "scripts/build_synth_sfx.py glitch(seconds=0p15)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "glitch",
+    "tags": [
+      "glitch",
+      "digital",
+      "error"
+    ]
+  },
+  "glitch_0p25": {
+    "file": "glitch_0p25.wav",
+    "seconds": 0.25,
+    "peak": 0.214,
+    "loudness_db": -7.7,
+    "source": "scripts/build_synth_sfx.py glitch(seconds=0p25)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "glitch",
+    "tags": [
+      "glitch",
+      "digital",
+      "error"
+    ]
+  },
+  "glitch_0p4": {
+    "file": "glitch_0p4.wav",
+    "seconds": 0.4,
+    "peak": 0.149,
+    "loudness_db": -12.1,
+    "source": "scripts/build_synth_sfx.py glitch(seconds=0p4)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "glitch",
+    "tags": [
+      "glitch",
+      "digital",
+      "error"
+    ]
+  },
+  "glitch_0p6": {
+    "file": "glitch_0p6.wav",
+    "seconds": 0.567,
+    "peak": 0.122,
+    "loudness_db": -8.8,
+    "source": "scripts/build_synth_sfx.py glitch(seconds=0p6)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "glitch",
+    "tags": [
+      "glitch",
+      "digital",
+      "error"
+    ]
+  },
+  "glitch_0p9": {
+    "file": "glitch_0p9.wav",
+    "seconds": 0.9,
+    "peak": 0.323,
+    "loudness_db": -13.7,
+    "source": "scripts/build_synth_sfx.py glitch(seconds=0p9)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "glitch",
+    "tags": [
+      "glitch",
+      "digital",
+      "error"
+    ]
+  },
+  "zap_1200_square": {
+    "file": "zap_1200_square.wav",
+    "seconds": 0.35,
+    "peak": 0.001,
+    "loudness_db": -10.8,
+    "source": "scripts/build_synth_sfx.py zap(start_hz=1200, wave=square)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "glitch",
+    "tags": [
+      "zap",
+      "laser",
+      "electric"
+    ]
+  },
+  "zap_1200_saw": {
+    "file": "zap_1200_saw.wav",
+    "seconds": 0.35,
+    "peak": 0.003,
+    "loudness_db": -14.3,
+    "source": "scripts/build_synth_sfx.py zap(start_hz=1200, wave=saw)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "glitch",
+    "tags": [
+      "zap",
+      "laser",
+      "electric"
+    ]
+  },
+  "zap_2400_square": {
+    "file": "zap_2400_square.wav",
+    "seconds": 0.35,
+    "peak": 0.001,
+    "loudness_db": -10.8,
+    "source": "scripts/build_synth_sfx.py zap(start_hz=2400, wave=square)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "glitch",
+    "tags": [
+      "zap",
+      "laser",
+      "electric"
+    ]
+  },
+  "zap_2400_saw": {
+    "file": "zap_2400_saw.wav",
+    "seconds": 0.35,
+    "peak": 0.003,
+    "loudness_db": -13.8,
+    "source": "scripts/build_synth_sfx.py zap(start_hz=2400, wave=saw)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "glitch",
+    "tags": [
+      "zap",
+      "laser",
+      "electric"
+    ]
+  },
+  "zap_4000_square": {
+    "file": "zap_4000_square.wav",
+    "seconds": 0.35,
+    "peak": 0.001,
+    "loudness_db": -10.9,
+    "source": "scripts/build_synth_sfx.py zap(start_hz=4000, wave=square)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "glitch",
+    "tags": [
+      "zap",
+      "laser",
+      "electric"
+    ]
+  },
+  "zap_4000_saw": {
+    "file": "zap_4000_saw.wav",
+    "seconds": 0.35,
+    "peak": 0.003,
+    "loudness_db": -13.2,
+    "source": "scripts/build_synth_sfx.py zap(start_hz=4000, wave=saw)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "glitch",
+    "tags": [
+      "zap",
+      "laser",
+      "electric"
+    ]
+  },
+  "typing_0p8_laptop": {
+    "file": "typing_0p8_laptop.wav",
+    "seconds": 0.879,
+    "peak": 0.511,
+    "loudness_db": -25.2,
+    "source": "scripts/build_synth_sfx.py typing(seconds=0p8, style=laptop)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "foley",
+    "tags": [
+      "typing",
+      "keyboard"
+    ]
+  },
+  "typing_0p8_mechanical": {
+    "file": "typing_0p8_mechanical.wav",
+    "seconds": 0.846,
+    "peak": 0.243,
+    "loudness_db": -23.9,
+    "source": "scripts/build_synth_sfx.py typing(seconds=0p8, style=mechanical)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "foley",
+    "tags": [
+      "typing",
+      "keyboard"
+    ]
+  },
+  "typing_1p5_laptop": {
+    "file": "typing_1p5_laptop.wav",
+    "seconds": 1.667,
+    "peak": 0.434,
+    "loudness_db": -27.7,
+    "source": "scripts/build_synth_sfx.py typing(seconds=1p5, style=laptop)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "foley",
+    "tags": [
+      "typing",
+      "keyboard"
+    ]
+  },
+  "typing_1p5_mechanical": {
+    "file": "typing_1p5_mechanical.wav",
+    "seconds": 1.617,
+    "peak": 1.325,
+    "loudness_db": -24.8,
+    "source": "scripts/build_synth_sfx.py typing(seconds=1p5, style=mechanical)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "foley",
+    "tags": [
+      "typing",
+      "keyboard"
+    ]
+  },
+  "typing_2p5_laptop": {
+    "file": "typing_2p5_laptop.wav",
+    "seconds": 2.648,
+    "peak": 2.442,
+    "loudness_db": -26.3,
+    "source": "scripts/build_synth_sfx.py typing(seconds=2p5, style=laptop)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "foley",
+    "tags": [
+      "typing",
+      "keyboard"
+    ]
+  },
+  "typing_2p5_mechanical": {
+    "file": "typing_2p5_mechanical.wav",
+    "seconds": 2.59,
+    "peak": 1.571,
+    "loudness_db": -26.4,
+    "source": "scripts/build_synth_sfx.py typing(seconds=2p5, style=mechanical)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "foley",
+    "tags": [
+      "typing",
+      "keyboard"
+    ]
+  },
+  "shutter_fast": {
+    "file": "shutter_fast.wav",
+    "seconds": 0.294,
+    "peak": 0.001,
+    "loudness_db": -23.8,
+    "source": "scripts/build_synth_sfx.py shutter(speed=fast)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "foley",
+    "tags": [
+      "camera",
+      "shutter",
+      "photo"
+    ]
+  },
+  "shutter_normal": {
+    "file": "shutter_normal.wav",
+    "seconds": 0.312,
+    "peak": 0.003,
+    "loudness_db": -25.0,
+    "source": "scripts/build_synth_sfx.py shutter(speed=normal)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "foley",
+    "tags": [
+      "camera",
+      "shutter",
+      "photo"
+    ]
+  },
+  "shutter_slow": {
+    "file": "shutter_slow.wav",
+    "seconds": 0.397,
+    "peak": 0.002,
+    "loudness_db": -25.2,
+    "source": "scripts/build_synth_sfx.py shutter(speed=slow)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "foley",
+    "tags": [
+      "camera",
+      "shutter",
+      "photo"
+    ]
+  },
+  "coin_19_26": {
+    "file": "coin_19_26.wav",
+    "seconds": 0.52,
+    "peak": 0.004,
+    "loudness_db": -11.5,
+    "source": "scripts/build_synth_sfx.py coin(first=19, second=26)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "money",
+    "tags": [
+      "coin",
+      "reward",
+      "collect"
+    ]
+  },
+  "coin_19_24": {
+    "file": "coin_19_24.wav",
+    "seconds": 0.52,
+    "peak": 0.072,
+    "loudness_db": -11.5,
+    "source": "scripts/build_synth_sfx.py coin(first=19, second=24)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "money",
+    "tags": [
+      "coin",
+      "reward",
+      "collect"
+    ]
+  },
+  "coin_14_26": {
+    "file": "coin_14_26.wav",
+    "seconds": 0.52,
+    "peak": 0.002,
+    "loudness_db": -11.6,
+    "source": "scripts/build_synth_sfx.py coin(first=14, second=26)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "money",
+    "tags": [
+      "coin",
+      "reward",
+      "collect"
+    ]
+  },
+  "coin_14_24": {
+    "file": "coin_14_24.wav",
+    "seconds": 0.52,
+    "peak": 0.002,
+    "loudness_db": -11.6,
+    "source": "scripts/build_synth_sfx.py coin(first=14, second=24)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "money",
+    "tags": [
+      "coin",
+      "reward",
+      "collect"
+    ]
+  },
+  "ka_ching_0": {
+    "file": "ka_ching_0.wav",
+    "seconds": 1.51,
+    "peak": 0.137,
+    "loudness_db": -20.3,
+    "source": "scripts/build_synth_sfx.py ka_ching(variant=0)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "money",
+    "tags": [
+      "cash",
+      "money",
+      "register",
+      "sale"
+    ]
+  },
+  "ka_ching_1": {
+    "file": "ka_ching_1.wav",
+    "seconds": 1.473,
+    "peak": 0.135,
+    "loudness_db": -19.6,
+    "source": "scripts/build_synth_sfx.py ka_ching(variant=1)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "money",
+    "tags": [
+      "cash",
+      "money",
+      "register",
+      "sale"
+    ]
+  },
+  "ka_ching_2": {
+    "file": "ka_ching_2.wav",
+    "seconds": 1.522,
+    "peak": 0.134,
+    "loudness_db": -19.4,
+    "source": "scripts/build_synth_sfx.py ka_ching(variant=2)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "money",
+    "tags": [
+      "cash",
+      "money",
+      "register",
+      "sale"
+    ]
+  },
+  "sparkle_0p6_12": {
+    "file": "sparkle_0p6_12.wav",
+    "seconds": 1.003,
+    "peak": 0.318,
+    "loudness_db": -18.3,
+    "source": "scripts/build_synth_sfx.py sparkle(seconds=0p6, density=12)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "magic",
+    "tags": [
+      "sparkle",
+      "magic",
+      "shine"
+    ]
+  },
+  "sparkle_0p6_30": {
+    "file": "sparkle_0p6_30.wav",
+    "seconds": 1.026,
+    "peak": 0.358,
+    "loudness_db": -21.0,
+    "source": "scripts/build_synth_sfx.py sparkle(seconds=0p6, density=30)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "magic",
+    "tags": [
+      "sparkle",
+      "magic",
+      "shine"
+    ]
+  },
+  "sparkle_1_12": {
+    "file": "sparkle_1_12.wav",
+    "seconds": 1.363,
+    "peak": 0.514,
+    "loudness_db": -16.9,
+    "source": "scripts/build_synth_sfx.py sparkle(seconds=1, density=12)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "magic",
+    "tags": [
+      "sparkle",
+      "magic",
+      "shine"
+    ]
+  },
+  "sparkle_1_30": {
+    "file": "sparkle_1_30.wav",
+    "seconds": 1.359,
+    "peak": 0.45,
+    "loudness_db": -18.6,
+    "source": "scripts/build_synth_sfx.py sparkle(seconds=1, density=30)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "magic",
+    "tags": [
+      "sparkle",
+      "magic",
+      "shine"
+    ]
+  },
+  "sparkle_1p6_12": {
+    "file": "sparkle_1p6_12.wav",
+    "seconds": 1.869,
+    "peak": 1.182,
+    "loudness_db": -19.9,
+    "source": "scripts/build_synth_sfx.py sparkle(seconds=1p6, density=12)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "magic",
+    "tags": [
+      "sparkle",
+      "magic",
+      "shine"
+    ]
+  },
+  "sparkle_1p6_30": {
+    "file": "sparkle_1p6_30.wav",
+    "seconds": 1.897,
+    "peak": 0.823,
+    "loudness_db": -19.5,
+    "source": "scripts/build_synth_sfx.py sparkle(seconds=1p6, density=30)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "magic",
+    "tags": [
+      "sparkle",
+      "magic",
+      "shine"
+    ]
+  },
+  "heartbeat_60_2": {
+    "file": "heartbeat_60_2.wav",
+    "seconds": 1.406,
+    "peak": 0.01,
+    "loudness_db": -16.0,
+    "source": "scripts/build_synth_sfx.py heartbeat(bpm=60, beats=2)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "tension",
+    "tags": [
+      "heartbeat",
+      "suspense"
+    ]
+  },
+  "heartbeat_60_4": {
+    "file": "heartbeat_60_4.wav",
+    "seconds": 3.406,
+    "peak": 0.01,
+    "loudness_db": -16.9,
+    "source": "scripts/build_synth_sfx.py heartbeat(bpm=60, beats=4)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "tension",
+    "tags": [
+      "heartbeat",
+      "suspense"
+    ]
+  },
+  "heartbeat_100_2": {
+    "file": "heartbeat_100_2.wav",
+    "seconds": 1.006,
+    "peak": 0.01,
+    "loudness_db": -14.6,
+    "source": "scripts/build_synth_sfx.py heartbeat(bpm=100, beats=2)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "tension",
+    "tags": [
+      "heartbeat",
+      "suspense"
+    ]
+  },
+  "heartbeat_100_4": {
+    "file": "heartbeat_100_4.wav",
+    "seconds": 2.206,
+    "peak": 0.01,
+    "loudness_db": -15.0,
+    "source": "scripts/build_synth_sfx.py heartbeat(bpm=100, beats=4)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "tension",
+    "tags": [
+      "heartbeat",
+      "suspense"
+    ]
+  },
+  "tape_stop_0p5": {
+    "file": "tape_stop_0p5.wav",
+    "seconds": 0.5,
+    "peak": 0.003,
+    "loudness_db": -10.1,
+    "source": "scripts/build_synth_sfx.py tape_stop(seconds=0p5)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "tape stop",
+      "slow down",
+      "stop"
+    ]
+  },
+  "tape_stop_0p9": {
+    "file": "tape_stop_0p9.wav",
+    "seconds": 0.9,
+    "peak": 0.003,
+    "loudness_db": -10.1,
+    "source": "scripts/build_synth_sfx.py tape_stop(seconds=0p9)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "tape stop",
+      "slow down",
+      "stop"
+    ]
+  },
+  "tape_stop_1p4": {
+    "file": "tape_stop_1p4.wav",
+    "seconds": 1.4,
+    "peak": 0.016,
+    "loudness_db": -10.1,
+    "source": "scripts/build_synth_sfx.py tape_stop(seconds=1p4)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "tape stop",
+      "slow down",
+      "stop"
+    ]
+  },
+  "scratch_0p25": {
+    "file": "scratch_0p25.wav",
+    "seconds": 0.244,
+    "peak": 0.075,
+    "loudness_db": -16.4,
+    "source": "scripts/build_synth_sfx.py scratch(seconds=0p25)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "scratch",
+      "record",
+      "stop"
+    ]
+  },
+  "scratch_0p45": {
+    "file": "scratch_0p45.wav",
+    "seconds": 0.441,
+    "peak": 0.17,
+    "loudness_db": -15.5,
+    "source": "scripts/build_synth_sfx.py scratch(seconds=0p45)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "scratch",
+      "record",
+      "stop"
+    ]
+  },
+  "scratch_0p7": {
+    "file": "scratch_0p7.wav",
+    "seconds": 0.685,
+    "peak": 0.291,
+    "loudness_db": -15.8,
+    "source": "scripts/build_synth_sfx.py scratch(seconds=0p7)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "transition",
+    "tags": [
+      "scratch",
+      "record",
+      "stop"
+    ]
+  },
+  "boing_150": {
+    "file": "boing_150.wav",
+    "seconds": 0.7,
+    "peak": 0.005,
+    "loudness_db": -14.7,
+    "source": "scripts/build_synth_sfx.py boing(freq=150)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "comedy",
+    "tags": [
+      "boing",
+      "spring",
+      "funny"
+    ]
+  },
+  "boing_220": {
+    "file": "boing_220.wav",
+    "seconds": 0.7,
+    "peak": 0.003,
+    "loudness_db": -14.7,
+    "source": "scripts/build_synth_sfx.py boing(freq=220)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "comedy",
+    "tags": [
+      "boing",
+      "spring",
+      "funny"
+    ]
+  },
+  "boing_330": {
+    "file": "boing_330.wav",
+    "seconds": 0.7,
+    "peak": 0.002,
+    "loudness_db": -14.5,
+    "source": "scripts/build_synth_sfx.py boing(freq=330)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "comedy",
+    "tags": [
+      "boing",
+      "spring",
+      "funny"
+    ]
+  },
+  "boing_440": {
+    "file": "boing_440.wav",
+    "seconds": 0.7,
+    "peak": 0.002,
+    "loudness_db": -14.5,
+    "source": "scripts/build_synth_sfx.py boing(freq=440)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "comedy",
+    "tags": [
+      "boing",
+      "spring",
+      "funny"
+    ]
+  },
+  "slide_whistle_up_0p5": {
+    "file": "slide_whistle_up_0p5.wav",
+    "seconds": 0.495,
+    "peak": 0.251,
+    "loudness_db": -8.2,
+    "source": "scripts/build_synth_sfx.py slide_whistle(direction=up, seconds=0p5)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "comedy",
+    "tags": [
+      "slide whistle",
+      "funny"
+    ]
+  },
+  "slide_whistle_up_1": {
+    "file": "slide_whistle_up_1.wav",
+    "seconds": 0.99,
+    "peak": 0.501,
+    "loudness_db": -8.2,
+    "source": "scripts/build_synth_sfx.py slide_whistle(direction=up, seconds=1)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "comedy",
+    "tags": [
+      "slide whistle",
+      "funny"
+    ]
+  },
+  "slide_whistle_down_0p5": {
+    "file": "slide_whistle_down_0p5.wav",
+    "seconds": 0.495,
+    "peak": 0.251,
+    "loudness_db": -8.2,
+    "source": "scripts/build_synth_sfx.py slide_whistle(direction=down, seconds=0p5)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "comedy",
+    "tags": [
+      "slide whistle",
+      "funny"
+    ]
+  },
+  "slide_whistle_down_1": {
+    "file": "slide_whistle_down_1.wav",
+    "seconds": 0.989,
+    "peak": 0.501,
+    "loudness_db": -8.2,
+    "source": "scripts/build_synth_sfx.py slide_whistle(direction=down, seconds=1)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "comedy",
+    "tags": [
+      "slide whistle",
+      "funny"
+    ]
+  },
+  "kick_kick_0": {
+    "file": "kick_kick_0.wav",
+    "seconds": 0.5,
+    "peak": 0.005,
+    "loudness_db": -14.2,
+    "source": "scripts/build_synth_sfx.py drum(kind=kick, variant=0)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "kick",
+      "drum",
+      "beat"
+    ]
+  },
+  "kick_kick_1": {
+    "file": "kick_kick_1.wav",
+    "seconds": 0.5,
+    "peak": 0.004,
+    "loudness_db": -13.7,
+    "source": "scripts/build_synth_sfx.py drum(kind=kick, variant=1)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "kick",
+      "drum",
+      "beat"
+    ]
+  },
+  "kick_kick_2": {
+    "file": "kick_kick_2.wav",
+    "seconds": 0.5,
+    "peak": 0.004,
+    "loudness_db": -13.1,
+    "source": "scripts/build_synth_sfx.py drum(kind=kick, variant=2)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "kick",
+      "drum",
+      "beat"
+    ]
+  },
+  "snare_snare_0": {
+    "file": "snare_snare_0.wav",
+    "seconds": 0.35,
+    "peak": 0.011,
+    "loudness_db": -20.9,
+    "source": "scripts/build_synth_sfx.py drum(kind=snare, variant=0)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "snare",
+      "drum",
+      "hit"
+    ]
+  },
+  "snare_snare_1": {
+    "file": "snare_snare_1.wav",
+    "seconds": 0.349,
+    "peak": 0.008,
+    "loudness_db": -22.5,
+    "source": "scripts/build_synth_sfx.py drum(kind=snare, variant=1)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "snare",
+      "drum",
+      "hit"
+    ]
+  },
+  "snare_snare_2": {
+    "file": "snare_snare_2.wav",
+    "seconds": 0.329,
+    "peak": 0.006,
+    "loudness_db": -20.8,
+    "source": "scripts/build_synth_sfx.py drum(kind=snare, variant=2)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "snare",
+      "drum",
+      "hit"
+    ]
+  },
+  "clap_clap_0": {
+    "file": "clap_clap_0.wav",
+    "seconds": 0.419,
+    "peak": 0.013,
+    "loudness_db": -21.4,
+    "source": "scripts/build_synth_sfx.py drum(kind=clap, variant=0)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "clap",
+      "applause"
+    ]
+  },
+  "clap_clap_1": {
+    "file": "clap_clap_1.wav",
+    "seconds": 0.427,
+    "peak": 0.014,
+    "loudness_db": -20.4,
+    "source": "scripts/build_synth_sfx.py drum(kind=clap, variant=1)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "clap",
+      "applause"
+    ]
+  },
+  "clap_clap_2": {
+    "file": "clap_clap_2.wav",
+    "seconds": 0.415,
+    "peak": 0.034,
+    "loudness_db": -21.5,
+    "source": "scripts/build_synth_sfx.py drum(kind=clap, variant=2)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "clap",
+      "applause"
+    ]
+  },
+  "hat_hat_closed_0": {
+    "file": "hat_hat_closed_0.wav",
+    "seconds": 0.08,
+    "peak": 0.002,
+    "loudness_db": -18.6,
+    "source": "scripts/build_synth_sfx.py drum(kind=hat_closed, variant=0)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "hi-hat",
+      "cymbal"
+    ]
+  },
+  "hat_hat_closed_1": {
+    "file": "hat_hat_closed_1.wav",
+    "seconds": 0.08,
+    "peak": 0.001,
+    "loudness_db": -19.1,
+    "source": "scripts/build_synth_sfx.py drum(kind=hat_closed, variant=1)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "hi-hat",
+      "cymbal"
+    ]
+  },
+  "hat_hat_open_0": {
+    "file": "hat_hat_open_0.wav",
+    "seconds": 0.5,
+    "peak": 0.01,
+    "loudness_db": -19.6,
+    "source": "scripts/build_synth_sfx.py drum(kind=hat_open, variant=0)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "hi-hat",
+      "cymbal"
+    ]
+  },
+  "hat_hat_open_1": {
+    "file": "hat_hat_open_1.wav",
+    "seconds": 0.5,
+    "peak": 0.013,
+    "loudness_db": -19.0,
+    "source": "scripts/build_synth_sfx.py drum(kind=hat_open, variant=1)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "hi-hat",
+      "cymbal"
+    ]
+  },
+  "drum_roll_1p5": {
+    "file": "drum_roll_1p5.wav",
+    "seconds": 2.0,
+    "peak": 1.502,
+    "loudness_db": -20.1,
+    "source": "scripts/build_synth_sfx.py drum_roll(seconds=1p5)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "drum roll",
+      "reveal",
+      "suspense"
+    ]
+  },
+  "drum_roll_3": {
+    "file": "drum_roll_3.wav",
+    "seconds": 3.5,
+    "peak": 3.003,
+    "loudness_db": -19.6,
+    "source": "scripts/build_synth_sfx.py drum_roll(seconds=3)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "drum",
+    "tags": [
+      "drum roll",
+      "reveal",
+      "suspense"
+    ]
+  },
+  "rumble_1p5": {
+    "file": "rumble_1p5.wav",
+    "seconds": 1.473,
+    "peak": 0.414,
+    "loudness_db": -13.8,
+    "source": "scripts/build_synth_sfx.py rumble(seconds=1p5)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ambience",
+    "tags": [
+      "rumble",
+      "earthquake",
+      "low"
+    ]
+  },
+  "rumble_3": {
+    "file": "rumble_3.wav",
+    "seconds": 2.955,
+    "peak": 1.221,
+    "loudness_db": -14.4,
+    "source": "scripts/build_synth_sfx.py rumble(seconds=3)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ambience",
+    "tags": [
+      "rumble",
+      "earthquake",
+      "low"
+    ]
+  },
+  "rumble_5": {
+    "file": "rumble_5.wav",
+    "seconds": 4.887,
+    "peak": 1.916,
+    "loudness_db": -15.3,
+    "source": "scripts/build_synth_sfx.py rumble(seconds=5)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ambience",
+    "tags": [
+      "rumble",
+      "earthquake",
+      "low"
+    ]
+  },
+  "wind_1p5": {
+    "file": "wind_1p5.wav",
+    "seconds": 1.489,
+    "peak": 0.457,
+    "loudness_db": -17.2,
+    "source": "scripts/build_synth_sfx.py wind(seconds=1p5)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ambience",
+    "tags": [
+      "wind",
+      "air",
+      "gust"
+    ]
+  },
+  "wind_3": {
+    "file": "wind_3.wav",
+    "seconds": 2.963,
+    "peak": 1.45,
+    "loudness_db": -19.5,
+    "source": "scripts/build_synth_sfx.py wind(seconds=3)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ambience",
+    "tags": [
+      "wind",
+      "air",
+      "gust"
+    ]
+  },
+  "wind_5": {
+    "file": "wind_5.wav",
+    "seconds": 4.923,
+    "peak": 2.002,
+    "loudness_db": -19.4,
+    "source": "scripts/build_synth_sfx.py wind(seconds=5)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ambience",
+    "tags": [
+      "wind",
+      "air",
+      "gust"
+    ]
+  },
+  "static_0p3": {
+    "file": "static_0p3.wav",
+    "seconds": 0.3,
+    "peak": 0.195,
+    "loudness_db": -17.4,
+    "source": "scripts/build_synth_sfx.py static_burst(seconds=0p3)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "glitch",
+    "tags": [
+      "static",
+      "tv",
+      "noise"
+    ]
+  },
+  "static_0p8": {
+    "file": "static_0p8.wav",
+    "seconds": 0.8,
+    "peak": 0.029,
+    "loudness_db": -17.8,
+    "source": "scripts/build_synth_sfx.py static_burst(seconds=0p8)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "glitch",
+    "tags": [
+      "static",
+      "tv",
+      "noise"
+    ]
+  },
+  "static_1p5": {
+    "file": "static_1p5.wav",
+    "seconds": 1.5,
+    "peak": 0.299,
+    "loudness_db": -17.9,
+    "source": "scripts/build_synth_sfx.py static_burst(seconds=1p5)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "glitch",
+    "tags": [
+      "static",
+      "tv",
+      "noise"
+    ]
+  },
+  "ui_swipe_0p12": {
+    "file": "ui_swipe_0p12.wav",
+    "seconds": 0.117,
+    "peak": 0.043,
+    "loudness_db": -14.0,
+    "source": "scripts/build_synth_sfx.py ui_swipe(seconds=0p12)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "swipe",
+      "slide",
+      "card"
+    ]
+  },
+  "ui_swipe_0p2": {
+    "file": "ui_swipe_0p2.wav",
+    "seconds": 0.197,
+    "peak": 0.075,
+    "loudness_db": -15.5,
+    "source": "scripts/build_synth_sfx.py ui_swipe(seconds=0p2)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "swipe",
+      "slide",
+      "card"
+    ]
+  },
+  "ui_swipe_0p3": {
+    "file": "ui_swipe_0p3.wav",
+    "seconds": 0.296,
+    "peak": 0.08,
+    "loudness_db": -15.6,
+    "source": "scripts/build_synth_sfx.py ui_swipe(seconds=0p3)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "swipe",
+      "slide",
+      "card"
+    ]
+  },
+  "ui_swipe_0p45": {
+    "file": "ui_swipe_0p45.wav",
+    "seconds": 0.442,
+    "peak": 0.172,
+    "loudness_db": -18.1,
+    "source": "scripts/build_synth_sfx.py ui_swipe(seconds=0p45)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "swipe",
+      "slide",
+      "card"
+    ]
+  },
+  "toggle_on_1800": {
+    "file": "toggle_on_1800.wav",
+    "seconds": 0.1,
+    "peak": 0.05,
+    "loudness_db": -15.6,
+    "source": "scripts/build_synth_sfx.py toggle(state=on, pitch=1800)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "toggle",
+      "switch"
+    ]
+  },
+  "toggle_on_3000": {
+    "file": "toggle_on_3000.wav",
+    "seconds": 0.099,
+    "peak": 0.05,
+    "loudness_db": -15.7,
+    "source": "scripts/build_synth_sfx.py toggle(state=on, pitch=3000)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "toggle",
+      "switch"
+    ]
+  },
+  "toggle_off_1800": {
+    "file": "toggle_off_1800.wav",
+    "seconds": 0.1,
+    "peak": 0.05,
+    "loudness_db": -15.4,
+    "source": "scripts/build_synth_sfx.py toggle(state=off, pitch=1800)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "toggle",
+      "switch"
+    ]
+  },
+  "toggle_off_3000": {
+    "file": "toggle_off_3000.wav",
+    "seconds": 0.099,
+    "peak": 0.05,
+    "loudness_db": -15.6,
+    "source": "scripts/build_synth_sfx.py toggle(state=off, pitch=3000)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "ui",
+    "tags": [
+      "toggle",
+      "switch"
+    ]
+  },
+  "thud_light": {
+    "file": "thud_light.wav",
+    "seconds": 0.25,
+    "peak": 0.008,
+    "loudness_db": -11.9,
+    "source": "scripts/build_synth_sfx.py thud(weight=light)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "thud",
+      "drop",
+      "land"
+    ]
+  },
+  "thud_medium": {
+    "file": "thud_medium.wav",
+    "seconds": 0.4,
+    "peak": 0.005,
+    "loudness_db": -13.7,
+    "source": "scripts/build_synth_sfx.py thud(weight=medium)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "thud",
+      "drop",
+      "land"
+    ]
+  },
+  "thud_heavy": {
+    "file": "thud_heavy.wav",
+    "seconds": 0.658,
+    "peak": 0.007,
+    "loudness_db": -17.8,
+    "source": "scripts/build_synth_sfx.py thud(weight=heavy)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "thud",
+      "drop",
+      "land"
+    ]
+  },
+  "thud_body": {
+    "file": "thud_body.wav",
+    "seconds": 0.5,
+    "peak": 0.006,
+    "loudness_db": -15.2,
+    "source": "scripts/build_synth_sfx.py thud(weight=body)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "impact",
+    "tags": [
+      "thud",
+      "drop",
+      "land"
+    ]
+  },
+  "page_turn_0p3": {
+    "file": "page_turn_0p3.wav",
+    "seconds": 0.297,
+    "peak": 0.185,
+    "loudness_db": -19.3,
+    "source": "scripts/build_synth_sfx.py page_turn(seconds=0p3)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "foley",
+    "tags": [
+      "page",
+      "paper",
+      "flip"
+    ]
+  },
+  "page_turn_0p5": {
+    "file": "page_turn_0p5.wav",
+    "seconds": 0.494,
+    "peak": 0.278,
+    "loudness_db": -19.3,
+    "source": "scripts/build_synth_sfx.py page_turn(seconds=0p5)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "foley",
+    "tags": [
+      "page",
+      "paper",
+      "flip"
+    ]
+  },
+  "page_turn_0p8": {
+    "file": "page_turn_0p8.wav",
+    "seconds": 0.783,
+    "peak": 0.477,
+    "loudness_db": -20.8,
+    "source": "scripts/build_synth_sfx.py page_turn(seconds=0p8)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "foley",
+    "tags": [
+      "page",
+      "paper",
+      "flip"
+    ]
+  },
+  "alarm_siren": {
+    "file": "alarm_siren.wav",
+    "seconds": 1.2,
+    "peak": 0.476,
+    "loudness_db": -3.3,
+    "source": "scripts/build_synth_sfx.py alarm(kind=siren)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "alert",
+    "tags": [
+      "alarm",
+      "warning"
+    ]
+  },
+  "alarm_buzzer": {
+    "file": "alarm_buzzer.wav",
+    "seconds": 0.6,
+    "peak": 0.011,
+    "loudness_db": -4.1,
+    "source": "scripts/build_synth_sfx.py alarm(kind=buzzer)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "alert",
+    "tags": [
+      "alarm",
+      "warning"
+    ]
+  },
+  "alarm_beeping": {
+    "file": "alarm_beeping.wav",
+    "seconds": 1.162,
+    "peak": 0.253,
+    "loudness_db": -5.8,
+    "source": "scripts/build_synth_sfx.py alarm(kind=beeping)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "alert",
+    "tags": [
+      "alarm",
+      "warning"
+    ]
+  },
+  "stinger_0-3-7": {
+    "file": "stinger_0-3-7.wav",
+    "seconds": 2.262,
+    "peak": 0.026,
+    "loudness_db": -20.6,
+    "source": "scripts/build_synth_sfx.py stinger(chord=0-3-7)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "music",
+    "tags": [
+      "stinger",
+      "reveal",
+      "dramatic"
+    ]
+  },
+  "stinger_0-4-7": {
+    "file": "stinger_0-4-7.wav",
+    "seconds": 2.418,
+    "peak": 0.019,
+    "loudness_db": -21.7,
+    "source": "scripts/build_synth_sfx.py stinger(chord=0-4-7)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "music",
+    "tags": [
+      "stinger",
+      "reveal",
+      "dramatic"
+    ]
+  },
+  "stinger_0-3-6": {
+    "file": "stinger_0-3-6.wav",
+    "seconds": 2.35,
+    "peak": 0.003,
+    "loudness_db": -21.4,
+    "source": "scripts/build_synth_sfx.py stinger(chord=0-3-6)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "music",
+    "tags": [
+      "stinger",
+      "reveal",
+      "dramatic"
+    ]
+  },
+  "stinger_0-5-7": {
+    "file": "stinger_0-5-7.wav",
+    "seconds": 2.412,
+    "peak": 0.007,
+    "loudness_db": -21.2,
+    "source": "scripts/build_synth_sfx.py stinger(chord=0-5-7)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "music",
+    "tags": [
+      "stinger",
+      "reveal",
+      "dramatic"
+    ]
+  },
+  "braam_-17": {
+    "file": "braam_-17.wav",
+    "seconds": 3.08,
+    "peak": 0.073,
+    "loudness_db": -18.4,
+    "source": "scripts/build_synth_sfx.py braam(root=-17)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "music",
+    "tags": [
+      "braam",
+      "trailer",
+      "epic"
+    ]
+  },
+  "braam_-14": {
+    "file": "braam_-14.wav",
+    "seconds": 3.031,
+    "peak": 0.031,
+    "loudness_db": -18.4,
+    "source": "scripts/build_synth_sfx.py braam(root=-14)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "music",
+    "tags": [
+      "braam",
+      "trailer",
+      "epic"
+    ]
+  },
+  "braam_-12": {
+    "file": "braam_-12.wav",
+    "seconds": 3.007,
+    "peak": 0.082,
+    "loudness_db": -17.0,
+    "source": "scripts/build_synth_sfx.py braam(root=-12)",
+    "licence": "Clipnera original, synthesised in code",
+    "category": "music",
+    "tags": [
+      "braam",
+      "trailer",
+      "epic"
+    ]
+  }
+}

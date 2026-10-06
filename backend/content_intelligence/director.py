@@ -24,6 +24,7 @@ from typing import Any
 from content_intelligence.classifier import CONTENT_TAXONOMY
 from content_intelligence.sentences import Sentence, format_table
 from core.logging_config import get_logger
+from skills import HOOKS, STANDALONE_SHORTS, TITLES, skill_block
 
 log = get_logger(__name__)
 
@@ -184,7 +185,7 @@ A clip never starts on a !C line, and never ends on a line whose next line is !C
 [sees: ...], when present, is what is on screen during the line. Favour moments that are strong to watch as well as to hear, and never pick a line whose words point at something the picture does not show."""
 
 # Shared by every prompt that reads a transcript or writes viewer-facing copy.
-LANGUAGE_RULE = """The transcript may be in any language or a mix, including Hindi, Telugu, Hinglish and Tenglish, in native or Roman script. Judge meaning, hooks and humour in the language actually spoken, never through a literal English reading. Write every title, description and hashtag in the language mix the speaker uses, in the transcript's script: Roman script for a Roman-script transcript."""
+LANGUAGE_RULE = """The transcript may be in any language or a mix, including Hindi, Telugu, Hinglish and Tenglish, in native or Roman script. Judge meaning, hooks and humour in the language actually spoken, never through a literal English reading. Write every title, description and hashtag in the language mix the speaker uses. Telugu speech always gets Tenglish: Telugu written in Roman script, mixed with the everyday English words Telugu speakers use, the way Telugu creators caption their reels ("Ee mistake chesthe mee money motham waste"). Never Telugu script, and never formal or pure Telugu. Any other language keeps the transcript's script: Roman script for a Roman-script transcript."""
 
 MAP_SYSTEM = f"""You scout long videos for a short-form video editor. You read a transcript and point at the moments worth turning into standalone vertical shorts. You answer with sentence ids, never timestamps, and return valid JSON only.
 
@@ -199,7 +200,7 @@ A strong candidate is one complete thought a stranger scrolling past would stop 
 # How every clip's fields are filled in, whether it is one moment or a story.
 CLIP_FIELD_RULES = """- hook: the id of the single most gripping line inside the clip, played first as a teaser: a bold claim, a number, a punchline, an emotional peak. 5-15 words, from the middle or end of the clip, never its first line, and it must make sense heard alone. 0 if no line qualifies.
 - title: one sentence, at most 60 characters, about the payoff, not the setup. It is burned above the captions. Do not quote the transcript. description: 1-2 sentences. hashtags: 3-5.
-- layout: single_speaker (one person talking), two_speaker_stack (a back-and-forth between two people on screen), split_gameplay (gameplay with a facecam), screen_with_speaker (slides or a screen share with a presenter), wide (a group or a scene), or auto if unsure.
+- layout: single_speaker (one person talking), two_speaker_stack (a back-and-forth between two people on screen), split_gameplay (gameplay with a facecam), screen_with_speaker (slides, a screen share, or something on screen being reacted to: fan art, a video, a post), wide (a group or a scene), or auto if unsure.
 - beats (at most 4, only where they help): punch_in on the line where the peak lands, with the key word; react_cut on a line whose listener's reaction is worth showing; emphasis on a key word or number to highlight in captions.
 - scores: 1-10 per criterion, honestly. A 9 is a clip that would go viral on its own; most good clips are 6-8.
 - why: one short sentence on what makes it work."""
@@ -255,6 +256,13 @@ For each clip choose:
 - start: the id of the line a stranger should hear first. It opens the clip's thought: the question, the claim, the first line of the story. Move it later when the current first line finishes or answers the point before it; move it earlier when the current first line leans on a line just before it ("that", "this", "it", an answer without its question).
 - end: the id of the last line to keep. The payoff has landed and the sentence is finished. Move it later when the current ending is a setup, a question still waiting for its answer, or partway through a list or a sentence; move it earlier when the lines after the payoff wander into a new point.
 Only ids shown for that clip's opening (start) and ending (end) are allowed. Keep the current id when it is already right; most are. Return valid JSON only."""
+
+# Every director reads the editing skills before it plans (backend/skills).
+MAP_SYSTEM = f"{MAP_SYSTEM}\n\n{skill_block(STANDALONE_SHORTS, HOOKS)}"
+DIRECTOR_SYSTEM = f"{DIRECTOR_SYSTEM}\n\n{skill_block(STANDALONE_SHORTS, HOOKS, TITLES)}"
+STORY_SYSTEM = f"{STORY_SYSTEM}\n\n{skill_block(STANDALONE_SHORTS, HOOKS, TITLES)}"
+CHECK_SYSTEM = f"{CHECK_SYSTEM}\n\n{skill_block(STANDALONE_SHORTS)}"
+EDGES_SYSTEM = f"{EDGES_SYSTEM}\n\n{skill_block(STANDALONE_SHORTS)}"
 
 CATEGORY_PLAYBOOKS: dict[str, str] = {
     "podcast_interview": "Podcasts: favour stories with a turn, contrarian opinions with their reasoning, and confessions. A guest's answer usually needs the host's question as its opening line. Use two_speaker_stack when the exchange itself is the point; react_cut when the host's face sells the moment.",

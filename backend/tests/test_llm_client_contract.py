@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from clients.ai.groq import DEFAULT_REASONING_EFFORT, Groq, get_profile, input_token_budget
+from clients.ai import groq as groq_module
+from clients.ai.groq import Groq, get_profile, input_token_budget, note_rate_limits, reasoning_effort
 from clip_generation.service import ClipService
 
 
@@ -69,8 +70,28 @@ class TestTokenBudget:
         profile = get_profile("openai/gpt-oss-20b")
         assert 0 < budget < profile.tokens_per_minute
 
-    def test_reasoning_models_are_configured_with_a_low_effort_default(self):
-        assert DEFAULT_REASONING_EFFORT == "low"
+    def test_free_tier_limit_keeps_low_effort(self, monkeypatch):
+        # At 8K tokens a minute, high effort's thinking allowance would leave no
+        # room for the transcript, so the effort steps down until it fits.
+        monkeypatch.setattr(groq_module, "_reported_tpm", {})
+        assert reasoning_effort("openai/gpt-oss-20b") == "low"
+
+    def test_reported_paid_tier_limit_raises_effort_to_high(self, monkeypatch):
+        monkeypatch.setattr(groq_module, "_reported_tpm", {})
+        monkeypatch.setattr(Groq, "_limiters", {})
+        bucket = Groq._limiter_for("openai/gpt-oss-120b")
+        note_rate_limits("openai/gpt-oss-120b", {"x-ratelimit-limit-tokens": "250000"})
+        assert reasoning_effort("openai/gpt-oss-120b") == "high"
+        assert bucket._tokens_per_minute == 250000
+        assert input_token_budget(1400, "openai/gpt-oss-120b") > 100_000
+
+    def test_configured_ceiling_caps_the_effort(self, monkeypatch):
+        monkeypatch.setattr(groq_module, "_reported_tpm", {"openai/gpt-oss-20b": 250000})
+        monkeypatch.setattr(groq_module.settings, "GROQ_REASONING_EFFORT", "medium")
+        assert reasoning_effort("openai/gpt-oss-20b") == "medium"
+
+    def test_non_reasoning_model_gets_no_effort(self):
+        assert reasoning_effort("qwen/qwen3.6-27b") is None
 
 
 class TestClipScoreSurface:

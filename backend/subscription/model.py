@@ -164,6 +164,10 @@ class CreditLedger(Base):
     purchased_balance_after: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     # How this entry changed the bought part, so a refund can return it there.
     purchased_amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # The part of balance_after that is bonus credits (see CreditGrant), and how
+    # this entry changed it. Like the bought part, it survives cycle resets.
+    bonus_balance_after: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    bonus_amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     reason: Mapped[str] = mapped_column(String(255), nullable=False)
     reference_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     reference_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -175,6 +179,51 @@ class CreditLedger(Base):
 
     user: Mapped["User"] = relationship("User", foreign_keys=[user_id], lazy="selectin")
     creator: Mapped["User"] = relationship("User", foreign_keys=[created_by], lazy="selectin")
+
+
+class CreditGrant(Base):
+    """Bonus credits given for a reason (a referral reward) that expire on a date.
+
+    Each grant keeps its own remaining amount, so credits given on different
+    days expire on their own dates. Spending, refunds and expiry change
+    ``remaining`` together with a ledger entry, under the user's balance lock.
+    """
+
+    __tablename__ = "credit_grants"
+    __table_args__ = (
+        CheckConstraint("remaining >= 0 AND remaining <= amount", name="ck_credit_grants_remaining"),
+        Index("ix_credit_grants_user_open", "user_id", "expires_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    remaining: Mapped[int] = mapped_column(Integer, nullable=False)
+    # What the grant was for, e.g. "referral_referrer_pro"; reference_id names
+    # the record behind it (the referral).
+    source: Mapped[str] = mapped_column(String(50), nullable=False)
+    reference_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # Set when the leftover was removed for good: on expiry, or by an admin.
+    expired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class CreditGrantSpend(Base):
+    """How much of a grant one ledger entry used (positive) or gave back
+    (negative), so a refund returns bonus credits to the grant they came from."""
+
+    __tablename__ = "credit_grant_spends"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    ledger_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("credit_ledger.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    grant_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("credit_grants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class UsageTracking(Base):

@@ -96,7 +96,7 @@ class TestBundledFonts:
         assert ass_filter("/tmp/work/captions.ass") == f"ass=captions.ass:fontsdir={FONTS_DIR}"
 
     def test_bundled_faces_have_font_files(self) -> None:
-        """A face missing from static/fonts silently burns in the fallback font."""
+        """A face missing from static/motion/fonts silently burns in the fallback font."""
         bundled = {
             "Anton": "Anton-Regular.ttf",
             "Archivo Black": "ArchivoBlack-Regular.ttf",

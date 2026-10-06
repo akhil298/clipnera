@@ -73,6 +73,14 @@ export const CreditsPopover: React.FC<CreditsPopoverProps> = ({ remaining, total
           <p className="text-xs text-neutral-300">
             ≈ <span className="font-bold text-white">{videoMinutesFor(entitlements, remaining)} min</span> of video left
           </p>
+          {entitlements.bonus_credits_remaining > 0 && (
+            <p className="text-[11px] text-sky-300">
+              Includes {entitlements.bonus_credits_remaining} bonus credits
+              {entitlements.bonus_credits_expiring_at && (
+                <>; {entitlements.bonus_credits_expiring} expire on {formatDate(entitlements.bonus_credits_expiring_at)}</>
+              )}
+            </p>
+          )}
           {entitlements.purchased_credits_remaining > 0 && (
             <p className="text-[11px] text-emerald-400">
               Includes {entitlements.purchased_credits_remaining} bought credits that never expire
@@ -90,6 +98,9 @@ export const CreditsPopover: React.FC<CreditsPopoverProps> = ({ remaining, total
                 : `Plan credits reset to ${entitlements.credit_minutes} every 30 days`}
               ; unused ones don&apos;t roll over
             </p>
+            {entitlements.bonus_credits_remaining > 0 && (
+              <p>• Bonus credits are used first when they&apos;d expire before your plan credits</p>
+            )}
           </div>
 
           <button

@@ -18,7 +18,7 @@ from core.logging_config import get_logger
 from usage.context import check_budget
 from usage.recorder import record_llm_call
 
-from .base import BaseAI, ToolCall, ToolReply, ToolResult, ToolSpec
+from .base import BaseAI, ToolCall, ToolReply, ToolResult, ToolSpec, reply_text
 from .groq import TOKEN_ESTIMATE_SAFETY_MARGIN, _arguments
 
 settings = get_settings()
@@ -27,6 +27,21 @@ log = get_logger(__name__)
 # The smallest window among the chat models this client is pointed at.
 CONTEXT_TOKENS = 128_000
 DEFAULT_MAX_TOKENS = 4096
+
+
+# Model families that take ``reasoning_effort``; their "-chat" variants do not.
+_REASONING_MODEL = re.compile(r"^(o\d|gpt-5)(?!.*chat)")
+# Output tokens added on top of the reply a caller asked for, so a reasoning
+# model can think at its effort and still answer instead of returning nothing.
+REASONING_ALLOWANCE = {"minimal": 1024, "low": 2048, "medium": 8192, "high": 16384, "xhigh": 32768}
+
+
+def reasoning_effort(model: str) -> str | None:
+    """OPENAI_REASONING_EFFORT for a reasoning model; None for any other model."""
+    if not _REASONING_MODEL.match((model or "").strip().lower()):
+        return None
+    effort = (getattr(settings, "OPENAI_REASONING_EFFORT", "") or "").strip().lower()
+    return effort if effort in REASONING_ALLOWANCE else None
 
 
 def input_token_budget(max_output_tokens: int) -> int:
@@ -101,7 +116,7 @@ class OpenAI(BaseAI):
             timeout=timeout,
             http2=True,
         )
-        log.info("OpenAI client initialized: model=%s api_key_configured=%s", self.model, bool(self.api_key))
+        log.debug("OpenAI client initialized: model=%s api_key_configured=%s", self.model, bool(self.api_key))
 
     @property
     def _headers(self) -> dict[str, str]:
@@ -176,6 +191,13 @@ class OpenAI(BaseAI):
     def _build_payload(self, messages: list[dict[str, Any]], stream: bool, **kwargs: Any) -> dict[str, Any]:
         # ``max_tokens`` is the callers' name for the cap; current models take it as ``max_completion_tokens``.
         max_tokens = int(kwargs.pop("max_tokens", None) or DEFAULT_MAX_TOKENS)
+        effort = kwargs.pop("reasoning_effort", None) or reasoning_effort(self.model)
+        if effort:
+            # Reasoning models accept only their default sampling.
+            kwargs.pop("temperature", None)
+            kwargs.pop("top_p", None)
+            kwargs["reasoning_effort"] = effort
+            max_tokens += REASONING_ALLOWANCE.get(effort, 0)
         return {
             "model": self.model,
             "messages": messages,
@@ -187,7 +209,7 @@ class OpenAI(BaseAI):
     async def _create(self, messages: list[dict[str, Any]], *, mode: str, **kwargs: Any) -> dict[str, Any]:
         """One completion with retries and usage recording."""
         payload = self._build_payload(messages, stream=False, **kwargs)
-        log.info(
+        log.debug(
             "OpenAI API call started: mode=%s, model=%s, messages=%d, max_output_tokens=%d",
             mode, self.model, len(messages), payload["max_completion_tokens"],
         )
@@ -213,8 +235,9 @@ class OpenAI(BaseAI):
                     input_tokens=int(usage.get("prompt_tokens") or 0),
                     output_tokens=int(usage.get("completion_tokens") or 0),
                     latency_ms=int((time.monotonic() - started) * 1000),
+                    response=reply_text(data),
                 )
-                log.info(
+                log.debug(
                     "OpenAI API call succeeded: mode=%s, model=%s, finish_reason=%s",
                     mode, self.model, data["choices"][0].get("finish_reason"),
                 )
@@ -223,4 +246,4 @@ class OpenAI(BaseAI):
 
     async def close(self) -> None:
         await self._client.aclose()
-        log.info("OpenAI client closed: model=%s", self.model)
+        log.debug("OpenAI client closed: model=%s", self.model)

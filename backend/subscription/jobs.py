@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from auth.repository import UserRepository as AuthRepository
 from core.database import AsyncSessionLocal
 from core.logging_config import get_logger, setup_logging
-from subscription.repository import UserSubscriptionRepository
+from subscription.repository import CreditLedgerRepository, UserSubscriptionRepository
 from subscription.service import SubscriptionService
 from user.repository import UserRepository
 
@@ -52,6 +52,22 @@ async def refresh_all_credits(batch_size: int = BATCH_SIZE) -> int:
         last_id = user_ids[-1]
 
 
+async def expire_all_bonus_credits() -> int:
+    """Remove expired bonus credits for every user who has some. Requests
+    already do this for the user they serve; this keeps idle balances true."""
+    expired = 0
+    async with AsyncSessionLocal() as session:
+        user_ids = await CreditLedgerRepository(session).users_with_due_grants(datetime.utcnow())
+    for user_id in user_ids:
+        async with AsyncSessionLocal() as session:
+            try:
+                expired += await SubscriptionService.for_session(session).expire_bonus_credits(user_id)
+            except Exception as exc:
+                await session.rollback()
+                log.error(f"Bonus credit expiry failed for user={user_id}: {exc}")
+    return expired
+
+
 async def forget_old_login_clients() -> int:
     cutoff = datetime.utcnow() - timedelta(days=LOGIN_CLIENT_RETENTION_DAYS)
     async with AsyncSessionLocal() as session:
@@ -60,9 +76,13 @@ async def forget_old_login_clients() -> int:
 
 async def run_daily_maintenance() -> None:
     expired = await expire_lapsed_subscriptions()
+    bonus_expired = await expire_all_bonus_credits()
     refreshed = await refresh_all_credits()
     forgotten = await forget_old_login_clients()
-    log.info(f"Daily maintenance done: expired={expired} credit_resets={refreshed} login_clients_forgotten={forgotten}")
+    log.info(
+        f"Daily maintenance done: expired={expired} bonus_credits_expired={bonus_expired} "
+        f"credit_resets={refreshed} login_clients_forgotten={forgotten}"
+    )
 
 
 if __name__ == "__main__":

@@ -1,8 +1,17 @@
+import io
+import os
 from typing import Literal
+from urllib.parse import urlparse
 
+from dotenv import dotenv_values
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from enum import Enum
+
+# Servers keep no .env on disk: the service sets this to the S3 object holding
+# their settings (an env file), read once per process with the machine's IAM
+# role. Variables already in the environment win over the file.
+CONFIG_S3_URI_VAR = "CLIPNERA_CONFIG_S3_URI"
 
 
 class Environment(str, Enum):
@@ -39,14 +48,22 @@ class BaseConfig(BaseSettings):
     # to it, which is what local work and A/B runs want -- and bills free users'
     # runs to that provider if left pinned in production.
     AI_PROVIDER: str = "auto"
+    # How "auto" routes text steps. "openai": every step of every plan runs on
+    # OPENAI_MODEL (Groq and Anthropic stay configured as fallbacks). "tiered":
+    # the per-step policy in clients.ai.STEP_MODELS, Groq for free and
+    # OpenAI for Pro. Switch back to "tiered" when OpenAI credits run out.
+    LLM_ROUTING: Literal["openai", "tiered"] = "openai"
 
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_ENDPOINT: str = ""
+    # Reasoning effort for OpenAI reasoning models (gpt-5, o-series); models
+    # without reasoning (gpt-4.1-mini, gpt-4o-mini) never receive it.
+    OPENAI_REASONING_EFFORT: str = "high"
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-opus-5-5"
     # Thinking depth for steps without their own setting: low | medium | high | xhigh | max.
-    ANTHROPIC_EFFORT: str = "medium"
+    ANTHROPIC_EFFORT: str = "high"
     # Most a pipeline run may spend on AI, per minute of source video. At 80%
     # the remaining calls drop to low effort; at 100% they stop and the
     # heuristic fallbacks take over, so a video never ends up without clips.
@@ -60,12 +77,20 @@ class BaseConfig(BaseSettings):
     # cost. Rendering is a small part of a run next to transcription and AI
     # analysis, so an extra ratio costs a fraction, not a whole run.
     EXTRA_ASPECT_RATIO_CREDIT_SHARE: float = 0.5
+    # Bonus credits refunded (a failed run) after their grant expired stay
+    # spendable this many more days instead of being lost.
+    BONUS_REFUND_GRACE_DAYS: int = 3
     XAI_API_KEY: str = ""
     XAI_MODEL: str = "grok-2-mini"
     GROQ_API_KEY: str = ""
     # llama-3.1-8b-instant and llama-3.3-70b-versatile were decommissioned on
     # 2026-08-16 and are Enterprise-only, so they are no longer usable defaults.
     GROQ_MODEL: str = "openai/gpt-oss-20b"
+    # Reasoning effort asked of Groq's reasoning models: low | medium | high.
+    # A call gets the highest effort up to this whose thinking allowance fits
+    # the account's per-minute token limit (read from Groq's response
+    # headers), so the free tier's 8K TPM still runs at low.
+    GROQ_REASONING_EFFORT: str = "high"
     # Speech-to-text: "auto" uses Groq's hosted Whisper when GROQ_API_KEY is
     # set (no GPU needed) and falls back to local faster-whisper; "local"
     # always transcribes on this machine.
@@ -96,6 +121,8 @@ class BaseConfig(BaseSettings):
     AWS_REGION: str = "us-east-1"
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
+    # SES identities are per region; empty means AWS_REGION.
+    SES_REGION: str = ""
     LOCALSTACK_ENDPOINT: str = ""
     S3_BUCKET_NAME: str = "clipnera-videos"
     # Direct browser-to-S3 video uploads. S3 allows 5 MB-5 GB parts and at
@@ -104,14 +131,23 @@ class BaseConfig(BaseSettings):
     UPLOAD_MAX_BYTES: int = 10 * 1024 * 1024 * 1024
     UPLOAD_URL_TTL_SECONDS: int = 6 * 3600
 
-    # Background jobs. "inprocess" runs them in the API process; "sqs" sends
-    # them to SQS_JOBS_QUEUE_URL for `python -m jobs.worker` processes.
-    JOB_QUEUE_BACKEND: Literal["inprocess", "sqs"] = "inprocess"
+    # Background jobs. "inprocess" runs them in the API process; "postgres"
+    # queues them in the database and "sqs" sends them to SQS_JOBS_QUEUE_URL,
+    # both for `python -m jobs.worker` processes to run.
+    JOB_QUEUE_BACKEND: Literal["inprocess", "postgres", "sqs"] = "inprocess"
     SQS_JOBS_QUEUE_URL: str = ""
     JOB_WORKER_CONCURRENCY: int = 2
     # A running job's message is hidden this long and re-hidden every third of
     # it, so a crashed worker's job reappears within this window.
     JOB_VISIBILITY_TIMEOUT_SECONDS: int = 300
+    # Postgres queue: a job whose handler keeps raising (or whose worker keeps
+    # dying) is given up after this many attempts.
+    JOB_MAX_ATTEMPTS: int = 3
+    # Sleeping worker machine (EC2). The API starts WORKER_INSTANCE_ID while
+    # jobs are waiting; a worker with WORKER_IDLE_SHUTDOWN_SECONDS > 0 powers
+    # its machine off after that long with nothing to run. Both off by default.
+    WORKER_INSTANCE_ID: str = ""
+    WORKER_IDLE_SHUTDOWN_SECONDS: int = 0
     # Clips cut (and burned) at once. 0 sizes it to the host's cores.
     CLIP_CUT_CONCURRENCY: int = 3
 
@@ -178,10 +214,16 @@ class BaseConfig(BaseSettings):
 
     TRANSCRIPTION_OUTPUT_DIR: str = "./transcription_outputs"
     HF_TOKEN: str = ""
+    # Speaker diarization runs in a child process, so torch and pyannote's
+    # memory goes back to the OS when it ends. A run that takes longer than
+    # this is stopped and the transcript keeps going without speaker labels.
+    DIARIZATION_TIMEOUT_SECONDS: int = 600
+    # Torch threads for that child; 0 means every core but one.
+    DIARIZATION_THREADS: int = 0
 
     # yt-dlp cookies. A browser name ("chrome", "firefox") reads them live from
-    # that browser and wins over the file; for servers, update_ec2.sh exports
-    # them locally and copies them to YOUTUBE_COOKIES_PATH.
+    # that browser and wins over the file; for the API machine, deploy.sh
+    # exports them locally and copies them to YOUTUBE_COOKIES_PATH.
     YOUTUBE_COOKIES_BROWSER: str = ""
     YOUTUBE_COOKIES_PATH: str = "~/.clipnera/youtube_cookies.txt"
 
@@ -246,7 +288,22 @@ CONFIG_MAP = {
 }
 
 
+def load_remote_env() -> None:
+    """Copy the env file at $CLIPNERA_CONFIG_S3_URI into os.environ, if set."""
+    uri = os.environ.get(CONFIG_S3_URI_VAR)
+    if not uri:
+        return
+    import boto3
+
+    location = urlparse(uri)
+    body = boto3.client("s3").get_object(Bucket=location.netloc, Key=location.path.lstrip("/"))["Body"].read()
+    for key, value in dotenv_values(stream=io.StringIO(body.decode("utf-8"))).items():
+        if value is not None:
+            os.environ.setdefault(key, value)
+
+
 @lru_cache
 def get_settings() -> BaseConfig:
+    load_remote_env()
     env = BaseConfig().ENVIRONMENT
     return CONFIG_MAP[env]()

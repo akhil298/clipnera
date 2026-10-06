@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams, usePathname } from 'next/navigation';
 import { Trash2 } from 'lucide-react';
 import { Sidebar } from './Sidebar';
+import { WelcomeForm } from '@/components/referral/WelcomeForm';
+import { ReferralsView } from '@/components/referral/ReferralsView';
 import { Header } from './Header';
 import { UploadModal } from './UploadModal';
 import { DashboardHomeView, type OpenUploadOptions } from './DashboardHomeView';
@@ -29,7 +31,7 @@ import { VideoProject, ViralClip, TabType, UserProfile, Workspace, AppNotificati
 import { DashboardSkeleton } from '@/components/skeletons';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { useNotificationInbox } from '@/hooks/useNotificationInbox';
-import { userApi, workspaceApi, authApi, pipelineApi, subscriptionApi, clipApi, mapBackendClip } from '@/lib/api';
+import { userApi, workspaceApi, authApi, pipelineApi, subscriptionApi, clipApi, mapBackendClip, CREDITS_CHANGED_EVENT, notifyCreditsChanged } from '@/lib/api';
 import { isAuthenticated, clearAuth } from '@/lib/auth';
 import { youtubeThumbnailUrl } from '@/lib/utils/urlParser';
 import type { UserProfileResponse } from '@/lib/api';
@@ -47,6 +49,7 @@ const toUserProfile = (profile: UserProfileResponse, fallbackWorkspaceId: string
   providers: profile.providers,
   role: profile.role,
   emailNotifications: profile.email_notifications,
+  onboardingCompleted: profile.onboarding_completed,
 });
 
 const getTabFromPathname = (pathname: string): TabType => {
@@ -64,6 +67,7 @@ const getTabFromPathname = (pathname: string): TabType => {
   if (segments[1] === 'reels') return 'reels';
   if (segments[1] === 'editor') return 'video_editor';
   if (segments[1] === 'settings') return 'settings';
+  if (segments[1] === 'referrals') return 'referrals';
 
   return 'dashboard';
 };
@@ -96,6 +100,8 @@ const getDashboardPath = (
       return '/dashboard/editor';
     case 'settings':
       return '/dashboard/settings';
+    case 'referrals':
+      return '/dashboard/referrals';
     case 'dashboard':
     default:
       return '/dashboard';
@@ -178,8 +184,8 @@ export default function DashboardApp() {
     clearAll: handleClearNotifications,
   } = useNotificationInbox(Boolean(isAuthed), (notification) => {
     setSnackbars((prev) => [...prev, notification].slice(-3));
-    // An approved payment changed the plan or balance on the server.
-    if (notification.type === 'credit_update') void refreshAccount();
+    // An approved payment changed the plan or balance, or a failed run was refunded.
+    if (notification.type === 'credit_update' || notification.type === 'render_failed') void refreshAccount();
     // The status poll only follows the open project, so reflect the outcome
     // here for every other one too.
     if (notification.projectId) {
@@ -193,6 +199,13 @@ export default function DashboardApp() {
   });
   const dismissSnackbar = useCallback((id: string) => {
     setSnackbars((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
+  // A run was charged or refunded: the sidebar, header and home all show the new balance.
+  useEffect(() => {
+    const onCreditsChanged = () => void refreshAccount();
+    window.addEventListener(CREDITS_CHANGED_EVENT, onCreditsChanged);
+    return () => window.removeEventListener(CREDITS_CHANGED_EVENT, onCreditsChanged);
   }, []);
 
   // Auth / Workspace Modal
@@ -457,6 +470,8 @@ export default function DashboardApp() {
         processingProgress: 100,
         processingStatus: status.error ? 'failed' : 'completed',
       });
+      // A failed run has been refunded.
+      if (status.error) notifyCreditsChanged();
       if (!status.error) void loadClipsOnce();
       return true;
     };
@@ -734,6 +749,11 @@ export default function DashboardApp() {
     return <DashboardSkeleton />;
   }
 
+  // New accounts fill in the welcome form once before seeing the dashboard.
+  if (!currentUser.onboardingCompleted) {
+    return <WelcomeForm onDone={() => void refreshAccount()} />;
+  }
+
   return (
     <EntitlementsProvider
       isAuthed={Boolean(isAuthed)}
@@ -879,6 +899,9 @@ export default function DashboardApp() {
           {activeTab === 'reels' && flags['broll_studio.reels'] && <ReelsView reelId={routeReelId} editId={routeEditId} />}
 
           {activeTab === 'video_editor' && flags.agent_editor && <EditorView projectId={routeEditorProjectId} />}
+
+          {/* Reachable while the program is off too, so running referrals stay visible. */}
+          {activeTab === 'referrals' && <ReferralsView />}
 
           {/* TAB 8: SETTINGS, WORKSPACE & BILLING */}
           {activeTab === 'settings' && currentUser && (

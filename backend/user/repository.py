@@ -4,6 +4,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.model import User
+from onboarding.model import UserOnboarding
 
 
 class UserRepository:
@@ -11,6 +12,9 @@ class UserRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def is_onboarded(self, user_id: str) -> bool:
+        return await self._session.get(UserOnboarding, user_id) is not None
 
     async def get_by_id(self, user_id: str) -> User | None:
         stmt = select(User).where(User.id == user_id)

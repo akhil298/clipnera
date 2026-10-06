@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from clip import source_video
 from clip.model import ProjectStatus
 from core.exceptions import CustomException
+from pipeline.schema import PipelineStartRequest
 from uploads import service as upload_service
 from uploads.schema import (
     VideoUploadAbortRequest,
@@ -271,6 +272,40 @@ class TestPrepare:
         progress = self._patch(monkeypatch, repo, 0.0)
         await upload_service.prepare_uploaded_video(project.id, "u1")
         assert project.status == ProjectStatus.FAILED and progress[project.id]["status"] == "error"
+
+    def _patch_start(self, monkeypatch, progress, error):
+        from pipeline import service as pipeline_service
+
+        started = []
+
+        async def start(project_id, user_id, request):
+            # The run must exist before the client is told the source is done.
+            started.append((project_id, user_id, request.body(), progress.get(project_id)))
+            return error
+
+        monkeypatch.setattr(pipeline_service, "start_when_source_ready", start)
+        return started
+
+    @pytest.mark.asyncio
+    async def test_the_requested_run_starts_before_done_is_reported(self, monkeypatch):
+        repo = FakeRepo()
+        project = await self._processing_project(repo)
+        progress = self._patch(monkeypatch, repo, 61.2)
+        started = self._patch_start(monkeypatch, progress, error=None)
+        request = PipelineStartRequest(steps=["transcription"], output_aspect_ratios=["9:16"])
+        await upload_service.prepare_uploaded_video(project.id, "u1", request)
+        assert started == [(project.id, "u1", {"steps": ["transcription"], "output_aspect_ratios": ["9:16"]}, None)]
+        assert progress[project.id]["status"] == "done"
+
+    @pytest.mark.asyncio
+    async def test_a_run_that_cannot_start_reports_why(self, monkeypatch):
+        repo = FakeRepo()
+        project = await self._processing_project(repo)
+        progress = self._patch(monkeypatch, repo, 61.2)
+        self._patch_start(monkeypatch, progress, error="Not enough credits")
+        await upload_service.prepare_uploaded_video(project.id, "u1", PipelineStartRequest())
+        assert project.status == ProjectStatus.UPLOADED
+        assert progress[project.id] == upload_service._progress("error", "Not enough credits")
 
 
 class TestPipelineSource:

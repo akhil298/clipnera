@@ -37,6 +37,8 @@ JUMP_CUT_KEEP = 0.12
 # No piece of a stitched clip may be shorter than this, or the cut reads as a glitch.
 MIN_PIECE_SECONDS = 0.5
 # Rubric weights for the overall 0-1 score: the hook decides whether anyone sees the rest.
+# Punctuation that ends a clause; a shortened teaser stops after one.
+CLAUSE_MARKS = (",", ".", "!", "?", ";", ":", "।")
 RUBRIC_WEIGHTS = {"hook": 0.3, "payoff": 0.25, "standalone": 0.2, "emotion": 0.15, "pacing": 0.1}
 # Two clips overlapping more than this share of the shorter one are the same clip.
 DUPLICATE_OVERLAP = 0.4
@@ -187,10 +189,9 @@ def _build_clip(
         for first, last in ranges
     ])
     planned_end = ranges[-1][1]
-    ranges = _fit_length(
-        ranges, sentences, by_id, min_seconds, max_seconds,
-        lambda candidate: _played_seconds(candidate, by_id, duration, jump_cuts), bounds,
-    )
+    length = lambda candidate: _played_seconds(candidate, by_id, duration, jump_cuts)  # noqa: E731
+    ranges = _end_on_finished(_fit_length(ranges, sentences, by_id, min_seconds, max_seconds, length, bounds),
+                              by_id, min_seconds, length)
     return _assemble(
         plan, ranges, by_id, duration, category, jump_cuts, "director", " ",
         payoff_cut=ranges[-1][1] < planned_end,
@@ -259,6 +260,8 @@ def _assemble(
         "edit_spans": [[round(s, 3), round(e, 3)] for s, e in spans],
         "hook_start": hook[0] if hook else None,
         "hook_end": hook[1] if hook else None,
+        # The teaser's words, so its title can be checked against it (packaging_lint).
+        "hook_text": by_id[int(plan["hook"])].text if hook else "",
         "score": round(overall, 4),
         "rubric": scores,
         "title": str(plan.get("title") or "").strip()[:100],
@@ -322,6 +325,29 @@ def _thought_end(last: int, by_id: dict[int, Sentence], ceiling: int) -> int:
         last += 1
         steps += 1
     return last
+
+
+def _end_on_finished(
+    ranges: list[tuple[int, int]],
+    by_id: dict[int, Sentence],
+    min_seconds: float,
+    length: Callable[[list[tuple[int, int]]], float],
+) -> list[tuple[int, int]]:
+    """``ranges`` without trailing lines of a sentence they never finish ("... in September. Movie").
+
+    Only when a finished sentence sits within reach to end on, and the clip
+    stays long enough; a transcript without punctuation has none, so it is
+    left as it is.
+    """
+    settled = ranges
+    for _ in range(THOUGHT_REACH):
+        if by_id[settled[-1][1]].finished:
+            return settled
+        shorter = _drop_last(settled)
+        if shorter is None or length(shorter) < min_seconds:
+            return ranges
+        settled = shorter
+    return settled if by_id[settled[-1][1]].finished else ranges
 
 
 def _seconds(ranges: list[tuple[int, int]], by_id: dict[int, Sentence]) -> float:
@@ -499,10 +525,13 @@ def _hook(value: Any, ids: list[int], by_id: dict[int, Sentence], spans: list[tu
     start = words[0]["start"]
     end = words[-1]["end"]
     if end - start > MAX_HOOK_SECONDS:
+        # A long line is cut where a clause ends, never mid-phrase ("...doing that, you'll");
+        # with no clause end inside the limit, no teaser beats a broken one.
         within = [w for w in words if w["end"] - start <= MAX_HOOK_SECONDS]
-        if not within:
+        clause_ends = [w for w in within if str(w.get("word", w.get("text", ""))).rstrip().endswith(CLAUSE_MARKS)]
+        if not clause_ends:
             return None
-        end = within[-1]["end"]
+        end = clause_ends[-1]["end"]
     if end - start < MIN_HOOK_SECONDS or start < spans[0][0] + MIN_HOOK_OFFSET_SECONDS:
         return None
     return round(start, 3), round(end, 3)

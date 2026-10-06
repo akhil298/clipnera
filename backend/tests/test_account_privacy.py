@@ -90,12 +90,24 @@ async def test_delete_account_requires_the_account_email(monkeypatch):
 @pytest.mark.asyncio
 async def test_delete_account_removes_files_accounts_and_user(monkeypatch):
     deleted_files: list[str] = []
+    refreshed: list[list[str]] = []
     monkeypatch.setattr(user_service, "_delete_user_files", lambda user_id: deleted_files.append(user_id) or 3)
+
+    async def referral_ids_of(user_id):
+        return ["ref-1"]
+
+    async def refresh_referrals(ids):
+        refreshed.append(ids)
+
+    monkeypatch.setattr(user_service, "referral_ids_of", referral_ids_of)
+    monkeypatch.setattr(user_service, "refresh_referrals", refresh_referrals)
     repo, social = _UserRepo(_user()), _Social()
     await UserService(repo, social_service=social).delete_account("user-1", "  ada@example.com ")
     assert deleted_files == ["user-1"]
     assert social.purged == ["user-1"]
     assert repo.deleted == ["user-1"]
+    # Its referrals end as "account deleted" for the other side.
+    assert refreshed == [["ref-1"]]
 
 
 @pytest.mark.asyncio

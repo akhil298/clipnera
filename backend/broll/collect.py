@@ -29,7 +29,7 @@ import tempfile
 from pathlib import Path
 
 from broll import renditions
-from broll.ingest import SkipClip, download, shot_ranges
+from broll.ingest import SkipClip, download, matches_topic, shot_ranges
 from broll.seed import TOPICS
 from broll.sources import StockClip, StockSource, enabled_sources
 from core.config import get_settings
@@ -69,8 +69,10 @@ def clip_year(clip: StockClip) -> int | None:
     return min(years) if years else None
 
 
-def rejection(clip: StockClip) -> str | None:
+def rejection(clip: StockClip, topic: str) -> str | None:
     """Why the clip's metadata rules it out before downloading, if it does."""
+    if not matches_topic(clip, topic):
+        return f"title and tags do not mention {topic!r}"
     settings = get_settings()
     short_side = min(clip.width, clip.height)
     if short_side and short_side < settings.BROLL_MIN_SHORT_SIDE:
@@ -158,7 +160,7 @@ class Collector:
     async def _collect_clip(self, clip: StockClip, category: str, topic: str, folder: Path) -> int:
         """Shots saved from ``clip``."""
         key = (clip.source, clip.source_id)
-        reason = "already collected" if key in self._seen else rejection(clip)
+        reason = "already collected" if key in self._seen else rejection(clip, topic)
         if reason:
             self.skipped += 1
             log.info("Skipped %s/%s: %s", clip.source, clip.source_id, reason)

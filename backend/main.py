@@ -32,7 +32,11 @@ from reels.route import reels_router
 from creator_intro.route import creator_intro_router
 from edit_engine.route import edits as edits_router, admin_music as admin_music_router
 from editor.route import editor as editor_router
+from onboarding.route import onboarding as onboarding_router
+from referral.route import admin_referrals as admin_referrals_router, referrals as referrals_router
+from referral.worker import running_in_background as referral_worker
 from video_processor.ffmpeg_service import FFmpegService
+from jobs.wake import waking_worker
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -64,8 +68,10 @@ async def lifespan(app: FastAPI):
     # Flag snapshot, LISTEN for changes and the 15 s poll; checks then cost no queries.
     await flags.start()
     try:
-        # Publishes posts and ends connections past their 7-day lifetime.
-        async with social_worker():
+        # Publishes posts and ends connections past their 7-day lifetime; starts the
+        # sleeping worker machine while jobs wait.
+        # Referral deadlines and reminders, and expiring bonus credits.
+        async with social_worker(), waking_worker(), referral_worker():
             yield
             log.info("Shutting down")
     finally:
@@ -123,6 +129,9 @@ app.include_router(creator_intro_router, prefix="/api/v1")
 app.include_router(edits_router, prefix="/api/v1")
 app.include_router(admin_music_router, prefix="/api/v1")
 app.include_router(editor_router, prefix="/api/v1")
+app.include_router(onboarding_router, prefix="/api/v1")
+app.include_router(referrals_router, prefix="/api/v1")
+app.include_router(admin_referrals_router, prefix="/api/v1")
 
 
 @app.exception_handler(CustomException)

@@ -24,6 +24,7 @@ from content_intelligence.research import TopicResearcher
 from content_intelligence.scorer import ClipScorer
 from content_intelligence.sentences import Sentence, build_sentences, speaker_legend
 from content_intelligence.signals import AudioSignals, extract_audio_signals
+from content_intelligence.social_copy import SocialCopyWriter
 from video_processor.ffmpeg_service import FFmpegService
 
 log = get_logger(__name__)
@@ -70,6 +71,12 @@ def story_clip_count(settings: dict[str, Any], max_clips: int, category: str) ->
     return min(MAX_STORY_CLIPS, max(1, max_clips // 4))
 
 
+async def media_signals(video_path: str, duration: float) -> tuple[AudioSignals | None, list[dict[str, Any]]]:
+    """Loudness cues and the visual timeline: everything the Map pass reads besides the words."""
+    audio, scenes = await asyncio.gather(extract_audio_signals(video_path), describe_video(video_path, duration))
+    return audio, scenes
+
+
 class ContentIntelligenceService:
     def __init__(self, is_pro: bool = False) -> None:
         # One client per step, not per service: STEP_POLICY pins the mechanical
@@ -84,6 +91,7 @@ class ContentIntelligenceService:
         self._highlighter = HighlightDetector(get_text_client(is_pro=is_pro, step="highlight_detection"))
         self._scorer = ClipScorer()
         self._metadata_gen = MetadataGenerator(get_text_client(is_pro=is_pro, step="titles"))
+        self._social_copy = SocialCopyWriter(get_text_client(is_pro=is_pro, step="social_copy"))
         self._director = VideoDirector(
             get_text_client(is_pro=is_pro, step="map"),
             get_text_client(is_pro=is_pro, step="director"),
@@ -96,8 +104,12 @@ class ContentIntelligenceService:
         transcript_segments: list[dict],
         progress_callback: Callable[[str, int, str | None], None] | None = None,
         clip_settings: dict[str, Any] | None = None,
+        signals: "asyncio.Task[tuple[AudioSignals | None, list[dict[str, Any]]]] | None" = None,
     ) -> dict:
         """Understand the video: what it is, its category, and where the moments are.
+
+        ``signals`` is :func:`media_signals` already started for this video
+        (the pipeline starts it beside transcription, since it needs no words).
 
         One Map pass over a compact sentence table replaces the separate
         research, classification and frame-analysis calls. If it fails the old
@@ -106,7 +118,7 @@ class ContentIntelligenceService:
         if progress_callback:
             await self._notify(progress_callback, "Listening for peaks and reactions...", 10)
         duration = await self._ffmpeg.probe_duration(video_path)
-        audio, scenes = await asyncio.gather(extract_audio_signals(video_path), describe_video(video_path, duration))
+        audio, scenes = await self._signals(signals, video_path, duration)
         sentences = build_sentences(transcript_segments, audio)
         attach_scenes(sentences, scenes)
 
@@ -137,6 +149,17 @@ class ContentIntelligenceService:
         analysis["visual_timeline"] = scenes
         await self._persist_analysis(project_id, analysis)
         return analysis
+
+    @staticmethod
+    async def _signals(
+        started: "asyncio.Task | None", video_path: str, duration: float,
+    ) -> tuple[AudioSignals | None, list[dict[str, Any]]]:
+        if started is not None:
+            try:
+                return await started
+            except Exception as exc:
+                log.warning("Prefetched media signals failed, reading them again: %s", exc)
+        return await media_signals(video_path, duration)
 
     @staticmethod
     def _signal_summary(audio: AudioSignals | None) -> dict[str, Any]:
@@ -271,8 +294,10 @@ class ContentIntelligenceService:
     async def score_highlights(self, highlights: list[dict], analysis: dict, clip_settings: dict[str, Any] | None = None) -> list[dict]:
         return await self._scorer.score(highlights, analysis, clip_settings=clip_settings)
 
-    async def generate_metadata_for_clips(self, clips: list[dict]) -> list[dict]:
-        return await self._metadata_gen.generate_batch(clips)
+    async def generate_metadata_for_clips(self, clips: list[dict], language: str = "en") -> list[dict]:
+        """Titles and descriptions, then the Instagram caption and hashtags, for every clip."""
+        titled = await self._metadata_gen.generate_batch(clips)
+        return await self._social_copy.write(titled, language)
 
     @staticmethod
     def default_aspect_ratios(content_category: str | None = None) -> list[str]:

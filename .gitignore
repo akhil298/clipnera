@@ -59,6 +59,8 @@ backend/transcription_outputs/
 # Brand motion ships with the repo: exports are rendered with these files.
 !backend/static/branding/**/*.mp4
 !backend/static/branding/**/*.mov
+# Hook-bridge motion graphics (hook_transitions.graphics_source.render); EC2 deploys by git pull.
+!backend/static/hook_graphics/*.mp4
 !branding/motion-library/**/*.mp4
 
 # Logs
@@ -86,3 +88,11 @@ broll_library/
 asset_library/
 library/
 motion_assets/
+# Local-only motion library and the catalog/previews built from it; the runtime
+# assets beside them (branding, fonts, hook_graphics, sfx) stay tracked for deploys.
+backend/static/motion/library/
+backend/static/motion/catalog.json
+backend/static/motion/previews/
+
+# Local cleanup report for the gitignored library
+backend/static/motion/cleanup_report.json

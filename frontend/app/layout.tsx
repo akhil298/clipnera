@@ -3,6 +3,7 @@ import "./globals.css";
 import Script from "next/script";
 import { CookieNotice } from "@/components/legal/CookieNotice";
 import { Providers } from "./providers";
+import { ReferralCapture } from "@/components/referral/ReferralCapture";
 // Fonts are self-hosted (SIL OFL 1.1 / Apache 2.0) so pages make no request to Google Fonts.
 import "@fontsource/plus-jakarta-sans/400.css";
 import "@fontsource/plus-jakarta-sans/500.css";
@@ -13,7 +14,7 @@ import "@fontsource/syne/700.css";
 import "@fontsource/syne/800.css";
 import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/700.css";
-// Caption faces, mirroring the files bundled in backend/static/fonts for burn-in.
+// Caption faces, mirroring the files bundled in backend/static/motion/fonts for burn-in.
 import "@fontsource/anton/400.css";
 import "@fontsource/archivo-black/400.css";
 import "@fontsource/bangers/400.css";
@@ -71,6 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-neutral-950 text-neutral-100 font-['Plus_Jakarta_Sans',sans-serif] selection:bg-amber-400 selection:text-neutral-950 overflow-x-hidden antialiased" suppressHydrationWarning={true}>
         <Providers>{children}</Providers>
         <CookieNotice />
+        <ReferralCapture />
       </body>
     </html>
   );

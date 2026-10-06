@@ -71,7 +71,7 @@ CLAUSE_ENDINGS = (".", ",", "?", "!", ";", ":", "…")
 DISPLAY_TRIM = ".,?!;:…\"“”—–"
 # Bundled caption faces (SIL OFL / Apache 2.0), so styles render identically on
 # any host instead of depending on what fontconfig happens to have installed.
-FONTS_DIR = Path(__file__).resolve().parent.parent / "static" / "fonts"
+FONTS_DIR = Path(__file__).resolve().parent.parent / "static" / "motion" / "fonts"
 # The headline is a hook: dark semibold text on a white rounded card for the
 # opening seconds, then it clears off the speaker. Mirrored by the title card in
 # the frontend preview (StudioCanvas).
@@ -557,13 +557,17 @@ class AssGenerator:
         style_overrides: dict[str, Any] | None = None,
         segment_breaks: list[float] | None = None,
         seams: list[tuple[float, float, float]] | None = None,
+        quiet: list[tuple[float, float]] | None = None,
     ) -> str:
         """``segment_breaks`` are times (on the words' timeline) where the picture
         cuts to a different segment, e.g. the end of the hook teaser; no caption
         line spans one, or it would carry the hook's words over into the clip.
         ``seams`` are ``(start, end, seam)`` stretches, in seconds from the
         clip's start, where two people are stacked: a line starting in one sits
-        on the seam between them, as a share of the height, not over a face."""
+        on the seam between them, as a share of the height, not over a face.
+        ``quiet`` are ``(start, end)`` stretches, in seconds from the clip's
+        start, where a motion graphic already shows what is said; caption lines
+        overlapping one are left out so text never sits on text."""
         template = {**get_template(style_id), **(style_overrides or {})}
         # A stack starting or ending moves the captions, so no line spans that either.
         seam_edges = [clip_start + edge for low, high, _ in seams or [] for edge in (low, high)]
@@ -778,6 +782,9 @@ class AssGenerator:
             line_size = fit_font_size(font_size, math.ceil(max(row_chars)), caption_char_px, width * CAPTION_SAFE_WIDTH)
             size_tag = f"\\fs{line_size}" if line_size < font_size else ""
             size_block = f"{{{size_tag}}}" if size_tag else ""
+            if any(group_start < high and low < group_end for low, high in quiet or []):
+                cap_idx += len(group)
+                continue
             line_y = next(
                 (round(seam * height) for low, high, seam in seams or [] if low <= group_start < high), caption_y,
             )
@@ -971,6 +978,7 @@ def build_ass_file(
     style_overrides: dict[str, Any] | None = None,
     segment_breaks: list[float] | None = None,
     seams: list[tuple[float, float, float]] | None = None,
+    quiet: list[tuple[float, float]] | None = None,
 ) -> str:
     """Generate an ASS subtitle file and return its path."""
     generator = AssGenerator()
@@ -988,6 +996,7 @@ def build_ass_file(
         style_overrides=style_overrides,
         segment_breaks=segment_breaks,
         seams=seams,
+        quiet=quiet,
     )
 
     if output_path:

@@ -36,6 +36,9 @@ from reels import model as reels_model
 from edit_engine import model as edit_engine_model
 from creator_intro import model as creator_intro_model
 from editor import model as editor_model
+from jobs import model as jobs_model
+from onboarding import model as onboarding_model
+from referral import model as referral_model
 
 target_metadata = Base.metadata
 

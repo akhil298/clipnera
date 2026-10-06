@@ -8,6 +8,7 @@ from core.config import get_settings
 from core.exceptions import CustomException
 from core.logging_config import get_logger
 from payment.service import SCREENSHOT_PREFIX
+from referral.service import referral_ids_of, refresh_referrals
 from social.service import SocialAccountService
 from user.repository import UserRepository
 from subscription.service import SubscriptionService
@@ -104,6 +105,7 @@ class UserService:
             providers=[a.provider.value for a in user.accounts],
             role=user.role.value,
             email_notifications=user.email_notifications,
+            onboarding_completed=await self._repository.is_onboarded(user.id),
             **plan_fields,
         )
 
@@ -140,5 +142,9 @@ class UserService:
         files = await asyncio.to_thread(_delete_user_files, user_id)
         if self._social_service:
             await self._social_service.purge_user(user_id)
+        # Found first: once the account is gone its referrals no longer point at it.
+        referral_ids = await referral_ids_of(user_id)
         await self._repository.delete(user_id)
         log.info(f"Account deleted: user_id={user_id} files={files}")
+        # They end as "account deleted" for the other side.
+        await refresh_referrals(referral_ids)

@@ -416,6 +416,8 @@ DEFAULT_PRESET = "auto_bridge"
 
 def get_catalog() -> dict[str, Any]:
     """Everything the editor needs to list and build transitions."""
+    from hook_transitions.graphics import library
+
     groups: list[str] = []
     for preset in PRESET_LIST:
         if preset.group not in groups:
@@ -430,6 +432,7 @@ def get_catalog() -> dict[str, Any]:
         "phrases": [phrase.to_dict() for phrase in PHRASES.values()],
         "groups": groups,
         "presets": [preset.to_dict() for preset in PRESET_LIST],
+        "graphics": [graphic.to_dict() for graphic in library().values()],
         "limits": {
             "min_duration": MIN_DURATION,
             "max_duration": MAX_DURATION,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import functools
 import json
 import os
@@ -21,9 +22,11 @@ from audio.enhancement.service import AudioService
 from audio.enhancement.schema import AudioEnhanceRequest
 from transcription.service import WhisperXTranscriptionService
 from transcription.schema import TranscriptionRequest
-from transcription.transliterate import CAPTION_SCRIPTS, romanize_transcript, wants_roman
-from clients.ai import get_text_client
+from transcription.language import spoken_language
+from transcription.punctuate import punctuate_captions
+from transcription.transliterate import CAPTION_SCRIPTS, romanize_captions, wants_roman
 from broll.cutaways import plan_project_broll
+from motion.service import plan_project_motion
 from feature_flags.registry import BROLL_CUTAWAYS
 from feature_flags.service import FeatureFlagService
 from clip.repository import ClipRepository
@@ -36,10 +39,13 @@ from depth_captions.schema import DepthCaptionRequest, StylePreset, DepthMode, T
 from core.database import AsyncSessionLocal
 
 from pipeline.model import PipelineStepType, StepStatus
+from pipeline.schema import PipelineStartRequest
 from core.exceptions import CustomException
 from notifications.service import notify_pipeline_outcome
+from referral.service import refresh_referrals_of
 from subscription.entitlements import Entitlements
 from subscription.service import (
+    InsufficientCreditsError,
     SubscriptionService,
     aspect_ratio_not_entitled,
     require_caption_style,
@@ -53,6 +59,10 @@ from jobs.queue import Job, get_queue, handler, uses_workers
 from subtitle_styling.templates import DEFAULT_STYLE
 
 log = get_logger(__name__)
+
+# Ledger reference types of a project's first run: its charge and its refunds.
+RUN_CHARGE_REFERENCE = "video_project"
+RUN_REFUND_REFERENCE = "video_project_refund"
 
 
 ProgressCallback = Callable[[str, int, Optional[str], Optional[str], Optional[str]], None]
@@ -82,6 +92,16 @@ async def fail_interrupted_pipelines() -> None:
         log.warning("Marked %d interrupted pipeline(s) failed: %s", len(project_ids), project_ids)
 
 
+def _clip_list(label: str, clips: list[dict]) -> str:
+    """``3 highlight(s): 12.3-41.0s 0.82 "Title" ; ...`` for a step summary line."""
+    entries = [
+        f"{float(c.get('start_time', c.get('start', 0))):.1f}-{float(c.get('end_time', c.get('end', 0))):.1f}s "
+        f"{float(c.get('score') or 0):.2f} \"{c.get('title') or ''}\""
+        for c in clips
+    ]
+    return f"{len(clips)} {label}" + (": " + " ; ".join(entries) if entries else "")
+
+
 def _read_audio_file(path: str) -> bytes:
     with open(path, "rb") as f:
         return f.read()
@@ -102,7 +122,7 @@ class PipelineOrchestrator:
         clip_settings: Optional[dict] = None,
         is_pro: bool = False,
     ) -> None:
-        log.info(
+        log.debug(
             "Pipeline orchestrator initialized",
             extra={
                 "project_id": project_id,
@@ -147,6 +167,9 @@ class PipelineOrchestrator:
         self._background_tasks: set[asyncio.Task] = set()
         # Cap set once the source's length is known, at the start of run().
         self._budget = RunBudget(cap_usd=0.0)
+        # Loudness cues and the visual timeline need no transcript, so they
+        # start beside transcription and topic research picks them up.
+        self._media_signals: asyncio.Task | None = None
 
     def cancel(self) -> None:
         self._cancel = True
@@ -292,6 +315,8 @@ class PipelineOrchestrator:
             await self._mark_pipeline_failed(str(exc))
             raise
         finally:
+            if self._media_signals is not None and not self._media_signals.done():
+                self._media_signals.cancel()
             # Cut clips are deleted as soon as they reach S3, and later renders
             # fetch them back from there. This sweeps whatever is left (cuts
             # that failed to upload, aborted renders) on every outcome.
@@ -367,11 +392,11 @@ class PipelineOrchestrator:
             if step == PipelineStepType.CONTENT_CLASSIFICATION:
                 return f"category={result.get('classification', {}).get('category', 'unknown')}"
             if step == PipelineStepType.HIGHLIGHT_DETECTION:
-                return f"{len(result.get('highlights', []))} highlight(s)"
+                return _clip_list("highlight(s)", result.get("highlights", []))
             if step == PipelineStepType.SCORING:
-                return f"{len(result.get('scored_highlights', []))} scored"
+                return _clip_list("scored", result.get("scored_highlights", []))
             if step == PipelineStepType.METADATA_GENERATION:
-                return f"{len(result.get('final_clips', []))} clip(s) planned"
+                return _clip_list("clip(s) planned", result.get("final_clips", []))
             if step == PipelineStepType.ASPECT_RATIO_RENDER:
                 rendered = result.get("rendered_clips", []) or []
                 files = sum(1 for c in rendered for path in (c.get("output_files") or {}).values() if path)
@@ -385,10 +410,6 @@ class PipelineOrchestrator:
         return "done"
 
     async def _execute_step(self, step: PipelineStepType, context: dict) -> Any:
-        log.info(
-            "Executing pipeline step",
-            extra={"project_id": self.project_id, "step": step.value},
-        )
         handlers = {
             PipelineStepType.AUDIO_EXTRACTION: self._step_audio_extraction,
             PipelineStepType.AI_NOISE_CANCELLATION: self._step_ai_noise_cancellation,
@@ -442,7 +463,7 @@ class PipelineOrchestrator:
     async def _step_audio_extraction(self, context: dict) -> dict:
         # Get video path from project (download already completed before pipeline start)
         video_path = await self._project_video_path()
-        log.info("Resolving video path for audio extraction", extra={"project_id": self.project_id, "video_path": video_path})
+        log.debug("Resolving video path for audio extraction", extra={"project_id": self.project_id, "video_path": video_path})
 
         if not video_path or not Path(video_path).exists():
             raise ValueError(
@@ -450,7 +471,7 @@ class PipelineOrchestrator:
                 "Video should have been downloaded before starting pipeline."
             )
 
-        log.info("Starting audio extraction", extra={"project_id": self.project_id, "video_path": video_path})
+        log.debug("Starting audio extraction", extra={"project_id": self.project_id, "video_path": video_path})
         self._notify("Extracting audio track...", 10)
         from audio.extraction.schema import ExtractionRequest, OutputFormat, AudioChannel
         request = ExtractionRequest(
@@ -460,7 +481,7 @@ class PipelineOrchestrator:
             channels=AudioChannel.MONO,
             overwrite=True,
         )
-        log.info(
+        log.debug(
             "Audio extraction request",
             extra={
                 "project_id": self.project_id,
@@ -471,7 +492,7 @@ class PipelineOrchestrator:
             },
         )
         result = await self._audio_extractor.extract(request)
-        log.info(
+        log.debug(
             "Audio extracted",
             extra={
                 "project_id": self.project_id,
@@ -486,7 +507,7 @@ class PipelineOrchestrator:
     async def _step_ai_noise_cancellation(self, context: dict) -> dict:
         extraction = context.get(PipelineStepType.AUDIO_EXTRACTION.value, {})
         audio_path = extraction.get("extraction_result", {}).get("output_path")
-        log.info("Resolving audio path for noise cancellation", extra={"project_id": self.project_id, "audio_path": audio_path})
+        log.debug("Resolving audio path for noise cancellation", extra={"project_id": self.project_id, "audio_path": audio_path})
         if not audio_path:
             raise ValueError("Missing extracted audio path for noise cancellation")
 
@@ -504,13 +525,13 @@ class PipelineOrchestrator:
         self._notify("Running AI noise cancellation...", 20)
 
         audio_bytes = await asyncio.to_thread(_read_audio_file, audio_path)
-        log.info(
+        log.debug(
             "Audio bytes loaded for enhancement",
             extra={"project_id": self.project_id, "audio_path": audio_path, "size_bytes": len(audio_bytes)},
         )
 
         request = AudioEnhanceRequest(audio_url=f"file://{audio_path}", config=self.audio_config)
-        log.info(
+        log.debug(
             "Starting AI noise cancellation",
             extra={"project_id": self.project_id, "audio_path": audio_path, "config": self.audio_config},
         )
@@ -533,7 +554,7 @@ class PipelineOrchestrator:
             processed_bytes = await self._fetch_processed_bytes(result.processed_url)
             with open(after_path, "wb") as f:
                 f.write(processed_bytes)
-            log.info(
+            log.debug(
                 "Enhanced audio saved",
                 extra={"project_id": self.project_id, "after_path": after_path, "size_bytes": len(processed_bytes)},
             )
@@ -557,13 +578,14 @@ class PipelineOrchestrator:
     async def _step_transcription(self, context: dict) -> dict:
         # Get video path from project (download already completed before pipeline start)
         video_path = await self._project_video_path()
-        log.info("Resolving video path for transcription", extra={"project_id": self.project_id, "video_path": video_path})
+        log.debug("Resolving video path for transcription", extra={"project_id": self.project_id, "video_path": video_path})
 
         if not video_path or not Path(video_path).exists():
             raise ValueError("Missing video path for transcription")
 
-        log.info("Starting transcription", extra={"project_id": self.project_id, "video_path": video_path})
+        log.debug("Starting transcription", extra={"project_id": self.project_id, "video_path": video_path})
         self._notify("Transcribing audio...", 10)
+        await self._prefetch_media_signals(video_path)
 
         audio_result = context.get(PipelineStepType.AUDIO_EXTRACTION.value, {})
         noise_result = context.get(PipelineStepType.AI_NOISE_CANCELLATION.value, {})
@@ -589,7 +611,7 @@ class PipelineOrchestrator:
             output_format="all",
             device="cpu",
         )
-        log.info(
+        log.debug(
             "Transcription request",
             extra={
                 "project_id": self.project_id,
@@ -605,8 +627,9 @@ class PipelineOrchestrator:
 
         result = await self._transcription_service.transcribe(request, progress_callback=_progress)
         segments = getattr(result, "segments", [])
+        await self._punctuate(segments)
         await self._romanize_captions(segments)
-        log.info(
+        log.debug(
             "Transcription complete",
             extra={
                 "project_id": self.project_id,
@@ -617,19 +640,39 @@ class PipelineOrchestrator:
         self._notify("Transcription complete", 100)
         return {"transcription_result": result}
 
+    async def _prefetch_media_signals(self, video_path: str) -> None:
+        """Start the Map pass's non-transcript inputs now, when topic research will need them."""
+        step = PipelineStepType.TOPIC_RESEARCH
+        if step not in self.selected_steps or self._step_statuses.get(step.value) == "completed":
+            return
+        from content_intelligence.service import media_signals
+        from video_processor.ffmpeg_service import FFmpegService
+
+        duration = await FFmpegService().probe_duration(video_path)
+        # Spend from this run's budget, attributed to topic research.
+        with llm_scope(step=step.value):
+            self._media_signals = asyncio.create_task(media_signals(video_path, duration))
+        # A failure is retried inline by topic research; never let it go unobserved.
+        self._media_signals.add_done_callback(lambda task: task.cancelled() or task.exception())
+
+    async def _punctuate(self, segments: list) -> None:
+        """Stretches Whisper wrote without punctuation get it back, so clips end on finished sentences."""
+        changed = await punctuate_captions(segments, self.is_pro)
+        if changed:
+            log.info("Punctuated %d word(s)", changed, extra={"project_id": self.project_id})
+
     async def _romanize_captions(self, segments: list) -> None:
         """Hindi and Telugu speech gets Roman-script captions unless the user chose native script."""
         if not wants_roman(self.clip_settings.get("caption_script"), segments):
             return
         self._notify("Writing captions in Roman script...", 95)
-        client = get_text_client(is_pro=self.is_pro, step="transliteration")
-        changed = await romanize_transcript(segments, client)
+        changed = await romanize_captions(segments, "roman", self.is_pro)
         log.info("Romanised %d caption word(s)", changed, extra={"project_id": self.project_id})
 
     async def _step_topic_research(self, context: dict) -> dict:
         self._notify("Researching topic...", 20)
         segments = self._transcript_segments(context)
-        log.info(
+        log.debug(
             "Starting topic research",
             extra={"project_id": self.project_id, "segment_count": len(segments)},
         )
@@ -647,8 +690,9 @@ class PipelineOrchestrator:
             transcript_segments=segments,
             progress_callback=lambda msg, pct, _: self._notify(msg, pct),
             clip_settings=self.clip_settings,
+            signals=self._media_signals,
         )
-        log.info(
+        log.debug(
             "Topic research complete",
             extra={"project_id": self.project_id, "analysis_keys": list(analysis.keys()) if isinstance(analysis, dict) else type(analysis).__name__},
         )
@@ -657,7 +701,7 @@ class PipelineOrchestrator:
 
     async def _step_visual_analysis(self, context: dict) -> dict:
         self._notify("Analyzing video frames...", 20)
-        log.info("Starting visual analysis", extra={"project_id": self.project_id})
+        log.debug("Starting visual analysis", extra={"project_id": self.project_id})
 
         video_path = await self._project_video_path()
         if not video_path or not Path(video_path).exists():
@@ -671,7 +715,7 @@ class PipelineOrchestrator:
 
             category = analysis.get("classification", {}).get("category", "unknown")
             frame_result = await FrameAnalyzer().analyze(video_path, category)
-        log.info(
+        log.debug(
             "Visual analysis complete",
             extra={"project_id": self.project_id, "result_type": type(frame_result).__name__},
         )
@@ -688,7 +732,7 @@ class PipelineOrchestrator:
             from content_intelligence.service import ContentIntelligenceService
             service = ContentIntelligenceService(is_pro=self.is_pro)
             classification = await service._classifier.classify(topic.get("topic_research", {}), segments)
-        log.info(
+        log.debug(
             "Content classification complete",
             extra={"project_id": self.project_id, "classification": str(classification)},
         )
@@ -697,7 +741,7 @@ class PipelineOrchestrator:
 
     async def _step_highlight_detection(self, context: dict) -> dict:
         self._notify("Detecting highlights...", 30)
-        log.info("Starting highlight detection", extra={"project_id": self.project_id})
+        log.debug("Starting highlight detection", extra={"project_id": self.project_id})
 
         video_path = await self._project_video_path()
         if not video_path or not Path(video_path).exists():
@@ -723,7 +767,7 @@ class PipelineOrchestrator:
             progress_callback=lambda msg, pct, _: self._notify(msg, pct),
             clip_settings=self.clip_settings,
         )
-        log.info(
+        log.debug(
             "Highlight detection complete",
             extra={"project_id": self.project_id, "highlight_count": len(highlights)},
         )
@@ -734,7 +778,7 @@ class PipelineOrchestrator:
         self._notify("Scoring highlights...", 50)
         highlight_result = context.get(PipelineStepType.HIGHLIGHT_DETECTION.value, {})
         highlights = highlight_result.get("highlights", [])
-        log.info(
+        log.debug(
             "Starting highlight scoring",
             extra={"project_id": self.project_id, "highlight_count": len(highlights)},
         )
@@ -746,7 +790,7 @@ class PipelineOrchestrator:
         service = ContentIntelligenceService(is_pro=self.is_pro)
 
         scored = await service.score_highlights(highlights, analysis, clip_settings=self.clip_settings)
-        log.info(
+        log.debug(
             "Scoring complete",
             extra={"project_id": self.project_id, "scored_count": len(scored)},
         )
@@ -757,7 +801,7 @@ class PipelineOrchestrator:
         self._notify("Generating metadata...", 50)
         score_result = context.get(PipelineStepType.SCORING.value, {})
         scored = score_result.get("scored_highlights", [])
-        log.info(
+        log.debug(
             "Starting metadata generation",
             extra={"project_id": self.project_id, "scored_highlight_count": len(scored)},
         )
@@ -765,8 +809,9 @@ class PipelineOrchestrator:
         from content_intelligence.service import ContentIntelligenceService
         service = ContentIntelligenceService(is_pro=self.is_pro)
 
-        final_clips = await service.generate_metadata_for_clips(scored)
-        log.info(
+        language = spoken_language(self._transcript_segments(context), self._reported_language(context))
+        final_clips = await service.generate_metadata_for_clips(scored, language)
+        log.debug(
             "Metadata generation complete",
             extra={"project_id": self.project_id, "final_clip_count": len(final_clips)},
         )
@@ -777,7 +822,7 @@ class PipelineOrchestrator:
         self._notify("Generating clips...", 30)
         meta_result = context.get(PipelineStepType.METADATA_GENERATION.value, {})
         final_clips = meta_result.get("final_clips", [])
-        log.info(
+        log.debug(
             "Starting clip generation",
             extra={"project_id": self.project_id, "clip_count": len(final_clips)},
         )
@@ -800,12 +845,14 @@ class PipelineOrchestrator:
             output_aspect_ratios=self.output_aspect_ratios,
             clip_settings=self.clip_settings,
         )
-        log.info(
+        log.debug(
             "Clip generation complete",
             extra={"project_id": self.project_id, "result_type": type(result).__name__},
         )
         if self.clip_settings.get("broll"):
             await self._plan_broll()
+        if self.is_pro:
+            await self._plan_motion()
         self._notify("Clip generation complete", 100)
         return result
 
@@ -824,6 +871,17 @@ class PipelineOrchestrator:
         except Exception as exc:
             log.warning("B-roll planning failed: project=%s error=%s", self.project_id, exc)
 
+    async def _plan_motion(self) -> None:
+        """Motion graphics for the new clips (Pro). Never fails the run: a clip without graphics is still a clip."""
+        try:
+            count = await plan_project_motion(
+                self.project_id, self.user_id, self.is_pro, video_path=await self._project_video_path(),
+                notify=lambda message, percent: self._notify(message, 95 + percent // 25),
+            )
+            self._notify(f"Motion graphics planned for {count} clip(s)", 99)
+        except Exception as exc:
+            log.warning("Motion planning failed: project=%s error=%s", self.project_id, exc)
+
     async def _project_video_path(self) -> str | None:
         async with AsyncSessionLocal() as session:
             repo = ClipRepository(session)
@@ -839,6 +897,15 @@ class PipelineOrchestrator:
         async with AsyncSessionLocal() as session:
             project = await ClipRepository(session).get_project(self.project_id, self.user_id)
         return (project.title or "")[:300] or None if project else None
+
+    @staticmethod
+    def _reported_language(context: dict) -> str | None:
+        """The language Whisper reported for the transcript, if any."""
+        transcription = context.get(PipelineStepType.TRANSCRIPTION.value, {})
+        result = transcription.get("transcription_result") if isinstance(transcription, dict) else None
+        if isinstance(result, dict):
+            return result.get("language")
+        return getattr(result, "language", None)
 
     def _transcript_segments(self, context: dict) -> list[dict]:
         transcription = context.get(PipelineStepType.TRANSCRIPTION.value, {})
@@ -876,7 +943,7 @@ class PipelineOrchestrator:
 
     async def _step_subtitle_styling(self, context: dict) -> dict:
         self._notify("Preparing subtitle styles...", 100)
-        log.info("Starting subtitle styling step", extra={"project_id": self.project_id})
+        log.debug("Starting subtitle styling step", extra={"project_id": self.project_id})
         from subtitle_styling.service import SubtitleStylingService
         from subtitle_styling.phrase_segmenter import segment_for_captions
 
@@ -891,12 +958,12 @@ class PipelineOrchestrator:
                 max_chars=42,
                 max_words_per_line=7,
             )
-            log.info(
+            log.debug(
                 "Phrase segmentation complete",
                 extra={"project_id": self.project_id, "segment_count": len(caption_segments)},
             )
 
-        log.info(
+        log.debug(
             "Subtitle styling step complete",
             extra={"project_id": self.project_id, "preset_count": len(presets), "caption_segment_count": len(caption_segments)},
         )
@@ -971,7 +1038,7 @@ class PipelineOrchestrator:
 
     async def _step_depth_captions(self, context: dict) -> dict:
         self._notify("Generating depth captions...", 10)
-        log.info("Starting depth captions generation", extra={"project_id": self.project_id})
+        log.debug("Starting depth captions generation", extra={"project_id": self.project_id})
 
         video_path = await self._project_video_path()
         if not video_path or not Path(video_path).exists():
@@ -1004,7 +1071,7 @@ class PipelineOrchestrator:
         if result.status.value == "failed":
             raise RuntimeError(f"Depth captions failed: {result.error}")
 
-        log.info(
+        log.debug(
             "Depth captions generation complete",
             extra={"project_id": self.project_id, "job_id": result.job_id, "output_url": result.output_url},
         )
@@ -1206,7 +1273,7 @@ class PipelineOrchestrator:
             log.debug(f"Failed to persist progress for step {step}: {exc}")
 
     async def _fetch_processed_bytes(self, url: str) -> bytes:
-        log.info("Fetching processed bytes", extra={"project_id": self.project_id, "url": url})
+        log.debug("Fetching processed bytes", extra={"project_id": self.project_id, "url": url})
         if url.startswith("processed://") or url.startswith("preview://"):
             return b""
         import httpx
@@ -1471,6 +1538,8 @@ async def _run_pipeline(
 
         if user:
             await notify_pipeline_outcome(user["user_id"], project_id, success=True)
+            # A finished first video can complete a referral.
+            await refresh_referrals_of(user["user_id"])
     except asyncio.CancelledError:
         if requeue_on_interrupt:
             # A worker shutting down: its job is redelivered and resumes from
@@ -1548,7 +1617,7 @@ async def _refund_run(user_id: str, project_id: str, amount: int, resume: bool) 
                 amount=amount,
                 reason=f"Pipeline failed{' (resume)' if resume else ''}, refunding credits for project {project_id}",
                 reference_id=project_id,
-                reference_type="video_project_refund",
+                reference_type=RUN_REFUND_REFERENCE,
             )
         except Exception as refund_exc:
             log.error(f"Credit refund failed: project={project_id} error={refund_exc}")
@@ -1592,8 +1661,8 @@ def _not_started(project_id: str) -> dict[str, Any]:
 
 
 @dataclass
-class _RunPlan:
-    """A run request resolved against the caller's plan and already charged."""
+class _RunQuote:
+    """A run request resolved against the caller's plan, and what it costs."""
 
     selected_steps: list[PipelineStepType]
     output_aspect_ratios: list[str]
@@ -1602,6 +1671,151 @@ class _RunPlan:
     clip_settings: dict | None
     is_pro: bool
     credit_cost: int
+
+
+async def _quote_run(
+    subscription_service: SubscriptionService,
+    user_id: str,
+    project_id: str,
+    duration_seconds: int,
+    body: dict | None,
+    resume: bool,
+) -> _RunQuote:
+    """Clamp a run request to the caller's plan and price it, without charging."""
+    body = body or {}
+    # Subtitles are burned at export time from the style the user picks, so
+    # caption steps are deliberately absent from the default run.
+    selected_steps = _resolve_steps(body.get("steps", DEFAULT_PIPELINE_STEPS))
+    output_aspect_ratios = _resolve_aspect_ratios(body.get("output_aspect_ratios"))
+    audio_config = body.get("audio_config", DEFAULT_AUDIO_CONFIG)
+    watermark_enabled = body.get("watermark_enabled", True)
+    clip_settings = body.get("clip_settings") if isinstance(body.get("clip_settings"), dict) else None
+
+    # Which AI provider this run uses. Resolved once, here, so the whole
+    # run is consistent even if the plan changes while it is in flight.
+    entitlements = await subscription_service.get_entitlements(user_id)
+    log.info(
+        "Pipeline provider tier resolved: project=%s user=%s plan=%s is_pro=%s",
+        project_id, user_id, entitlements.plan, entitlements.pro_ai_provider,
+    )
+
+    output_aspect_ratios, watermark_enabled, clip_settings = _apply_entitlements(
+        entitlements, output_aspect_ratios, watermark_enabled, clip_settings
+    )
+
+    if duration_seconds <= 0:
+        message = (
+            "Video duration not available."
+            if resume
+            else "Video duration not available. Please wait for download to complete."
+        )
+        raise CustomException(message=message, code="DURATION_UNAVAILABLE", status_code=400)
+    if duration_seconds > entitlements.max_upload_duration_seconds:
+        raise CustomException(
+            message=(
+                f"This video is {duration_seconds // 60} minutes. Your {entitlements.plan} plan "
+                f"supports up to {entitlements.max_upload_duration_seconds // 60} minutes per video."
+            ),
+            code="DURATION_NOT_ENTITLED",
+            status_code=403,
+        )
+
+    return _RunQuote(
+        selected_steps=selected_steps,
+        output_aspect_ratios=output_aspect_ratios,
+        audio_config=audio_config,
+        watermark_enabled=watermark_enabled,
+        clip_settings=clip_settings,
+        is_pro=entitlements.pro_ai_provider,
+        credit_cost=subscription_service.calculate_video_credit_cost(duration_seconds, len(output_aspect_ratios)),
+    )
+
+
+async def _settle_charge(
+    subscription_service: SubscriptionService,
+    user_id: str,
+    project_id: str,
+    quote: _RunQuote,
+    amount: int,
+    resume: bool,
+    duration_seconds: int | None = None,
+) -> None:
+    """Take ``amount`` credits for a run, or give them back when it is negative
+    (a run charged up front whose video turned out shorter)."""
+    if amount < 0:
+        await subscription_service.refund_credits(
+            user_id=user_id,
+            amount=-amount,
+            reason="Video processing: video shorter than estimated",
+            reference_id=project_id,
+            reference_type=RUN_REFUND_REFERENCE,
+        )
+        return
+    if amount == 0:
+        return
+    seconds = f"{duration_seconds}s, " if duration_seconds else ""
+    try:
+        await subscription_service.deduct_credits(
+            user_id=user_id,
+            amount=amount,
+            reason=(
+                f"Video processing{' (resume)' if resume else ''}: "
+                f"{seconds}ratios {', '.join(quote.output_aspect_ratios)}"
+            ),
+            reference_id=project_id,
+            reference_type="video_project_resume" if resume else RUN_CHARGE_REFERENCE,
+        )
+    except InsufficientCreditsError as exc:
+        raise CustomException(message=str(exc), code="INSUFFICIENT_CREDITS", status_code=402)
+
+
+async def _prepaid_credits(session, user_id: str, project_id: str) -> int:
+    """Credits a project's first run has already paid for: charged when the
+    download was requested and not yet refunded. Zero once a run exists, as
+    that run's own charge and refund cover it from then on."""
+    if await _pipeline_repository(session).get_pipeline(project_id):
+        return 0
+    return await SubscriptionService.for_session(session).net_charged(
+        user_id, project_id, (RUN_CHARGE_REFERENCE, RUN_REFUND_REFERENCE)
+    )
+
+
+async def prepay_run(project_id: str, user_id: str, duration_seconds: int, request: PipelineStartRequest) -> int:
+    """Charge for a run the moment its download is requested, so the balance
+    drops right away and a second request cannot spend the same credits.
+    The run settles any difference the real length makes when it starts."""
+    async with AsyncSessionLocal() as session:
+        subscription_service = SubscriptionService.for_session(session)
+        quote = await _quote_run(subscription_service, user_id, project_id, duration_seconds, request.body(), resume=False)
+        await _settle_charge(
+            subscription_service, user_id, project_id, quote, quote.credit_cost, resume=False,
+            duration_seconds=duration_seconds,
+        )
+        return quote.credit_cost
+
+
+async def release_prepaid(project_id: str, user_id: str) -> None:
+    """Refund an up-front charge when no run follows it: the download failed,
+    the run was refused, or the project was deleted first."""
+    async with AsyncSessionLocal() as session:
+        try:
+            amount = await _prepaid_credits(session, user_id, project_id)
+            if amount > 0:
+                await SubscriptionService.for_session(session).refund_credits(
+                    user_id=user_id,
+                    amount=amount,
+                    reason=f"Video was not processed, refunding credits for project {project_id}",
+                    reference_id=project_id,
+                    reference_type=RUN_REFUND_REFERENCE,
+                )
+        except Exception:
+            log.exception("Up-front charge refund failed: project=%s", project_id)
+
+
+@dataclass
+class _RunPlan(_RunQuote):
+    """A run request resolved against the caller's plan and already charged."""
+
     refund: Callable[[], Awaitable[None]]
 
     def job(self, project, user: dict, resume: bool = False) -> Job:
@@ -1646,70 +1860,20 @@ class PipelineRunService:
     async def _plan_run(session, project, user_id: str, body: dict | None, resume: bool) -> _RunPlan:
         """Resolve the request, clamp it to the plan and charge credits for it."""
         project_id = project.id
-        body = body or {}
-        # Subtitles are burned at export time from the style the user picks, so
-        # caption steps are deliberately absent from the default run.
-        selected_steps = _resolve_steps(body.get("steps", DEFAULT_PIPELINE_STEPS))
-        output_aspect_ratios = _resolve_aspect_ratios(body.get("output_aspect_ratios"))
-        audio_config = body.get("audio_config", DEFAULT_AUDIO_CONFIG)
-        watermark_enabled = body.get("watermark_enabled", True)
-        clip_settings = body.get("clip_settings") if isinstance(body.get("clip_settings"), dict) else None
-
         subscription_service = SubscriptionService.for_session(session)
+        quote = await _quote_run(subscription_service, user_id, project_id, project.duration_seconds or 0, body, resume)
 
-        # Which AI provider this run uses. Resolved once, here, so the whole
-        # run is consistent even if the plan changes while it is in flight.
-        entitlements = await subscription_service.get_entitlements(user_id)
-        is_pro = entitlements.pro_ai_provider
-        log.info(
-            "Pipeline provider tier resolved: project=%s user=%s plan=%s is_pro=%s",
-            project_id, user_id, entitlements.plan, is_pro,
+        # A run asked for with its download was charged when it was asked for;
+        # only the difference the real length makes is settled here.
+        prepaid = 0 if resume else await _prepaid_credits(session, user_id, project_id)
+        await _settle_charge(
+            subscription_service, user_id, project_id, quote, quote.credit_cost - prepaid, resume,
+            duration_seconds=project.duration_seconds,
         )
-
-        output_aspect_ratios, watermark_enabled, clip_settings = _apply_entitlements(
-            entitlements, output_aspect_ratios, watermark_enabled, clip_settings
-        )
-
-        duration_seconds = project.duration_seconds or 0
-        if duration_seconds <= 0:
-            message = (
-                "Video duration not available."
-                if resume
-                else "Video duration not available. Please wait for download to complete."
-            )
-            raise CustomException(message=message, code="DURATION_UNAVAILABLE", status_code=400)
-        if duration_seconds > entitlements.max_upload_duration_seconds:
-            raise CustomException(
-                message=(
-                    f"This video is {duration_seconds // 60} minutes. Your {entitlements.plan} plan "
-                    f"supports up to {entitlements.max_upload_duration_seconds // 60} minutes per video."
-                ),
-                code="DURATION_NOT_ENTITLED",
-                status_code=403,
-            )
-
-        credit_cost = subscription_service.calculate_video_credit_cost(duration_seconds, len(output_aspect_ratios))
-        ratios_note = f", ratios {', '.join(output_aspect_ratios)}"
-        try:
-            await subscription_service.deduct_credits(
-                user_id=user_id,
-                amount=credit_cost,
-                reason=f"Video processing{' (resume)' if resume else ''}: {duration_seconds}s{ratios_note}",
-                reference_id=project_id,
-                reference_type="video_project_resume" if resume else "video_project",
-            )
-        except Exception as exc:
-            raise CustomException(message=str(exc), code="INSUFFICIENT_CREDITS", status_code=402)
 
         return _RunPlan(
-            selected_steps=selected_steps,
-            output_aspect_ratios=output_aspect_ratios,
-            audio_config=audio_config,
-            watermark_enabled=watermark_enabled,
-            clip_settings=clip_settings,
-            is_pro=is_pro,
-            credit_cost=credit_cost,
-            refund=functools.partial(_refund_run, user_id, project_id, credit_cost, resume),
+            **dataclasses.asdict(quote),
+            refund=functools.partial(_refund_run, user_id, project_id, quote.credit_cost, resume),
         )
 
     async def start(self, project_id: str, user: dict, body: dict | None) -> dict[str, Any]:
@@ -1934,3 +2098,23 @@ class PipelineRunService:
             bundle=request.bundle,
             channel_intro=request.channel_intro and entitlements.creator_intro,
         )
+
+
+async def start_when_source_ready(project_id: str, user_id: str, request: PipelineStartRequest) -> str | None:
+    """Start the run a download or upload asked for, once its source is stored.
+
+    Runs on the server, so the run starts even if the browser that asked for
+    it has been reloaded or closed. Returns why it could not start, if it
+    could not (the caller shows that as the download's error).
+    """
+    try:
+        await PipelineRunService().start(project_id, {"user_id": user_id}, request.body())
+    except CustomException as exc:
+        log.warning("Pipeline not started after download: project=%s reason=%s", project_id, exc.message)
+        await release_prepaid(project_id, user_id)
+        return exc.message
+    except Exception:
+        log.exception("Pipeline not started after download: project=%s", project_id)
+        await release_prepaid(project_id, user_id)
+        return "Processing could not be started. Please try again."
+    return None

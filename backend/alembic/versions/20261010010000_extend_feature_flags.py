@@ -4,7 +4,7 @@ Server defaults keep every existing row's meaning: rollout 100%, no rules, not
 killed, so a flag that was on stays on for everyone.
 
 Revision ID: 20261010010000
-Revises: 20261003010000
+Revises: 20261007020000
 Create Date: 2026-10-10 01:00:00.000000
 
 """
@@ -16,7 +16,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision: str = "20261010010000"
-down_revision: Union[str, None] = "20261003010000"
+down_revision: Union[str, None] = "20261007020000"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

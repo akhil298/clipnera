@@ -12,6 +12,16 @@ import {
   HookTransitionResolveResponse,
   ClipEditorSettings,
   TranscriptEdits,
+  OnboardingRequest,
+  OnboardingResponse,
+  OnboardingStatusResponse,
+  MyReferralsResponse,
+  InvitedByResponse,
+  ValidateCodeResponse,
+  AdminReferralResponse,
+  AdminReferralVoidRequest,
+  AdminReferralSettingsResponse,
+  ReferralRules,
 } from '@/lib/types';
 import { getToken, clearAuth, setAuth } from '@/lib/auth';
 import { emojiForKeyword } from '@/lib/data/emojiCatalog.generated';
@@ -83,6 +93,8 @@ export interface UserProfileResponse {
   role: 'user' | 'admin';
   /** Account emails (failed posts, reconnect reminders); false after unsubscribing. */
   email_notifications: boolean;
+  /** False until the user has filled in the one-time welcome form. */
+  onboarding_completed: boolean;
 }
 
 // Mirrors backend/user/schema.py.
@@ -185,6 +197,24 @@ export interface YouTubeMetadataResponse {
   original_url: string;
 }
 
+/** Mirrors backend clip/schema.py VideoMetadataResponse. */
+export interface VideoDownloadResponse {
+  id: string;
+  title: string;
+  thumbnail_url: string;
+  channel_title: string;
+  duration_formatted: string;
+  resolution: string;
+  aspect_ratio: string | number;
+  file_size: number;
+  presigned_url: string;
+  original_url: string;
+  status: string;
+  created_at: string;
+  /** Charged when the download was requested with a run; 0 otherwise. */
+  credits_deducted: number;
+}
+
 export interface FormatInfo {
   format_id: string;
   ext: string;
@@ -215,6 +245,10 @@ export interface BackendClip {
   user_id: string;
   title: string;
   description: string | null;
+  /** The Instagram caption to post with the clip; null on clips made before it existed. */
+  social_caption: string | null;
+  /** 3-5 hashtags to post with the clip. */
+  hashtags: string[];
   start_time: number;
   end_time: number;
   duration_seconds: number;
@@ -477,7 +511,7 @@ export function mapBackendClip(clip: BackendClip): ViralClip {
     autoZoom: { enabled: false, frequency: 'subtle', scale: 1.1 },
     autoReframe: { mode: 'center', speakerCropX: 0.5, speakerSmoothing: 0.5 },
     socialOptimization: {
-      hashtags: [],
+      hashtags: clip.hashtags ?? [],
       optimizedHooks: [],
       targetPlatforms: ['tiktok', 'instagram', 'youtube'],
       postStatus: 'draft',
@@ -505,6 +539,20 @@ const PLAN_ERROR_CODES = new Set([
 /** Fired on window for any plan error, so the dashboard can open the upsell
  * modal wherever the request came from. */
 export const UPGRADE_REQUIRED_EVENT = 'clipnera:upgrade-required';
+
+/** Fired on window when a request has changed the credit balance (a run was
+ * charged, or a failed one refunded), so every balance on screen refetches. */
+export const CREDITS_CHANGED_EVENT = 'clipnera:credits-changed';
+
+export function notifyCreditsChanged(): void {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(CREDITS_CHANGED_EVENT));
+}
+
+/** Passes a response through after announcing the balance it changed. */
+function creditsChanged<T>(response: T): T {
+  notifyCreditsChanged();
+  return response;
+}
 
 export interface UpgradeRequiredDetail {
   error: string;
@@ -627,10 +675,12 @@ export const clipApi = {
       method: 'PUT',
       body: JSON.stringify(settings),
     }),
-  downloadYoutube: (url: string, formatId?: string) => authedRequest<Record<string, any>>('/clips/download', {
+  /** `pipeline` is started by the server once the video is stored. */
+  /** With `pipeline`, the run is charged now, before the download finishes. */
+  downloadYoutube: (url: string, formatId?: string, pipeline?: PipelineStartRequest) => authedRequest<VideoDownloadResponse>('/clips/download', {
     method: 'POST',
-    body: JSON.stringify({ url, format_id: formatId }),
-  }),
+    body: JSON.stringify({ url, format_id: formatId, ...(pipeline ? { pipeline } : {}) }),
+  }).then(creditsChanged),
   exportProject: (
     projectId: string,
     { clipIds, maxClips, aspectRatio, captionConfig, watermarkEnabled = true, burnSubtitles = true, showTitle = true, hookTransition, bundle, channelIntro = true }: ExportProjectOptions = {},
@@ -710,6 +760,9 @@ export const clipApi = {
             onProgress(data);
 
             if (data.status === 'done' || data.status === 'error') {
+              // Done: the server has started (and charged for) the run.
+              // Error: whatever the run was charged up front was refunded.
+              notifyCreditsChanged();
               break;
             }
 
@@ -847,6 +900,16 @@ export interface PipelineClipSettings {
   story_clips?: boolean;
 }
 
+/** Run settings; mirrors backend pipeline/schema.py PipelineStartRequest. Sent to
+ * /pipeline/start, or with a download/upload so the server starts the run itself. */
+export interface PipelineStartRequest {
+  steps?: string[];
+  audio_config?: Record<string, any>;
+  output_aspect_ratios?: string[];
+  clip_settings?: PipelineClipSettings;
+  watermark_enabled?: boolean;
+}
+
 export const pipelineApi = {
   start: (
     projectId: string,
@@ -863,7 +926,7 @@ export const pipelineApi = {
         ...(outputAspectRatios?.length ? { output_aspect_ratios: outputAspectRatios } : {}),
         ...(clipSettings ? { clip_settings: clipSettings } : {}),
       }),
-    }),
+    }).then(creditsChanged),
   subscribeProgress: (
     projectId: string,
     onProgress: (data: PipelineProgressEvent) => void,
@@ -909,7 +972,7 @@ export const pipelineApi = {
         audio_config: audioConfig,
         ...(outputAspectRatios?.length ? { output_aspect_ratios: outputAspectRatios } : {}),
       }),
-    }),
+    }).then(creditsChanged),
 };
 
 /**
@@ -1100,6 +1163,11 @@ export interface EntitlementsResponse extends PlanCapabilities {
   credit_minutes_remaining: number;
   /** The bought part of credit_minutes_remaining; never expires. */
   purchased_credits_remaining: number;
+  /** The bonus part (referral rewards), which expires grant by grant. */
+  bonus_credits_remaining: number;
+  /** The soonest bonus expiry, and how many credits expire then. */
+  bonus_credits_expiring_at: string | null;
+  bonus_credits_expiring: number;
   current_period_end: string | null;
   subscription_status: string;
   /** When paid access ends, counting queued renewals; null on Free. */
@@ -1715,7 +1783,8 @@ export type FeatureFlagKey =
   | 'broll_studio.ai_shots'
   | 'broll_studio.reels.footage'
   | 'broll_studio.reels.footage.opus_director'
-  | 'agent_editor';
+  | 'agent_editor'
+  | 'referral_program';
 
 export interface FeatureFlagsResponse {
   flags: Record<FeatureFlagKey, boolean>;
@@ -1739,7 +1808,7 @@ export interface AdminFeatureFlagListResponse {
 /** Mirrors NotificationKind in backend/notifications/model.py. */
 export type InAppNotificationKind =
   | 'pipeline_completed' | 'pipeline_failed' | 'payment_approved' | 'reel_ready' | 'reel_failed'
-  | 'social_expiring' | 'social_expired';
+  | 'social_expiring' | 'social_expired' | 'referral_reward' | 'referral_update';
 
 export interface InAppNotificationResponse {
   id: string;
@@ -1855,6 +1924,8 @@ export interface UploadedPart {
 export interface VideoUploadCompleteRequest {
   upload_id: string;
   parts: UploadedPart[];
+  /** Started by the server once the upload is ready. */
+  pipeline?: PipelineStartRequest;
 }
 
 export interface VideoUploadAbortRequest {
@@ -1881,6 +1952,8 @@ export interface VideoUploadOptions {
   durationSeconds?: number;
   onProgress?: (percent: number) => void;
   signal?: AbortSignal;
+  /** Run to start once the upload is ready. */
+  pipeline?: PipelineStartRequest;
 }
 
 /** PUTs one part and resolves its ETag; `onBytes` reports bytes sent so far for this part. */
@@ -1930,7 +2003,7 @@ export const uploadApi = {
    * ready for the pipeline once `clipApi` progress for it reports `done`.
    */
   async uploadVideo(file: File, options: VideoUploadOptions = {}): Promise<string> {
-    const { durationSeconds, onProgress, signal } = options;
+    const { durationSeconds, onProgress, signal, pipeline } = options;
     const init = await uploadApi.initVideo({
       filename: file.name,
       content_type: file.type as VideoContentType,
@@ -1962,7 +2035,7 @@ export const uploadApi = {
 
     try {
       await Promise.all(Array.from({ length: Math.min(UPLOAD_CONCURRENCY, init.part_urls.length) }, worker));
-      await uploadApi.completeVideo(init.project_id, { upload_id: init.upload_id, parts });
+      await uploadApi.completeVideo(init.project_id, { upload_id: init.upload_id, parts, ...(pipeline ? { pipeline } : {}) });
     } catch (err) {
       await uploadApi.abortVideo(init.project_id, { upload_id: init.upload_id }).catch(() => undefined);
       throw err;
@@ -2590,4 +2663,38 @@ export const editorApi = {
   get: (projectId: string) => envelopeRequest<EditorProjectResponse>(`/editor/projects/${projectId}`),
   applyOps: (projectId: string, payload: EditorOpsRequest) =>
     envelopeRequest<EditorOpsResponse>(`/editor/projects/${projectId}/ops`, post(payload)),
+};
+
+// -- Welcome form (backend onboarding/) and referrals (backend referral/) ----
+// Types live in lib/types.ts and mirror onboarding/schema.py and referral/schema.py.
+
+export const onboardingApi = {
+  status: () => envelopeRequest<OnboardingStatusResponse>('/onboarding'),
+  complete: (body: OnboardingRequest) =>
+    envelopeRequest<OnboardingResponse>('/onboarding', { method: 'POST', body: JSON.stringify(body) }),
+};
+
+export const referralApi = {
+  mine: () => envelopeRequest<MyReferralsResponse>('/referrals/me'),
+  invitedBy: () => envelopeRequest<InvitedByResponse | null>('/referrals/invited-by'),
+  validate: (code: string) =>
+    envelopeRequest<ValidateCodeResponse>(`/referrals/validate/${encodeURIComponent(code)}`),
+};
+
+export const adminReferralApi = {
+  list: (params: { status?: string; review_state?: string; q?: string; limit?: number; offset?: number } = {}) =>
+    envelopeRequest<AdminReferralResponse[]>(`/admin/referrals${queryString(params)}`),
+  approve: (id: string) =>
+    envelopeRequest<null>(`/admin/referrals/${encodeURIComponent(id)}/approve`, { method: 'POST' }),
+  void: (id: string, body: AdminReferralVoidRequest) =>
+    envelopeRequest<null>(`/admin/referrals/${encodeURIComponent(id)}/void`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  settings: () => envelopeRequest<AdminReferralSettingsResponse>('/admin/referrals/settings'),
+  updateSettings: (body: ReferralRules) =>
+    envelopeRequest<AdminReferralSettingsResponse>('/admin/referrals/settings', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
 };

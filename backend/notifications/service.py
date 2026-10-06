@@ -132,6 +132,17 @@ async def notify_social_connection(user_id: str, label: str, name: str, lifetime
         log.warning(f"In-app notification failed: social user={user_id} error={type(exc).__name__}")
 
 
+async def notify_referral(user_id: str, title: str, message: str, reward: bool = False) -> None:
+    """Tell one side of a referral it moved on. Best effort: the referral stands
+    whether or not this lands."""
+    kind = NotificationKind.REFERRAL_REWARD if reward else NotificationKind.REFERRAL_UPDATE
+    try:
+        async with AsyncSessionLocal() as session:
+            await _deliver(session, user_id, kind, title, message)
+    except Exception as exc:
+        log.warning(f"In-app notification failed: referral user={user_id} error={type(exc).__name__}")
+
+
 async def _deliver(
     session: AsyncSession,
     user_id: str,

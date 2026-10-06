@@ -22,6 +22,12 @@ export default function PrivacyPage() {
         <li>Videos you upload or link, and the clips, transcripts, captions, brand kits and reels Clipnera generates from them.</li>
         <li>Payment records for manual UPI payments: the plan or credit pack, amount, UPI transaction reference (UTR) and the payment screenshot you upload.</li>
         <li>Feedback you give on a clip (for example, a thumbs up or down).</li>
+        <li>Your answers to the welcome form: what you do and how you heard about Clipnera.</li>
+        <li>
+          Referrals: the referral code you joined with, if any. The person who referred you sees your first name, last
+          initial and a partly hidden email address, and whether you reached each step in time; never your videos or
+          payments.
+        </li>
       </ul>
 
       <h2>Information we collect automatically</h2>
@@ -125,6 +131,11 @@ export default function PrivacyPage() {
           <b>Deleting your account</b> (Settings → Profile → Delete account) immediately and permanently deletes your
           account, videos, clips, reels, brand kits, payment records and connected accounts. You can also ask us to do
           it at <ContactLine />.
+        </li>
+        <li>
+          When an account joins through a referral, we keep a one-way hash of its email address after the account is
+          deleted, only to stop the same address earning a referral reward twice. The hash cannot be turned back into the
+          address.
         </li>
         <li>Otherwise we keep your data for as long as your account exists.</li>
       </ul>

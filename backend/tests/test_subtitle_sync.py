@@ -101,6 +101,19 @@ class TestBurnCommand:
         assert "-ss" not in cmd
         assert cmd[cmd.index("-t") + 1] == "10.0"
 
+    def test_final_render_keeps_veryfast_crf18(self, tmp_path) -> None:
+        cmd = self._cmd(tmp_path)
+        assert cmd[cmd.index("-preset") + 1] == "veryfast"
+        assert cmd[cmd.index("-crf") + 1] == "18"
+
+    def test_render_before_branding_is_a_fast_near_lossless_intermediate(self, tmp_path) -> None:
+        cmd = SubtitleStylingService._encode_cmd(
+            video_path="clip.mp4", output_path=str(tmp_path / "out.mp4"),
+            video_filters=[], duration=5.0, intermediate=True,
+        )
+        assert cmd[cmd.index("-preset") + 1] == "ultrafast"
+        assert cmd[cmd.index("-crf") + 1] == "14"
+
     def test_ass_referenced_by_bare_filename(self, tmp_path) -> None:
         """libass resolves the path against cwd, which is the work dir."""
         cmd = self._cmd(tmp_path)

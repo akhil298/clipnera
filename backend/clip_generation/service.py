@@ -15,6 +15,8 @@ from typing import Any, AsyncIterator, Callable
 
 from clients.services.s3 import S3
 from broll.cutaways import with_broll
+from motion.overlay import MotionSource
+from motion.service import motion_source
 from clip_generation.hook import (
     Hook,
     Span,
@@ -37,6 +39,7 @@ from core.config import get_settings
 from core.database import AsyncSessionLocal
 from core.exceptions import CustomException
 from core.logging_config import get_logger
+from transcription.language import spoken_language
 from creator_intro.service import ExportIntro, export_intro
 from feedback.model import ClipEventKind
 from feedback.service import record_clip_event
@@ -56,7 +59,6 @@ log = get_logger(__name__)
 MAX_CONCURRENT_CUTS = settings.CLIP_CUT_CONCURRENCY or max(2, min(8, os.cpu_count() or 2))
 # URLs are re-signed on every read, so this only needs to outlive one page view.
 PRESIGN_EXPIRES_SECONDS = 6 * 3600
-LOG_RULE = "=" * 78
 
 
 class _CutProgress:
@@ -112,6 +114,7 @@ class _CutProgress:
             self._running.pop(clip_id, None)
             self._done += 1
             line, percent = self._line(), self._percent()
+            self._log_progress(line)
         await self._notify(line, percent)
 
     async def mark_failed(self, clip_id: str) -> None:
@@ -119,7 +122,12 @@ class _CutProgress:
             self._running.pop(clip_id, None)
             self._failed += 1
             line, percent = self._line(), self._percent()
+            self._log_progress(line)
         await self._notify(line, percent)
+
+    def _log_progress(self, line: str) -> None:
+        finished = self._done + self._failed
+        log.info("CUTTING %d%% (%d/%d finished) | %s", finished * 100 // max(1, self._total), finished, self._total, line)
 
     async def notify_summary(self) -> None:
         async with self._lock:
@@ -301,6 +309,7 @@ class ClipService:
         self._ffmpeg = FFmpegService()
         self._s3 = S3()
         self._bucket = settings.S3_BUCKET_NAME
+        self._is_pro = is_pro
         self._content_ai = ContentIntelligenceService(is_pro=is_pro)
         self._output_dir = Path(settings.CLIP_OUTPUT_DIR)
 
@@ -354,6 +363,7 @@ class ClipService:
                 transcript_segments, _edit_choices(self._loads(clip.analysis_json, {})).get("beats", []),
             )
             burned_path = await styling.burn_subtitles(
+                motion=motion_source(clip),
                 video_path=video_path,
                 clip_start=clip.start_time,
                 clip_end=clip.end_time,
@@ -511,6 +521,7 @@ class ClipService:
                             transcript=transcripts[clip.id],
                             max_duration=max_duration_override,
                             transition=transition,
+                            ratio=ratio,
                         )
                     if intro:
                         rendered_path = await self._with_intro(intro, rendered_path)
@@ -693,6 +704,7 @@ class ClipService:
         transcript: list[dict[str, Any]],
         max_duration: int | None,
         transition: TransitionSpec | None,
+        ratio: str = "9:16",
     ) -> str:
         """Render one exported file from a cut; returns a new local path the caller owns."""
         from subtitle_styling.service import SubtitleStylingService
@@ -709,18 +721,19 @@ class ClipService:
             return await self._render_export_from(
                 clip, source_path, styling, hook, spans, clip_end, style_type, caption_config,
                 burn_subtitles, show_title, watermark_enabled, enable_emoji, transcript, transition,
+                motion_source(clip, ratio),
             )
 
     async def _render_export_from(
         self, clip: GeneratedClip, cut_path: str, styling: Any, hook: Hook | None, spans: list | None,
         clip_end: float, style_type: str, caption_config: dict[str, Any], burn_subtitles: bool,
         show_title: bool, watermark_enabled: bool, enable_emoji: bool, transcript: list[dict[str, Any]],
-        transition: TransitionSpec | None,
+        transition: TransitionSpec | None, motion: MotionSource | None = None,
     ) -> str:
         if not burn_subtitles:
             return await styling.render_uncaptioned(
                 cut_path, clip.start_time, clip_end, watermark_enabled, hook=hook, transition=transition,
-                spans=spans,
+                spans=spans, motion=motion,
             )
 
         analysis = self._loads(clip.analysis_json, {})
@@ -740,6 +753,7 @@ class ClipService:
             transition=transition,
             spans=spans,
             seams=stack_seams(clip),
+            motion=motion,
         )
 
     def hook_transition_for(
@@ -854,7 +868,9 @@ class ClipService:
         if final_clips is None:
             if progress_callback:
                 await self._notify(progress_callback, "Generating clip metadata...", 75)
-            final_clips = await self._content_ai.generate_metadata_for_clips(scored_highlights)
+            final_clips = await self._content_ai.generate_metadata_for_clips(
+                scored_highlights, spoken_language(transcript_segments or []),
+            )
 
         # Fallback: if no AI highlights were generated, create clips from transcript segments
         if not final_clips and transcript_segments:
@@ -967,12 +983,10 @@ class ClipService:
 
         total = len(clips)
         cutting_started = time.monotonic()
-        log.info(LOG_RULE)
         log.info(
             "CLIP CUTTING START | project=%s | %d clip(s) | ratios=%s | %d at a time",
             project_id, total, ", ".join(ratios), MAX_CONCURRENT_CUTS,
         )
-        log.info(LOG_RULE)
 
         async def notify_status(message: str, percent: int) -> None:
             if progress_callback:
@@ -1066,6 +1080,7 @@ class ClipService:
                     "strategy": result.strategy,
                     "speaker_count": result.speaker_count,
                     "seams": result.seams.get(ratio, []),
+                    "frames": result.frames.get(ratio, []),
                 }
                 for ratio in ratios
             }
@@ -1102,12 +1117,10 @@ class ClipService:
         await tracker.notify_summary()
 
         rendered_ok = sum(1 for c in rendered if any(c.get("output_files", {}).values()))
-        log.info(LOG_RULE)
         log.info(
             "CLIP CUTTING DONE  | project=%s | %d/%d rendered | %d failed | %.1fs total",
             project_id, rendered_ok, total, total - rendered_ok, time.monotonic() - cutting_started,
         )
-        log.info(LOG_RULE)
 
         if rendered and not any(c.get("output_files", {}).values() for c in rendered):
             raise CustomException(
@@ -1127,13 +1140,11 @@ class ClipService:
         video_metadata: dict[str, Any],
     ) -> list[GeneratedClip]:
         upload_started = time.monotonic()
-        log.info(LOG_RULE)
         log.info(
             "CLIP SAVE START | project=%s | %d clip(s), %d already in s3://%s/clips/%s/%s/",
             project_id, len(clips), sum(1 for clip in clips if clip.get("s3_upload")),
             self._bucket, user_id, project_id,
         )
-        log.info(LOG_RULE)
         async with AsyncSessionLocal() as session:
             repo = ClipRepository(session)
             saved = []
@@ -1167,6 +1178,8 @@ class ClipService:
                     user_id=user_id,
                     title=_sanitize_str(str(clip.get("title") or f"Clip {clip_id}")),
                     description=_sanitize_str(clip.get("description")),
+                    social_caption=_sanitize_str(clip.get("social_caption")),
+                    hashtags=_json_dumps(clip.get("hashtags") or []),
                     start_time=start,
                     end_time=end,
                     duration_seconds=float(clip.get("duration", end - start)),
@@ -1195,12 +1208,10 @@ class ClipService:
                 saved.append(saved_clip)
 
         stored = sum(1 for clip in saved if clip.s3_key)
-        log.info(LOG_RULE)
         log.info(
             "CLIP SAVE DONE  | project=%s | %d/%d clip(s) stored | %d failed | %.1fs total",
             project_id, stored, len(saved), len(saved) - stored, time.monotonic() - upload_started,
         )
-        log.info(LOG_RULE)
         return saved
 
     def _clip_s3_prefix(self, user_id: str, project_id: str, clip_id: str) -> str:
@@ -1557,6 +1568,8 @@ class ClipService:
     ) -> list[dict[str, Any]]:
         from transcription.service import WhisperXTranscriptionService
         from transcription.schema import TranscriptionRequest
+        from transcription.punctuate import punctuate_captions
+        from transcription.transliterate import romanize_captions
 
         if progress_callback:
             await self._notify(progress_callback, "Transcribing audio for export...", 0)
@@ -1581,6 +1594,10 @@ class ClipService:
         result = await transcribe_service.transcribe(request, progress_callback=_progress)
         # transcribe() returns a dict; reading it as an attribute always gave [].
         segments = result.get("segments", [])
+        # The project's script choice is not kept past its run, so Telugu and
+        # Hindi speech gets the default Tenglish/Hinglish captions here too.
+        await punctuate_captions(segments, self._is_pro)
+        await romanize_captions(segments, "auto", self._is_pro)
         if progress_callback:
             await self._notify(progress_callback, "Transcription complete", 100)
         return list(segments)
@@ -1688,6 +1705,9 @@ class ClipService:
             "user_id": clip.user_id,
             "title": clip.title,
             "description": clip.description,
+            # The Instagram caption and hashtags to post with the clip.
+            "social_caption": clip.social_caption,
+            "hashtags": self._loads(clip.hashtags, []),
             "start_time": clip.start_time,
             "end_time": clip.end_time,
             "duration_seconds": clip.duration_seconds,

@@ -15,8 +15,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from clients.ai import REEL_DIRECTOR_OPUS, get_text_client
+from clients.ai import REEL_DIRECTOR_OPUS, get_text_client, openai_only
 from core.logging_config import get_logger
+from skills import HOOKS, TITLES, skill_block
 from edit_engine.looks import DEFAULT_LOOK, LOOKS
 from edit_engine.music import MOODS
 from edit_engine.story import CONTENT_TYPES
@@ -41,6 +42,9 @@ How great reels are edited:
 - Pick the music mood and energy that fit the content, and a colour look that fits the setting.
 - Write the Instagram caption in the creator's language: 1-2 short lines, no hashtags inside; hashtags separately, at most 8.
 Follow the creator's intent when given. When the script is marked FIXED, keep every script line in order and only choose visuals, pop-ups, punch-ins, music and look."""
+
+# The reel director reads the editing skills before it plans (backend/skills).
+SYSTEM = f"{SYSTEM}\n\n{skill_block(HOOKS, TITLES)}"
 
 SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -102,7 +106,8 @@ def footage_log(analysis: dict[str, Any], mode: str, script: str | None, intent:
 
 
 def director_client(is_pro: bool, opus: bool) -> Any:
-    if is_pro and opus:
+    # The Opus flag yields to LLM_ROUTING=openai, which sends every step to OpenAI.
+    if is_pro and opus and not openai_only():
         return get_text_client(choice=REEL_DIRECTOR_OPUS, step="reel_director")
     return get_text_client(is_pro=is_pro, step="reel_director")
 

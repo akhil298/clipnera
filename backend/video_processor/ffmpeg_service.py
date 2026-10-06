@@ -72,6 +72,76 @@ def upscale_filter(width: int, height: int, factor: float, fit: str = "") -> str
     return f"{chain},{UPSCALE_SHARPEN}" if factor > SHARPEN_ABOVE_SCALE else chain
 
 
+BUBBLE_SHARE = 0.36  # bubble diameter, as a share of the output width
+BUBBLE_RING = 10  # white ring around it, in pixels at 1080 wide
+
+
+BUBBLE_GAP = 24
+# The bubble's bottom stays above the captions' line.
+BUBBLE_BOTTOM = 0.70
+CONTENT_MIN_TOP = 0.10
+
+
+def bubble_layout(target_width: int, target_height: int, content_height: int) -> tuple[int, int, int, int]:
+    """(content top, bubble x, bubble y, bubble diameter with ring) for a picture
+    ``content_height`` tall shown with a webcam bubble.
+
+    The picture moves up so the bubble fits under it, centred, above the
+    captions; a picture too tall for that keeps its place and the bubble
+    overlaps its lower edge.
+    """
+    diameter = int(target_width * BUBBLE_SHARE) // 2 * 2 + 2 * BUBBLE_RING
+    bottom = int(target_height * BUBBLE_BOTTOM)
+    centred = (target_height - content_height) // 2
+    top = min(centred, max(int(target_height * CONTENT_MIN_TOP), bottom - diameter - BUBBLE_GAP - content_height))
+    y = min(top + content_height + BUBBLE_GAP, bottom - diameter)
+    # Under the picture it sits centred; over it, in the corner, off its subject.
+    overlaps = y < top + content_height
+    x = target_width - diameter - int(target_width * 0.05) if overlaps else (target_width - diameter) // 2
+    return top, x, y, diameter
+
+
+def bubble_graph(
+    bubble: dict, source_width: int, source_height: int, target_width: int, target_height: int, content_height: int,
+) -> str:
+    """Chains laying a round webcam bubble from ``[whole]`` over ``[framed]``, ending in ``[v]``."""
+    _, x, y, diameter = bubble_layout(target_width, target_height, content_height)
+    inner = diameter - 2 * BUBBLE_RING
+    side = max(2, int(bubble["width"] * source_width) // 2 * 2)
+    left = min(max(0, int(bubble["x"] * source_width)), source_width - side)
+    top = min(max(0, int(bubble["y"] * source_height)), source_height - side)
+    circle = "a='if(lte(hypot(X-W/2,Y-H/2),W/2-1),255,0)'"
+    return (
+        f"[whole]crop={side}:{side}:{left}:{top},{upscale_filter(inner, inner, inner / side)},format=rgba,"
+        f"geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':{circle}[face];"
+        f"color=c=white:s={diameter}x{diameter},format=rgba,geq=r=255:g=255:b=255:{circle}[ring];"
+        f"[framed][ring]overlay={x}:{y}:shortest=1[ringed];"
+        f"[ringed][face]overlay={x + BUBBLE_RING}:{y + BUBBLE_RING}[v]"
+    )
+
+
+def _content_top(bubble: dict | None, target_width: int, target_height: int, content_height: int) -> str:
+    """The overlay ``y`` for fitted content: centred, or raised to make room for a bubble."""
+    if not bubble or content_height <= 0:
+        return "(H-h)/2"
+    return str(bubble_layout(target_width, target_height, content_height)[0])
+
+
+def _fitted(width: int, height: int, cell_width: int, cell_height: int, tag: str = "f") -> str:
+    """Filter chain showing a ``width``x``height`` picture whole in a cell, over a blurred copy of itself."""
+    factor = min(cell_width / width, cell_height / height)
+    fit_w, fit_h = max(2, int(width * factor) // 2 * 2), max(2, int(height * factor) // 2 * 2)
+    back_w = max(2, cell_width // BACKDROP_SCALE // 2 * 2)
+    back_h = max(2, cell_height // BACKDROP_SCALE // 2 * 2)
+    return (
+        f"split=2[{tag}b][{tag}f];"
+        f"[{tag}b]scale={back_w}:{back_h}:force_original_aspect_ratio=increase,crop={back_w}:{back_h},"
+        f"boxblur=16:3,eq=brightness=-0.12,scale={cell_width}:{cell_height},setsar=1[{tag}back];"
+        f"[{tag}f]{upscale_filter(fit_w, fit_h, factor)},setsar=1[{tag}front];"
+        f"[{tag}back][{tag}front]overlay=(W-w)/2:(H-h)/2"
+    )
+
+
 class FFmpegService:
     _encoder_args: list[str] | None = None
     _has_libass: bool | None = None
@@ -452,30 +522,34 @@ class FFmpegService:
         output_path: str,
         start_time: float,
         duration: float,
-        cells: list[tuple[dict, int]],
+        cells: list[tuple[dict, int] | tuple[dict, int, bool]],
         target_width: int,
         source_width: int,
         source_height: int,
     ) -> None:
         """Render regions of the source stacked top to bottom into one frame.
 
-        ``cells`` are ``(normalised box, output height)`` pairs; each region is
+        ``cells`` are ``(normalised box, output height[, fit])``; each region is
         scaled to cover its cell and centre-cropped, so nothing is letterboxed.
-        Uses the same encoder settings as tracked crops, so the two join by
-        stream copy.
+        A ``fit`` cell instead shows its whole region inside the cell over a
+        blurred, dimmed copy of itself. Uses the same encoder settings as
+        tracked crops, so the two join by stream copy.
         """
         chains = []
         labels = []
-        for index, (box, height) in enumerate(cells):
+        for index, (box, height, *rest) in enumerate(cells):
             w = max(2, int(box["width"] * source_width) // 2 * 2)
             h = max(2, int(box["height"] * source_height) // 2 * 2)
             x = min(max(0, int(box["x"] * source_width)), source_width - w)
             y = min(max(0, int(box["y"] * source_height)), source_height - h)
-            scale = upscale_filter(target_width, height, max(target_width / w, height / h), fit="increase")
-            chains.append(
-                f"[s{index}]crop={w}:{h}:{x}:{y},{scale},"
-                f"crop={target_width}:{height},setsar=1[c{index}]"
-            )
+            if rest and rest[0]:
+                chains.append(f"[s{index}]crop={w}:{h}:{x}:{y},{_fitted(w, h, target_width, height, f"fit{index}")}[c{index}]")
+            else:
+                scale = upscale_filter(target_width, height, max(target_width / w, height / h), fit="increase")
+                chains.append(
+                    f"[s{index}]crop={w}:{h}:{x}:{y},{scale},"
+                    f"crop={target_width}:{height},setsar=1[c{index}]"
+                )
             labels.append(f"[c{index}]")
         graph = (
             f"[0:v]split={len(cells)}" + "".join(f"[s{i}]" for i in range(len(cells))) + ";"
@@ -493,22 +567,46 @@ class FFmpegService:
         target_width: int,
         target_height: int,
         source_width: int,
+        box: dict | None = None,
+        source_height: int | None = None,
+        bubble: dict | None = None,
     ) -> None:
         """Render the whole source frame, fitted to the output width over a
         blurred, dimmed copy of itself.
 
         For shots with nobody in them (animation, B-roll, slides), where any
-        crop would cut an arbitrary slice out of the picture.
+        crop would cut an arbitrary slice out of the picture. With ``box`` (a
+        normalised region, ``source_height`` then required) only that region is
+        shown: a picture or window on screen, fitted whole inside the frame.
+        ``bubble`` (a normalised square around a small webcam face) is shown as
+        a round, white-ringed bubble low on the right, over the picture.
         """
         back_w = target_width // BACKDROP_SCALE // 2 * 2
         back_h = target_height // BACKDROP_SCALE // 2 * 2
+        crop = ""
+        fit_w, fit_h, factor = target_width, -2, target_width / source_width
+        bubble = bubble if source_height else None
+        if box is not None and source_height:
+            w = max(2, int(box["width"] * source_width) // 2 * 2)
+            h = max(2, int(box["height"] * source_height) // 2 * 2)
+            x = min(max(0, int(box["x"] * source_width)), source_width - w)
+            y = min(max(0, int(box["y"] * source_height)), source_height - h)
+            crop = f"crop={w}:{h}:{x}:{y},"
+            factor = min(target_width / w, target_height / h)
+            fit_w, fit_h = max(2, int(w * factor) // 2 * 2), max(2, int(h * factor) // 2 * 2)
+        # With a bubble the source is split first: the picture is fitted from
+        # one copy, the webcam cut from the other.
+        source = "[0:v]split=2[whole][pic];[pic]" if bubble else "[0:v]"
         graph = (
-            "[0:v]split=2[bg][fg];"
+            f"{source}{crop}split=2[bg][fg];"
             f"[bg]scale={back_w}:{back_h}:force_original_aspect_ratio=increase,crop={back_w}:{back_h},"
             f"boxblur=16:3,eq=brightness=-0.12,scale={target_width}:{target_height},setsar=1[back];"
-            f"[fg]{upscale_filter(target_width, -2, target_width / source_width)},setsar=1[front];"
-            "[back][front]overlay=(W-w)/2:(H-h)/2[v]"
+            f"[fg]{upscale_filter(fit_w, fit_h, factor)},setsar=1[front];"
+            f"[back][front]overlay=(W-w)/2:{_content_top(bubble, target_width, target_height, fit_h)}"
+            f"{'[framed]' if bubble else '[v]'}"
         )
+        if bubble:
+            graph += ";" + bubble_graph(bubble, source_width, source_height, target_width, target_height, fit_h)
         await self._render_graph(input_path, output_path, start_time, duration, graph, "FIT_RENDER_FAILED")
 
     async def _render_graph(

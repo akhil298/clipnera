@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 import main  # noqa: F401  registers every model on Base.metadata
 import admin.repository
 import admin.service
+import referral.service
 import subscription.jobs as jobs
 import subscription.repository
 import subscription.service
@@ -84,8 +85,9 @@ async def db(monkeypatch):
             ]
         )
         await session.commit()
-    # Keep the daily job off the real database.
+    # Keep the daily job and the referral checks off the real database.
     monkeypatch.setattr(jobs, "AsyncSessionLocal", maker)
+    monkeypatch.setattr(referral.service, "AsyncSessionLocal", maker)
     yield maker
     await engine.dispose()
 

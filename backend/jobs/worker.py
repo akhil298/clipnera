@@ -1,6 +1,7 @@
-"""SQS job worker: ``python -m jobs.worker``.
+"""Job worker: ``python -m jobs.worker``.
 
-Long-polls the jobs queue, runs up to ``JOB_WORKER_CONCURRENCY`` jobs at once,
+Runs jobs from the queue JOB_QUEUE_BACKEND names: Postgres (``jobs.postgres``)
+or SQS. For SQS it long-polls the jobs queue, runs up to ``JOB_WORKER_CONCURRENCY`` jobs at once,
 and deletes a message only after its handler returns. While a job runs, its
 message's visibility is extended on a heartbeat, so a pipeline that takes an
 hour is not handed to a second worker; if this process dies, the heartbeat
@@ -15,7 +16,7 @@ import signal
 from typing import Any
 
 from core.config import get_settings
-from core.logging_config import get_logger
+from core.logging_config import get_logger, setup_logging
 from jobs.queue import Job, run_job, sqs_client
 
 log = get_logger(__name__)
@@ -101,17 +102,28 @@ def load_handlers() -> None:
     import pipeline.service  # noqa: F401
     import reels.jobs  # noqa: F401
     import creator_intro.jobs  # noqa: F401
+    import edit_engine.jobs  # noqa: F401
 
 
-async def main() -> None:
+def _worker() -> Any:
     settings = get_settings()
+    if settings.JOB_QUEUE_BACKEND == "postgres":
+        from jobs.postgres import worker_from_settings
+
+        return worker_from_settings()
+    if settings.JOB_QUEUE_BACKEND != "sqs":
+        raise SystemExit("JOB_QUEUE_BACKEND is 'inprocess': jobs run in the API, so no worker is needed")
     if not settings.SQS_JOBS_QUEUE_URL:
         raise SystemExit("SQS_JOBS_QUEUE_URL is not set")
-    load_handlers()
-    worker = Worker(
+    return Worker(
         sqs_client(), settings.SQS_JOBS_QUEUE_URL,
         settings.JOB_WORKER_CONCURRENCY, settings.JOB_VISIBILITY_TIMEOUT_SECONDS,
     )
+
+
+async def main() -> None:
+    load_handlers()
+    worker = _worker()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, worker.stop)
@@ -119,4 +131,5 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     asyncio.run(main())

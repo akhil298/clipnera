@@ -134,6 +134,11 @@ class EntitlementsResponse(PlanCapabilities):
     credit_minutes_remaining: int = 0
     # The bought part of credit_minutes_remaining; never expires.
     purchased_credits_remaining: int = 0
+    # The bonus part (referral rewards), which expires grant by grant; the
+    # soonest expiry, and how many credits expire then.
+    bonus_credits_remaining: int = 0
+    bonus_credits_expiring_at: Optional[datetime] = None
+    bonus_credits_expiring: int = 0
     current_period_end: Optional[datetime] = None
     subscription_status: str = "none"
     # When paid access ends, counting renewals queued after the current period.

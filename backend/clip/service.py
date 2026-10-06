@@ -15,6 +15,7 @@ from clip.youtube_service import YouTubeService
 from clip.model import ProjectStatus
 from clip_generation.repository import ClipRepository as ClipGenRepository
 from clients.services.s3 import S3
+from pipeline.schema import PipelineStartRequest
 from core.exceptions import CustomException
 from core.logging_config import get_logger
 from datetime import datetime
@@ -150,7 +151,8 @@ class ClipService:
             status=ProjectStatus.PROCESSING,
         )
 
-        asyncio.create_task(self._background_download(data.url, user_id, project.id, data.format_id))
+        credits_deducted = await self._prepay(project.id, user_id, int(prefetch.duration or 0), data.pipeline)
+        asyncio.create_task(self._background_download(data.url, user_id, project.id, data.format_id, data.pipeline))
 
         resolution, aspect_ratio = _video_shape(prefetch, "Unknown")
 
@@ -167,7 +169,25 @@ class ClipService:
             "original_url": data.url,
             "status": "processing",
             "created_at": project.created_at.isoformat(),
+            "credits_deducted": credits_deducted,
         }
+
+    async def _prepay(
+        self, project_id: str, user_id: str, duration_seconds: int, pipeline: PipelineStartRequest | None
+    ) -> int:
+        """Charge for the requested run now rather than after the download, so the
+        balance drops when the user asks. A refused charge removes the project,
+        leaving nothing behind that looks like it is downloading."""
+        if not pipeline or duration_seconds <= 0:
+            return 0
+        # Imported here: pipeline.service imports notifications, which imports clip.
+        from pipeline.service import prepay_run
+
+        try:
+            return await prepay_run(project_id, user_id, duration_seconds, pipeline)
+        except Exception:
+            await self._repo.delete_project(project_id, user_id)
+            raise
 
 
     async def _owned_project(self, project_id: str, user_id: str):
@@ -182,6 +202,8 @@ class ClipService:
 
     async def delete_project(self, user_id: str, project_id: str) -> None:
         project = await self._owned_project(project_id, user_id)
+        # Deleted while still downloading: the run it paid for will never happen.
+        await self._release_prepaid(project_id, user_id, PipelineStartRequest())
 
         if project.s3_bucket and project.s3_key:
             try:
@@ -193,7 +215,10 @@ class ClipService:
 
         await self._repo.delete_project(project_id, user_id)
 
-    async def _background_download(self, url: str, user_id: str, project_id: str, format_id: str | None = None) -> None:
+    async def _background_download(
+        self, url: str, user_id: str, project_id: str, format_id: str | None = None,
+        pipeline: PipelineStartRequest | None = None,
+    ) -> None:
         try:
             result = await self._youtube.download_and_store(url, user_id, project_id, format_id)
             await self._repo.update_project_s3(
@@ -206,6 +231,14 @@ class ClipService:
                 status=ProjectStatus.UPLOADED,
                 local_path=result.get("local_path"),
             )
+            # Imported here: pipeline.service imports notifications, which imports clip.
+            from pipeline.service import start_when_source_ready
+
+            # Started before "done" is reported, so a client that sees "done"
+            # also finds the run.
+            if pipeline and (error := await start_when_source_ready(project_id, user_id, pipeline)):
+                await YouTubeService.set_progress(project_id, {"status": "error", "percent": 100.0, "message": error})
+                return
             await YouTubeService.set_progress(project_id, {
                 "status": "done",
                 "percent": 100.0,
@@ -224,5 +257,15 @@ class ClipService:
                 duration=0,
                 status=ProjectStatus.FAILED,
             )
+            await self._release_prepaid(project_id, user_id, pipeline)
         except Exception as e:
             log.error(f"Download error: project={project_id} user={user_id} error={e}")
+            await self._release_prepaid(project_id, user_id, pipeline)
+
+    @staticmethod
+    async def _release_prepaid(project_id: str, user_id: str, pipeline: PipelineStartRequest | None) -> None:
+        """Give back what the run was charged up front: it will not happen now."""
+        if pipeline:
+            from pipeline.service import release_prepaid
+
+            await release_prepaid(project_id, user_id)

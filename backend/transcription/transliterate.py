@@ -11,6 +11,7 @@ here.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Iterable
 from typing import Any, Literal, get_args
@@ -23,6 +24,7 @@ log = get_logger(__name__)
 CaptionScript = Literal["auto", "roman", "native"]
 CAPTION_SCRIPTS = frozenset(get_args(CaptionScript))
 BATCH_WORDS = 300
+PARALLEL_BATCHES = 4
 
 SYSTEM = (
     "You transliterate Hindi and Telugu words into Roman script the way Indians type Hinglish and "
@@ -38,6 +40,15 @@ def wants_roman(caption_script: str | None, segments: Iterable[Any]) -> bool:
     if caption_script == "roman":
         return True
     return any(is_indic(_text(segment)) for segment in segments)
+
+
+async def romanize_captions(segments: list[Any], caption_script: str | None, is_pro: bool) -> int:
+    """Romanise ``segments`` in place when ``caption_script`` asks for it; returns how many words changed."""
+    if not wants_roman(caption_script, segments):
+        return 0
+    from clients.ai import get_text_client
+
+    return await romanize_transcript(segments, get_text_client(is_pro=is_pro, step="transliteration"))
 
 
 async def romanize_transcript(segments: list[Any], client: Any) -> int:
@@ -62,15 +73,26 @@ async def romanize_transcript(segments: list[Any], client: Any) -> int:
 
 
 async def _spellings(unique: list[str], client: Any) -> dict[str, str]:
+    """Roman spellings for ``unique``, its batches asked at once.
+
+    One after another, a long Telugu or Hindi video spent minutes here; the
+    client's rate limiter still paces concurrent batches to the account's limits.
+    """
+    limit = asyncio.Semaphore(PARALLEL_BATCHES)
+
+    async def spell(batch: list[str]) -> dict[str, str]:
+        async with limit:
+            try:
+                found = await _ask(batch, client)
+            except Exception as exc:
+                log.warning("Transliteration batch failed, using rule-based spelling: %s", exc)
+                found = {}
+        return {word: found.get(word) or romanize_word(word) for word in batch}
+
     spellings: dict[str, str] = {}
-    for start in range(0, len(unique), BATCH_WORDS):
-        batch = unique[start:start + BATCH_WORDS]
-        try:
-            spellings.update(await _ask(batch, client))
-        except Exception as exc:
-            log.warning("Transliteration batch failed, using rule-based spelling: %s", exc)
-        for word in batch:
-            spellings.setdefault(word, romanize_word(word))
+    batches = [unique[start:start + BATCH_WORDS] for start in range(0, len(unique), BATCH_WORDS)]
+    for result in await asyncio.gather(*(spell(batch) for batch in batches)):
+        spellings.update(result)
     return spellings
 
 

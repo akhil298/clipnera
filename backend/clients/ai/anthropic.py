@@ -33,7 +33,7 @@ from core.logging_config import get_logger
 from usage.context import check_budget
 from usage.recorder import record_llm_call
 
-from .base import BaseAI, ToolCall, ToolReply, ToolResult, ToolSpec
+from .base import BaseAI, ToolCall, ToolReply, ToolResult, ToolSpec, reply_text
 
 settings = get_settings()
 log = get_logger(__name__)
@@ -153,7 +153,7 @@ class Anthropic(BaseAI):
         if not self.api_key:
             log.warning("Anthropic API key is missing; Claude-backed steps will fail.")
         self._client = AsyncAnthropic(api_key=self.api_key, timeout=timeout)
-        log.info(
+        log.debug(
             "Anthropic client initialized: model=%s context=%d effort=%s api_key_configured=%s",
             self.model, self.context_tokens, self.effort, bool(self.api_key),
         )
@@ -215,7 +215,7 @@ class Anthropic(BaseAI):
         request["output_config"] = output_config
         request.update(kwargs)
 
-        log.info(
+        log.debug(
             "Anthropic API call started: model=%s, messages=%d, max_output_tokens=%d, schema=%s",
             self.model, len(conversation), request["max_tokens"], bool(json_schema),
         )
@@ -223,7 +223,7 @@ class Anthropic(BaseAI):
 
         text = "".join(block.text for block in response.content if block.type == "text")
         usage = response.usage
-        log.info(
+        log.debug(
             "Anthropic API call succeeded: model=%s, chars=%d, stop_reason=%s, "
             "input_tokens=%s, output_tokens=%s, cache_read=%s",
             self.model, len(text), response.stop_reason,
@@ -301,6 +301,7 @@ class Anthropic(BaseAI):
             cache_write_tokens=int(getattr(usage, "cache_creation_input_tokens", 0) or 0),
             effort=effort,
             latency_ms=int((time.monotonic() - started) * 1000),
+            response=reply_text(response),
         )
         if response.stop_reason == "refusal":
             details = getattr(response, "stop_details", None)
@@ -375,4 +376,4 @@ class Anthropic(BaseAI):
 
     async def close(self) -> None:
         await self._client.close()
-        log.info("Anthropic client closed: model=%s", self.model)
+        log.debug("Anthropic client closed: model=%s", self.model)

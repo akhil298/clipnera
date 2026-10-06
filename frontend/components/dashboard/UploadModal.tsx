@@ -24,7 +24,7 @@ import { estimateVideoCredits, useEntitlements } from '@/hooks/useEntitlements';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { analyzeVideoSource, extractYoutubeVideoId } from '@/lib/utils/urlParser';
 import { formatBytes, formatDuration, readVideoDuration, titleFromFileName } from '@/lib/utils/videoFile';
-import { CaptionScript, clipApi, pipelineApi, uploadApi, VIDEO_UPLOAD_TYPES, VideoContentType, YouTubeMetadataResponse } from '@/lib/api';
+import { CaptionScript, clipApi, pipelineApi, PipelineStartRequest, uploadApi, VIDEO_UPLOAD_TYPES, VideoContentType, YouTubeMetadataResponse } from '@/lib/api';
 
 type SourceMode = 'youtube' | 'upload';
 import { PipelineProgressTracker } from './PipelineProgressTracker';
@@ -189,13 +189,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   };
 
   /** Sends the picked file to S3; resolves like a YouTube download that is still processing. */
-  const uploadSource = async () => {
+  const uploadSource = async (pipeline: PipelineStartRequest) => {
     const controller = new AbortController();
     uploadAbortRef.current = controller;
     const total = formatBytes(uploadFile!.size);
     const id = await uploadApi.uploadVideo(uploadFile!, {
       durationSeconds: uploadDuration ?? undefined,
       signal: controller.signal,
+      pipeline,
       onProgress: (percent) => setDownloadProgress({ status: 'uploading', percent, total, speed: null, eta: null }),
     });
     uploadAbortRef.current = null;
@@ -239,8 +240,33 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     let projectId: string | null = null;
     let projectPublished = false;
 
+    // Pipeline steps (download is the step above, so it is not one of them)
+    const steps = [
+      'audio_extraction',
+      'ai_noise_cancellation',
+      'transcription',
+      'topic_research',
+      'visual_analysis',
+      'content_classification',
+      'highlight_detection',
+      'scoring',
+      'metadata_generation',
+      'aspect_ratio_render',
+      'clip_generation',
+    ];
+    // Sent with the download/upload: the server starts the run once the video is
+    // stored, so reloading or closing this page cannot leave it unprocessed.
+    const pipelineRequest: PipelineStartRequest = {
+      steps,
+      audio_config: audioEnhanceConfig,
+      ...(outputRatios.length ? { output_aspect_ratios: outputRatios } : {}),
+      clip_settings: { caption_script: captionScript, broll: cutawaysEnabled && autoBroll },
+    };
+
     try {
-      const downloadResult: any = isUpload ? await uploadSource() : await clipApi.downloadYoutube(urlInput);
+      const downloadResult: any = isUpload
+        ? await uploadSource(pipelineRequest)
+        : await clipApi.downloadYoutube(urlInput, undefined, pipelineRequest);
       projectId = downloadResult?.id || null;
 
       if (projectId) {
@@ -316,41 +342,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       return;
     }
 
-    const audioConfig = {
-      aiDenoise,
-      noiseSuppressionStrength,
-      deReverb,
-      vocalClarityEq,
-      humFilter,
-    };
-
-    // Pipeline steps (download already done, so skip it)
-    const steps = [
-      'audio_extraction',
-      'ai_noise_cancellation',
-      'transcription',
-      'topic_research',
-      'visual_analysis',
-      'content_classification',
-      'highlight_detection',
-      'scoring',
-      'metadata_generation',
-      'aspect_ratio_render',
-      'clip_generation',
-    ];
-
     try {
-      setProcessingLogs((prev) => [...prev, 'Starting AI processing pipeline...']);
+      // The server started the run before reporting the download done.
       setPipelineError(null);
-      setPipelineStarted(false);
-
-      const startResult = await pipelineApi.start(projectId!, steps, audioConfig, outputRatios, { caption_script: captionScript, broll: cutawaysEnabled && autoBroll });
-      setPipelineSteps(startResult.selected_steps || steps);
-      setCreditsDeducted(startResult.credits_deducted || 0);
-
+      setPipelineSteps(steps);
       setPipelineStarted(true);
       setPipelineProjectId(projectId!);
-      setProcessingLogs((prev) => [...prev, `Pipeline started. Credits deducted: ${startResult.credits_deducted || 0}`]);
+      setProcessingLogs((prev) => [...prev, 'AI processing pipeline started.']);
 
       await new Promise((resolve) => {
         const interval = setInterval(async () => {

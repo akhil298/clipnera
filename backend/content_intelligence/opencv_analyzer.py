@@ -47,7 +47,7 @@ class OpenCVAnalyzer:
             return []
         interval = self._frame_interval or max(2.0, duration / self._max_frames)
         timestamps = [i * interval for i in range(self._max_frames) if i * interval < duration]
-        log.info(
+        log.debug(
             "[OPENCV] [EXTRACT START] video=%s duration=%.3fs frames=%d interval=%.3fs",
             video_path,
             duration,
@@ -61,7 +61,7 @@ class OpenCVAnalyzer:
     def detect_scenes(self, frames: list[OpenCVFrame]) -> list[float]:
         if len(frames) < 2:
             return []
-        log.info("[OPENCV] [SCENES START] frames=%d threshold=%.3f", len(frames), self._scene_threshold)
+        log.debug("[OPENCV] [SCENES START] frames=%d threshold=%.3f", len(frames), self._scene_threshold)
         changes: list[float] = []
         prev_hist = frames[0].hist
         if prev_hist is None:
@@ -78,7 +78,7 @@ class OpenCVAnalyzer:
         return changes
 
     def compute_motion_map(self, frames: list[OpenCVFrame]) -> dict[float, dict[str, float]]:
-        log.info("[OPENCV] [MOTION START] frames=%d", len(frames))
+        log.debug("[OPENCV] [MOTION START] frames=%d", len(frames))
         motion: dict[float, dict[str, float]] = {}
         for i in range(1, len(frames)):
             prev = frames[i - 1]
@@ -130,7 +130,7 @@ class OpenCVAnalyzer:
             return None
 
     def _extract_frames_sync(self, video_path: str, timestamps: list[float]) -> list[OpenCVFrame]:
-        log.info("[OPENCV] [EXTRACT OPENED] decoder=ffmpeg software video=%s", video_path)
+        log.debug("[OPENCV] [EXTRACT OPENED] decoder=ffmpeg software video=%s", video_path)
         frames: list[OpenCVFrame] = []
         for index, ts in enumerate(timestamps, start=1):
             frame = self._decode_frame_with_ffmpeg(video_path, ts)
@@ -141,7 +141,7 @@ class OpenCVAnalyzer:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             hist = cv2.calcHist([gray], [0], None, [32], [0, 256])
             cv2.normalize(hist, hist, 0, 1, cv2.NORM_MINMAX)
-            log.info("[OPENCV] [FRAME] index=%d/%d timestamp=%.3fs size=%dx%d", index, len(timestamps), ts, w, h)
+            log.debug("[OPENCV] [FRAME] index=%d/%d timestamp=%.3fs size=%dx%d", index, len(timestamps), ts, w, h)
             frames.append(OpenCVFrame(
                 timestamp=round(ts, 3),
                 frame=frame,
