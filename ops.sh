@@ -19,6 +19,8 @@ export AWS_PROFILE AWS_REGION AWS_PAGER=""
 DB_ID="${DB_ID:-clipnera-prod-db}"
 SSH_OPTS=(-i "${EC2_KEY}" -o IdentitiesOnly=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new)
 API_IP="${API_HOST#*@}"
+# Caddy serves the API over HTTPS at this sslip.io name (see update_ec2.sh).
+API_URL="https://${API_IP//./-}.sslip.io"
 LOGS="clipnera_new/backend"
 
 api_instance_id() {
@@ -48,7 +50,7 @@ status() {
     aws ec2 describe-instances --instance-ids "$(api_instance_id)" "${WORKER_INSTANCE_ID}" \
         --query 'Reservations[].Instances[].[Tags[?Key==`Name`]|[0].Value,InstanceType,State.Name,PublicIpAddress]' --output table
     echo "Database ${DB_ID}: $(db_state)"
-    echo "API health: $(curl -s -m 5 "http://${API_IP}:8000/health" || echo 'not answering')"
+    echo "API health: $(curl -s -m 5 "${API_URL}/health" || echo 'not answering')"
 }
 
 case "${1:-status}" in
@@ -75,11 +77,11 @@ case "${1:-status}" in
         aws ec2 wait instance-running --instance-ids "$(api_instance_id)"
         # The API may have booted before the database was up; restart it now that it is.
         for _ in {1..36}; do
-            ssh "${SSH_OPTS[@]}" "${API_HOST}" 'sudo systemctl restart clipnera-backend' 2>/dev/null && break
+            ssh "${SSH_OPTS[@]}" "${API_HOST}" 'sudo systemctl restart clipnera-backend caddy' 2>/dev/null && break
             sleep 5
         done
         for _ in {1..30}; do
-            curl -fs -m 5 "http://${API_IP}:8000/health" >/dev/null && break
+            curl -fs -m 5 "${API_URL}/health" >/dev/null && break
             sleep 5
         done
         status

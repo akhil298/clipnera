@@ -325,15 +325,51 @@ else
     echo "Social publisher off: SOCIAL_TOKEN_ENCRYPTION_KEYS is not set." >&2
 fi
 
+# HTTPS in front of the API, so the HTTPS frontend may call it. Caddy gets and
+# renews a free Let's Encrypt certificate for <ip-with-dashes>.sslip.io, a
+# hostname that resolves to this machine's Elastic IP.
+IMDS_TOKEN="$(curl -fsS -X PUT http://169.254.169.254/latest/api/token -H 'X-aws-ec2-metadata-token-ttl-seconds: 60')"
+PUBLIC_IP="$(curl -fsS -H "X-aws-ec2-metadata-token: ${IMDS_TOKEN}" http://169.254.169.254/latest/meta-data/public-ipv4)"
+API_DOMAIN="${PUBLIC_IP//./-}.sslip.io"
+if ! command -v caddy >/dev/null 2>&1; then
+    curl -fsSL "https://caddyserver.com/api/download?os=linux&arch=amd64" -o /tmp/caddy
+    sudo install -m 755 /tmp/caddy /usr/local/bin/caddy
+    rm -f /tmp/caddy
+fi
+id caddy >/dev/null 2>&1 || sudo useradd --system --home-dir /var/lib/caddy --create-home --shell /sbin/nologin caddy
+sudo install -d -m 755 /etc/caddy
+printf '%s {\n\treverse_proxy 127.0.0.1:8000\n}\n' "${API_DOMAIN}" | sudo tee /etc/caddy/Caddyfile >/dev/null
+sudo tee /etc/systemd/system/caddy.service >/dev/null <<UNIT
+[Unit]
+Description=Caddy (HTTPS for the Clipnera API)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=caddy
+Environment=XDG_DATA_HOME=/var/lib/caddy XDG_CONFIG_HOME=/var/lib/caddy
+ExecStart=/usr/local/bin/caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+ExecReload=/usr/local/bin/caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+sudo systemctl daemon-reload
+sudo systemctl enable --quiet caddy
+sudo systemctl restart caddy
+
 for _ in {1..60}; do
-    if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then
-        echo "Backend healthy: $(curl -fsS http://127.0.0.1:8000/health)"
+    if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 && curl -fsS "https://${API_DOMAIN}/health" >/dev/null 2>&1; then
+        echo "Backend healthy at https://${API_DOMAIN}: $(curl -fsS "https://${API_DOMAIN}/health")"
         exit 0
     fi
     sleep 2
 done
-echo "Backend did not become healthy. Last log lines:" >&2
+echo "Backend or HTTPS did not become healthy. Last log lines:" >&2
 tail -40 backend.log >&2
+sudo journalctl -u caddy -n 20 --no-pager >&2
 exit 1
 REMOTE_SCRIPT
 
