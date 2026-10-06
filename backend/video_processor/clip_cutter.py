@@ -42,6 +42,7 @@ from video_processor.editing import (
     Part,
     Turn,
     choose_layout,
+    typical_box,
     framing_stretches,
     picture_difference,
     plan_parts,
@@ -52,6 +53,9 @@ from video_processor.editing import (
     tracks_in_shot,
 )
 from video_processor.face_detection import Face, FaceDetector
+from video_processor.ffmpeg_service import bubble_layout
+from video_processor.focus import PEOPLE, Focus, decide_focus
+from video_processor.regions import Region, content_regions, person_tracks
 from video_processor.geometry import (
     Box,
     crop_around,
@@ -103,6 +107,13 @@ MAX_PAN_PER_SECOND = 0.35
 # Faces occupying less than this share of frame width suggest the subject is not
 # the point of the shot (gameplay, slides, wide stage).
 SMALL_FACE_RATIO = 0.08
+
+# Layouts built from two stacked pictures; captions sit on the seam between them.
+STACKED_KINDS = frozenset({"two_speaker_stack", "screen_with_speaker"})
+
+# Content regions are found on every this-many-th sampled frame: a picture on
+# screen holds still for seconds, so three frames a second is plenty.
+REGION_SAMPLE_STEP = 2
 
 # A new speaker further than this share of the crop width from the last is cut
 # to; a nearer one is still inside the frame, so the crop glides.
@@ -182,6 +193,10 @@ class CutResult:
     # Per aspect ratio: (start, end, seam) wherever two people are stacked, in
     # the rendered file's own seconds, with the seam as a share of its height.
     seams: dict[str, list[tuple[float, float, float]]] = field(default_factory=dict)
+    # Per aspect ratio, every stretch of the rendered file: its layout kind, the
+    # share of the height its top cell takes, and where faces are in the output
+    # (normalised boxes), so graphics added later never cover anyone.
+    frames: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     faces: list[dict[str, Any]] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
@@ -216,6 +231,8 @@ class ClipCutter:
         # A jump between windows is a cut, so the crop never glides across it.
         cuts = sorted(set(cuts) | {start for start, _ in request.windows[1:]})
         tracks = build_tracks(_decode_frames(frames), faces_per_frame, cuts)
+        regions_at = _region_finder(frames)
+        tracks = _people_only(request, tracks, cuts, regions_at)
         for track in tracks:
             log.info(
                 "[TRACK] clip=%s id=%d samples=%d seen=%.2fs-%.2fs mean_area=%.4f mean_motion=%.2f",
@@ -269,10 +286,11 @@ class ClipCutter:
             result.crop_tracking[aspect_ratio] = [point.copy() for point in tracking]
             output_path = self._output_path(request, aspect_ratio)
             shots = _plan_shots(
-                request, layout, tracks, cuts, turns, aspect_ratio, source_width, source_height,
+                request, layout, tracks, cuts, turns, aspect_ratio, source_width, source_height, regions_at,
             )
             result.layout = next((frame.kind for _, frame in shots if frame.composite), result.layout)
             result.seams[aspect_ratio] = _stack_seams(shots)
+            result.frames[aspect_ratio] = _layout_frames(shots, tracks, source_width, source_height, aspect_ratio)
             log.info("[LAYOUT] clip=%s ratio=%s hint=%s detected=%s used=%s beats=%d",
                      request.clip_id, aspect_ratio, request.layout_hint, layout,
                      " ".join(f"{part.start:.1f}-{part.end:.1f}:{frame.kind}" for part, frame in shots),
@@ -606,16 +624,18 @@ class ClipCutter:
         can_reframe = crop_w < source_width or crop_h < source_height
 
         async def render_part(part: Part, frame: Layout, path: Path) -> None:
-            if frame.kind == "fit":
+            if frame.kind in ("fit", "content"):
                 await ffmpeg.render_fit(
                     request.source_path, str(path), part.start, part.end - part.start,
                     target_width, target_height, source_width,
+                    box=frame.content.as_dict() if frame.content else None, source_height=source_height,
+                    bubble=frame.bubble.as_dict() if frame.bubble else None,
                 )
                 return
             if frame.composite:
                 await ffmpeg.render_stack(
                     request.source_path, str(path), part.start, part.end - part.start,
-                    [(cell.box.as_dict(), cell.height) for cell in frame.cells],
+                    [(cell.box.as_dict(), cell.height, cell.fit) for cell in frame.cells],
                     target_width, source_width, source_height,
                 )
                 return
@@ -685,6 +705,7 @@ def _plan_shots(
     aspect_ratio: str,
     source_width: int,
     source_height: int,
+    regions_at: Any = None,
 ) -> list[tuple[Part, Layout]]:
     """The clip in play order (hook first), one entry per run of shots sharing a layout.
 
@@ -700,17 +721,19 @@ def _plan_shots(
     for span_start, span_end in spans:
         joinable = False  # Never join across spans: they are separate stretches of source.
         for shot_start, shot_end in shot_windows(span_start, span_end, cuts):
-            stretches = framing_stretches(
-                shot_start, shot_end, turns, SAMPLE_INTERVAL_SECONDS, request.transcript_segments,
-                present=tracks_in_shot(tracks, shot_start, shot_end, SAMPLE_INTERVAL_SECONDS),
+            present = tracks_in_shot(tracks, shot_start, shot_end, SAMPLE_INTERVAL_SECONDS)
+            focus = _shot_focus(request, shot_start, shot_end, present, regions_at)
+            # A shot about something on screen is one stretch: its layout does
+            # not change with who is talking.
+            stretches = [(shot_start, shot_end, [])] if focus.shows_content else framing_stretches(
+                shot_start, shot_end, turns, SAMPLE_INTERVAL_SECONDS, request.transcript_segments, present=present,
             )
             for start, end, pair in stretches:
-                present = tracks_in_shot(tracks, start, end, SAMPLE_INTERVAL_SECONDS)
                 frame = choose_layout(
-                    request.layout_hint, detected, present, aspect_ratio,
-                    source_width, source_height, *output_size, pair=pair,
+                    request.layout_hint, detected, tracks_in_shot(tracks, start, end, SAMPLE_INTERVAL_SECONDS),
+                    aspect_ratio, source_width, source_height, *output_size, pair=pair, focus=focus,
                 )
-                if joinable and not frame.composite and shots[-1][1].kind == frame.kind:
+                if joinable and _joins(shots[-1][1], frame):
                     shots[-1] = (Part(shots[-1][0].start, end), frame)
                 else:
                     shots.append((Part(start, end), frame))
@@ -718,18 +741,156 @@ def _plan_shots(
     return shots
 
 
+def _joins(previous: Layout, frame: Layout) -> bool:
+    """Whether two neighbouring stretches render as one part."""
+    return (not frame.composite and previous.kind == frame.kind and previous.content == frame.content
+            and previous.bubble == frame.bubble)
+
+
+def _shot_focus(
+    request: CutRequest, start: float, end: float, present: list[SpeakerTrack], regions_at: Any,
+) -> Focus:
+    """What the shot ``start``..``end`` is about; people unless something on screen clearly is."""
+    if regions_at is None:
+        return PEOPLE
+    regions = regions_at(start, end)
+    if not regions:
+        return PEOPLE
+    focus = decide_focus(
+        regions, person_tracks(present, regions), start, hint=request.layout_hint,
+        category=request.content_category, spoken=_spoken(request.transcript_segments, start, end),
+    )
+    if focus.shows_content:
+        log.info("[FOCUS] clip=%s %.1f-%.1f %s box=%s", request.clip_id, start, end, focus.kind,
+                 focus.content.box.as_dict())
+    return focus
+
+
+def _spoken(segments: list[dict[str, Any]], start: float, end: float) -> str:
+    return " ".join(
+        str(segment.get("text", "")) for segment in segments
+        if float(segment.get("end", 0.0)) > start and float(segment.get("start", 0.0)) < end
+    )
+
+
+def _region_finder(frames: list[tuple[float, bytes]]):
+    """``(start, end) -> content regions`` over the sampled frames in that range, computed once each."""
+    cache: dict[tuple[float, float], list[Region]] = {}
+
+    def regions_at(start: float, end: float) -> list[Region]:
+        key = (round(start, 3), round(end, 3))
+        if key not in cache:
+            picked = [frame for frame in frames if start <= frame[0] < end][::REGION_SAMPLE_STEP]
+            cache[key] = content_regions(list(_decode_frames(picked)))
+        return cache[key]
+
+    return regions_at
+
+
+def _people_only(
+    request: CutRequest, tracks: list[SpeakerTrack], cuts: list[float], regions_at: Any,
+) -> list[SpeakerTrack]:
+    """``tracks`` without faces that belong to content: one that is part of a
+    picture in every shot it appears in is never framed as a speaker."""
+    depicted: dict[int, bool] = {}
+    for window_start, window_end in request.windows:
+        for start, end in shot_windows(window_start, window_end, cuts):
+            present = tracks_in_shot(tracks, start, end, SAMPLE_INTERVAL_SECONDS)
+            people = {track.track_id for track in person_tracks(present, regions_at(start, end))}
+            for track in present:
+                depicted[track.track_id] = depicted.get(track.track_id, True) and track.track_id not in people
+    dropped = [track.track_id for track in tracks if depicted.get(track.track_id)]
+    if dropped:
+        log.info("[FACES] clip=%s faces in content, not framed: %s", request.clip_id, dropped)
+    return [track for track in tracks if not depicted.get(track.track_id)]
+
+
 def _stack_seams(shots: list[tuple[Part, Layout]]) -> list[tuple[float, float, float]]:
-    """Where two people share the frame, on the rendered file's timeline: the
-    shots play back to back, so each starts where the last one ended."""
+    """Where the frame is two stacked pictures (two people, or shown content
+    over its audience), on the rendered file's timeline: the shots play back
+    to back, so each starts where the last one ended. Captions sit on the seam."""
     seams: list[tuple[float, float, float]] = []
     cursor = 0.0
     for part, frame in shots:
         length = part.end - part.start
-        if frame.kind == "two_speaker_stack":
+        if frame.kind in STACKED_KINDS:
             seam = frame.cells[0].height / sum(cell.height for cell in frame.cells)
             seams.append((round(cursor, 3), round(cursor + length, 3), round(seam, 4)))
         cursor += length
     return seams
+
+
+def _layout_frames(
+    shots: list[tuple[Part, Layout]], tracks: list[SpeakerTrack], source_width: int, source_height: int,
+    aspect_ratio: str,
+) -> list[dict[str, Any]]:
+    """Each stretch's layout on the rendered file's timeline: its kind, the
+    share of the height its top cell takes (0 for one picture), and the
+    people's faces as normalised boxes of the output."""
+    frames: list[dict[str, Any]] = []
+    cursor = 0.0
+    for part, frame in shots:
+        length = part.end - part.start
+        top = frame.cells[0].height / sum(cell.height for cell in frame.cells) if frame.cells else 0.0
+        people = tracks_in_shot(tracks, part.start, part.end, SAMPLE_INTERVAL_SECONDS)
+        faces = _faces_on_output(frame, [typical_box(track) for track in people], source_width, source_height,
+                                 aspect_ratio)
+        frames.append({
+            "start": round(cursor, 3), "end": round(cursor + length, 3), "kind": frame.kind, "top": round(top, 4),
+            "faces": [[round(v, 4) for v in (b.x, b.y, b.width, b.height)] for b in faces],
+        })
+        cursor += length
+    return frames
+
+
+def _faces_on_output(
+    frame: Layout, faces: list[Box], source_width: int, source_height: int, aspect_ratio: str,
+) -> list[Box]:
+    """Where ``faces`` (source boxes) appear in the output frame for ``frame``'s layout."""
+    if frame.kind == "content":
+        if frame.bubble is None:
+            return []
+        out_w, out_h = output_dimensions(aspect_ratio)
+        content = frame.content or Box()
+        width_px, height_px = content.width * source_width, content.height * source_height
+        fitted = int(height_px * min(out_w / width_px, out_h / height_px)) // 2 * 2
+        _, x, y, diameter = bubble_layout(out_w, out_h, fitted)
+        return [Box(x / out_w, y / out_h, diameter / out_w, diameter / out_h)]
+    if frame.cells:
+        total = sum(cell.height for cell in frame.cells)
+        placed, offset = [], 0.0
+        for cell in frame.cells:
+            share = cell.height / total
+            if not cell.fit:
+                placed += [_through(face, cell.box, offset, share) for face in faces if _centred_in(face, cell.box)]
+            offset += share
+        return placed
+    out_w, out_h = output_dimensions(aspect_ratio)
+    if frame.kind == "fit":
+        share = min(1.0, source_height * out_w / source_width / out_h)
+        return [_through(face, Box(), (1 - share) / 2, share) for face in faces]
+    if not faces:
+        return []
+    # A followed shot is centred on its speaker, lifted by the headroom bias.
+    lead = max(faces, key=lambda face: face.area)
+    window = crop_around(lead.center[0], max(0.0, lead.center[1] - VERTICAL_BIAS), source_width, source_height,
+                         aspect_ratio)
+    return [_through(face, window, 0.0, 1.0) for face in faces if _centred_in(face, window)]
+
+
+def _centred_in(face: Box, window: Box) -> bool:
+    cx, cy = face.center
+    return window.x <= cx <= window.x + window.width and window.y <= cy <= window.y + window.height
+
+
+def _through(face: Box, window: Box, offset: float, share: float) -> Box:
+    """``face`` seen through ``window``, drawn into the band ``offset``..``offset + share`` of the output."""
+    return Box(
+        (face.x - window.x) / window.width,
+        offset + (face.y - window.y) / window.height * share,
+        face.width / window.width,
+        face.height / window.height * share,
+    )
 
 
 def _switch_cuts(

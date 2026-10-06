@@ -1,0 +1,72 @@
+{
+  "pop": {
+    "file": "pop.wav",
+    "seconds": 0.6,
+    "peak": 0.007,
+    "source": "SFX/General SFX/Pop sound effect 1pop up sound effectpop smokeballon pop sound effectpop sound effect youtuber.mp3",
+    "licence": "owner library, generic pop"
+  },
+  "click": {
+    "file": "click.wav",
+    "seconds": 0.4,
+    "peak": 0.015,
+    "source": "SFX/trending sfx/click-button.mp3",
+    "licence": "owner library, generic UI click"
+  },
+  "soft_click": {
+    "file": "soft_click.wav",
+    "seconds": 0.5,
+    "peak": 0.203,
+    "source": "drive-download-20261004T045104Z-1-001/interface-soft-click-131438 (1).mp3",
+    "licence": "Pixabay content licence"
+  },
+  "whoosh": {
+    "file": "whoosh.wav",
+    "seconds": 1.2,
+    "peak": 0.278,
+    "source": "drive-download-20261004T045104Z-1-001/mixkit-flying-fast-swoosh-1469.wav",
+    "licence": "Mixkit free licence"
+  },
+  "whoosh_short": {
+    "file": "whoosh_short.wav",
+    "seconds": 0.8,
+    "peak": 0.183,
+    "source": "SFX/trending sfx/Short whoose_1.mp3",
+    "licence": "owner library, generic whoosh"
+  },
+  "ding": {
+    "file": "ding.wav",
+    "seconds": 0.881,
+    "peak": 0.204,
+    "source": "SFX/trending sfx/Correct.mp3",
+    "licence": "owner library, generic chime"
+  },
+  "cash": {
+    "file": "cash.wav",
+    "seconds": 1.2,
+    "peak": 0.119,
+    "source": "SFX/trending sfx/Cash Register.wav",
+    "licence": "owner library, generic register"
+  },
+  "tick": {
+    "file": "tick.wav",
+    "seconds": 0.6,
+    "peak": 0.273,
+    "source": "SFX/trending sfx/counting.wav",
+    "licence": "owner library, generic counter"
+  },
+  "boom": {
+    "file": "boom.wav",
+    "seconds": 2.5,
+    "peak": 0.139,
+    "source": "SFX/trending sfx/Cinematic_boom_01.wav",
+    "licence": "owner library, generic cinematic boom"
+  },
+  "riser": {
+    "file": "riser.wav",
+    "seconds": 3.0,
+    "peak": 1.625,
+    "source": "SFX/trending sfx/riser.mp3",
+    "licence": "owner library, generic riser"
+  }
+}

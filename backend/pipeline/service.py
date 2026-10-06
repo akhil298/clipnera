@@ -25,6 +25,7 @@ from transcription.language import spoken_language
 from transcription.transliterate import CAPTION_SCRIPTS, romanize_transcript, wants_roman
 from clients.ai import get_text_client
 from broll.cutaways import plan_project_broll
+from motion.service import plan_project_motion
 from feature_flags.registry import BROLL_CUTAWAYS
 from feature_flags.service import FeatureFlagService
 from clip.repository import ClipRepository
@@ -830,6 +831,8 @@ class PipelineOrchestrator:
         )
         if self.clip_settings.get("broll"):
             await self._plan_broll()
+        if self.is_pro:
+            await self._plan_motion()
         self._notify("Clip generation complete", 100)
         return result
 
@@ -847,6 +850,17 @@ class PipelineOrchestrator:
             self._notify(f"B-roll added to {count} clip(s)", 99)
         except Exception as exc:
             log.warning("B-roll planning failed: project=%s error=%s", self.project_id, exc)
+
+    async def _plan_motion(self) -> None:
+        """Motion graphics for the new clips (Pro). Never fails the run: a clip without graphics is still a clip."""
+        try:
+            count = await plan_project_motion(
+                self.project_id, self.user_id, self.is_pro, video_path=await self._project_video_path(),
+                notify=lambda message, percent: self._notify(message, 95 + percent // 25),
+            )
+            self._notify(f"Motion graphics planned for {count} clip(s)", 99)
+        except Exception as exc:
+            log.warning("Motion planning failed: project=%s error=%s", self.project_id, exc)
 
     async def _project_video_path(self) -> str | None:
         async with AsyncSessionLocal() as session:

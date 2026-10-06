@@ -199,7 +199,7 @@ A strong candidate is one complete thought a stranger scrolling past would stop 
 # How every clip's fields are filled in, whether it is one moment or a story.
 CLIP_FIELD_RULES = """- hook: the id of the single most gripping line inside the clip, played first as a teaser: a bold claim, a number, a punchline, an emotional peak. 5-15 words, from the middle or end of the clip, never its first line, and it must make sense heard alone. 0 if no line qualifies.
 - title: one sentence, at most 60 characters, about the payoff, not the setup. It is burned above the captions. Do not quote the transcript. description: 1-2 sentences. hashtags: 3-5.
-- layout: single_speaker (one person talking), two_speaker_stack (a back-and-forth between two people on screen), split_gameplay (gameplay with a facecam), screen_with_speaker (slides or a screen share with a presenter), wide (a group or a scene), or auto if unsure.
+- layout: single_speaker (one person talking), two_speaker_stack (a back-and-forth between two people on screen), split_gameplay (gameplay with a facecam), screen_with_speaker (slides, a screen share, or something on screen being reacted to: fan art, a video, a post), wide (a group or a scene), or auto if unsure.
 - beats (at most 4, only where they help): punch_in on the line where the peak lands, with the key word; react_cut on a line whose listener's reaction is worth showing; emphasis on a key word or number to highlight in captions.
 - scores: 1-10 per criterion, honestly. A 9 is a clip that would go viral on its own; most good clips are 6-8.
 - why: one short sentence on what makes it work."""

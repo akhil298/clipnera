@@ -15,6 +15,8 @@ from typing import Any, AsyncIterator, Callable
 
 from clients.services.s3 import S3
 from broll.cutaways import with_broll
+from motion.overlay import MotionSource
+from motion.service import motion_source
 from clip_generation.hook import (
     Hook,
     Span,
@@ -355,6 +357,7 @@ class ClipService:
                 transcript_segments, _edit_choices(self._loads(clip.analysis_json, {})).get("beats", []),
             )
             burned_path = await styling.burn_subtitles(
+                motion=motion_source(clip),
                 video_path=video_path,
                 clip_start=clip.start_time,
                 clip_end=clip.end_time,
@@ -512,6 +515,7 @@ class ClipService:
                             transcript=transcripts[clip.id],
                             max_duration=max_duration_override,
                             transition=transition,
+                            ratio=ratio,
                         )
                     if intro:
                         rendered_path = await self._with_intro(intro, rendered_path)
@@ -694,6 +698,7 @@ class ClipService:
         transcript: list[dict[str, Any]],
         max_duration: int | None,
         transition: TransitionSpec | None,
+        ratio: str = "9:16",
     ) -> str:
         """Render one exported file from a cut; returns a new local path the caller owns."""
         from subtitle_styling.service import SubtitleStylingService
@@ -710,18 +715,19 @@ class ClipService:
             return await self._render_export_from(
                 clip, source_path, styling, hook, spans, clip_end, style_type, caption_config,
                 burn_subtitles, show_title, watermark_enabled, enable_emoji, transcript, transition,
+                motion_source(clip, ratio),
             )
 
     async def _render_export_from(
         self, clip: GeneratedClip, cut_path: str, styling: Any, hook: Hook | None, spans: list | None,
         clip_end: float, style_type: str, caption_config: dict[str, Any], burn_subtitles: bool,
         show_title: bool, watermark_enabled: bool, enable_emoji: bool, transcript: list[dict[str, Any]],
-        transition: TransitionSpec | None,
+        transition: TransitionSpec | None, motion: MotionSource | None = None,
     ) -> str:
         if not burn_subtitles:
             return await styling.render_uncaptioned(
                 cut_path, clip.start_time, clip_end, watermark_enabled, hook=hook, transition=transition,
-                spans=spans,
+                spans=spans, motion=motion,
             )
 
         analysis = self._loads(clip.analysis_json, {})
@@ -741,6 +747,7 @@ class ClipService:
             transition=transition,
             spans=spans,
             seams=stack_seams(clip),
+            motion=motion,
         )
 
     def hook_transition_for(
@@ -1069,6 +1076,7 @@ class ClipService:
                     "strategy": result.strategy,
                     "speaker_count": result.speaker_count,
                     "seams": result.seams.get(ratio, []),
+                    "frames": result.frames.get(ratio, []),
                 }
                 for ratio in ratios
             }

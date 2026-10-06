@@ -77,6 +77,8 @@ STEP_MODELS: dict[str, tuple[ModelChoice, ModelChoice]] = {
     "transliteration": (GROQ_SMALL, GROQ_LARGE),
     # Where to cut away and what to search for: editorial, but low stakes per call.
     "broll_planning": (GROQ_LARGE, OPENAI_PRO),
+    # Which spoken moments get a motion graphic, and its exact words: what the viewer reads.
+    "motion_planning": (GROQ_LARGE, OPENAI_PRO),
     # Footage reels: one call decides the whole edit. The reel editor's Opus
     # flag swaps in REEL_DIRECTOR_OPUS (see edit_engine.director).
     "reel_director": (GROQ_LARGE, OPENAI_PRO),

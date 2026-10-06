@@ -21,6 +21,7 @@ from typing import Any
 import cv2
 import numpy as np
 
+from video_processor.focus import Focus
 from video_processor.geometry import Box
 from video_processor.speaker_tracking import SpeakerTrack
 
@@ -82,6 +83,18 @@ PAIR_MIN_SIZE_RATIO = 0.6
 # answer never sits in one static shot.
 RHYTHM_ZOOM = 1.12
 RHYTHM_MIN_SECONDS = 3.0
+# Content shown above its audience takes between these shares of the frame's
+# height, as close as it can to its own shape so it fills the width.
+CONTENT_MIN_SHARE = 0.32
+CONTENT_MAX_SHARE = 0.62
+# The audience under shown content: one person framed head and shoulders, a
+# group framed from the span of their faces.
+AUDIENCE_GROUP_SPAN = 1.4
+# A lone face that would need enlarging more than this to fill the audience
+# cell is a small webcam: it goes in a round bubble over the content instead.
+MAX_AUDIENCE_UPSCALE = 3.0
+# The bubble's window on the face, in face sizes.
+BUBBLE_FACE_SPAN = 1.9
 
 
 @dataclass(frozen=True)
@@ -90,12 +103,20 @@ class Cell:
 
     box: Box
     height: int
+    # Show the whole box inside the cell over a blurred copy of itself, rather
+    # than cropping it to fill: shown content is never cut, nor padded with
+    # whatever happened to surround it on screen.
+    fit: bool = False
 
 
 @dataclass
 class Layout:
-    kind: str  # follow | fit | split_gameplay | two_speaker_stack | screen_with_speaker
+    kind: str  # follow | fit | content | split_gameplay | two_speaker_stack | screen_with_speaker
     cells: list[Cell] = field(default_factory=list)
+    # The region a ``content`` layout fits whole into the frame.
+    content: Box | None = None
+    # A square window on a small webcam face, shown as a round bubble over ``content``.
+    bubble: Box | None = None
 
     @property
     def composite(self) -> bool:
@@ -330,7 +351,7 @@ def _two_shot(
     pair = [_within(track, start, end) for track in present]
     if not _on_screen_together(pair, start, end, sample_interval):
         return []
-    small, large = sorted(_typical_box(track).width for track in pair)
+    small, large = sorted(typical_box(track).width for track in pair)
     if small < large * PAIR_MIN_SIZE_RATIO:
         return []
     return sorted(pair, key=lambda track: -_talk_time(track, turns, start, end))
@@ -350,7 +371,7 @@ def _on_screen_together(pair: list[SpeakerTrack], start: float, end: float, samp
     together = sum(1 for s in second.samples if round(s.timestamp, 3) in seen)
     if together < _expected_samples(start, end, sample_interval) * PAIR_MIN_TOGETHER:
         return False
-    a, b = _typical_box(first), _typical_box(second)
+    a, b = typical_box(first), typical_box(second)
     return abs(a.center[0] - b.center[0]) >= PAIR_MIN_SEPARATION * max(a.width, b.width)
 
 
@@ -386,6 +407,7 @@ def choose_layout(
     output_width: int,
     output_height: int,
     pair: list[SpeakerTrack] | None = None,
+    focus: Focus | None = None,
 ) -> Layout:
     """How to build the frame, from the director's hint and what was actually detected.
 
@@ -398,7 +420,13 @@ def choose_layout(
     transcript and cannot see who is in the picture. A composite layout is used
     only when the faces it needs were found; any other doubt falls back to
     following the speaker, which is always safe.
+
+    ``focus`` (see :mod:`video_processor.focus`) comes first: when the stretch
+    is about something on screen, that thing is shown, with the people
+    reacting to it below when there are any.
     """
+    if focus is not None and focus.content is not None and aspect_ratio == VERTICAL:
+        return _content_layout(focus, source_width, source_height, output_width, output_height)
     if not tracks and source_width / max(1, source_height) > output_width / output_height * FIT_MIN_ASPECT_GAP:
         return Layout("fit")
     if aspect_ratio != VERTICAL or source_width / max(1, source_height) < 1.2:
@@ -418,7 +446,7 @@ def choose_layout(
         half = output_height // 2 // 2 * 2
         heights = (half, output_height - half)
         return Layout("two_speaker_stack", [
-            Cell(region_around(_with_headroom(_typical_box(track)), STACK_FACE_SPAN, output_width / h,
+            Cell(region_around(_with_headroom(typical_box(track)), STACK_FACE_SPAN, output_width / h,
                                source_width, source_height), h)
             for track, h in zip(pair, heights)
         ])
@@ -428,10 +456,42 @@ def choose_layout(
             top = round(output_width * source_height / source_width) // 2 * 2
             return Layout("screen_with_speaker", [
                 Cell(Box(0.0, 0.0, 1.0, 1.0), top),
-                Cell(region_around(_with_headroom(_typical_box(speaker[0])), 3.5, output_width / (output_height - top),
+                Cell(region_around(_with_headroom(typical_box(speaker[0])), 3.5, output_width / (output_height - top),
                                    source_width, source_height), output_height - top),
             ])
     return Layout("follow")
+
+
+def _content_layout(
+    focus: Focus, source_width: int, source_height: int, output_width: int, output_height: int,
+) -> Layout:
+    """Shown content on top and its audience below, or the content alone, fitted whole."""
+    content = focus.content.box
+    if not focus.people:
+        return Layout("content", content=content)
+    shape = (content.width * source_width) / max(1.0, content.height * source_height)
+    share = min(CONTENT_MAX_SHARE, max(CONTENT_MIN_SHARE, output_width / shape / output_height))
+    top = round(output_height * share) // 2 * 2
+    bottom = output_height - top
+    audience = _audience(list(focus.people), output_width / bottom, source_width, source_height)
+    if len(focus.people) == 1 and bottom / max(1.0, audience.height * source_height) > MAX_AUDIENCE_UPSCALE:
+        face = typical_box(focus.people[0])
+        return Layout("content", content=content,
+                      bubble=region_around(face, BUBBLE_FACE_SPAN, 1.0, source_width, source_height))
+    return Layout("screen_with_speaker", [Cell(content, top, fit=True), Cell(audience, bottom)])
+
+
+def _audience(people: list[SpeakerTrack], cell_aspect: float, source_width: int, source_height: int) -> Box:
+    """A window on the people watching: one face head and shoulders, a group by the span of their faces."""
+    faces = [_with_headroom(typical_box(track)) for track in _most_present(people, 2)]
+    if len(faces) == 1:
+        return region_around(faces[0], STACK_FACE_SPAN, cell_aspect, source_width, source_height)
+    left = min(f.x for f in faces)
+    top = min(f.y for f in faces)
+    right = max(f.x + f.width for f in faces)
+    bottom = max(f.y + f.height for f in faces)
+    group = Box(left, top, right - left, bottom - top)
+    return region_around(group, AUDIENCE_GROUP_SPAN, cell_aspect, source_width, source_height)
 
 
 def plan_parts(
@@ -524,7 +584,7 @@ def _centre_region(cell_aspect: float, source_width: int, source_height: int) ->
     return region_around(Box(0.5, 0.5, 0.0, 1.0), 1.0, cell_aspect, source_width, source_height)
 
 
-def _typical_box(track: SpeakerTrack) -> Box:
+def typical_box(track: SpeakerTrack) -> Box:
     """Per-coordinate median of the track's boxes; one stray detection cannot drag it."""
     boxes = [s.face.box for s in track.samples] or [Box()]
     return Box(*(float(np.median([getattr(b, key) for b in boxes])) for key in ("x", "y", "width", "height")))
@@ -541,7 +601,7 @@ def _most_present(tracks: list[SpeakerTrack], count: int) -> list[SpeakerTrack]:
 def _facecam(tracks: list[SpeakerTrack]) -> Box | None:
     """The mean box of a small, stationary face, or None."""
     for track in _most_present(tracks, 3):
-        mean = _typical_box(track)
+        mean = typical_box(track)
         drift = max(
             (abs(s.face.box.center[0] - mean.center[0]) + abs(s.face.box.center[1] - mean.center[1]))
             for s in track.samples
