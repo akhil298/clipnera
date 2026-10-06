@@ -60,8 +60,9 @@ class ContextFormatter(logging.Formatter):
     def _context(record: logging.LogRecord) -> str:
         parts: list[str] = []
         for key, value in record.__dict__.items():
-            # project_id and step are already in the [project step] tag.
-            if key in _STANDARD_RECORD_KEYS or key.startswith("_") or key in ("project_id", "step"):
+            # project_id and step are already in the [project step] tag;
+            # color_message is uvicorn's ANSI-coloured copy of the message.
+            if key in _STANDARD_RECORD_KEYS or key.startswith("_") or key in ("project_id", "step", "color_message"):
                 continue
             text = str(value)
             if len(text) > _MAX_VALUE_CHARS:
