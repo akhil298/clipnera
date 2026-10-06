@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import jobs.postgres as pg
+import jobs.wake as wake
 from jobs.model import BackgroundJob
 from jobs.queue import Job, handler
 
@@ -45,7 +46,9 @@ async def db(monkeypatch):
     async with engine.begin() as conn:
         await conn.run_sync(lambda c: BackgroundJob.__table__.drop(c, checkfirst=True))
         await conn.run_sync(lambda c: BackgroundJob.__table__.create(c))
-    monkeypatch.setattr(pg, "AsyncSessionLocal", async_sessionmaker(engine, expire_on_commit=False))
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    monkeypatch.setattr(pg, "AsyncSessionLocal", sessions)
+    monkeypatch.setattr(wake, "AsyncSessionLocal", sessions)
     monkeypatch.setattr(pg, "POLL_SECONDS", 0.05)
     monkeypatch.setattr(pg, "RETRY_BACKOFF_SECONDS", 0)
     seen.clear()
@@ -125,3 +128,37 @@ async def test_two_workers_never_take_the_same_job(db):
         w.stop()
     await asyncio.gather(*tasks)
     assert sorted(name for name, _ in seen) == [str(i) for i in range(6)]
+
+
+async def test_an_idle_worker_powers_off_once_nothing_is_queued(db, monkeypatch):
+    powered_off = asyncio.Event()
+
+    async def power_off(self):
+        self.stop()
+        powered_off.set()
+
+    monkeypatch.setattr(pg.PostgresWorker, "_power_off", power_off)
+    await pg.PostgresQueue().enqueue(Job("test.pg_ok", {"name": "last"}))
+    worker = pg.PostgresWorker(concurrency=1, stale_seconds=60, max_attempts=3, idle_shutdown_seconds=0.3)
+
+    async with asyncio.timeout(10):
+        await worker.run()
+    assert powered_off.is_set()
+    assert seen == [("last", 1)]
+
+
+async def test_a_retry_in_backoff_keeps_the_worker_up(db, monkeypatch):
+    async def power_off(self):
+        raise AssertionError("powered off with a retry still queued")
+
+    monkeypatch.setattr(pg.PostgresWorker, "_power_off", power_off)
+    async with db.begin() as conn:
+        await conn.execute(text("""
+            INSERT INTO background_jobs (id, kind, payload, status, attempts, run_after)
+            VALUES ('later', 'test.pg_ok', :payload, 'queued', 1, now() + interval '1 hour')
+        """), {"payload": json.dumps({"name": "later"})})
+    worker = pg.PostgresWorker(concurrency=1, stale_seconds=60, max_attempts=3, idle_shutdown_seconds=0.1)
+    task = asyncio.create_task(worker.run())
+    await asyncio.sleep(0.6)
+    worker.stop()
+    await task

@@ -6,6 +6,10 @@ taking the same job. Pipelines then run outside the API process: their memory
 is not the API's, a deploy can restart the API without killing them, and the
 worker caps how many run at once.
 
+With ``WORKER_IDLE_SHUTDOWN_SECONDS`` set, a worker that has had nothing to
+run for that long powers its machine off; the API starts it again when a job
+arrives (``jobs.wake``).
+
 A running job's ``heartbeat_at`` is refreshed while it runs. If its worker
 dies, the heartbeat stops and the job is claimed again once it is
 ``JOB_VISIBILITY_TIMEOUT_SECONDS`` stale, with ``attempt`` > 1 so a pipeline
@@ -27,6 +31,7 @@ from core.database import AsyncSessionLocal
 from core.logging_config import get_logger
 from jobs.model import BackgroundJob
 from jobs.queue import Job, run_job
+from jobs.wake import has_pending_jobs, wake_worker
 
 log = get_logger(__name__)
 
@@ -76,6 +81,7 @@ class PostgresQueue:
             session.add(row)
             await session.commit()
         log.info("Job queued: kind=%s id=%s", job.kind, row.id)
+        await wake_worker()
 
 
 async def _execute(statement: Any, **params: Any) -> Any:
@@ -86,10 +92,12 @@ async def _execute(statement: Any, **params: Any) -> Any:
 
 
 class PostgresWorker:
-    def __init__(self, concurrency: int, stale_seconds: int, max_attempts: int) -> None:
+    def __init__(self, concurrency: int, stale_seconds: int, max_attempts: int, idle_shutdown_seconds: int = 0) -> None:
         self._concurrency = max(1, concurrency)
         self._stale = max(30, stale_seconds)
         self._max_attempts = max(1, max_attempts)
+        self._idle_shutdown = idle_shutdown_seconds
+        self._idle_since: float | None = None
         self._name = f"{socket.gethostname()}:{os.getpid()}"
         self._stopping = asyncio.Event()
         self._running: set[asyncio.Task] = set()
@@ -119,8 +127,12 @@ class PostgresWorker:
         await self._housekeeping()
         row = (await _execute(_CLAIM, worker=self._name, max_attempts=self._max_attempts, stale=self._stale)).first()
         if row is None:
+            if not self._running and await self._idle_too_long():
+                await self._power_off()
+                return
             await self._idle()
             return
+        self._idle_since = None
         job = Job(kind=row.kind, payload=json.loads(row.payload), attempt=row.attempts)
         task = asyncio.create_task(self._handle(row.id, job))
         self._running.add(task)
@@ -131,6 +143,26 @@ class PostgresWorker:
             await asyncio.wait_for(self._stopping.wait(), timeout=POLL_SECONDS)
         except asyncio.TimeoutError:
             pass
+
+    async def _idle_too_long(self) -> bool:
+        if self._idle_shutdown <= 0:
+            return False
+        now = asyncio.get_running_loop().time()
+        if self._idle_since is None:
+            self._idle_since = now
+        # A queued retry waiting out its backoff is not idle. Running rows are
+        # left out: with nothing of ours running they are stale, and the claim
+        # or the expiry sweep deals with them.
+        if await has_pending_jobs(include_running=False):
+            self._idle_since = now
+            return False
+        return now - self._idle_since >= self._idle_shutdown
+
+    async def _power_off(self) -> None:
+        log.info("No jobs for %ds; powering the worker machine off", self._idle_shutdown)
+        self.stop()
+        process = await asyncio.create_subprocess_exec("sudo", "-n", "shutdown", "-h", "now")
+        await process.wait()
 
     async def _housekeeping(self) -> None:
         now = asyncio.get_running_loop().time()
@@ -183,4 +215,5 @@ def worker_from_settings() -> PostgresWorker:
     settings = get_settings()
     return PostgresWorker(
         settings.JOB_WORKER_CONCURRENCY, settings.JOB_VISIBILITY_TIMEOUT_SECONDS, settings.JOB_MAX_ATTEMPTS,
+        settings.WORKER_IDLE_SHUTDOWN_SECONDS,
     )

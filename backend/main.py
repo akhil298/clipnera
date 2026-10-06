@@ -29,6 +29,7 @@ from creator_intro.route import creator_intro_router
 from edit_engine.route import edits as edits_router, admin_music as admin_music_router
 from editor.route import editor as editor_router
 from video_processor.ffmpeg_service import FFmpegService
+from jobs.wake import waking_worker
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -57,8 +58,9 @@ async def lifespan(app: FastAPI):
         await FFmpegService.require_caption_support()
     except CustomException as exc:
         log.error(f"{exc.message} Exports will fail until FFmpeg with libass is installed.")
-    # Publishes posts and ends connections past their 7-day lifetime.
-    async with social_worker():
+    # Publishes posts and ends connections past their 7-day lifetime; starts the
+    # sleeping worker machine while jobs wait.
+    async with social_worker(), waking_worker():
         yield
         log.info("Shutting down")
 

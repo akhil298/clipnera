@@ -9,7 +9,9 @@
 # Env overrides: EC2_KEY, COOKIE_BROWSER, COOKIE_FILE (push this cookies.txt
 # as-is instead of exporting from the browser), FORCE_COOKIES=1 (replace the
 # cookies on EC2 even if they still work), COOKIE_MIN_DAYS (default 2),
-# YOUTUBE_URL, GIT_BRANCH (branch to deploy, default clipnera).
+# YOUTUBE_URL, GIT_BRANCH (branch to deploy, default clipnera),
+# ROLE: "api" (API + publisher; YouTube cookies), "worker" (job worker only)
+# or "all" (default: everything on one machine). deploy.sh sets it.
 set -Eeuo pipefail
 
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,6 +27,8 @@ COOKIE_MIN_DAYS="${COOKIE_MIN_DAYS:-2}"
 YOUTUBE_URL="${YOUTUBE_URL:-https://www.youtube.com/watch?v=jNQXAC9IVRw}"
 EC2_KEY="${EC2_KEY:-${HOME}/Desktop/clipneras.pem}"
 GIT_BRANCH="${GIT_BRANCH:-clipnera}"
+ROLE="${ROLE:-all}"
+case "${ROLE}" in api|worker|all) ;; *) echo "ROLE must be api, worker or all" >&2; exit 1 ;; esac
 LAST_TARGET_FILE="${HOME}/.config/clipnera/ec2_target"
 
 cleanup() {
@@ -139,7 +143,10 @@ CHECK_SCRIPT
 }
 
 PUSH_COOKIES=1
-if [[ -n "${COOKIE_FILE}" || "${FORCE_COOKIES}" == "1" ]]; then
+if [[ "${ROLE}" == "worker" ]]; then
+    PUSH_COOKIES=0
+    echo "[1/4] Worker machine: no YouTube cookies needed."
+elif [[ -n "${COOKIE_FILE}" || "${FORCE_COOKIES}" == "1" ]]; then
     echo "[1/4] Refreshing YouTube cookies as requested..."
 else
     echo "[1/4] Checking YouTube cookies on EC2..."
@@ -196,23 +203,23 @@ if [[ "${PUSH_COOKIES}" == "1" ]]; then
     echo "[2/4] Copying cookies to ${EC2_USER}@${EC2_HOST}:${REMOTE_COOKIE}..."
     ssh "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" "install -d -m 700 '$(dirname "${REMOTE_COOKIE}")'"
     scp -q "${SSH_OPTS[@]}" "${COOKIE_FILE}" "${EC2_USER}@${EC2_HOST}:${REMOTE_COOKIE}"
-else
+elif [[ "${ROLE}" != "worker" ]]; then
     echo "[2/4] Cookies on EC2 are still good; not copying."
 fi
 
 # --- Server update ---------------------------------------------------------
-echo "[3/4] Updating code, validating YouTube access and restarting backend..."
+echo "[3/4] Updating code and packages, restarting services (role: ${ROLE})..."
 ssh -T "${SSH_OPTS[@]}" "${EC2_USER}@${EC2_HOST}" bash -s -- \
-    "${REMOTE_ROOT}" "${REMOTE_COOKIE}" "${YOUTUBE_URL}" "${GIT_BRANCH}" <<'REMOTE_SCRIPT'
+    "${REMOTE_ROOT}" "${REMOTE_COOKIE}" "${YOUTUBE_URL}" "${GIT_BRANCH}" "${ROLE}" <<'REMOTE_SCRIPT'
 set -Eeuo pipefail
 
 REMOTE_ROOT="$1"
 REMOTE_COOKIE="$2"
 YOUTUBE_URL="$3"
 GIT_BRANCH="$4"
+ROLE="$5"
 BACKEND_DIR="${REMOTE_ROOT}/backend"
 VENV_DIR="${BACKEND_DIR}/venv"
-SERVICE=clipnera-backend
 
 cd "${REMOTE_ROOT}"
 # Older runs wrote cookies into the tracked backend/youtube_cookies.txt; drop
@@ -231,6 +238,18 @@ cd "${BACKEND_DIR}"
 
 if [[ ! -x "${VENV_DIR}/bin/python" ]] || ! "${VENV_DIR}/bin/python" -c 'import yt_dlp' >/dev/null 2>&1; then
     bash setup_ec2.sh
+else
+    bash scripts/install_deps.sh
+fi
+
+# Small machines (t3.micro: 1 GB) get swap so a burst cannot OOM-kill the API.
+if [[ "$(awk '/MemTotal/ {print $2}' /proc/meminfo)" -lt 3000000 ]] && ! swapon --show | grep -q .; then
+    sudo fallocate -l 2G /swapfile
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile >/dev/null
+    sudo swapon /swapfile
+    grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+    echo "Added 2 GB swap."
 fi
 
 if [[ ! -x "${HOME}/.deno/bin/deno" ]] && ! command -v deno >/dev/null 2>&1; then
@@ -238,6 +257,17 @@ if [[ ! -x "${HOME}/.deno/bin/deno" ]] && ! command -v deno >/dev/null 2>&1; the
 fi
 export PATH="${HOME}/.deno/bin:${PATH}"
 
+# Turns off a service this machine's role does not run.
+disable_unit() {
+    if systemctl list-unit-files "$1.service" >/dev/null 2>&1; then
+        sudo systemctl disable --now --quiet "$1" 2>/dev/null || true
+    fi
+}
+SERVICE=clipnera-backend
+PUBLISHER=clipnera-publisher
+JOBS=clipnera-jobs
+
+if [[ "${ROLE}" != "worker" ]]; then
 chmod 600 "${REMOTE_COOKIE}"
 # Settings load from .env or .env.production depending on ENVIRONMENT, so
 # point every env file present at the cookies, replacing any older path.
@@ -258,6 +288,10 @@ done
     --skip-download \
     --print '%(title)s' \
     "${YOUTUBE_URL}"
+
+# Schema changes ship with the code; the API machine applies them before the
+# restart, so a failed migration leaves the running backend untouched.
+"${VENV_DIR}/bin/alembic" upgrade head
 
 # systemd keeps the backend up across SSH logouts and reboots.
 sudo tee "/etc/systemd/system/${SERVICE}.service" >/dev/null <<UNIT
@@ -300,7 +334,6 @@ sudo systemctl start "${SERVICE}"
 
 # The social publisher worker (python -m social.worker) runs beside the API. It
 # refuses to start without a token key ring, so only run it once one is set.
-PUBLISHER=clipnera-publisher
 if grep -qsE '^SOCIAL_TOKEN_ENCRYPTION_KEYS=.+' .env .env.production; then
     sudo tee "/etc/systemd/system/${PUBLISHER}.service" >/dev/null <<UNIT
 [Unit]
@@ -328,11 +361,18 @@ else
     echo "Skipping ${PUBLISHER}: SOCIAL_TOKEN_ENCRYPTION_KEYS is not set." >&2
 fi
 
+else
+    disable_unit "${SERVICE}"
+    disable_unit "${PUBLISHER}"
+fi
+
 # The job worker (python -m jobs.worker) runs pipelines, renders and other
 # background jobs outside the API once JOB_QUEUE_BACKEND=postgres is set (after
-# `alembic upgrade head` has created background_jobs).
-JOBS=clipnera-jobs
-if grep -qsE '^JOB_QUEUE_BACKEND="?postgres"?\s*$' .env .env.production; then
+# `alembic upgrade head` has created background_jobs). An API-only machine
+# leaves them to the worker machine.
+if [[ "${ROLE}" == "api" ]]; then
+    disable_unit "${JOBS}"
+elif grep -qsE '^JOB_QUEUE_BACKEND="?postgres"?\s*$' .env .env.production; then
     sudo tee "/etc/systemd/system/${JOBS}.service" >/dev/null <<UNIT
 [Unit]
 Description=Clipnera background job worker
@@ -361,9 +401,20 @@ UNIT
     sudo systemctl daemon-reload
     sudo systemctl enable --quiet "${JOBS}"
     sudo systemctl restart "${JOBS}"
-elif systemctl list-unit-files "${JOBS}.service" >/dev/null 2>&1; then
+else
     # Back on in-process jobs: a leftover worker would sit idle, so stop it.
-    sudo systemctl disable --now --quiet "${JOBS}" 2>/dev/null || true
+    disable_unit "${JOBS}"
+fi
+
+if [[ "${ROLE}" == "worker" ]]; then
+    sleep 3
+    if systemctl is-active --quiet "${JOBS}"; then
+        echo "Job worker running."
+        exit 0
+    fi
+    echo "Job worker is not running (is JOB_QUEUE_BACKEND=postgres in .env?). Last log lines:" >&2
+    tail -40 jobs.log >&2 || true
+    exit 1
 fi
 
 for _ in {1..60}; do
@@ -378,5 +429,5 @@ tail -40 backend.log >&2
 exit 1
 REMOTE_SCRIPT
 
-echo "[4/4] EC2 update complete. Backend running on ${EC2_HOST}:8000."
+echo "[4/4] EC2 update complete (role: ${ROLE}) on ${EC2_HOST}."
 echo "      Logs: ssh ${EC2_USER}@${EC2_HOST} 'tail -f ${REMOTE_ROOT}/backend/backend.log'"

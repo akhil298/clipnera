@@ -18,9 +18,9 @@ class EmailClient:
         self._client = boto3.client(
             "ses",
             endpoint_url=settings.LOCALSTACK_ENDPOINT or None,
-            region_name=settings.AWS_REGION,
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.SES_REGION or settings.AWS_REGION,
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID or None,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY or None,
             config=Config(retries={"max_attempts": 3, "mode": "standard"}),
         )
 

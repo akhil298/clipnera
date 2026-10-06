@@ -27,3 +27,19 @@ opencv-contrib-python-headless==4.10.0.84
 librosa==0.10.2.post1
 faster-whisper>=1.1.1
 whisperx==3.7.4
+# Imported directly by our code; listed so they never depend on another
+# package pulling them in.
+numpy>=2.0.2,<2.3.0
+pillow>=12.0.0
+cryptography>=43.0.0
+fonttools>=4.55.0
+onnxruntime>=1.20.0
+# WhisperX is installed with --no-deps (its torch pin pulls the multi-GB CUDA
+# build), so its own requirements are listed here instead. torch and
+# torchaudio come from the CPU-only index in scripts/install_deps.sh.
+ctranslate2>=4.5.0
+av<16.0.0
+nltk>=3.9.1
+pandas>=2.2.3,<2.3.0
+pyannote.audio>=3.3.2,<4.0.0
+transformers>=4.48.0

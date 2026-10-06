@@ -25,8 +25,8 @@ class S3:
         self.region = region or settings.AWS_REGION
         client_kwargs = {
             "region_name": self.region,
-            "aws_access_key_id": settings.AWS_ACCESS_KEY_ID,
-            "aws_secret_access_key": settings.AWS_SECRET_ACCESS_KEY,
+            "aws_access_key_id": settings.AWS_ACCESS_KEY_ID or None,
+            "aws_secret_access_key": settings.AWS_SECRET_ACCESS_KEY or None,
             "config": Config(
                 retries={"max_attempts": 3, "mode": "standard"},
                 s3={"addressing_style": "virtual"},

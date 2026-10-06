@@ -19,7 +19,7 @@ else
 fi
 
 echo ""
-echo "[1/10] Updating system..."
+echo "[1/8] Updating system..."
 if command -v dnf >/dev/null 2>&1; then
     ${SUDO} dnf update -y
     PACKAGE_MANAGER="dnf"
@@ -32,7 +32,7 @@ else
 fi
 
 echo ""
-echo "[2/10] Installing system dependencies..."
+echo "[2/8] Installing system dependencies..."
 ${SUDO} "${PACKAGE_MANAGER}" install -y \
     git curl wget tar xz gcc gcc-c++ make \
     openssl-devel libffi-devel zlib-devel bzip2-devel \
@@ -40,7 +40,11 @@ ${SUDO} "${PACKAGE_MANAGER}" install -y \
     gdbm-devel libuuid-devel
 
 echo ""
-echo "[3/10] Installing Python ${PYTHON_VERSION}..."
+echo "[3/8] Installing Python ${PYTHON_VERSION}..."
+# The distro package, when there is one, saves a long source build.
+if ! command -v python3.13 >/dev/null 2>&1; then
+    ${SUDO} "${PACKAGE_MANAGER}" install -y python3.13 python3.13-devel || true
+fi
 if ! command -v python3.13 >/dev/null 2>&1; then
     cd /tmp
     PYTHON_ARCHIVE="Python-${PYTHON_VERSION}.tgz"
@@ -62,30 +66,20 @@ fi
 python3.13 --version
 
 echo ""
-echo "[4/10] Creating virtual environment..."
+echo "[4/8] Creating virtual environment..."
 cd "${BACKEND_DIR}"
 if [[ ! -x "${VENV_DIR}/bin/python" ]]; then
     python3.13 -m venv "${VENV_DIR}"
 fi
 source "${VENV_DIR}/bin/activate"
 python --version
-pip install --upgrade pip setuptools wheel
 
 echo ""
-echo "[5/10] Installing CPU-only PyTorch..."
-pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu
+echo "[5/8] Installing Python packages (CPU-only PyTorch, missing ones only)..."
+bash "${BACKEND_DIR}/scripts/install_deps.sh"
 
 echo ""
-echo "[6/10] Installing application requirements..."
-grep -v '^whisperx==' requirements.txt > /tmp/clipnera-requirements.txt
-pip install -r /tmp/clipnera-requirements.txt
-
-echo ""
-echo "[7/10] Installing WhisperX without replacing CPU PyTorch..."
-pip install --no-deps whisperx==3.7.4
-
-echo ""
-echo "[8/10] Installing FFmpeg..."
+echo "[6/8] Installing FFmpeg..."
 if ! command -v ffmpeg >/dev/null 2>&1; then
     cd /tmp
     FF_VERSION="7.0.2"
@@ -106,7 +100,7 @@ echo "FFprobe:"
 ffprobe -version | head -1
 
 echo ""
-echo "[9/10] Installing Deno for yt-dlp..."
+echo "[7/8] Installing Deno for yt-dlp..."
 if ! command -v deno >/dev/null 2>&1 && [[ ! -x "${HOME}/.deno/bin/deno" ]]; then
     curl -fsSL https://deno.land/install.sh | sh
 fi
@@ -119,7 +113,7 @@ echo "Deno: $(command -v deno)"
 deno --version
 
 echo ""
-echo "[10/10] Verifying Python environment..."
+echo "[8/8] Verifying Python environment..."
 cd "${BACKEND_DIR}"
 source "${VENV_DIR}/bin/activate"
 python - <<'PY'

@@ -109,6 +109,8 @@ class BaseConfig(BaseSettings):
     AWS_REGION: str = "us-east-1"
     AWS_ACCESS_KEY_ID: str = ""
     AWS_SECRET_ACCESS_KEY: str = ""
+    # SES identities are per region; empty means AWS_REGION.
+    SES_REGION: str = ""
     LOCALSTACK_ENDPOINT: str = ""
     S3_BUCKET_NAME: str = "clipnera-videos"
     # Direct browser-to-S3 video uploads. S3 allows 5 MB-5 GB parts and at
@@ -129,6 +131,11 @@ class BaseConfig(BaseSettings):
     # Postgres queue: a job whose handler keeps raising (or whose worker keeps
     # dying) is given up after this many attempts.
     JOB_MAX_ATTEMPTS: int = 3
+    # Sleeping worker machine (EC2). The API starts WORKER_INSTANCE_ID while
+    # jobs are waiting; a worker with WORKER_IDLE_SHUTDOWN_SECONDS > 0 powers
+    # its machine off after that long with nothing to run. Both off by default.
+    WORKER_INSTANCE_ID: str = ""
+    WORKER_IDLE_SHUTDOWN_SECONDS: int = 0
     # Clips cut (and burned) at once. 0 sizes it to the host's cores.
     CLIP_CUT_CONCURRENCY: int = 3
 
