@@ -307,10 +307,10 @@ chmod 600 "${REMOTE_COOKIE}"
 
 # Stopping signals uvicorn alone, which finishes open requests first; the
 # default also signalled their FFmpeg renders and failed every export in flight.
-# Open requests get 20s: the browser's notifications stream never ends on its
+# Open requests get 10s: the browser's notifications stream never ends on its
 # own, so without a limit every restart waited out the full stop timeout.
 write_unit clipnera-backend "Clipnera backend" backend.log \
-    "-m uvicorn main:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 20" $'KillMode=mixed\nTimeoutStopSec=60'
+    "-m uvicorn main:app --host 0.0.0.0 --port 8000 --timeout-graceful-shutdown 10" $'KillMode=mixed\nTimeoutStopSec=60'
 sudo systemctl daemon-reload
 sudo systemctl enable --quiet clipnera-backend
 sudo systemctl restart clipnera-backend
