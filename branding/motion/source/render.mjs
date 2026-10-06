@@ -5,6 +5,13 @@
 //   node branding/motion/source/render.mjs                 # production + library
 //   node branding/motion/source/render.mjs production      # files the backend uses
 //   node branding/motion/source/render.mjs library --only the-moment
+//   node branding/motion/source/render.mjs motion --spec specs.json --out dir/
+//
+// `motion` renders template graphics (templates.js) from a list of specs, one transparent
+// PNG-in-MOV per spec, sized to its slot box, plus a manifest.json of what it rendered:
+//
+//   [{"name": "users", "template": "count-up", "dur": 2.5, "W": 900, "H": 420,
+//     "fields": {"value": 10000, "suffix": "+", "label": "users in a month"}, "accent": "#f59e0b"}]
 //
 // CHROME_PATH overrides the Chrome binary (defaults to the macOS app).
 import { spawn } from 'node:child_process';
@@ -16,7 +23,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '../../..');
 const LIBRARY = path.join(ROOT, 'branding/motion-library');
-const STATIC = path.join(ROOT, 'backend/static/branding');
+const STATIC = path.join(ROOT, 'backend/static/motion/branding');
 const CHROME = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const catalog = JSON.parse(await readFile(path.join(HERE, 'catalog.json'), 'utf8'));
 const FPS = catalog.fps;
@@ -111,14 +118,18 @@ const fromDataUrl = url => Buffer.from(url.slice(url.indexOf(',') + 1), 'base64'
 
 /* ---------- frame sources ---------- */
 // Round 2 is canvas code (signature.html); round 1 is CSS animation (reel.html).
+/** Encodes the data-URL frame ``call(t)`` returns for every time in ``times``. */
+async function renderCanvas(cdp, out, times, call, alpha) {
+  const enc = encoder(out, { alpha });
+  for (const t of times) await enc.write(fromDataUrl(await evaluate(cdp, call(t))));
+  await enc.end();
+}
+
 async function renderSignature(cdp, out, times, { id, W, H, layer = false, backdrop = null, alpha = false }) {
   // Only a .mov keeps the transparency; an .mp4 of transparent frames keeps
   // their colour, and the backend restores any fade with the manifest's fade_in_s.
-  const enc = encoder(out, { alpha: alpha && out.endsWith('.mov') });
-  for (const t of times) {
-    await enc.write(fromDataUrl(await evaluate(cdp, `Harness.frame(${JSON.stringify({ id, t, W, H, layer, backdrop, alpha })})`)));
-  }
-  await enc.end();
+  await renderCanvas(cdp, out, times,
+    t => `Harness.frame(${JSON.stringify({ id, t, W, H, layer, backdrop, alpha })})`, alpha && out.endsWith('.mov'));
 }
 
 async function renderReel(cdp, out, times, { id }) {
@@ -213,8 +224,8 @@ function motionReadme(m) {
     const [key] = live;
     lines.push('## Where it runs', '',
       key === 'watermark'
-        ? 'Sprites in `backend/static/branding/watermark/listening-spark/`. `backend/branding/watermark.py` rebuilds every frame from the clip\'s loudness and `backend/branding/service.py` lays it over the top-right corner.'
-        : `Rendered for 9:16, 16:9 and 1:1 in \`backend/static/branding/${key}/\`. \`backend/branding/service.py\` adds it to every branded export.`,
+        ? 'Sprites in `backend/static/motion/branding/watermark/listening-spark/`. `backend/branding/watermark.py` rebuilds every frame from the clip\'s loudness and `backend/branding/service.py` lays it over the top-right corner.'
+        : `Rendered for 9:16, 16:9 and 1:1 in \`backend/static/motion/branding/${key}/\`. \`backend/branding/service.py\` adds it to every branded export.`,
       '');
   }
   lines.push('## Re-render', '', '```sh', `node branding/motion/source/render.mjs library --only ${m.slug}`, '```', '');
@@ -259,16 +270,40 @@ async function library(cdp, only) {
   await writeFile(path.join(LIBRARY, 'README.md'), libraryReadme());
 }
 
+/* ---------- motion: template graphics placed by the director ---------- */
+async function motion(cdp, specFile, outDir) {
+  const specs = JSON.parse(await readFile(specFile, 'utf8'));
+  await openPage(cdp, 'motion.html');
+  // Every spec is checked before the first frame, so a bad one fails the batch cheaply.
+  for (const spec of specs) await evaluate(cdp, `Motion.check(${JSON.stringify(spec)})`);
+  await mkdir(outDir, { recursive: true });
+  const rendered = [];
+  for (const spec of specs) {
+    const out = path.join(outDir, `${spec.name}.mov`), started = performance.now();
+    const times = Array.from({ length: Math.round(spec.dur * FPS) }, (_, n) => n / FPS);
+    await renderCanvas(cdp, out, times, t => `Motion.frame(${JSON.stringify({ ...spec, t })})`, true);
+    const seconds = (performance.now() - started) / 1000;
+    console.log(`motion ${spec.name} (${spec.template}) ${times.length} frames in ${seconds.toFixed(2)} s -> ${out}`);
+    rendered.push({ name: spec.name, template: spec.template, file: path.basename(out), W: spec.W, H: spec.H,
+      dur: spec.dur, frames: times.length, render_s: Number(seconds.toFixed(3)) });
+  }
+  await writeFile(path.join(outDir, 'manifest.json'), JSON.stringify({ fps: FPS, motions: rendered }, null, 2) + '\n');
+}
+
 /* ---------- main ---------- */
 const args = process.argv.slice(2);
-const onlyAt = args.indexOf('--only');
-const only = onlyAt >= 0 ? args[onlyAt + 1] : null;
-const jobs = args.filter((a, i) => !a.startsWith('--') && (onlyAt < 0 || i !== onlyAt + 1));
+const FLAGS = ['--only', '--spec', '--out'];
+const flag = name => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
+const flagValues = new Set(FLAGS.map(f => args.indexOf(f)).filter(i => i >= 0).map(i => i + 1));
+const only = flag('--only');
+const jobs = args.filter((a, i) => !a.startsWith('--') && !flagValues.has(i));
 const run = jobs.length ? jobs : ['production', 'library'];
+if (run.includes('motion') && !(flag('--spec') && flag('--out'))) throw new Error('motion needs --spec <file> and --out <dir>');
 const chrome = await launchChrome();
 try {
   if (run.includes('production')) await production(chrome.cdp);
   if (run.includes('library')) await library(chrome.cdp, only);
+  if (run.includes('motion')) await motion(chrome.cdp, path.resolve(flag('--spec')), path.resolve(flag('--out')));
 } finally {
   await chrome.close();
 }

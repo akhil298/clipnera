@@ -4,7 +4,7 @@ The finished video becomes ``[clip + Listening Spark][end card]``: after the
 opening headline the watermark rolls into the clip's top-left corner and follows
 its voice, and the end card blurs the clip's last frame behind it.
 The files are rendered by ``branding/motion/source/render.mjs``;
-``static/branding/manifest.json`` lists them.
+``static/motion/branding/manifest.json`` lists them.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from video_processor.ffmpeg_service import FFmpegService
 
 log = get_logger(__name__)
 
-STATIC_DIR = Path(__file__).resolve().parent.parent / "static" / "branding"
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static" / "motion" / "branding"
 # The end card's blur is about this share of the frame's short side.
 BLUR_RATIO = 1 / 40
 

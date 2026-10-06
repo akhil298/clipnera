@@ -18,7 +18,7 @@ from typing import Any
 from fontTools.pens.basePen import BasePen
 from fontTools.ttLib import TTFont
 
-FONT = Path(__file__).resolve().parent.parent / "static" / "fonts" / "Twemoji.Mozilla.ttf"
+FONT = Path(__file__).resolve().parent.parent / "static" / "motion" / "fonts" / "Twemoji.Mozilla.ttf"
 # The one-colour face for an emoji Twemoji does not have.
 MONO_FAMILY = "Noto Emoji"
 # Colour layers sit above the captions (1) and the title (2).

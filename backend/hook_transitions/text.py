@@ -1,7 +1,7 @@
 """The on-screen bridge line, written as a one-event ASS file.
 
 Rendered with libass over the bridge segment only, using the display faces
-bundled in ``static/fonts`` so it looks the same on every host.
+bundled in ``static/motion/fonts`` so it looks the same on every host.
 """
 
 from __future__ import annotations

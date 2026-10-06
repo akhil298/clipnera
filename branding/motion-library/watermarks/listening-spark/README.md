@@ -18,7 +18,7 @@ The mark listens to the video like the AI does, so the watermark feels alive wit
 
 ## Where it runs
 
-Sprites in `backend/static/branding/watermark/listening-spark/`. `backend/branding/watermark.py` rebuilds every frame from the clip's loudness and `backend/branding/service.py` lays it over the top-right corner.
+Sprites in `backend/static/motion/branding/watermark/listening-spark/`. `backend/branding/watermark.py` rebuilds every frame from the clip's loudness and `backend/branding/service.py` lays it over the top-right corner.
 
 ## Re-render
 

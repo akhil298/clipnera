@@ -5,7 +5,7 @@ opening headline, a vertical "MADE WITH" badge rises on the left edge, rolls up
 into the top-left corner the headline left, and the name wipes in.
 
 The pieces (name, tile per loudness level, level bar per height) are drawn by
-``branding/motion/source/kit.js`` and saved under ``static/branding``; this
+``branding/motion/source/kit.js`` and saved under ``static/motion/branding``; this
 module measures the clip's loudness frame by frame and stacks the matching
 pieces into a transparent overlay video.
 """
@@ -38,7 +38,9 @@ BADGE_REST_Y, BADGE_RISE = 640, 300
 # the name wipes in beside the icon before the level bars come up.
 BADGE_IN, BADGE_REST, ROLL, LAND, NAME_DONE, BARS_IN = 4.3, 4.8, 6.9, 7.4, 8.1, 0.3
 BADGE_LABEL = "MADE WITH"
-BADGE_FONT = Path(__file__).resolve().parent.parent / "static" / "fonts" / "Montserrat-Bold.ttf"
+BADGE_FONT = (
+    Path(__file__).resolve().parent.parent / "static" / "motion" / "fonts" / "Montserrat-Bold.ttf"
+)
 # The badge's type, letter spacing and the gap above the icon, in layout pixels.
 BADGE_TYPE_PX, BADGE_TRACKING_PX, BADGE_GAP_PX = 45, 8, 22
 # A soft dark halo under the mark keeps it legible on bright or warm footage.

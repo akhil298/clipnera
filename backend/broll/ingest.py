@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import re
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -67,6 +68,24 @@ def orientation_of(width: int, height: int) -> str:
 
 def search_text(title: str, tags: list[str], caption: str = "") -> str:
     return " ".join(part for part in (title, caption, " ".join(tags)) if part)
+
+
+_TOPIC_FILLER = frozenset({"a", "an", "and", "at", "for", "in", "of", "on", "the", "with"})
+
+
+def _words(text: str) -> set[str]:
+    """Lowercase words with a plural "s" dropped, so "waves" and "wave" are the same word."""
+    return {w[:-1] if len(w) > 3 and w.endswith("s") else w for w in re.findall(r"[a-z0-9]+", text.lower())}
+
+
+def matches_topic(clip: StockClip, query: str) -> bool:
+    """Whether the clip's title and tags name every word of ``query``.
+
+    Stock search matches long descriptions loosely ("tea" finds a Mars landing,
+    "3d printer" a rocket launch), so a clip's own title and tags have to back the
+    topic up before it is downloaded. Descriptions are left out for that reason.
+    """
+    return _words(query) - _TOPIC_FILLER <= _words(search_text(clip.title, clip.tags))
 
 
 def shot_ranges(path: str, duration: float, min_seconds: float) -> list[tuple[float, float]]:
@@ -164,7 +183,9 @@ class Ingestor:
             except Exception as exc:
                 report.errors.append(f"{source.name}: {exc}")
                 continue
-            for index, clip in enumerate(clips):
+            relevant = [clip for clip in clips if matches_topic(clip, query)]
+            report.skipped += len(clips) - len(relevant)
+            for index, clip in enumerate(relevant):
                 if index:
                     await asyncio.sleep(PAUSE_BETWEEN_DOWNLOADS_SECONDS)
                 try:

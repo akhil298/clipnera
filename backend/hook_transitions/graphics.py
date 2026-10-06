@@ -1,6 +1,6 @@
 """The motion-graphics library laid over a hook bridge.
 
-``static/hook_graphics`` holds graphics rendered by
+``static/motion/hook_graphics`` holds graphics rendered by
 ``hook_transitions.graphics_source.render``: packed-alpha MP4s (colour left,
 matte right) with a matching sound effect each, listed in ``manifest.json``.
 Auto picks one per clip at random, leaning towards graphics whose moods match
@@ -21,7 +21,7 @@ from core.logging_config import get_logger
 
 log = get_logger(__name__)
 
-LIBRARY_DIR = Path(__file__).resolve().parent.parent / "static" / "hook_graphics"
+LIBRARY_DIR = Path(__file__).resolve().parent.parent / "static" / "motion" / "hook_graphics"
 # How much a graphic whose moods match the hook outweighs one that does not.
 MOOD_WEIGHT = 3
 

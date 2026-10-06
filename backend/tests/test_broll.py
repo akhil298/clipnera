@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from broll import sources as broll_sources
-from broll.ingest import orientation_of, quality_score, retry_wait, search_text
+from broll.ingest import matches_topic, orientation_of, quality_score, retry_wait, search_text
 from broll.repository import Candidate
 from broll.retrieval import BrollRetriever, SceneQuery, coverage, terms
 from broll.sources import nasa, pexels, pixabay, wikimedia
@@ -111,6 +111,18 @@ class TestIngestHelpers:
 
     def test_search_text(self):
         assert search_text("City at night", ["neon", "street"]) == "City at night neon street"
+
+    @pytest.mark.parametrize(("title", "tags", "topic", "kept"), [
+        ("Perseverance Rover's Descent and Touchdown on Mars", ["mars", "landing"], "tea", False),
+        ("Science Launching to Space Station", ["rocket"], "3d printer", False),
+        ("Waves breaking on the shore", [], "ocean waves", False),
+        ("Ocean wave at sunset", [], "ocean waves", True),
+        ("Launch of Artemis I", ["rocket", "launch"], "rocket launch", True),
+        ("Steam rising from a cup", ["tea", "kitchen"], "tea", True),
+        ("Sunset over the sea", [], "sunset clouds", False),
+    ])
+    def test_matches_topic_needs_every_topic_word_in_title_or_tags(self, title, tags, topic, kept):
+        assert matches_topic(SimpleNamespace(title=title, tags=tags), topic) is kept
 
     @pytest.mark.parametrize(("status", "headers", "attempt", "wait"), [
         (429, {"retry-after": "7"}, 1, 7.0), (429, {}, 2, 10.0), (503, {"retry-after": "999"}, 1, 60.0),

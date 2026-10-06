@@ -5,7 +5,7 @@ these ids in ``lib/utils/captionStyles.generated.ts`` for live preview; any id
 here must exist there and vice versa, which is asserted by
 ``tests/test_caption_style_parity``.
 
-Every face a template names is bundled in ``static/fonts`` under the SIL Open
+Every face a template names is bundled in ``static/motion/fonts`` under the SIL Open
 Font License or Apache 2.0, with its license beside it, and the frontend serves
 the same files, so previews and burns use identical glyphs. Style names are
 descriptive and original: none names a creator, channel or brand.

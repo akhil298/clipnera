@@ -12,7 +12,7 @@ import "@fontsource/syne/700.css";
 import "@fontsource/syne/800.css";
 import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/700.css";
-// Caption faces, mirroring the files bundled in backend/static/fonts for burn-in.
+// Caption faces, mirroring the files bundled in backend/static/motion/fonts for burn-in.
 import "@fontsource/anton/400.css";
 import "@fontsource/archivo-black/400.css";
 import "@fontsource/bangers/400.css";

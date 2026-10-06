@@ -18,7 +18,7 @@ Shows reframing to vertical, the other half of the product. The crop window lite
 
 ## Where it runs
 
-Rendered for 9:16, 16:9 and 1:1 in `backend/static/branding/outro/`. `backend/branding/service.py` adds it to every branded export.
+Rendered for 9:16, 16:9 and 1:1 in `backend/static/motion/branding/outro/`. `backend/branding/service.py` adds it to every branded export.
 
 ## Re-render
 

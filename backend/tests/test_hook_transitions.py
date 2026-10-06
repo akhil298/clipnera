@@ -271,7 +271,7 @@ class TestRender:
 
 
 class TestBridgeGraphics:
-    """Motion graphics from static/hook_graphics laid over the bridge, each with its sound."""
+    """Motion graphics from static/motion/hook_graphics laid over the bridge, each with its sound."""
 
     def test_library_has_every_rendered_graphic_with_its_sound(self):
         from hook_transitions.graphics import library

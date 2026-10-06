@@ -37,6 +37,11 @@ class TestParsing:
         assert timeline.parse_moments(reply, 0.0, 60.0) == []
         assert timeline.parse_moments("not json", 0.0, 60.0) == []
 
+    def test_cut_off_reply_keeps_its_complete_entries(self):
+        reply = ('{"moments": [{"from": "00:00", "to": "00:01", "shows": "host talks"}, '
+                 '{"from": "00:01", "to": "00:04", "shows": "An')
+        assert timeline.parse_moments(reply, 0.0, 60.0) == [{"start": 0.0, "end": 1.0, "shows": "host talks"}]
+
     def test_clock_forms(self):
         assert timeline._seconds("01:15") == 75.0
         assert timeline._seconds("1:02:03") == 3723.0

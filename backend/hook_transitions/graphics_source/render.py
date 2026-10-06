@@ -4,7 +4,7 @@
 
 Every graphic is drawn here from code (numpy + Pillow), so the library is
 original work with no licence to track. Each is written to
-``static/hook_graphics/<id>.mp4`` as a *packed-alpha* H.264 video: colour on
+``static/motion/hook_graphics/<id>.mp4`` as a *packed-alpha* H.264 video: colour on
 the left half, its alpha matte (as grey) on the right. Any FFmpeg build can
 composite that (crop both halves, ``alphamerge``), unlike alpha codecs, and the
 files stay small. Each graphic's sound effect is synthesised beside it as
@@ -24,7 +24,9 @@ from typing import Callable
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
-OUT_DIR = Path(__file__).resolve().parent.parent.parent / "static" / "hook_graphics"
+OUT_DIR = (
+    Path(__file__).resolve().parent.parent.parent / "static" / "motion" / "hook_graphics"
+)
 W, H = 1080, 1920
 FPS = 30
 SECONDS = 1.0
