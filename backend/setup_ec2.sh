@@ -33,8 +33,11 @@ fi
 
 echo ""
 echo "[2/8] Installing system dependencies..."
+# Amazon Linux 2023 ships curl-minimal, which conflicts with the full curl
+# package; either provides the curl command this script uses.
+command -v curl >/dev/null 2>&1 || ${SUDO} "${PACKAGE_MANAGER}" install -y curl
 ${SUDO} "${PACKAGE_MANAGER}" install -y \
-    git curl wget tar xz gcc gcc-c++ make \
+    git wget tar xz gcc gcc-c++ make \
     openssl-devel libffi-devel zlib-devel bzip2-devel \
     readline-devel sqlite-devel xz-devel tk-devel \
     gdbm-devel libuuid-devel
