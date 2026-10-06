@@ -7,7 +7,9 @@ from typing import Any
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from content_intelligence.director import LANGUAGE_RULE
+from content_intelligence.packaging_lint import repeats, restates
 from core.logging_config import get_logger
+from skills import TITLES, skill_block
 
 log = get_logger(__name__)
 
@@ -43,6 +45,12 @@ EMOJI_MAP = {
     "unknown": "\ud83c\udf1f",
 }
 
+# The title writer reads the titles skill before it writes (backend/skills).
+TITLE_SYSTEM = (
+    "You write short-form video titles that earn the click honestly. Return valid JSON only.\n\n"
+    + skill_block(TITLES)
+)
+
 
 DEFAULT_EMOJI = "\ud83c\udf1f"
 
@@ -75,25 +83,44 @@ class MetadataGenerator:
     """Writes the headline burned into each clip, its description and hashtags.
 
     One call covers every clip that still needs copy: clips the director already
-    titled are left alone, and emoji come from the caption catalog's keyword
-    map at render time rather than from a model.
+    titled are left alone unless the title restates the clip's hook line, in
+    which case it is written once more, told which words to avoid. Emoji come
+    from the caption catalog's keyword map at render time rather than from a model.
     """
 
     def __init__(self, text_client: Any) -> None:
         self._text_client = text_client
 
     async def generate_batch(self, clips: list[dict]) -> list[dict]:
-        pending = [index for index, clip in enumerate(clips) if not clip.get("title")]
+        clashing = {
+            index for index, clip in enumerate(clips) if restates(str(clip.get("title") or ""), clip.get("hook_text"))
+        }
+        for index in sorted(clashing):
+            log.info("Title repeats its hook, writing it again: title=%r hook=%r",
+                     clips[index]["title"], clips[index]["hook_text"])
+        pending = [index for index, clip in enumerate(clips) if not clip.get("title") or index in clashing]
         written: dict[int, dict] = {}
         if pending:
             try:
                 written = await self._generate_titles([clips[index] for index in pending])
             except Exception as exc:
                 log.warning(f"Title generation failed, using transcript titles: {exc}")
-        return [
-            self._finish(clip, written.get(pending.index(index)) if index in pending else None)
-            for index, clip in enumerate(clips)
-        ]
+        finished = []
+        for index, clip in enumerate(clips):
+            copy = written.get(pending.index(index)) if index in pending else None
+            if index in clashing:
+                clip = self._pairing(clip, copy)
+            finished.append(self._finish(clip, copy))
+        return finished
+
+    @staticmethod
+    def _pairing(clip: dict, copy: dict | None) -> dict:
+        """``clip`` with its title replaced by the rewrite when that repeats the hook less."""
+        rewrite = str((copy or {}).get("title") or "").strip()
+        hook = clip.get("hook_text") or ""
+        if rewrite and len(repeats(rewrite, hook)) < len(repeats(clip["title"], hook)):
+            return {**clip, "title": rewrite}
+        return clip
 
     def _finish(self, clip: dict, copy: dict | None) -> dict:
         category = clip.get("content_category", "unknown")
@@ -115,6 +142,8 @@ class MetadataGenerator:
         blocks = "\n\n".join(
             f"[{index}] ({clip.get('content_category', 'unknown')}) "
             f"{' '.join(str(clip.get('transcript_excerpt', '')).split())[:EXCERPT_CHARS]}"
+            + (f"\nHook line played first (the title must not repeat its words): {clip['hook_text']}"
+               if clip.get("hook_text") else "")
             for index, clip in enumerate(clips)
         )
         prompt = f"""Write YouTube Shorts copy for each clip below. Each clip is its index, category and transcript.
@@ -138,7 +167,7 @@ Return JSON only: {{"items": [{{"index": 0, "title": "...", "description": "..."
         ):
             with attempt:
                 response = await self._text_client.chat([
-                    {"role": "system", "content": "You write short-form video titles that earn the click honestly. Return valid JSON only."},
+                    {"role": "system", "content": TITLE_SYSTEM},
                     {"role": "user", "content": prompt},
                 ], temperature=0.7, max_tokens=120 * len(clips) + 200, json_mode=True, json_schema=METADATA_JSON_SCHEMA)
         data = json.loads(self._extract_json(response))

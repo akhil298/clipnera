@@ -24,6 +24,7 @@ from typing import Any
 from content_intelligence.classifier import CONTENT_TAXONOMY
 from content_intelligence.sentences import Sentence, format_table
 from core.logging_config import get_logger
+from skills import HOOKS, STANDALONE_SHORTS, TITLES, skill_block
 
 log = get_logger(__name__)
 
@@ -255,6 +256,13 @@ For each clip choose:
 - start: the id of the line a stranger should hear first. It opens the clip's thought: the question, the claim, the first line of the story. Move it later when the current first line finishes or answers the point before it; move it earlier when the current first line leans on a line just before it ("that", "this", "it", an answer without its question).
 - end: the id of the last line to keep. The payoff has landed and the sentence is finished. Move it later when the current ending is a setup, a question still waiting for its answer, or partway through a list or a sentence; move it earlier when the lines after the payoff wander into a new point.
 Only ids shown for that clip's opening (start) and ending (end) are allowed. Keep the current id when it is already right; most are. Return valid JSON only."""
+
+# Every director reads the editing skills before it plans (backend/skills).
+MAP_SYSTEM = f"{MAP_SYSTEM}\n\n{skill_block(STANDALONE_SHORTS, HOOKS)}"
+DIRECTOR_SYSTEM = f"{DIRECTOR_SYSTEM}\n\n{skill_block(STANDALONE_SHORTS, HOOKS, TITLES)}"
+STORY_SYSTEM = f"{STORY_SYSTEM}\n\n{skill_block(STANDALONE_SHORTS, HOOKS, TITLES)}"
+CHECK_SYSTEM = f"{CHECK_SYSTEM}\n\n{skill_block(STANDALONE_SHORTS)}"
+EDGES_SYSTEM = f"{EDGES_SYSTEM}\n\n{skill_block(STANDALONE_SHORTS)}"
 
 CATEGORY_PLAYBOOKS: dict[str, str] = {
     "podcast_interview": "Podcasts: favour stories with a turn, contrarian opinions with their reasoning, and confessions. A guest's answer usually needs the host's question as its opening line. Use two_speaker_stack when the exchange itself is the point; react_cut when the host's face sells the moment.",

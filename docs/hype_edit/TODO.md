@@ -53,6 +53,15 @@ Test footage (local only, never shipped): `TRuX-Tn91uQ` (Speed + Jamal fan-art s
 - [x] F2 Rendered clips reviewed frame by frame; sound timing measured
 - [ ] F3 Owner review of the rendered samples
 
+## G. Director skills + asset library (2026-10-06)
+- [x] G1 Runtime skills (`backend/skills/`: hooks, standalone_shorts, titles, motion_graphics) distilled from `skills.reference/`; every director prompt includes them, a missing skill is an error (tests/test_director_skills.py)
+- [x] G2 Title/hook pairing measured (`content_intelligence/packaging_lint.py`); a title repeating its hook is rewritten once (live: "Gratitude boosts your immunity by 50% in just 4 days" -> "Gratitude practice boosts immunity fast")
+- [x] G3 Long teaser hooks cut at a clause end, never mid-phrase; none when no clause ends in time
+- [x] G4 Library cleanup (`scripts/clean_motion_library.py`): 6,256 files / 2.9 GB removed (duplicates, rips, meme/game audio, unusable font formats); report in static/motion/cleanup_report.json (local)
+- [x] G5 Asset guides for models (`scripts/describe_motion_assets.py`): static/motion/ASSETS.md (shipped) and LIBRARY.md (local library), with measured length, peak, shape, tone, loudness, BPM, licence
+- [x] G6 Reference reels stay local: library/reference, motion_assets, Validations all untracked
+- [ ] G7 Owner decision: swap the 8 curated sounds of unclear licence for synthesised ones
+
 ## Known limits
 - Mood is judged from words + loud bursts. A constantly loud streamer has no bursts, so mock-anger reads as "serious" and gets no stickers (safe: nothing wrong is added).
 - Faint drawings with no visible border (pencil on grey) are not detected as content; framing falls back to people.

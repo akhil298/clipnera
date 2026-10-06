@@ -17,6 +17,7 @@ from typing import Any
 
 from broll.planner import ClipWords
 from core.logging_config import get_logger
+from skills import MOTION_GRAPHICS, skill_block
 
 log = get_logger(__name__)
 
@@ -46,6 +47,9 @@ Read each clip's words and report only what is clearly there:
 - mood: the clip's overall tone: funny, hype, wholesome, serious, sad or neutral. Judge it as a viewer would: "(LOUD)" after a word marks a burst of laughter, cheering or shouting heard right there, and the clip's category is given. Mock anger, roasting and teasing that gets laughs is funny, not serious.
 
 Word ranges use the word ids shown (from/to inclusive). Leave a list empty rather than stretch it. Most clips have no list and no cta."""
+
+# The motion planner reads its editing skill before it plans (backend/skills).
+SYSTEM = f"{SYSTEM}\n\n{skill_block(MOTION_GRAPHICS)}"
 
 EXAMPLE = (
     '{"clips":[{"index":0,"mood":"funny",'

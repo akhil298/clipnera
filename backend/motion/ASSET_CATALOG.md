@@ -7,6 +7,22 @@ generated sound effects are also under this root.
 `backend/static/motion/catalog.json` is the consolidated index across all of
 them.
 
+Readable guides for editing models, regenerated after any change:
+
+- `static/motion/ASSETS.md`: everything renders can use (shipped): sounds with length, peak, shape,
+  tone and loudness, hook graphics, fonts, branding.
+- `static/motion/LIBRARY.md`: the local library (never on servers) with the same facts and a
+  licence status per file, for choosing what to promote.
+
+Clean the library (duplicates, rips, meme audio, unusable font formats) before indexing:
+
+```sh
+cd backend
+venv/bin/python -m scripts.clean_motion_library            # dry run
+venv/bin/python -m scripts.clean_motion_library --apply
+venv/bin/python -m scripts.describe_motion_assets
+```
+
 Build or refresh the index locally:
 
 ```sh
