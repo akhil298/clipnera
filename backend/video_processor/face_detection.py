@@ -72,8 +72,12 @@ DEDUPE_IOU = 0.4
 # (about once a second at the cutter's sample rate) ...
 PROBE_EVERY = 6
 # ... and switches the clip to RetinaFace when more than this share of checks
-# disagree. A rare miss is absorbed by track smoothing; a steady one is not.
-ESCALATE_RATIO = 0.15
+# disagree. On dark, blurred or tilted footage YuNet finds ~78% of faces where
+# RetinaFace finds ~98%, so even occasional disagreement means a hard clip.
+ESCALATE_RATIO = 0.10
+# Below that, a frame where YuNet finds fewer faces than it does in the frames
+# around it is a likely miss, and RetinaFace redoes just that frame.
+GAP_WINDOW = 2
 # Two detections of one face from different backends overlap at least this much.
 MATCH_IOU = 0.3
 
@@ -279,7 +283,7 @@ class FaceDetector:
 
         disagreements = sum(1 for index, faces in accurate.items() if not _same_faces(fast[index], faces))
         if disagreements <= len(accurate) * ESCALATE_RATIO:
-            return fast, "yunet"
+            return self._fill_gaps(fast, accurate, frames), "yunet"
         log.info(
             "YuNet disagreed with RetinaFace on %d/%d checks; running RetinaFace on every frame",
             disagreements, len(accurate),
@@ -288,6 +292,33 @@ class FaceDetector:
             accurate[index] if index in accurate else self.detect(frame)
             for index, frame in enumerate(frames())
         ], "retinaface"
+
+    def _fill_gaps(
+        self,
+        fast: list[list[Face]],
+        accurate: dict[int, list[Face]],
+        frames: Callable[[], Iterable[np.ndarray]],
+    ) -> list[list[Face]]:
+        """YuNet's faces, merged with RetinaFace's wherever it already checked a
+        frame and on frames where YuNet likely missed someone: fewer faces than
+        it found in the frames around them. Merged rather than replaced, since
+        each detector sometimes finds a face the other misses."""
+        result = [self._merge(faces, accurate[index]) if index in accurate else faces for index, faces in enumerate(fast)]
+        gaps = {
+            index for index, faces in enumerate(result)
+            if index not in accurate
+            and len(faces) < max(len(f) for f in result[max(0, index - GAP_WINDOW):index + GAP_WINDOW + 1])
+        }
+        if gaps:
+            for index, frame in enumerate(frames()):
+                if index in gaps:
+                    result[index] = self._merge(result[index], self.detect(frame))
+            log.debug("RetinaFace rechecked %d/%d frames where YuNet found fewer faces", len(gaps), len(result))
+        return result
+
+    def _merge(self, first: list[Face], second: list[Face]) -> list[Face]:
+        """Both detectors' faces for one frame, each face once."""
+        return self._postprocess(first + second)
 
     def _detect_retinaface(self, frame: np.ndarray) -> list[Face]:
         height, width = frame.shape[:2]
