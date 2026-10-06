@@ -301,8 +301,9 @@ chmod 600 "${REMOTE_COOKIE}"
     --remote-components ejs:github --skip-download --quiet --print '%(title)s' "${YOUTUBE_URL}"
 
 # Schema changes ship with the code; applied before the restart, so a failed
-# migration leaves the running backend untouched.
-"${VENV_DIR}/bin/alembic" upgrade head
+# migration leaves the running backend untouched. init_db also seeds the plans
+# into an empty database.
+"${VENV_DIR}/bin/python" init_db.py
 
 # Stopping signals uvicorn alone, which finishes open requests first; the
 # default also signalled their FFmpeg renders and failed every export in flight.
