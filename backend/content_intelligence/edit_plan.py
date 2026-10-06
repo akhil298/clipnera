@@ -189,10 +189,9 @@ def _build_clip(
         for first, last in ranges
     ])
     planned_end = ranges[-1][1]
-    ranges = _fit_length(
-        ranges, sentences, by_id, min_seconds, max_seconds,
-        lambda candidate: _played_seconds(candidate, by_id, duration, jump_cuts), bounds,
-    )
+    length = lambda candidate: _played_seconds(candidate, by_id, duration, jump_cuts)  # noqa: E731
+    ranges = _end_on_finished(_fit_length(ranges, sentences, by_id, min_seconds, max_seconds, length, bounds),
+                              by_id, min_seconds, length)
     return _assemble(
         plan, ranges, by_id, duration, category, jump_cuts, "director", " ",
         payoff_cut=ranges[-1][1] < planned_end,
@@ -326,6 +325,29 @@ def _thought_end(last: int, by_id: dict[int, Sentence], ceiling: int) -> int:
         last += 1
         steps += 1
     return last
+
+
+def _end_on_finished(
+    ranges: list[tuple[int, int]],
+    by_id: dict[int, Sentence],
+    min_seconds: float,
+    length: Callable[[list[tuple[int, int]]], float],
+) -> list[tuple[int, int]]:
+    """``ranges`` without trailing lines of a sentence they never finish ("... in September. Movie").
+
+    Only when a finished sentence sits within reach to end on, and the clip
+    stays long enough; a transcript without punctuation has none, so it is
+    left as it is.
+    """
+    settled = ranges
+    for _ in range(THOUGHT_REACH):
+        if by_id[settled[-1][1]].finished:
+            return settled
+        shorter = _drop_last(settled)
+        if shorter is None or length(shorter) < min_seconds:
+            return ranges
+        settled = shorter
+    return settled if by_id[settled[-1][1]].finished else ranges
 
 
 def _seconds(ranges: list[tuple[int, int]], by_id: dict[int, Sentence]) -> float:

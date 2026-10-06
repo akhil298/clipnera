@@ -147,6 +147,16 @@ class TestEditPlan:
         clips = build_clips([{"segments": [{"from": 2, "to": 6}]}], sentences, 60.0, 10.0, 60.0, 5, "vlog", False)
         assert clips[0]["end_time"] >= sentences[6].end
 
+    def test_a_dangling_word_after_the_last_sentence_is_dropped(self):
+        """"... in September. Movie" with the rest of that sentence never reached: end on "September."."""
+        segments = _talk(10)
+        segments[5] = _segment(25.0, "Movie", gap=0.4)
+        segments[6] = _segment(26.0, "Who " + " ".join(["word"] * 10) + " end6.", "Speaker 2")
+        sentences = build_sentences(segments)
+        assert not sentences[5].finished and not sentences[6].continues
+        clips = build_clips([{"segments": [{"from": 2, "to": 6}]}], sentences, 60.0, 10.0, 60.0, 5, "vlog", False)
+        assert clips[0]["end_time"] <= sentences[5].start + 1e-6
+
     def test_a_trim_lands_on_a_finished_sentence(self):
         segments = _talk(20)
         segments[5] = _segment(25.0, " ".join(["word"] * 12))  # unfinished; the line after carries it on

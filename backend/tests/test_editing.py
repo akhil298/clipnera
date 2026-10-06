@@ -57,6 +57,19 @@ class TestLayout:
         assert layout.kind == "two_speaker_stack"
         assert layout.cells[0].box.center[0] > layout.cells[1].box.center[0]
 
+    def test_a_face_cut_by_the_edge_of_the_picture_is_not_stacked(self):
+        """Half a person at the frame's edge would leave their cell showing the empty set."""
+        speaker, edge = _track(1, Box(0.35, 0.3, 0.12, 0.2)), _track(2, Box(0.94, 0.25, 0.06, 0.2))
+        layout = choose_layout("auto", "two_subjects_left_right", [speaker, edge], "9:16", 1920, 1080, 1080, 1920,
+                               pair=[edge, speaker])
+        assert layout.kind == "follow"
+
+    def test_a_whole_face_near_the_edge_is_still_stacked(self):
+        left, right = _track(1, Box(0.15, 0.3, 0.12, 0.2)), _track(2, Box(0.85, 0.3, 0.12, 0.2))
+        layout = choose_layout("auto", "two_subjects_left_right", [left, right], "9:16", 1920, 1080, 1080, 1920,
+                               pair=[right, left])
+        assert layout.kind == "two_speaker_stack"
+
     def test_other_shapes_always_follow(self):
         facecam = _track(1, Box(0.82, 0.05, 0.1, 0.15))
         assert choose_layout("split_gameplay", "gaming_with_facecam", [facecam], "1:1", 1920, 1080, 1080, 1080).kind == "follow"

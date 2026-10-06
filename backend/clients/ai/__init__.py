@@ -75,6 +75,8 @@ STEP_MODELS: dict[str, tuple[ModelChoice, ModelChoice]] = {
     "social_copy": (GROQ_LARGE, OPENAI_PRO),
     # Spelling words in Roman script needs no judgement; the large open model is plenty.
     "transliteration": (GROQ_SMALL, GROQ_LARGE),
+    # Full stops back into speech Whisper wrote without any: no judgement either.
+    "punctuation": (GROQ_SMALL, GROQ_LARGE),
     # Where to cut away and what to search for: editorial, but low stakes per call.
     "broll_planning": (GROQ_LARGE, OPENAI_PRO),
     # Which spoken moments get a motion graphic, and its exact words: what the viewer reads.

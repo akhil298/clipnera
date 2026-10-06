@@ -22,8 +22,8 @@ from audio.enhancement.schema import AudioEnhanceRequest
 from transcription.service import WhisperXTranscriptionService
 from transcription.schema import TranscriptionRequest
 from transcription.language import spoken_language
-from transcription.transliterate import CAPTION_SCRIPTS, romanize_transcript, wants_roman
-from clients.ai import get_text_client
+from transcription.punctuate import punctuate_captions
+from transcription.transliterate import CAPTION_SCRIPTS, romanize_captions, wants_roman
 from broll.cutaways import plan_project_broll
 from motion.service import plan_project_motion
 from feature_flags.registry import BROLL_CUTAWAYS
@@ -620,6 +620,7 @@ class PipelineOrchestrator:
 
         result = await self._transcription_service.transcribe(request, progress_callback=_progress)
         segments = getattr(result, "segments", [])
+        await self._punctuate(segments)
         await self._romanize_captions(segments)
         log.debug(
             "Transcription complete",
@@ -647,13 +648,18 @@ class PipelineOrchestrator:
         # A failure is retried inline by topic research; never let it go unobserved.
         self._media_signals.add_done_callback(lambda task: task.cancelled() or task.exception())
 
+    async def _punctuate(self, segments: list) -> None:
+        """Stretches Whisper wrote without punctuation get it back, so clips end on finished sentences."""
+        changed = await punctuate_captions(segments, self.is_pro)
+        if changed:
+            log.info("Punctuated %d word(s)", changed, extra={"project_id": self.project_id})
+
     async def _romanize_captions(self, segments: list) -> None:
         """Hindi and Telugu speech gets Roman-script captions unless the user chose native script."""
         if not wants_roman(self.clip_settings.get("caption_script"), segments):
             return
         self._notify("Writing captions in Roman script...", 95)
-        client = get_text_client(is_pro=self.is_pro, step="transliteration")
-        changed = await romanize_transcript(segments, client)
+        changed = await romanize_captions(segments, "roman", self.is_pro)
         log.info("Romanised %d caption word(s)", changed, extra={"project_id": self.project_id})
 
     async def _step_topic_research(self, context: dict) -> dict:

@@ -309,6 +309,7 @@ class ClipService:
         self._ffmpeg = FFmpegService()
         self._s3 = S3()
         self._bucket = settings.S3_BUCKET_NAME
+        self._is_pro = is_pro
         self._content_ai = ContentIntelligenceService(is_pro=is_pro)
         self._output_dir = Path(settings.CLIP_OUTPUT_DIR)
 
@@ -1567,6 +1568,8 @@ class ClipService:
     ) -> list[dict[str, Any]]:
         from transcription.service import WhisperXTranscriptionService
         from transcription.schema import TranscriptionRequest
+        from transcription.punctuate import punctuate_captions
+        from transcription.transliterate import romanize_captions
 
         if progress_callback:
             await self._notify(progress_callback, "Transcribing audio for export...", 0)
@@ -1591,6 +1594,10 @@ class ClipService:
         result = await transcribe_service.transcribe(request, progress_callback=_progress)
         # transcribe() returns a dict; reading it as an attribute always gave [].
         segments = result.get("segments", [])
+        # The project's script choice is not kept past its run, so Telugu and
+        # Hindi speech gets the default Tenglish/Hinglish captions here too.
+        await punctuate_captions(segments, self._is_pro)
+        await romanize_captions(segments, "auto", self._is_pro)
         if progress_callback:
             await self._notify(progress_callback, "Transcription complete", 100)
         return list(segments)

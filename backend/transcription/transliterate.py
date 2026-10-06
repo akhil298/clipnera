@@ -42,6 +42,15 @@ def wants_roman(caption_script: str | None, segments: Iterable[Any]) -> bool:
     return any(is_indic(_text(segment)) for segment in segments)
 
 
+async def romanize_captions(segments: list[Any], caption_script: str | None, is_pro: bool) -> int:
+    """Romanise ``segments`` in place when ``caption_script`` asks for it; returns how many words changed."""
+    if not wants_roman(caption_script, segments):
+        return 0
+    from clients.ai import get_text_client
+
+    return await romanize_transcript(segments, get_text_client(is_pro=is_pro, step="transliteration"))
+
+
 async def romanize_transcript(segments: list[Any], client: Any) -> int:
     """Rewrite Hindi and Telugu words in Roman script in place; returns how many words changed."""
     words = [word for segment in segments for word in (_words(segment) or [])]

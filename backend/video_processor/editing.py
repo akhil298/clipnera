@@ -61,6 +61,12 @@ SPEAKER_HEADROOM = 0.5
 # A stacked speaker's cell spans this many face sizes: a head-and-shoulders
 # framing where the face reads at phone size, not a wide shot cut in half.
 STACK_FACE_SPAN = 2.3
+# A stacked cell must actually show its person: a face cut by the edge of the
+# picture, or one the crop cannot centre (it is pinned against that edge), puts
+# a sliver of shoulder beside an empty set in the cell. Then the speaker is
+# followed instead.
+FRAME_EDGE_MARGIN = 0.01
+STACK_MAX_FACE_OFFSET = 0.25
 # A faceless shot is shown whole only when cropping would lose this much more
 # width than the output shape keeps; a near match is simply cropped.
 FIT_MIN_ASPECT_GAP = 1.15
@@ -445,11 +451,14 @@ def choose_layout(
     if pair and len(pair) == 2:
         half = output_height // 2 // 2 * 2
         heights = (half, output_height - half)
-        return Layout("two_speaker_stack", [
-            Cell(region_around(_with_headroom(typical_box(track)), STACK_FACE_SPAN, output_width / h,
-                               source_width, source_height), h)
-            for track, h in zip(pair, heights)
-        ])
+        faces = [typical_box(track) for track in pair]
+        cells = [
+            Cell(region_around(_with_headroom(face), STACK_FACE_SPAN, output_width / h, source_width, source_height), h)
+            for face, h in zip(faces, heights)
+        ]
+        if all(_frames_face(cell.box, face) for cell, face in zip(cells, faces)):
+            return Layout("two_speaker_stack", cells)
+        return Layout("follow")
     if wants_screen:
         speaker = _most_present(tracks, 1)
         if speaker:
@@ -588,6 +597,13 @@ def typical_box(track: SpeakerTrack) -> Box:
     """Per-coordinate median of the track's boxes; one stray detection cannot drag it."""
     boxes = [s.face.box for s in track.samples] or [Box()]
     return Box(*(float(np.median([getattr(b, key) for b in boxes])) for key in ("x", "y", "width", "height")))
+
+
+def _frames_face(cell: Box, face: Box) -> bool:
+    """Whether ``cell`` shows the whole of ``face`` near its middle."""
+    if face.x < FRAME_EDGE_MARGIN or face.x + face.width > 1.0 - FRAME_EDGE_MARGIN:
+        return False
+    return abs(face.center[0] - cell.center[0]) <= STACK_MAX_FACE_OFFSET * cell.width
 
 
 def _with_headroom(face: Box) -> Box:
