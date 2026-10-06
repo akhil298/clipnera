@@ -46,7 +46,8 @@ YUNET_SEARCH_PATHS = (
 )
 
 # RetinaFace-ResNet50 from biubug6/Pytorch_Retinaface (MIT), exported to ONNX.
-# Too large for git; setup_ec2.sh downloads it into backend/models/.
+# Too large for git; update_ec2.sh syncs it into backend/models/ on the worker
+# from models/ in the settings bucket.
 RETINAFACE_FILENAME = "retinaface_r50.onnx"
 RETINAFACE_SEARCH_PATHS = (
     Path(__file__).resolve().parent.parent / "models" / RETINAFACE_FILENAME,

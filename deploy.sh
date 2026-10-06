@@ -12,6 +12,9 @@
 # which holds no secrets:
 #   AWS_PROFILE=...  AWS_REGION=ap-south-2  EC2_KEY=/path/to/key.pem
 #   API_HOST=ec2-user@<api address>  WORKER_INSTANCE_ID=i-...
+#   CONFIG_S3_URI=s3://<config bucket>/clipnera.env  (the servers' settings)
+# Cookie options (FORCE_COOKIES=1, COOKIE_FILE=...) pass through to the API
+# machine, e.g. FORCE_COOKIES=1 bash deploy.sh api to replace its cookies.
 set -Eeuo pipefail
 
 REPO_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -25,13 +28,13 @@ fi
 # shellcheck source=/dev/null
 source "${CONFIG}"
 : "${AWS_PROFILE:?set in ${CONFIG}}" "${AWS_REGION:?set in ${CONFIG}}" "${EC2_KEY:?set in ${CONFIG}}"
-: "${API_HOST:?set in ${CONFIG}}" "${WORKER_INSTANCE_ID:?set in ${CONFIG}}"
-export AWS_PROFILE AWS_REGION EC2_KEY AWS_PAGER=""
+: "${API_HOST:?set in ${CONFIG}}" "${WORKER_INSTANCE_ID:?set in ${CONFIG}}" "${CONFIG_S3_URI:?set in ${CONFIG}}"
+export AWS_PROFILE AWS_REGION EC2_KEY CONFIG_S3_URI AWS_PAGER=""
 SSH_OPTS=(-i "${EC2_KEY}" -o IdentitiesOnly=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new)
 
 deploy_api() {
     echo "=== API machine (${API_HOST}) ==="
-    ROLE=api bash "${REPO_DIR}/update_ec2.sh" "${API_HOST}"
+    bash "${REPO_DIR}/update_ec2.sh" api "${API_HOST}"
 }
 
 deploy_worker() {
@@ -49,7 +52,7 @@ deploy_worker() {
     # Stop the worker first: its idle timer must not power the machine off
     # halfway through the package install.
     ssh "${SSH_OPTS[@]}" "ec2-user@${ip}" 'sudo systemctl stop clipnera-jobs 2>/dev/null || true'
-    ROLE=worker bash "${REPO_DIR}/update_ec2.sh" "ec2-user@${ip}"
+    bash "${REPO_DIR}/update_ec2.sh" worker "ec2-user@${ip}"
 }
 
 case "${TARGET}" in

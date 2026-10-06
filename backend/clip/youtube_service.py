@@ -98,7 +98,7 @@ class YouTubeService:
         1. YOUTUBE_COOKIES_BROWSER: yt-dlp reads cookies directly from browser.
            Set to browser name, e.g. "chrome", "firefox", "edge".
         2. YOUTUBE_COOKIES_PATH: path to an exported cookies.txt file
-           (default ~/.clipnera/youtube_cookies.txt, where update_ec2.sh puts it).
+           (default ~/.clipnera/youtube_cookies.txt, where update_ec2.sh puts it on the API machine).
 
         If neither resolves, a local backend/youtube_cookies.txt is used when present.
         """

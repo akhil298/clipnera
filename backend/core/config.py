@@ -1,8 +1,17 @@
+import io
+import os
 from typing import Literal
+from urllib.parse import urlparse
 
+from dotenv import dotenv_values
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from enum import Enum
+
+# Servers keep no .env on disk: the service sets this to the S3 object holding
+# their settings (an env file), read once per process with the machine's IAM
+# role. Variables already in the environment win over the file.
+CONFIG_S3_URI_VAR = "CLIPNERA_CONFIG_S3_URI"
 
 
 class Environment(str, Enum):
@@ -210,8 +219,8 @@ class BaseConfig(BaseSettings):
     DIARIZATION_THREADS: int = 0
 
     # yt-dlp cookies. A browser name ("chrome", "firefox") reads them live from
-    # that browser and wins over the file; for servers, update_ec2.sh exports
-    # them locally and copies them to YOUTUBE_COOKIES_PATH.
+    # that browser and wins over the file; for the API machine, deploy.sh
+    # exports them locally and copies them to YOUTUBE_COOKIES_PATH.
     YOUTUBE_COOKIES_BROWSER: str = ""
     YOUTUBE_COOKIES_PATH: str = "~/.clipnera/youtube_cookies.txt"
 
@@ -276,7 +285,22 @@ CONFIG_MAP = {
 }
 
 
+def load_remote_env() -> None:
+    """Copy the env file at $CLIPNERA_CONFIG_S3_URI into os.environ, if set."""
+    uri = os.environ.get(CONFIG_S3_URI_VAR)
+    if not uri:
+        return
+    import boto3
+
+    location = urlparse(uri)
+    body = boto3.client("s3").get_object(Bucket=location.netloc, Key=location.path.lstrip("/"))["Body"].read()
+    for key, value in dotenv_values(stream=io.StringIO(body.decode("utf-8"))).items():
+        if value is not None:
+            os.environ.setdefault(key, value)
+
+
 @lru_cache
 def get_settings() -> BaseConfig:
+    load_remote_env()
     env = BaseConfig().ENVIRONMENT
     return CONFIG_MAP[env]()
