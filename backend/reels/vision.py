@@ -14,6 +14,7 @@ from typing import Any
 from groq import AsyncGroq
 
 from clients.ai import OpenAI
+from clients.ai.base import reply_text
 from core.config import get_settings
 from core.logging_config import get_logger
 from usage.recorder import record_llm_call
@@ -57,7 +58,8 @@ async def describe_image(image: bytes, media_type: str, is_pro: bool) -> dict[st
         )
         usage = response.usage
         await record_llm_call("groq", FREE_MODEL, input_tokens=getattr(usage, "prompt_tokens", 0),
-                              output_tokens=getattr(usage, "completion_tokens", 0), latency_ms=int((time.monotonic() - started) * 1000))
+                              output_tokens=getattr(usage, "completion_tokens", 0), latency_ms=int((time.monotonic() - started) * 1000),
+                              response=reply_text(response))
         return parse(response.choices[0].message.content or "")
     except Exception as exc:
         log.warning("Image description failed: %s", exc)

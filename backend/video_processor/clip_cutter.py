@@ -440,9 +440,9 @@ class ClipCutter:
         all_faces = [face for faces in faces_per_frame for face in faces]
         frames_with_faces = sum(1 for faces in faces_per_frame if faces)
         log.info(
-            "[FACES] clip=%s backend=%s frames=%d with_faces=%d total_faces=%d max_per_frame=%d "
+            "[FACES] clip=%s backend=%s frames=%d with_faces=%d (%d%%) total_faces=%d max_per_frame=%d "
             "avg_confidence=%.2f elapsed=%.2fs",
-            clip_id, backend, len(frames), frames_with_faces, len(all_faces),
+            clip_id, backend, len(frames), frames_with_faces, frames_with_faces * 100 // max(1, len(frames)), len(all_faces),
             max((len(faces) for faces in faces_per_frame), default=0),
             sum(f.confidence for f in all_faces) / len(all_faces) if all_faces else 0.0,
             time.monotonic() - started,
@@ -532,8 +532,9 @@ class ClipCutter:
         centred = sum(1 for target in targets if target is None)
         raw = [target or (0.5, 0.5) for target in targets]
         log.info(
-            "[CROP] clip=%s ratio=%s strategy=%s crop=%dx%d points=%d subject_framed=%d centred=%d",
-            request.clip_id, aspect_ratio, strategy, crop_w, crop_h, count, count - centred, centred,
+            "[CROP] clip=%s ratio=%s strategy=%s crop=%dx%d points=%d subject_framed=%d (%d%%) centred=%d",
+            request.clip_id, aspect_ratio, strategy, crop_w, crop_h, count, count - centred,
+            (count - centred) * 100 // max(1, count), centred,
         )
 
         # Smoothed shot by shot: a camera cut is a cut in the crop too, never a

@@ -1,6 +1,35 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+import json
 from typing import Any, AsyncIterator
+
+
+def _field(obj: Any, name: str) -> Any:
+    return obj.get(name) if isinstance(obj, dict) else getattr(obj, name, None)
+
+
+def reply_text(response: Any) -> str:
+    """What a model answered, as one string for the log: its text plus any tool calls.
+
+    Takes an OpenAI-compatible reply (a dict or SDK object with ``choices``)
+    or an Anthropic message (``content`` blocks).
+    """
+    parts: list[str] = []
+    choices = _field(response, "choices")
+    if choices:
+        message = _field(choices[0], "message") or {}
+        if _field(message, "content"):
+            parts.append(str(_field(message, "content")))
+        for call in _field(message, "tool_calls") or []:
+            function = _field(call, "function") or {}
+            parts.append(f"tool {_field(function, 'name')}({_field(function, 'arguments')})")
+    for block in _field(response, "content") or []:
+        kind = _field(block, "type")
+        if kind == "text":
+            parts.append(str(_field(block, "text")))
+        elif kind == "tool_use":
+            parts.append(f"tool {_field(block, 'name')}({json.dumps(_field(block, 'input'), default=str)})")
+    return " ".join(parts)
 
 
 @dataclass(frozen=True)

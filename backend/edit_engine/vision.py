@@ -18,6 +18,7 @@ import cv2
 import numpy as np
 from groq import AsyncGroq
 
+from clients.ai.base import reply_text
 from core.config import get_settings
 from core.logging_config import get_logger
 from reels.vision import FREE_MODEL
@@ -87,7 +88,8 @@ async def caption_sheet(sheet: bytes) -> dict[int, str]:
         usage = response.usage
         await record_llm_call("groq", FREE_MODEL, input_tokens=getattr(usage, "prompt_tokens", 0),
                               output_tokens=getattr(usage, "completion_tokens", 0),
-                              latency_ms=int((time.monotonic() - started) * 1000))
+                              latency_ms=int((time.monotonic() - started) * 1000),
+                              response=reply_text(response))
         return parse_tiles(response.choices[0].message.content or "")
     except Exception as exc:
         log.warning("Contact sheet captioning failed: %s", exc)

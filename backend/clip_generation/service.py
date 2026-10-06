@@ -59,7 +59,6 @@ log = get_logger(__name__)
 MAX_CONCURRENT_CUTS = settings.CLIP_CUT_CONCURRENCY or max(2, min(8, os.cpu_count() or 2))
 # URLs are re-signed on every read, so this only needs to outlive one page view.
 PRESIGN_EXPIRES_SECONDS = 6 * 3600
-LOG_RULE = "=" * 78
 
 
 class _CutProgress:
@@ -115,6 +114,7 @@ class _CutProgress:
             self._running.pop(clip_id, None)
             self._done += 1
             line, percent = self._line(), self._percent()
+            self._log_progress(line)
         await self._notify(line, percent)
 
     async def mark_failed(self, clip_id: str) -> None:
@@ -122,7 +122,12 @@ class _CutProgress:
             self._running.pop(clip_id, None)
             self._failed += 1
             line, percent = self._line(), self._percent()
+            self._log_progress(line)
         await self._notify(line, percent)
+
+    def _log_progress(self, line: str) -> None:
+        finished = self._done + self._failed
+        log.info("CUTTING %d%% (%d/%d finished) | %s", finished * 100 // max(1, self._total), finished, self._total, line)
 
     async def notify_summary(self) -> None:
         async with self._lock:
@@ -977,12 +982,10 @@ class ClipService:
 
         total = len(clips)
         cutting_started = time.monotonic()
-        log.info(LOG_RULE)
         log.info(
             "CLIP CUTTING START | project=%s | %d clip(s) | ratios=%s | %d at a time",
             project_id, total, ", ".join(ratios), MAX_CONCURRENT_CUTS,
         )
-        log.info(LOG_RULE)
 
         async def notify_status(message: str, percent: int) -> None:
             if progress_callback:
@@ -1113,12 +1116,10 @@ class ClipService:
         await tracker.notify_summary()
 
         rendered_ok = sum(1 for c in rendered if any(c.get("output_files", {}).values()))
-        log.info(LOG_RULE)
         log.info(
             "CLIP CUTTING DONE  | project=%s | %d/%d rendered | %d failed | %.1fs total",
             project_id, rendered_ok, total, total - rendered_ok, time.monotonic() - cutting_started,
         )
-        log.info(LOG_RULE)
 
         if rendered and not any(c.get("output_files", {}).values() for c in rendered):
             raise CustomException(
@@ -1138,13 +1139,11 @@ class ClipService:
         video_metadata: dict[str, Any],
     ) -> list[GeneratedClip]:
         upload_started = time.monotonic()
-        log.info(LOG_RULE)
         log.info(
             "CLIP SAVE START | project=%s | %d clip(s), %d already in s3://%s/clips/%s/%s/",
             project_id, len(clips), sum(1 for clip in clips if clip.get("s3_upload")),
             self._bucket, user_id, project_id,
         )
-        log.info(LOG_RULE)
         async with AsyncSessionLocal() as session:
             repo = ClipRepository(session)
             saved = []
@@ -1208,12 +1207,10 @@ class ClipService:
                 saved.append(saved_clip)
 
         stored = sum(1 for clip in saved if clip.s3_key)
-        log.info(LOG_RULE)
         log.info(
             "CLIP SAVE DONE  | project=%s | %d/%d clip(s) stored | %d failed | %.1fs total",
             project_id, stored, len(saved), len(saved) - stored, time.monotonic() - upload_started,
         )
-        log.info(LOG_RULE)
         return saved
 
     def _clip_s3_prefix(self, user_id: str, project_id: str, clip_id: str) -> str:

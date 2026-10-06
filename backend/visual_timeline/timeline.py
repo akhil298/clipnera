@@ -147,15 +147,17 @@ async def _call_gemini(video: bytes, length: float) -> str:
     response.raise_for_status()
     payload = response.json()
     usage = payload.get("usageMetadata") or {}
+    parts = ((payload.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+    text = "".join(str(part.get("text") or "") for part in parts)
     await record_llm_call(
         "gemini", model,
         input_tokens=int(usage.get("promptTokenCount") or 0),
         # Thinking tokens bill as output.
         output_tokens=int(usage.get("candidatesTokenCount") or 0) + int(usage.get("thoughtsTokenCount") or 0),
         latency_ms=round((time.monotonic() - started) * 1000),
+        response=text,
     )
-    parts = ((payload.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
-    return "".join(str(part.get("text") or "") for part in parts)
+    return text
 
 
 def parse_moments(reply: str, offset: float, length: float) -> list[dict[str, Any]]:

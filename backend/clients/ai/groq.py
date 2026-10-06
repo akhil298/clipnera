@@ -14,7 +14,7 @@ from core.logging_config import get_logger
 from usage.context import check_budget
 from usage.recorder import record_llm_call
 
-from .base import BaseAI, ToolCall, ToolReply, ToolResult, ToolSpec
+from .base import BaseAI, ToolCall, ToolReply, ToolResult, ToolSpec, reply_text
 
 settings = get_settings()
 log = get_logger(__name__)
@@ -240,7 +240,7 @@ class Groq(BaseAI):
             api_key=self.api_key,
             timeout=timeout,
         )
-        log.info(
+        log.debug(
             "Groq client initialized: model=%s context=%d tpm=%d reasoning_effort=%s api_key_configured=%s",
             self.model,
             self.profile.context_tokens,
@@ -343,7 +343,7 @@ class Groq(BaseAI):
                 "Groq response truncated at the output token cap: model=%s, max_tokens=%d, chars=%d",
                 self.model, kwargs["max_tokens"], len(content),
             )
-        log.info(
+        log.debug(
             "Groq API call succeeded: mode=chat, model=%s, response_chars=%d, finish_reason=%s",
             self.model, len(content), finish_reason,
         )
@@ -384,7 +384,7 @@ class Groq(BaseAI):
         requested = int(kwargs.get("max_tokens") or 1024)
         max_output_tokens = effective_max_tokens(requested, self.model)
         if max_output_tokens != requested:
-            log.info(
+            log.debug(
                 "Raised max_tokens %d -> %d for reasoning model %s; a smaller budget is "
                 "consumed by reasoning and returns empty content",
                 requested, max_output_tokens, self.model,
@@ -401,7 +401,7 @@ class Groq(BaseAI):
         """One completion with rate limiting, retries and usage recording."""
         max_output_tokens = kwargs["max_tokens"]
         estimated_input = _messages_tokens(messages)
-        log.info(
+        log.debug(
             "Groq API call started: mode=%s, model=%s, messages=%d, estimated_input_tokens=%d, max_output_tokens=%d",
             mode, self.model, len(messages), estimated_input, max_output_tokens,
         )
@@ -414,7 +414,7 @@ class Groq(BaseAI):
             with attempt:
                 attempt_number = attempt.retry_state.attempt_number
                 await self._limiter_for(self.model).acquire(estimated_input + max_output_tokens)
-                log.info("Groq API request hit: mode=%s, model=%s, attempt=%d", mode, self.model, attempt_number)
+                log.debug("Groq API request hit: mode=%s, model=%s, attempt=%d", mode, self.model, attempt_number)
                 try:
                     started = time.monotonic()
                     raw = await self._client.chat.completions.with_raw_response.create(
@@ -429,6 +429,7 @@ class Groq(BaseAI):
                         output_tokens=int(getattr(usage, "completion_tokens", 0) or 0),
                         effort=kwargs.get("reasoning_effort"),
                         latency_ms=int((time.monotonic() - started) * 1000),
+                        response=reply_text(response),
                     )
                     return response
                 except Exception as exc:
@@ -452,25 +453,25 @@ class Groq(BaseAI):
         fitted = self._fit_messages(messages, max_output_tokens)
         await self._limiter_for(self.model).acquire(_messages_tokens(fitted) + max_output_tokens)
 
-        log.info("Groq API call started: mode=stream, model=%s, messages=%d", self.model, len(fitted))
+        log.debug("Groq API call started: mode=stream, model=%s, messages=%d", self.model, len(fitted))
         payload = {"model": self.model, "messages": fitted, "stream": True, **kwargs}
         chunk_count = 0
         try:
-            log.info("Groq API request hit: mode=stream, model=%s", self.model)
+            log.debug("Groq API request hit: mode=stream, model=%s", self.model)
             stream = await self._client.chat.completions.create(**payload)
             async for chunk in stream:
                 delta = chunk.choices[0].delta
                 if delta.content:
                     chunk_count += 1
                     yield delta.content
-            log.info("Groq API call succeeded: mode=stream, model=%s, chunks=%d", self.model, chunk_count)
+            log.debug("Groq API call succeeded: mode=stream, model=%s, chunks=%d", self.model, chunk_count)
         except Exception:
             log.exception("Groq API call failed: mode=stream, model=%s, chunks=%d", self.model, chunk_count)
             raise
 
     async def close(self) -> None:
         await self._client.close()
-        log.info("Groq client closed: model=%s", self.model)
+        log.debug("Groq client closed: model=%s", self.model)
 
 
 def _arguments(raw: str | None) -> dict[str, Any]:

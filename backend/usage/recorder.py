@@ -29,8 +29,13 @@ async def record_llm_call(
     resolution: str | None = None,
     effort: str | None = None,
     latency_ms: int = 0,
+    response: str | None = None,
 ) -> float:
-    """Cost the call, charge the run's budget and persist a row. Returns the cost in USD."""
+    """Cost the call, charge the run's budget, log it and persist a row. Returns the cost in USD.
+
+    ``response`` is what the model answered; it is logged in full on the same
+    line, so the log shows every AI decision the run was built on.
+    """
     if video_seconds is not None:
         cost = video_cost(provider, model, resolution or "720p", video_seconds)
     elif audio_seconds is not None:
@@ -39,12 +44,9 @@ async def record_llm_call(
         cost = token_cost(provider, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
 
     scope = current_scope()
-    log.info(
-        "AI usage: step=%s %s/%s in=%d out=%d cache_read=%d cache_write=%d audio_s=%s cost=$%.5f",
-        scope.step if scope else "unscoped", provider, model, input_tokens, output_tokens,
-        cache_read_tokens, cache_write_tokens,
-        f"{audio_seconds:.1f}" if audio_seconds is not None else "-", cost,
-    )
+    log.info("AI %s/%s %s %.1fs $%.5f%s", provider, model, _usage_summary(
+        input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, audio_seconds, video_seconds,
+    ), latency_ms / 1000, cost, f" -> {' '.join(response.split())}" if response else "")
     if scope is not None and scope.budget is not None:
         scope.budget.charge(cost)
     if scope is None or scope.project_id is None:
@@ -71,3 +73,20 @@ async def record_llm_call(
     except Exception as exc:
         log.warning("Could not record AI usage for project %s: %s", scope.project_id, exc)
     return cost
+
+
+def _usage_summary(
+    input_tokens: int, output_tokens: int, cache_read: int, cache_write: int,
+    audio_seconds: float | None, video_seconds: float | None,
+) -> str:
+    """Only the measures this call has, e.g. ``in=1200 out=340`` or ``audio=312.0s``."""
+    if video_seconds is not None:
+        return f"video={video_seconds:.1f}s"
+    if audio_seconds is not None:
+        return f"audio={audio_seconds:.1f}s"
+    parts = [f"in={input_tokens}", f"out={output_tokens}"]
+    if cache_read:
+        parts.append(f"cache_read={cache_read}")
+    if cache_write:
+        parts.append(f"cache_write={cache_write}")
+    return " ".join(parts)

@@ -311,7 +311,14 @@ class WhisperXTranscriptionService(TranscriptionService):
         if progress_callback:
             progress_callback(100.0, "Completed")
 
-        log.info(f"Transcription completed: {input_path} -> {len(segments_out)} segments in {processing_time:.2f}s")
+        words = sum(len(seg["text"].split()) for seg in segments_out)
+        speakers = len({seg["speaker"] for seg in segments_out if seg["speaker"]})
+        opening = " ".join(seg["text"] for seg in segments_out)[:300]
+        log.info(
+            "TRANSCRIBED model=%s lang=%s audio=%.0fs segments=%d words=%d speakers=%d in %.1fs (%.1fx realtime) | %s",
+            model_used, language or "en", duration, len(segments_out), words, speakers,
+            processing_time, duration / processing_time if processing_time else 0, opening,
+        )
         return {
             "input_path": input_path,
             "language": language or "en",

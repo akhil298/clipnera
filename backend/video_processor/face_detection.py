@@ -161,7 +161,7 @@ def _retinaface_session() -> ort.InferenceSession | None:
     except Exception as exc:
         log.warning("RetinaFace model at %s failed to load: %s", model_path, exc)
         return None
-    log.info("Face detection backend: RetinaFace-ResNet50 (%s)", model_path)
+    log.debug("Face detection backend: RetinaFace-ResNet50 (%s)", model_path)
     return session
 
 
@@ -204,7 +204,7 @@ class FaceDetector:
         if self._retinaface is not None:
             return "retinaface"
         if self._yunet is not None:
-            log.info("Face detection backend: YuNet (%s)", _yunet_model_path())
+            log.debug("Face detection backend: YuNet (%s)", _yunet_model_path())
             return "yunet"
 
         cascade_dir = Path(cv2.data.haarcascades)
@@ -213,7 +213,7 @@ class FaceDetector:
         if self._frontal.empty():
             log.error("Haar frontal-face cascade failed to load; face detection disabled")
             return "none"
-        log.info(
+        log.debug(
             "Face detection backend: Haar cascades (bundled). Add %s to backend/models/ for better accuracy.",
             YUNET_FILENAME,
         )

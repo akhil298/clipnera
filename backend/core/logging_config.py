@@ -1,8 +1,10 @@
 import logging
 import logging.config
 import os
+import re
 
 from core.log_redaction import redact
+from usage.context import current_scope
 
 # Attributes the stdlib puts on every LogRecord. Anything outside this set was
 # passed by the caller via extra={...} and is worth printing.
@@ -14,24 +16,52 @@ _STANDARD_RECORD_KEYS = frozenset(
 _MAX_VALUE_CHARS = 200
 
 
-class ContextFormatter(logging.Formatter):
-    """Renders ``extra={...}`` fields after the message as ``key=value`` pairs.
+_NEWLINES = re.compile(r"\s*\n\s*")
 
-    The previous formatter dropped them silently, so the structured context
-    attached throughout the pipeline never reached the log output and every line
-    read as a bare status string.
+# Libraries whose INFO/DEBUG output is noise in our logs; their warnings stay.
+_QUIET_LOGGERS = (
+    "sqlalchemy", "asyncpg", "httpx", "httpcore", "passlib", "botocore", "boto3", "s3transfer", "urllib3",
+    "asyncio", "multipart", "python_multipart", "PIL", "numba", "matplotlib", "filelock", "fsspec",
+    "huggingface_hub", "transformers", "speechbrain", "lightning", "lightning_fabric", "pytorch_lightning",
+    "pyannote", "faster_whisper", "ctranslate2", "websockets", "watchfiles", "charset_normalizer",
+)
+
+
+class ContextFormatter(logging.Formatter):
+    """One clean line per event: ``time level logger [project step] message | key=value``.
+
+    The project and step come from the run scope (``usage.context``), so every
+    line a pipeline writes says which video and stage it belongs to without each
+    call passing them. A multi-line message is folded onto one line; only an
+    exception's traceback keeps its own lines. ``extra={...}`` fields follow as
+    ``key=value`` pairs.
     """
 
     def format(self, record: logging.LogRecord) -> str:
+        message = record.getMessage()
+        record = logging.makeLogRecord({**record.__dict__, "msg": _NEWLINES.sub(" ", message.strip()), "args": ()})
+        tag = self._scope_tag(record)
+        if tag:
+            record.msg = f"{tag} {record.msg}"
         base = super().format(record)
         context = self._context(record)
         return redact(f"{base} | {context}" if context else base)
 
     @staticmethod
+    def _scope_tag(record: logging.LogRecord) -> str:
+        scope = current_scope()
+        project = getattr(record, "project_id", None) or (scope.project_id if scope else None)
+        if not project:
+            return ""
+        step = getattr(record, "step", None) or (scope.step if scope and scope.step != "unscoped" else None)
+        return f"[{str(project)[:8]}{' ' + step if step else ''}]"
+
+    @staticmethod
     def _context(record: logging.LogRecord) -> str:
         parts: list[str] = []
         for key, value in record.__dict__.items():
-            if key in _STANDARD_RECORD_KEYS or key.startswith("_"):
+            # project_id and step are already in the [project step] tag.
+            if key in _STANDARD_RECORD_KEYS or key.startswith("_") or key in ("project_id", "step"):
                 continue
             text = str(value)
             if len(text) > _MAX_VALUE_CHARS:
@@ -54,24 +84,14 @@ def setup_logging() -> None:
 
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(
-        ContextFormatter("%(asctime)s %(levelname)-8s %(name)-28s %(message)s")
+        ContextFormatter("%(asctime)s %(levelname)-7s %(name)-26s %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
     )
     root_logger.addHandler(console_handler)
-    root_logger.setLevel(logging.DEBUG if os.getenv("APP_DEBUG", "").lower() in ("1", "true") else logging.INFO)
+    # INFO unless LOG_LEVEL says otherwise; APP_DEBUG no longer turns servers to DEBUG.
+    root_logger.setLevel(os.getenv("LOG_LEVEL", "INFO").upper())
 
-    for logger_name in [
-        "sqlalchemy",
-        "sqlalchemy.engine",
-        "sqlalchemy.pool",
-        "asyncpg",
-        "httpx",
-        "httpcore",
-        "passlib",
-        "botocore",
-        "boto3",
-        "urllib3",
-    ]:
-        logging.getLogger(logger_name).setLevel(logging.ERROR)
+    for logger_name in _QUIET_LOGGERS:
+        logging.getLogger(logger_name).setLevel(logging.WARNING)
 
     for uvicorn_logger_name in ["uvicorn", "uvicorn.access", "uvicorn.error"]:
         uvicorn_logger = logging.getLogger(uvicorn_logger_name)

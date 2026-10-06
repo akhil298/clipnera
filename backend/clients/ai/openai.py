@@ -18,7 +18,7 @@ from core.logging_config import get_logger
 from usage.context import check_budget
 from usage.recorder import record_llm_call
 
-from .base import BaseAI, ToolCall, ToolReply, ToolResult, ToolSpec
+from .base import BaseAI, ToolCall, ToolReply, ToolResult, ToolSpec, reply_text
 from .groq import TOKEN_ESTIMATE_SAFETY_MARGIN, _arguments
 
 settings = get_settings()
@@ -116,7 +116,7 @@ class OpenAI(BaseAI):
             timeout=timeout,
             http2=True,
         )
-        log.info("OpenAI client initialized: model=%s api_key_configured=%s", self.model, bool(self.api_key))
+        log.debug("OpenAI client initialized: model=%s api_key_configured=%s", self.model, bool(self.api_key))
 
     @property
     def _headers(self) -> dict[str, str]:
@@ -209,7 +209,7 @@ class OpenAI(BaseAI):
     async def _create(self, messages: list[dict[str, Any]], *, mode: str, **kwargs: Any) -> dict[str, Any]:
         """One completion with retries and usage recording."""
         payload = self._build_payload(messages, stream=False, **kwargs)
-        log.info(
+        log.debug(
             "OpenAI API call started: mode=%s, model=%s, messages=%d, max_output_tokens=%d",
             mode, self.model, len(messages), payload["max_completion_tokens"],
         )
@@ -235,8 +235,9 @@ class OpenAI(BaseAI):
                     input_tokens=int(usage.get("prompt_tokens") or 0),
                     output_tokens=int(usage.get("completion_tokens") or 0),
                     latency_ms=int((time.monotonic() - started) * 1000),
+                    response=reply_text(data),
                 )
-                log.info(
+                log.debug(
                     "OpenAI API call succeeded: mode=%s, model=%s, finish_reason=%s",
                     mode, self.model, data["choices"][0].get("finish_reason"),
                 )
@@ -245,4 +246,4 @@ class OpenAI(BaseAI):
 
     async def close(self) -> None:
         await self._client.aclose()
-        log.info("OpenAI client closed: model=%s", self.model)
+        log.debug("OpenAI client closed: model=%s", self.model)

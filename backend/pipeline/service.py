@@ -85,6 +85,16 @@ async def fail_interrupted_pipelines() -> None:
         log.warning("Marked %d interrupted pipeline(s) failed: %s", len(project_ids), project_ids)
 
 
+def _clip_list(label: str, clips: list[dict]) -> str:
+    """``3 highlight(s): 12.3-41.0s 0.82 "Title" ; ...`` for a step summary line."""
+    entries = [
+        f"{float(c.get('start_time', c.get('start', 0))):.1f}-{float(c.get('end_time', c.get('end', 0))):.1f}s "
+        f"{float(c.get('score') or 0):.2f} \"{c.get('title') or ''}\""
+        for c in clips
+    ]
+    return f"{len(clips)} {label}" + (": " + " ; ".join(entries) if entries else "")
+
+
 def _read_audio_file(path: str) -> bytes:
     with open(path, "rb") as f:
         return f.read()
@@ -105,7 +115,7 @@ class PipelineOrchestrator:
         clip_settings: Optional[dict] = None,
         is_pro: bool = False,
     ) -> None:
-        log.info(
+        log.debug(
             "Pipeline orchestrator initialized",
             extra={
                 "project_id": project_id,
@@ -375,11 +385,11 @@ class PipelineOrchestrator:
             if step == PipelineStepType.CONTENT_CLASSIFICATION:
                 return f"category={result.get('classification', {}).get('category', 'unknown')}"
             if step == PipelineStepType.HIGHLIGHT_DETECTION:
-                return f"{len(result.get('highlights', []))} highlight(s)"
+                return _clip_list("highlight(s)", result.get("highlights", []))
             if step == PipelineStepType.SCORING:
-                return f"{len(result.get('scored_highlights', []))} scored"
+                return _clip_list("scored", result.get("scored_highlights", []))
             if step == PipelineStepType.METADATA_GENERATION:
-                return f"{len(result.get('final_clips', []))} clip(s) planned"
+                return _clip_list("clip(s) planned", result.get("final_clips", []))
             if step == PipelineStepType.ASPECT_RATIO_RENDER:
                 rendered = result.get("rendered_clips", []) or []
                 files = sum(1 for c in rendered for path in (c.get("output_files") or {}).values() if path)
@@ -393,10 +403,6 @@ class PipelineOrchestrator:
         return "done"
 
     async def _execute_step(self, step: PipelineStepType, context: dict) -> Any:
-        log.info(
-            "Executing pipeline step",
-            extra={"project_id": self.project_id, "step": step.value},
-        )
         handlers = {
             PipelineStepType.AUDIO_EXTRACTION: self._step_audio_extraction,
             PipelineStepType.AI_NOISE_CANCELLATION: self._step_ai_noise_cancellation,
@@ -450,7 +456,7 @@ class PipelineOrchestrator:
     async def _step_audio_extraction(self, context: dict) -> dict:
         # Get video path from project (download already completed before pipeline start)
         video_path = await self._project_video_path()
-        log.info("Resolving video path for audio extraction", extra={"project_id": self.project_id, "video_path": video_path})
+        log.debug("Resolving video path for audio extraction", extra={"project_id": self.project_id, "video_path": video_path})
 
         if not video_path or not Path(video_path).exists():
             raise ValueError(
@@ -458,7 +464,7 @@ class PipelineOrchestrator:
                 "Video should have been downloaded before starting pipeline."
             )
 
-        log.info("Starting audio extraction", extra={"project_id": self.project_id, "video_path": video_path})
+        log.debug("Starting audio extraction", extra={"project_id": self.project_id, "video_path": video_path})
         self._notify("Extracting audio track...", 10)
         from audio.extraction.schema import ExtractionRequest, OutputFormat, AudioChannel
         request = ExtractionRequest(
@@ -468,7 +474,7 @@ class PipelineOrchestrator:
             channels=AudioChannel.MONO,
             overwrite=True,
         )
-        log.info(
+        log.debug(
             "Audio extraction request",
             extra={
                 "project_id": self.project_id,
@@ -479,7 +485,7 @@ class PipelineOrchestrator:
             },
         )
         result = await self._audio_extractor.extract(request)
-        log.info(
+        log.debug(
             "Audio extracted",
             extra={
                 "project_id": self.project_id,
@@ -494,7 +500,7 @@ class PipelineOrchestrator:
     async def _step_ai_noise_cancellation(self, context: dict) -> dict:
         extraction = context.get(PipelineStepType.AUDIO_EXTRACTION.value, {})
         audio_path = extraction.get("extraction_result", {}).get("output_path")
-        log.info("Resolving audio path for noise cancellation", extra={"project_id": self.project_id, "audio_path": audio_path})
+        log.debug("Resolving audio path for noise cancellation", extra={"project_id": self.project_id, "audio_path": audio_path})
         if not audio_path:
             raise ValueError("Missing extracted audio path for noise cancellation")
 
@@ -512,13 +518,13 @@ class PipelineOrchestrator:
         self._notify("Running AI noise cancellation...", 20)
 
         audio_bytes = await asyncio.to_thread(_read_audio_file, audio_path)
-        log.info(
+        log.debug(
             "Audio bytes loaded for enhancement",
             extra={"project_id": self.project_id, "audio_path": audio_path, "size_bytes": len(audio_bytes)},
         )
 
         request = AudioEnhanceRequest(audio_url=f"file://{audio_path}", config=self.audio_config)
-        log.info(
+        log.debug(
             "Starting AI noise cancellation",
             extra={"project_id": self.project_id, "audio_path": audio_path, "config": self.audio_config},
         )
@@ -541,7 +547,7 @@ class PipelineOrchestrator:
             processed_bytes = await self._fetch_processed_bytes(result.processed_url)
             with open(after_path, "wb") as f:
                 f.write(processed_bytes)
-            log.info(
+            log.debug(
                 "Enhanced audio saved",
                 extra={"project_id": self.project_id, "after_path": after_path, "size_bytes": len(processed_bytes)},
             )
@@ -565,12 +571,12 @@ class PipelineOrchestrator:
     async def _step_transcription(self, context: dict) -> dict:
         # Get video path from project (download already completed before pipeline start)
         video_path = await self._project_video_path()
-        log.info("Resolving video path for transcription", extra={"project_id": self.project_id, "video_path": video_path})
+        log.debug("Resolving video path for transcription", extra={"project_id": self.project_id, "video_path": video_path})
 
         if not video_path or not Path(video_path).exists():
             raise ValueError("Missing video path for transcription")
 
-        log.info("Starting transcription", extra={"project_id": self.project_id, "video_path": video_path})
+        log.debug("Starting transcription", extra={"project_id": self.project_id, "video_path": video_path})
         self._notify("Transcribing audio...", 10)
         await self._prefetch_media_signals(video_path)
 
@@ -598,7 +604,7 @@ class PipelineOrchestrator:
             output_format="all",
             device="cpu",
         )
-        log.info(
+        log.debug(
             "Transcription request",
             extra={
                 "project_id": self.project_id,
@@ -615,7 +621,7 @@ class PipelineOrchestrator:
         result = await self._transcription_service.transcribe(request, progress_callback=_progress)
         segments = getattr(result, "segments", [])
         await self._romanize_captions(segments)
-        log.info(
+        log.debug(
             "Transcription complete",
             extra={
                 "project_id": self.project_id,
@@ -653,7 +659,7 @@ class PipelineOrchestrator:
     async def _step_topic_research(self, context: dict) -> dict:
         self._notify("Researching topic...", 20)
         segments = self._transcript_segments(context)
-        log.info(
+        log.debug(
             "Starting topic research",
             extra={"project_id": self.project_id, "segment_count": len(segments)},
         )
@@ -673,7 +679,7 @@ class PipelineOrchestrator:
             clip_settings=self.clip_settings,
             signals=self._media_signals,
         )
-        log.info(
+        log.debug(
             "Topic research complete",
             extra={"project_id": self.project_id, "analysis_keys": list(analysis.keys()) if isinstance(analysis, dict) else type(analysis).__name__},
         )
@@ -682,7 +688,7 @@ class PipelineOrchestrator:
 
     async def _step_visual_analysis(self, context: dict) -> dict:
         self._notify("Analyzing video frames...", 20)
-        log.info("Starting visual analysis", extra={"project_id": self.project_id})
+        log.debug("Starting visual analysis", extra={"project_id": self.project_id})
 
         video_path = await self._project_video_path()
         if not video_path or not Path(video_path).exists():
@@ -696,7 +702,7 @@ class PipelineOrchestrator:
 
             category = analysis.get("classification", {}).get("category", "unknown")
             frame_result = await FrameAnalyzer().analyze(video_path, category)
-        log.info(
+        log.debug(
             "Visual analysis complete",
             extra={"project_id": self.project_id, "result_type": type(frame_result).__name__},
         )
@@ -713,7 +719,7 @@ class PipelineOrchestrator:
             from content_intelligence.service import ContentIntelligenceService
             service = ContentIntelligenceService(is_pro=self.is_pro)
             classification = await service._classifier.classify(topic.get("topic_research", {}), segments)
-        log.info(
+        log.debug(
             "Content classification complete",
             extra={"project_id": self.project_id, "classification": str(classification)},
         )
@@ -722,7 +728,7 @@ class PipelineOrchestrator:
 
     async def _step_highlight_detection(self, context: dict) -> dict:
         self._notify("Detecting highlights...", 30)
-        log.info("Starting highlight detection", extra={"project_id": self.project_id})
+        log.debug("Starting highlight detection", extra={"project_id": self.project_id})
 
         video_path = await self._project_video_path()
         if not video_path or not Path(video_path).exists():
@@ -748,7 +754,7 @@ class PipelineOrchestrator:
             progress_callback=lambda msg, pct, _: self._notify(msg, pct),
             clip_settings=self.clip_settings,
         )
-        log.info(
+        log.debug(
             "Highlight detection complete",
             extra={"project_id": self.project_id, "highlight_count": len(highlights)},
         )
@@ -759,7 +765,7 @@ class PipelineOrchestrator:
         self._notify("Scoring highlights...", 50)
         highlight_result = context.get(PipelineStepType.HIGHLIGHT_DETECTION.value, {})
         highlights = highlight_result.get("highlights", [])
-        log.info(
+        log.debug(
             "Starting highlight scoring",
             extra={"project_id": self.project_id, "highlight_count": len(highlights)},
         )
@@ -771,7 +777,7 @@ class PipelineOrchestrator:
         service = ContentIntelligenceService(is_pro=self.is_pro)
 
         scored = await service.score_highlights(highlights, analysis, clip_settings=self.clip_settings)
-        log.info(
+        log.debug(
             "Scoring complete",
             extra={"project_id": self.project_id, "scored_count": len(scored)},
         )
@@ -782,7 +788,7 @@ class PipelineOrchestrator:
         self._notify("Generating metadata...", 50)
         score_result = context.get(PipelineStepType.SCORING.value, {})
         scored = score_result.get("scored_highlights", [])
-        log.info(
+        log.debug(
             "Starting metadata generation",
             extra={"project_id": self.project_id, "scored_highlight_count": len(scored)},
         )
@@ -792,7 +798,7 @@ class PipelineOrchestrator:
 
         language = spoken_language(self._transcript_segments(context), self._reported_language(context))
         final_clips = await service.generate_metadata_for_clips(scored, language)
-        log.info(
+        log.debug(
             "Metadata generation complete",
             extra={"project_id": self.project_id, "final_clip_count": len(final_clips)},
         )
@@ -803,7 +809,7 @@ class PipelineOrchestrator:
         self._notify("Generating clips...", 30)
         meta_result = context.get(PipelineStepType.METADATA_GENERATION.value, {})
         final_clips = meta_result.get("final_clips", [])
-        log.info(
+        log.debug(
             "Starting clip generation",
             extra={"project_id": self.project_id, "clip_count": len(final_clips)},
         )
@@ -826,7 +832,7 @@ class PipelineOrchestrator:
             output_aspect_ratios=self.output_aspect_ratios,
             clip_settings=self.clip_settings,
         )
-        log.info(
+        log.debug(
             "Clip generation complete",
             extra={"project_id": self.project_id, "result_type": type(result).__name__},
         )
@@ -924,7 +930,7 @@ class PipelineOrchestrator:
 
     async def _step_subtitle_styling(self, context: dict) -> dict:
         self._notify("Preparing subtitle styles...", 100)
-        log.info("Starting subtitle styling step", extra={"project_id": self.project_id})
+        log.debug("Starting subtitle styling step", extra={"project_id": self.project_id})
         from subtitle_styling.service import SubtitleStylingService
         from subtitle_styling.phrase_segmenter import segment_for_captions
 
@@ -939,12 +945,12 @@ class PipelineOrchestrator:
                 max_chars=42,
                 max_words_per_line=7,
             )
-            log.info(
+            log.debug(
                 "Phrase segmentation complete",
                 extra={"project_id": self.project_id, "segment_count": len(caption_segments)},
             )
 
-        log.info(
+        log.debug(
             "Subtitle styling step complete",
             extra={"project_id": self.project_id, "preset_count": len(presets), "caption_segment_count": len(caption_segments)},
         )
@@ -1019,7 +1025,7 @@ class PipelineOrchestrator:
 
     async def _step_depth_captions(self, context: dict) -> dict:
         self._notify("Generating depth captions...", 10)
-        log.info("Starting depth captions generation", extra={"project_id": self.project_id})
+        log.debug("Starting depth captions generation", extra={"project_id": self.project_id})
 
         video_path = await self._project_video_path()
         if not video_path or not Path(video_path).exists():
@@ -1052,7 +1058,7 @@ class PipelineOrchestrator:
         if result.status.value == "failed":
             raise RuntimeError(f"Depth captions failed: {result.error}")
 
-        log.info(
+        log.debug(
             "Depth captions generation complete",
             extra={"project_id": self.project_id, "job_id": result.job_id, "output_url": result.output_url},
         )
@@ -1254,7 +1260,7 @@ class PipelineOrchestrator:
             log.debug(f"Failed to persist progress for step {step}: {exc}")
 
     async def _fetch_processed_bytes(self, url: str) -> bytes:
-        log.info("Fetching processed bytes", extra={"project_id": self.project_id, "url": url})
+        log.debug("Fetching processed bytes", extra={"project_id": self.project_id, "url": url})
         if url.startswith("processed://") or url.startswith("preview://"):
             return b""
         import httpx
