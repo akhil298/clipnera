@@ -7,6 +7,7 @@
 #   bash ops.sh logs api        follow the API server's log (requests, errors)      Ctrl+C to quit
 #   bash ops.sh logs worker     follow the worker's log (pipelines, renders, sleep)  Ctrl+C to quit
 #   bash ops.sh ssh api|worker  open a shell on that server (starts the worker if it is asleep)
+#   bash ops.sh db              tunnel the private database to localhost:5433 (Ctrl+C to close)
 #
 # Deploying new code is deploy.sh. Both read ~/.config/clipnera/deploy.env (no secrets).
 set -Eeuo pipefail
@@ -17,6 +18,7 @@ source "${CONFIG}"
 : "${AWS_PROFILE:?}" "${AWS_REGION:?}" "${EC2_KEY:?}" "${API_HOST:?}" "${WORKER_INSTANCE_ID:?}"
 export AWS_PROFILE AWS_REGION AWS_PAGER=""
 DB_ID="${DB_ID:-clipnera-prod-db}"
+DB_LOCAL_PORT="${DB_LOCAL_PORT:-5433}"
 SSH_OPTS=(-i "${EC2_KEY}" -o IdentitiesOnly=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new)
 API_IP="${API_HOST#*@}"
 # Caddy serves the API over HTTPS at this sslip.io name (see update_ec2.sh).
@@ -100,5 +102,11 @@ case "${1:-status}" in
             *) echo "Usage: bash ops.sh ssh api|worker" >&2; exit 1 ;;
         esac
         ;;
-    *) sed -n '2,12p' "$0"; exit 1 ;;
+    db)
+        # The database has no public address; reach it through the API machine.
+        host="$(aws rds describe-db-instances --db-instance-identifier "${DB_ID}" --query 'DBInstances[0].Endpoint.Address' --output text)"
+        echo "Database on localhost:${DB_LOCAL_PORT} (database clipnera, user clipnera). Ctrl+C to close."
+        ssh -N "${SSH_OPTS[@]}" -o ServerAliveInterval=30 -L "${DB_LOCAL_PORT}:${host}:5432" "${API_HOST}"
+        ;;
+    *) sed -n '2,13p' "$0"; exit 1 ;;
 esac
