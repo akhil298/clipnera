@@ -59,6 +59,7 @@ def download(monkeypatch):
         return repo.status, progress.get("p1"), started
 
     run.outcome = outcome
+    run.service = service
     return run
 
 
@@ -84,8 +85,20 @@ async def test_a_run_that_cannot_start_reports_why(download):
     assert progress["status"] == "error" and progress["message"] == "Not enough credits"
 
 
+@pytest.fixture
+def released(monkeypatch):
+    """Projects whose up-front charge was handed back."""
+    calls: list = []
+
+    async def release(project_id, user_id):
+        calls.append((project_id, user_id))
+
+    monkeypatch.setattr(pipeline_service, "release_prepaid", release)
+    return calls
+
+
 @pytest.mark.asyncio
-async def test_start_when_source_ready_returns_the_refusal(monkeypatch):
+async def test_start_when_source_ready_returns_the_refusal(monkeypatch, released):
     async def refuse(self, project_id, user, body):
         assert user == {"user_id": "u1"} and body == {"output_aspect_ratios": ["9:16"]}
         raise CustomException(message="Not enough credits", code="INSUFFICIENT_CREDITS", status_code=402)
@@ -93,6 +106,39 @@ async def test_start_when_source_ready_returns_the_refusal(monkeypatch):
     monkeypatch.setattr(pipeline_service.PipelineRunService, "start", refuse)
     request = PipelineStartRequest(output_aspect_ratios=["9:16"])
     assert await pipeline_service.start_when_source_ready("p1", "u1", request) == "Not enough credits"
+    assert released == [("p1", "u1")]
+
+
+@pytest.mark.asyncio
+async def test_a_failed_download_hands_back_the_up_front_charge(download, released):
+    async def fail(url, user_id, project_id, format_id):
+        raise ValueError("video unavailable")
+
+    download.service._youtube.download_and_store = fail
+    status, _, started = await download(PipelineStartRequest())
+    assert status == ProjectStatus.FAILED and started == []
+    assert released == [("p1", "u1")]
+
+
+@pytest.mark.asyncio
+async def test_a_refused_charge_leaves_no_project_behind(monkeypatch):
+    deleted: list = []
+
+    class Repo:
+        async def delete_project(self, project_id, user_id):
+            deleted.append(project_id)
+
+    async def refuse(project_id, user_id, duration_seconds, request):
+        raise CustomException(message="Not enough credits", code="INSUFFICIENT_CREDITS", status_code=402)
+
+    monkeypatch.setattr(pipeline_service, "prepay_run", refuse)
+    service = clip_service.ClipService(Repo())
+    with pytest.raises(CustomException):
+        await service._prepay("p1", "u1", 120, PipelineStartRequest())
+    assert deleted == ["p1"]
+    # Without a run, or before the length is known, nothing is charged up front.
+    assert await service._prepay("p2", "u1", 120, None) == 0
+    assert await service._prepay("p3", "u1", 0, PipelineStartRequest()) == 0
 
 
 @pytest.mark.asyncio

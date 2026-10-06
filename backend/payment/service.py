@@ -17,6 +17,7 @@ from core.logging_config import get_logger
 from notifications.service import notify_payment_approved
 from payment.repository import ManualPaymentRepository
 from payment.schema import AdminPaymentResponse, PaymentResponse, UpiCheckoutResponse
+from referral.service import refresh_referrals_of
 from subscription.entitlements import CREDIT_PACKS, PLAN_PRICES, PURCHASABLE_PLAN, CreditPack
 from subscription.model import BillingPeriod, PaymentStatus, PaymentTransaction, Plan
 from subscription.repository import PlanRepository
@@ -227,16 +228,19 @@ class PaymentService:
         await self._tx_repo.commit()
         log.info(f"UPI payment approved: tx={tx_id} user={tx.user_id} by={admin_id}")
         await notify_payment_approved(tx.user_id, credits_added, tx.plan.name if tx.plan else None)
+        # A Pro payment can move the buyer's referral on.
+        await refresh_referrals_of(tx.user_id)
         return await self.get_for_admin(tx_id)
 
     async def reject(self, tx_id: str, admin_id: str, reason: str) -> AdminPaymentResponse:
-        await self._get_tx(tx_id)
+        tx = await self._get_tx(tx_id)
         if not await self._tx_repo.resolve_pending(
             tx_id, PaymentStatus.REJECTED, verified_by=admin_id, rejection_reason=reason.strip()
         ):
             raise _already_resolved()
         await self._tx_repo.commit()
         log.info(f"UPI payment rejected: tx={tx_id} by={admin_id}")
+        await refresh_referrals_of(tx.user_id)
         return await self.get_for_admin(tx_id)
 
     # Helpers

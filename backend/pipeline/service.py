@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import functools
 import json
 import os
@@ -41,8 +42,10 @@ from pipeline.model import PipelineStepType, StepStatus
 from pipeline.schema import PipelineStartRequest
 from core.exceptions import CustomException
 from notifications.service import notify_pipeline_outcome
+from referral.service import refresh_referrals_of
 from subscription.entitlements import Entitlements
 from subscription.service import (
+    InsufficientCreditsError,
     SubscriptionService,
     aspect_ratio_not_entitled,
     require_caption_style,
@@ -56,6 +59,10 @@ from jobs.queue import Job, get_queue, handler, uses_workers
 from subtitle_styling.templates import DEFAULT_STYLE
 
 log = get_logger(__name__)
+
+# Ledger reference types of a project's first run: its charge and its refunds.
+RUN_CHARGE_REFERENCE = "video_project"
+RUN_REFUND_REFERENCE = "video_project_refund"
 
 
 ProgressCallback = Callable[[str, int, Optional[str], Optional[str], Optional[str]], None]
@@ -1531,6 +1538,8 @@ async def _run_pipeline(
 
         if user:
             await notify_pipeline_outcome(user["user_id"], project_id, success=True)
+            # A finished first video can complete a referral.
+            await refresh_referrals_of(user["user_id"])
     except asyncio.CancelledError:
         if requeue_on_interrupt:
             # A worker shutting down: its job is redelivered and resumes from
@@ -1608,7 +1617,7 @@ async def _refund_run(user_id: str, project_id: str, amount: int, resume: bool) 
                 amount=amount,
                 reason=f"Pipeline failed{' (resume)' if resume else ''}, refunding credits for project {project_id}",
                 reference_id=project_id,
-                reference_type="video_project_refund",
+                reference_type=RUN_REFUND_REFERENCE,
             )
         except Exception as refund_exc:
             log.error(f"Credit refund failed: project={project_id} error={refund_exc}")
@@ -1652,8 +1661,8 @@ def _not_started(project_id: str) -> dict[str, Any]:
 
 
 @dataclass
-class _RunPlan:
-    """A run request resolved against the caller's plan and already charged."""
+class _RunQuote:
+    """A run request resolved against the caller's plan, and what it costs."""
 
     selected_steps: list[PipelineStepType]
     output_aspect_ratios: list[str]
@@ -1662,6 +1671,151 @@ class _RunPlan:
     clip_settings: dict | None
     is_pro: bool
     credit_cost: int
+
+
+async def _quote_run(
+    subscription_service: SubscriptionService,
+    user_id: str,
+    project_id: str,
+    duration_seconds: int,
+    body: dict | None,
+    resume: bool,
+) -> _RunQuote:
+    """Clamp a run request to the caller's plan and price it, without charging."""
+    body = body or {}
+    # Subtitles are burned at export time from the style the user picks, so
+    # caption steps are deliberately absent from the default run.
+    selected_steps = _resolve_steps(body.get("steps", DEFAULT_PIPELINE_STEPS))
+    output_aspect_ratios = _resolve_aspect_ratios(body.get("output_aspect_ratios"))
+    audio_config = body.get("audio_config", DEFAULT_AUDIO_CONFIG)
+    watermark_enabled = body.get("watermark_enabled", True)
+    clip_settings = body.get("clip_settings") if isinstance(body.get("clip_settings"), dict) else None
+
+    # Which AI provider this run uses. Resolved once, here, so the whole
+    # run is consistent even if the plan changes while it is in flight.
+    entitlements = await subscription_service.get_entitlements(user_id)
+    log.info(
+        "Pipeline provider tier resolved: project=%s user=%s plan=%s is_pro=%s",
+        project_id, user_id, entitlements.plan, entitlements.pro_ai_provider,
+    )
+
+    output_aspect_ratios, watermark_enabled, clip_settings = _apply_entitlements(
+        entitlements, output_aspect_ratios, watermark_enabled, clip_settings
+    )
+
+    if duration_seconds <= 0:
+        message = (
+            "Video duration not available."
+            if resume
+            else "Video duration not available. Please wait for download to complete."
+        )
+        raise CustomException(message=message, code="DURATION_UNAVAILABLE", status_code=400)
+    if duration_seconds > entitlements.max_upload_duration_seconds:
+        raise CustomException(
+            message=(
+                f"This video is {duration_seconds // 60} minutes. Your {entitlements.plan} plan "
+                f"supports up to {entitlements.max_upload_duration_seconds // 60} minutes per video."
+            ),
+            code="DURATION_NOT_ENTITLED",
+            status_code=403,
+        )
+
+    return _RunQuote(
+        selected_steps=selected_steps,
+        output_aspect_ratios=output_aspect_ratios,
+        audio_config=audio_config,
+        watermark_enabled=watermark_enabled,
+        clip_settings=clip_settings,
+        is_pro=entitlements.pro_ai_provider,
+        credit_cost=subscription_service.calculate_video_credit_cost(duration_seconds, len(output_aspect_ratios)),
+    )
+
+
+async def _settle_charge(
+    subscription_service: SubscriptionService,
+    user_id: str,
+    project_id: str,
+    quote: _RunQuote,
+    amount: int,
+    resume: bool,
+    duration_seconds: int | None = None,
+) -> None:
+    """Take ``amount`` credits for a run, or give them back when it is negative
+    (a run charged up front whose video turned out shorter)."""
+    if amount < 0:
+        await subscription_service.refund_credits(
+            user_id=user_id,
+            amount=-amount,
+            reason="Video processing: video shorter than estimated",
+            reference_id=project_id,
+            reference_type=RUN_REFUND_REFERENCE,
+        )
+        return
+    if amount == 0:
+        return
+    seconds = f"{duration_seconds}s, " if duration_seconds else ""
+    try:
+        await subscription_service.deduct_credits(
+            user_id=user_id,
+            amount=amount,
+            reason=(
+                f"Video processing{' (resume)' if resume else ''}: "
+                f"{seconds}ratios {', '.join(quote.output_aspect_ratios)}"
+            ),
+            reference_id=project_id,
+            reference_type="video_project_resume" if resume else RUN_CHARGE_REFERENCE,
+        )
+    except InsufficientCreditsError as exc:
+        raise CustomException(message=str(exc), code="INSUFFICIENT_CREDITS", status_code=402)
+
+
+async def _prepaid_credits(session, user_id: str, project_id: str) -> int:
+    """Credits a project's first run has already paid for: charged when the
+    download was requested and not yet refunded. Zero once a run exists, as
+    that run's own charge and refund cover it from then on."""
+    if await _pipeline_repository(session).get_pipeline(project_id):
+        return 0
+    return await SubscriptionService.for_session(session).net_charged(
+        user_id, project_id, (RUN_CHARGE_REFERENCE, RUN_REFUND_REFERENCE)
+    )
+
+
+async def prepay_run(project_id: str, user_id: str, duration_seconds: int, request: PipelineStartRequest) -> int:
+    """Charge for a run the moment its download is requested, so the balance
+    drops right away and a second request cannot spend the same credits.
+    The run settles any difference the real length makes when it starts."""
+    async with AsyncSessionLocal() as session:
+        subscription_service = SubscriptionService.for_session(session)
+        quote = await _quote_run(subscription_service, user_id, project_id, duration_seconds, request.body(), resume=False)
+        await _settle_charge(
+            subscription_service, user_id, project_id, quote, quote.credit_cost, resume=False,
+            duration_seconds=duration_seconds,
+        )
+        return quote.credit_cost
+
+
+async def release_prepaid(project_id: str, user_id: str) -> None:
+    """Refund an up-front charge when no run follows it: the download failed,
+    the run was refused, or the project was deleted first."""
+    async with AsyncSessionLocal() as session:
+        try:
+            amount = await _prepaid_credits(session, user_id, project_id)
+            if amount > 0:
+                await SubscriptionService.for_session(session).refund_credits(
+                    user_id=user_id,
+                    amount=amount,
+                    reason=f"Video was not processed, refunding credits for project {project_id}",
+                    reference_id=project_id,
+                    reference_type=RUN_REFUND_REFERENCE,
+                )
+        except Exception:
+            log.exception("Up-front charge refund failed: project=%s", project_id)
+
+
+@dataclass
+class _RunPlan(_RunQuote):
+    """A run request resolved against the caller's plan and already charged."""
+
     refund: Callable[[], Awaitable[None]]
 
     def job(self, project, user: dict, resume: bool = False) -> Job:
@@ -1706,70 +1860,20 @@ class PipelineRunService:
     async def _plan_run(session, project, user_id: str, body: dict | None, resume: bool) -> _RunPlan:
         """Resolve the request, clamp it to the plan and charge credits for it."""
         project_id = project.id
-        body = body or {}
-        # Subtitles are burned at export time from the style the user picks, so
-        # caption steps are deliberately absent from the default run.
-        selected_steps = _resolve_steps(body.get("steps", DEFAULT_PIPELINE_STEPS))
-        output_aspect_ratios = _resolve_aspect_ratios(body.get("output_aspect_ratios"))
-        audio_config = body.get("audio_config", DEFAULT_AUDIO_CONFIG)
-        watermark_enabled = body.get("watermark_enabled", True)
-        clip_settings = body.get("clip_settings") if isinstance(body.get("clip_settings"), dict) else None
-
         subscription_service = SubscriptionService.for_session(session)
+        quote = await _quote_run(subscription_service, user_id, project_id, project.duration_seconds or 0, body, resume)
 
-        # Which AI provider this run uses. Resolved once, here, so the whole
-        # run is consistent even if the plan changes while it is in flight.
-        entitlements = await subscription_service.get_entitlements(user_id)
-        is_pro = entitlements.pro_ai_provider
-        log.info(
-            "Pipeline provider tier resolved: project=%s user=%s plan=%s is_pro=%s",
-            project_id, user_id, entitlements.plan, is_pro,
+        # A run asked for with its download was charged when it was asked for;
+        # only the difference the real length makes is settled here.
+        prepaid = 0 if resume else await _prepaid_credits(session, user_id, project_id)
+        await _settle_charge(
+            subscription_service, user_id, project_id, quote, quote.credit_cost - prepaid, resume,
+            duration_seconds=project.duration_seconds,
         )
-
-        output_aspect_ratios, watermark_enabled, clip_settings = _apply_entitlements(
-            entitlements, output_aspect_ratios, watermark_enabled, clip_settings
-        )
-
-        duration_seconds = project.duration_seconds or 0
-        if duration_seconds <= 0:
-            message = (
-                "Video duration not available."
-                if resume
-                else "Video duration not available. Please wait for download to complete."
-            )
-            raise CustomException(message=message, code="DURATION_UNAVAILABLE", status_code=400)
-        if duration_seconds > entitlements.max_upload_duration_seconds:
-            raise CustomException(
-                message=(
-                    f"This video is {duration_seconds // 60} minutes. Your {entitlements.plan} plan "
-                    f"supports up to {entitlements.max_upload_duration_seconds // 60} minutes per video."
-                ),
-                code="DURATION_NOT_ENTITLED",
-                status_code=403,
-            )
-
-        credit_cost = subscription_service.calculate_video_credit_cost(duration_seconds, len(output_aspect_ratios))
-        ratios_note = f", ratios {', '.join(output_aspect_ratios)}"
-        try:
-            await subscription_service.deduct_credits(
-                user_id=user_id,
-                amount=credit_cost,
-                reason=f"Video processing{' (resume)' if resume else ''}: {duration_seconds}s{ratios_note}",
-                reference_id=project_id,
-                reference_type="video_project_resume" if resume else "video_project",
-            )
-        except Exception as exc:
-            raise CustomException(message=str(exc), code="INSUFFICIENT_CREDITS", status_code=402)
 
         return _RunPlan(
-            selected_steps=selected_steps,
-            output_aspect_ratios=output_aspect_ratios,
-            audio_config=audio_config,
-            watermark_enabled=watermark_enabled,
-            clip_settings=clip_settings,
-            is_pro=is_pro,
-            credit_cost=credit_cost,
-            refund=functools.partial(_refund_run, user_id, project_id, credit_cost, resume),
+            **dataclasses.asdict(quote),
+            refund=functools.partial(_refund_run, user_id, project_id, quote.credit_cost, resume),
         )
 
     async def start(self, project_id: str, user: dict, body: dict | None) -> dict[str, Any]:
@@ -2007,8 +2111,10 @@ async def start_when_source_ready(project_id: str, user_id: str, request: Pipeli
         await PipelineRunService().start(project_id, {"user_id": user_id}, request.body())
     except CustomException as exc:
         log.warning("Pipeline not started after download: project=%s reason=%s", project_id, exc.message)
+        await release_prepaid(project_id, user_id)
         return exc.message
     except Exception:
         log.exception("Pipeline not started after download: project=%s", project_id)
+        await release_prepaid(project_id, user_id)
         return "Processing could not be started. Please try again."
     return None

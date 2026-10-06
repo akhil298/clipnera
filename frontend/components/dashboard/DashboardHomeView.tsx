@@ -24,7 +24,8 @@ import { VideoProject, ViralClip, UserProfile, TabType, Workspace } from '@/lib/
 import { analyticsApi, brandKitApi, socialApi, type DashboardStatsResponse, type SocialPostResponse } from '@/lib/api';
 import { StatsSkeleton } from '@/components/skeletons';
 import { usePlan } from '@/hooks/usePlan';
-import { creditResetLabel, useEntitlements, videoMinutesFor } from '@/hooks/useEntitlements';
+import { InvitedByCard } from '@/components/referral/InvitedByCard';
+import { creditResetLabel, creditSplit, useEntitlements, videoMinutesFor } from '@/hooks/useEntitlements';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { extractYoutubeVideoId } from '@/lib/utils/urlParser';
 import { formatRelativeTime, formatScheduleTime, parseApiDate } from '@/lib/utils/dates';
@@ -200,8 +201,7 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
   };
 
   const total = Math.max(user.aiCreditsTotal, user.aiCreditsMinutesRemaining, 1);
-  const bought = Math.min(entitlements.purchased_credits_remaining, user.aiCreditsMinutesRemaining);
-  const planCredits = user.aiCreditsMinutesRemaining - bought;
+  const { plan: planCredits, bonus, bought } = creditSplit(entitlements, user.aiCreditsMinutesRemaining);
 
   return (
     <div className="space-y-6 lg:space-y-8 animate-in fade-in duration-300">
@@ -234,6 +234,8 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
           </>
         }
       />
+
+      <InvitedByCard onGetPro={upgrade} />
 
       {/* Start from a link, right here */}
       <form onSubmit={submitLink} className="rounded-2xl bg-neutral-900/80 border border-neutral-800 p-2.5 sm:p-3">
@@ -360,11 +362,13 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
             <span className="text-sm font-medium text-neutral-500"> of {user.aiCreditsTotal} left</span>
           </p>
           <div className="h-2 w-full rounded-full bg-neutral-800 overflow-hidden flex">
-            <div className="h-full bg-amber-500" style={{ width: `${(Math.max(0, planCredits) / total) * 100}%` }} />
+            <div className="h-full bg-amber-500" style={{ width: `${(planCredits / total) * 100}%` }} />
+            <div className="h-full bg-sky-400" style={{ width: `${(bonus / total) * 100}%` }} />
             <div className="h-full bg-violet-400" style={{ width: `${(bought / total) * 100}%` }} />
           </div>
           <p className="text-[11.5px] text-neutral-400">
             ≈ {videoMinutesFor(entitlements, user.aiCreditsMinutesRemaining)} min of video · {creditResetLabel(entitlements.next_credit_reset_at).toLowerCase()}
+            {bonus > 0 && <> · {bonus} bonus credits</>}
             {bought > 0 && <> · {bought} bought credits never expire</>}
           </p>
           <div className="flex flex-wrap items-center gap-2 pt-1">

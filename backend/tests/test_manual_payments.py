@@ -136,7 +136,11 @@ def approval_notices(monkeypatch):
     async def _notify(user_id, credits_added, plan_name):
         sent.append((user_id, credits_added, plan_name))
 
+    async def _no_referrals(user_id):
+        pass
+
     monkeypatch.setattr(svc, "notify_payment_approved", _notify)
+    monkeypatch.setattr(svc, "refresh_referrals_of", _no_referrals)
     return sent
 
 

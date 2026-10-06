@@ -34,6 +34,7 @@ const TAB_TITLES: Record<TabType, string> = {
   brand_kit: 'Brand kit',
   reels: 'Reels',
   video_editor: 'Editor',
+  referrals: 'Refer & earn',
   settings: 'Settings',
 };
 

@@ -10,6 +10,7 @@ import subscription.route as route
 from auth.dependencies import get_current_admin
 from core.exceptions import CustomException
 from subscription.schema import CreditTopupRequest
+from subscription.repository import Balances
 from subscription.service import ADMIN_TOPUP_REFERENCE, SubscriptionService
 
 
@@ -21,10 +22,14 @@ class _LedgerRepo:
     async def get_latest_balance(self, user_id):
         return self.balance
 
+    async def lock_user(self, user_id):
+        pass
+
     async def get_latest_balances(self, user_id):
-        return self.balance, 0
+        return Balances(self.balance)
 
     async def add_entry(self, **fields):
+        fields["balance_after"] = fields["balances_after"].total
         self.entries.append(fields)
         return SimpleNamespace(id="entry-1", **fields)
 

@@ -44,6 +44,8 @@ class VideoMetadataResponse(BaseModel):
     original_url: str
     status: str
     created_at: datetime
+    # Charged when the download was requested with a run; 0 otherwise.
+    credits_deducted: int = 0
 
 
 class FormatInfo(BaseModel):

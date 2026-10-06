@@ -23,11 +23,12 @@ import {
   Cpu,
   Clapperboard,
   Wand2,
+  Gift,
 } from 'lucide-react';
 import Link from 'next/link';
 import { TabType, UserProfile, Workspace, VideoProject, ViralClip } from '@/lib/types';
 import { Skeleton } from '@/components/skeletons';
-import { useEntitlements, planLabel, creditResetLabel } from '@/hooks/useEntitlements';
+import { useEntitlements, planLabel, creditResetLabel, creditSplit } from '@/hooks/useEntitlements';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { projectStatus, statusDotClass } from '@/components/ui/StatusPill';
 import { LogoMark } from '@/components/ui/LogoMark';
@@ -110,6 +111,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const accountItems: NavItem[] = [
     { id: 'brand_kit', label: 'Brand kit', icon: Palette },
     { id: 'settings', label: 'Settings & billing', icon: Settings },
+    // Shown while an admin has the referral program switched on.
+    ...(flags.referral_program ? [{ id: 'referrals' as TabType, label: 'Refer & earn', icon: Gift }] : []),
   ];
 
   // Same pages as the admin panel's own tabs (components/admin/AdminLayout.tsx).
@@ -132,11 +135,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     onCloseMobile();
   };
 
-  // Plan credits and bought credits share one bar so the split is visible.
+  // Plan, bonus and bought credits share one bar so the split is visible.
   const total = Math.max(user.aiCreditsTotal, user.aiCreditsMinutesRemaining, 1);
-  const bought = Math.min(entitlements.purchased_credits_remaining, user.aiCreditsMinutesRemaining);
-  const planPercent = Math.max(0, ((user.aiCreditsMinutesRemaining - bought) / total) * 100);
-  const boughtPercent = Math.max(0, (bought / total) * 100);
+  const { plan, bonus, bought } = creditSplit(entitlements, user.aiCreditsMinutesRemaining);
+  const planPercent = (plan / total) * 100;
+  const bonusPercent = (bonus / total) * 100;
+  const boughtPercent = (bought / total) * 100;
 
   const groupLabel = (label: string, collapsed: boolean) =>
     collapsed ? (
@@ -423,9 +427,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div
               className="h-1.5 w-full bg-neutral-800 rounded-full overflow-hidden flex"
               role="img"
-              aria-label={`${user.aiCreditsMinutesRemaining} of ${user.aiCreditsTotal} credits left${bought ? `, including ${bought} bought credits` : ''}`}
+              aria-label={`${user.aiCreditsMinutesRemaining} of ${user.aiCreditsTotal} credits left${bonus ? `, including ${bonus} bonus credits` : ''}${bought ? `, including ${bought} bought credits` : ''}`}
             >
               <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${planPercent}%` }} />
+              <div className="h-full bg-sky-400 transition-all duration-300" style={{ width: `${bonusPercent}%` }} />
               <div className="h-full bg-violet-400 transition-all duration-300" style={{ width: `${boughtPercent}%` }} />
             </div>
             <div className="flex items-center justify-between text-[11px]">

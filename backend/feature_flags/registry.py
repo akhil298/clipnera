@@ -28,6 +28,7 @@ BROLL_AI_SHOTS = f"{BROLL_STUDIO}.ai_shots"
 REEL_EDITOR = f"{BROLL_REELS}.footage"
 REEL_EDITOR_OPUS = f"{REEL_EDITOR}.opus_director"
 AGENT_EDITOR = "agent_editor"
+REFERRAL_PROGRAM = "referral_program"
 
 
 def social_platform_flag(platform: str) -> str:
@@ -100,6 +101,13 @@ _DEFINITIONS = (
         AGENT_EDITOR,
         "Editor",
         "The multi-track editor: users build and change a video on a timeline, by hand and with the agent.",
+    ),
+    FlagDefinition(
+        REFERRAL_PROGRAM,
+        "Referral program",
+        "Users share a referral code and earn bonus credits when the people they bring in buy Pro and process "
+        "a video in time. Turning this off stops new codes from being accepted; referrals already running finish "
+        "under their own rules.",
     ),
 )
 

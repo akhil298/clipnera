@@ -77,6 +77,9 @@ class BaseConfig(BaseSettings):
     # cost. Rendering is a small part of a run next to transcription and AI
     # analysis, so an extra ratio costs a fraction, not a whole run.
     EXTRA_ASPECT_RATIO_CREDIT_SHARE: float = 0.5
+    # Bonus credits refunded (a failed run) after their grant expired stay
+    # spendable this many more days instead of being lost.
+    BONUS_REFUND_GRACE_DAYS: int = 3
     XAI_API_KEY: str = ""
     XAI_MODEL: str = "grok-2-mini"
     GROQ_API_KEY: str = ""

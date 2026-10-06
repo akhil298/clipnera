@@ -1,13 +1,25 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
+from typing import NamedTuple
 from uuid import uuid4
-from sqlalchemy import select, desc, or_, update
+from sqlalchemy import select, desc, func, or_, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.model import User
-from subscription.model import Plan, UserSubscription, PaymentTransaction, CreditLedger, PlanSlug, SubscriptionStatus, PaymentStatus, UsageTracking
+from subscription.model import (
+    CreditGrant,
+    CreditGrantSpend,
+    CreditLedger,
+    PaymentStatus,
+    PaymentTransaction,
+    Plan,
+    PlanSlug,
+    SubscriptionStatus,
+    UsageTracking,
+    UserSubscription,
+)
 from core.logging_config import get_logger
 
 log = get_logger(__name__)
@@ -159,6 +171,29 @@ class PaymentTransactionRepository:
         return list(result.scalars().all())
 
 
+class Balances(NamedTuple):
+    """A user's credit balance and the parts of it that outlive a cycle reset."""
+
+    total: int
+    purchased: int = 0
+    bonus: int = 0
+
+    @property
+    def plan(self) -> int:
+        """The plan allowance part, which the next reset replaces."""
+        return max(0, self.total - self.purchased - self.bonus)
+
+
+def _open_grant(now: datetime):
+    """Grants with credits left that can still be spent."""
+    return (
+        CreditGrant.remaining > 0,
+        CreditGrant.expired_at.is_(None),
+        CreditGrant.voided_at.is_(None),
+        CreditGrant.expires_at > now,
+    )
+
+
 class CreditLedgerRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
@@ -177,25 +212,83 @@ class CreditLedgerRepository:
         entry = await self._latest_entry(user_id)
         return entry.balance_after if entry else 0
 
-    async def get_latest_balances(self, user_id: str) -> tuple[int, int]:
-        """The total balance and the bought part of it."""
+    async def get_latest_balances(self, user_id: str) -> Balances:
         entry = await self._latest_entry(user_id)
-        return (entry.balance_after, entry.purchased_balance_after) if entry else (0, 0)
+        if not entry:
+            return Balances(0)
+        return Balances(entry.balance_after, entry.purchased_balance_after, entry.bonus_balance_after)
 
-    async def get_latest_charge(self, user_id: str, reference_id: str) -> CreditLedger | None:
-        """The newest deduction made for ``reference_id``."""
-        stmt = (
-            select(CreditLedger)
-            .where(
-                CreditLedger.user_id == user_id,
-                CreditLedger.reference_id == reference_id,
-                CreditLedger.amount < 0,
-            )
-            .order_by(desc(CreditLedger.created_at))
-            .limit(1)
+    async def lock_user(self, user_id: str) -> None:
+        """Hold the user's balance until this transaction ends, so two changes made
+        at once cannot both read the same balance and spend the same credits."""
+        await self._session.execute(select(func.pg_advisory_xact_lock(func.hashtext(user_id))))
+
+    async def net_charged(self, user_id: str, reference_id: str, reference_types: tuple[str, ...]) -> int:
+        """Credits taken for ``reference_id`` minus those given back for it."""
+        stmt = select(func.coalesce(func.sum(CreditLedger.amount), 0)).where(
+            CreditLedger.user_id == user_id,
+            CreditLedger.reference_id == reference_id,
+            CreditLedger.reference_type.in_(reference_types),
         )
-        result = await self._session.execute(stmt)
-        return result.scalar_one_or_none()
+        return -int((await self._session.execute(stmt)).scalar_one())
+
+    async def purchased_spent(self, user_id: str, reference_id: str) -> int:
+        """Bought credits the entries for ``reference_id`` used and did not give back."""
+        stmt = select(func.coalesce(func.sum(CreditLedger.purchased_amount), 0)).where(
+            CreditLedger.user_id == user_id, CreditLedger.reference_id == reference_id
+        )
+        return max(0, -int((await self._session.execute(stmt)).scalar_one()))
+
+    async def grants_spent(self, user_id: str, reference_id: str) -> list[tuple[CreditGrant, int]]:
+        """Each grant the entries for ``reference_id`` used and did not give back,
+        with how much, latest-expiring first."""
+        spent = func.sum(CreditGrantSpend.amount)
+        stmt = (
+            select(CreditGrant, spent)
+            .join(CreditGrantSpend, CreditGrantSpend.grant_id == CreditGrant.id)
+            .join(CreditLedger, CreditLedger.id == CreditGrantSpend.ledger_id)
+            .where(CreditLedger.user_id == user_id, CreditLedger.reference_id == reference_id)
+            .group_by(CreditGrant.id)
+            .having(spent > 0)
+            .order_by(desc(CreditGrant.expires_at))
+        )
+        return [(grant, int(amount)) for grant, amount in (await self._session.execute(stmt)).all()]
+
+    async def open_grants(self, user_id: str, now: datetime) -> list[CreditGrant]:
+        """Spendable grants, soonest to expire first."""
+        stmt = (
+            select(CreditGrant)
+            .where(CreditGrant.user_id == user_id, *_open_grant(now))
+            .order_by(CreditGrant.expires_at, CreditGrant.created_at)
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def due_grants(self, user_id: str, now: datetime) -> list[CreditGrant]:
+        """Grants past their expiry whose leftover has not been removed yet."""
+        stmt = select(CreditGrant).where(
+            CreditGrant.user_id == user_id,
+            CreditGrant.expires_at <= now,
+            CreditGrant.expired_at.is_(None),
+            CreditGrant.voided_at.is_(None),
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def users_with_due_grants(self, now: datetime) -> list[str]:
+        stmt = select(CreditGrant.user_id).distinct().where(
+            CreditGrant.expires_at <= now, CreditGrant.expired_at.is_(None), CreditGrant.voided_at.is_(None)
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def refresh(self, obj: object) -> None:
+        await self._session.refresh(obj)
+
+    async def get_grant(self, grant_id: str) -> CreditGrant | None:
+        return await self._session.get(CreditGrant, grant_id)
+
+    async def add_grant(self, grant: CreditGrant) -> CreditGrant:
+        self._session.add(grant)
+        await self._session.flush()
+        return grant
 
     async def get_balance_at_time(self, user_id: str, at: datetime) -> int:
         stmt = (
@@ -208,19 +301,40 @@ class CreditLedgerRepository:
         entry = result.scalar_one_or_none()
         return entry.balance_after if entry else 0
 
-    async def add_entry(self, user_id: str, amount: int, balance_after: int, purchased_balance_after: int, reason: str, reference_id: str | None = None, reference_type: str | None = None, commit: bool = True, created_by: str | None = None, purchased_amount: int = 0) -> CreditLedger:
+    async def add_entry(
+        self,
+        user_id: str,
+        amount: int,
+        balances_after: Balances,
+        reason: str,
+        reference_id: str | None = None,
+        reference_type: str | None = None,
+        commit: bool = True,
+        created_by: str | None = None,
+        purchased_amount: int = 0,
+        bonus_amount: int = 0,
+        grant_spends: list[tuple[CreditGrant, int]] = (),
+    ) -> CreditLedger:
+        """Write a ledger entry, with how much of each grant it used (positive)
+        or gave back (negative); the grants' ``remaining`` is changed to match."""
         entry = CreditLedger(
             user_id=user_id,
             amount=amount,
-            balance_after=balance_after,
-            purchased_balance_after=purchased_balance_after,
+            balance_after=balances_after.total,
+            purchased_balance_after=balances_after.purchased,
+            bonus_balance_after=balances_after.bonus,
             purchased_amount=purchased_amount,
+            bonus_amount=bonus_amount,
             reason=reason,
             reference_id=reference_id,
             reference_type=reference_type,
             created_by=created_by,
         )
         self._session.add(entry)
+        await self._session.flush()
+        for grant, used in grant_spends:
+            grant.remaining -= used
+            self._session.add(CreditGrantSpend(ledger_id=entry.id, grant_id=grant.id, amount=used))
         await _save(self._session, entry, commit)
         return entry
 

@@ -55,6 +55,9 @@ export const FREE_TIER_FALLBACK: EntitlementsResponse = {
   credit_minutes_total: 0,
   credit_minutes_remaining: 0,
   purchased_credits_remaining: 0,
+  bonus_credits_remaining: 0,
+  bonus_credits_expiring_at: null,
+  bonus_credits_expiring: 0,
   current_period_end: null,
   subscription_status: 'none',
   plan_expires_at: null,
@@ -134,6 +137,16 @@ export const videoMinutesFor = (entitlements: EntitlementsResponse, credits: num
   entitlements.credits_per_video_minute > 0
     ? Math.floor(credits / entitlements.credits_per_video_minute)
     : 0;
+
+/** A balance split into its parts: plan credits (gone at the next reset),
+ * bonus credits (referral rewards, which expire) and bought credits (never
+ * expire). ``remaining`` may be fresher than the entitlements, so each part is
+ * capped by what is left. */
+export const creditSplit = (entitlements: EntitlementsResponse, remaining: number) => {
+  const bought = Math.min(entitlements.purchased_credits_remaining, remaining);
+  const bonus = Math.min(entitlements.bonus_credits_remaining, remaining - bought);
+  return { plan: Math.max(0, remaining - bought - bonus), bonus, bought };
+};
 
 /** Whether a plan slug is a paid tier. The one place the UI compares slugs. */
 export const isPaidPlanSlug = (plan: string): boolean => plan !== 'free';

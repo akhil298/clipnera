@@ -29,6 +29,8 @@ class UserProfileResponse(BaseModel):
     role: Literal["user", "admin"] = "user"
     # Account emails (failed posts, reconnect reminders); off after unsubscribing.
     email_notifications: bool = True
+    # False until the user has filled in the one-time welcome form.
+    onboarding_completed: bool = True
 
 
 class EmailPreferencesRequest(BaseModel):

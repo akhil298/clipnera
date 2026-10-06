@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Script from "next/script";
 import { CookieNotice } from "@/components/legal/CookieNotice";
+import { ReferralCapture } from "@/components/referral/ReferralCapture";
 // Fonts are self-hosted (SIL OFL 1.1 / Apache 2.0) so pages make no request to Google Fonts.
 import "@fontsource/plus-jakarta-sans/400.css";
 import "@fontsource/plus-jakarta-sans/500.css";
@@ -70,6 +71,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-neutral-950 text-neutral-100 font-['Plus_Jakarta_Sans',sans-serif] selection:bg-amber-400 selection:text-neutral-950 overflow-x-hidden antialiased" suppressHydrationWarning={true}>
         {children}
         <CookieNotice />
+        <ReferralCapture />
       </body>
     </html>
   );

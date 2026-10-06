@@ -7,7 +7,7 @@ from typing import get_args
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from subscription.model import Plan, UserSubscription, PaymentTransaction, CreditLedger, PlanSlug, SubscriptionStatus
+from subscription.model import CreditGrant, Plan, UserSubscription, PaymentTransaction, CreditLedger, PlanSlug, SubscriptionStatus
 from auth.repository import UserRepository
 from subscription.entitlements import (
     CREDIT_CYCLE_DAYS,
@@ -21,6 +21,7 @@ from subscription.entitlements import (
     entitlements_for,
 )
 from subscription.repository import (
+    Balances,
     PlanRepository,
     UserSubscriptionRepository,
     PaymentTransactionRepository,
@@ -53,6 +54,10 @@ ADMIN_TOPUP_REFERENCE = "admin_topup"
 CREDIT_REFILL_REFERENCE = "credit_refill"
 # Ledger reference_type for a credit pack bought through an approved payment.
 CREDIT_PACK_REFERENCE = "credit_pack"
+# Ledger reference_types for bonus credits given, expired and taken back.
+BONUS_GRANT_REFERENCE = "bonus_grant"
+BONUS_EXPIRED_REFERENCE = "bonus_expired"
+BONUS_VOIDED_REFERENCE = "bonus_voided"
 
 USAGE_KEYS: tuple[str, ...] = get_args(UsageKey)
 _USAGE_LABELS = {
@@ -81,6 +86,9 @@ def entitlements_response(summary: PlanSummary) -> EntitlementsResponse:
         credit_minutes_total=ent.credit_minutes,
         credit_minutes_remaining=summary.credit_minutes_remaining,
         purchased_credits_remaining=summary.purchased_credits_remaining,
+        bonus_credits_remaining=summary.bonus_credits_remaining,
+        bonus_credits_expiring_at=summary.bonus_credits_expiring_at,
+        bonus_credits_expiring=summary.bonus_credits_expiring,
         current_period_end=summary.current_period_end,
         subscription_status=summary.subscription_status,
         plan_expires_at=summary.plan_expires_at,
@@ -194,6 +202,11 @@ class PlanSummary:
     credit_minutes_remaining: int
     # The bought part of credit_minutes_remaining; it survives resets.
     purchased_credits_remaining: int
+    # The bonus part (referral rewards), which expires grant by grant, and the
+    # soonest of those expiries with how much expires then.
+    bonus_credits_remaining: int
+    bonus_credits_expiring_at: datetime | None
+    bonus_credits_expiring: int
     next_credit_reset_at: datetime | None
     usage_today: dict[str, int]
     has_pending_payment: bool
@@ -357,15 +370,20 @@ class SubscriptionService:
         ]
         anchor, _ = await self._credit_cycle(user_id, subscription)
         account = await self._sub_repo.get_account(user_id)
-        balance, purchased = await self._ledger_repo.get_latest_balances(user_id)
+        balances = await self._ledger_repo.get_latest_balances(user_id)
         now = datetime.utcnow()
+        grants = await self._ledger_repo.open_grants(user_id, now)
+        soonest = grants[0].expires_at if grants else None
         return PlanSummary(
             entitlements=entitlements,
             plan_expires_at=max(paid_ends, default=None),
             current_period_end=subscription.current_period_end if subscription else None,
             subscription_status=subscription.status.value if subscription else "none",
-            credit_minutes_remaining=balance,
-            purchased_credits_remaining=purchased,
+            credit_minutes_remaining=balances.total,
+            purchased_credits_remaining=balances.purchased,
+            bonus_credits_remaining=balances.bonus,
+            bonus_credits_expiring_at=soonest,
+            bonus_credits_expiring=sum(g.remaining for g in grants if g.expires_at == soonest),
             next_credit_reset_at=(
                 cycle_start(anchor, now) + timedelta(days=CREDIT_CYCLE_DAYS) if anchor else None
             ),
@@ -381,6 +399,9 @@ class SubscriptionService:
 
     async def get_user_credit_balance(self, user_id: str) -> int:
         return await self._ledger_repo.get_latest_balance(user_id)
+
+    async def net_charged(self, user_id: str, reference_id: str, reference_types: tuple[str, ...]) -> int:
+        return await self._ledger_repo.net_charged(user_id, reference_id, reference_types)
 
     async def get_user_credit_history(self, user_id: str, limit: int = 50) -> list[CreditLedger]:
         return await self._ledger_repo.get_history(user_id, limit)
@@ -404,13 +425,15 @@ class SubscriptionService:
 
     async def refresh_credits(self, user_id: str, commit: bool = True) -> bool:
         """Reset the plan part of the balance to the plan's allowance once per
-        credit cycle; bought credits are kept.
+        credit cycle; bought and bonus credits are kept. Expired bonus credits
+        are removed first.
 
         Unused plan credits do not roll over. Safe to call any number of times, from
         requests and the daily job at once: each cycle is claimed in
         usage_tracking under a unique key, so only the first call applies it.
         Returns whether a reset was applied.
         """
+        await self.expire_bonus_credits(user_id, commit=commit)
         subscription = await self._sub_repo.get_active_by_user(user_id)
         anchor, key = await self._credit_cycle(user_id, subscription)
         if anchor is None:
@@ -420,17 +443,17 @@ class SubscriptionService:
             return False
 
         allowance = (await self.get_entitlements(user_id)).credit_minutes
-        balance, purchased = await self._ledger_repo.get_latest_balances(user_id)
+        balances = await self._locked_balances(user_id)
         await self._record(
             user_id,
-            allowance + purchased - balance,
+            allowance - balances.plan,
             f"Plan credits reset to {allowance} for the cycle starting {start:%d %b %Y}",
-            balances=(balance, purchased),
+            balances=balances,
             reference_id=subscription.id if subscription else None,
             reference_type=CREDIT_REFILL_REFERENCE,
             commit=commit,
         )
-        log.info(f"Credits reset: user={user_id} key={key} cycle={start.date()} plan={allowance} purchased={purchased}")
+        log.info(f"Credits reset: user={user_id} key={key} cycle={start.date()} plan={allowance} purchased={balances.purchased} bonus={balances.bonus}")
         return True
 
     async def extend_plan(self, user_id: str, plan: Plan, days: int, commit: bool = True) -> UserSubscription:
@@ -479,19 +502,25 @@ class SubscriptionService:
             sub.canceled_at = now
 
         free_allowance = entitlements_for(PlanSlug.FREE.value).credit_minutes
-        balance, purchased = await self._ledger_repo.get_latest_balances(user_id)
-        if revoked and balance - purchased > free_allowance:
+        balances = await self._locked_balances(user_id)
+        if revoked and balances.plan > free_allowance:
             await self._record(
                 user_id,
-                free_allowance + purchased - balance,
+                free_allowance - balances.plan,
                 "Pro revoked: plan credits capped at the Free allowance",
-                balances=(balance, purchased),
+                balances=balances,
                 reference_type=CREDIT_REFILL_REFERENCE,
                 commit=False,
             )
         await self._flush_or_commit(True)
         log.info(f"Paid plan revoked: user={user_id} periods={len(revoked)}")
         return len(revoked)
+
+    async def _locked_balances(self, user_id: str) -> Balances:
+        """The balances, read under the user's lock: anything about to change the
+        balance reads it through here, so concurrent charges are applied in turn."""
+        await self._ledger_repo.lock_user(user_id)
+        return await self._ledger_repo.get_latest_balances(user_id)
 
     async def _flush_or_commit(self, commit: bool) -> None:
         if commit:
@@ -501,46 +530,207 @@ class SubscriptionService:
         if amount <= 0:
             raise ValueError("Credit deduction amount must be positive")
 
-        # A new cycle may have started since the balance was last touched.
+        # A new cycle may have started, or bonus credits expired, since the
+        # balance was last touched.
         await self.refresh_credits(user_id)
-        balance, purchased = await self._ledger_repo.get_latest_balances(user_id)
-        if balance < amount:
+        balances = await self._locked_balances(user_id)
+        if balances.total < amount:
             raise InsufficientCreditsError(
-                f"Insufficient credits: required={amount}, available={balance}"
+                f"Insufficient credits: required={amount}, available={balances.total}"
             )
 
-        # Plan credits expire at the next reset, so they are spent first.
-        from_purchased = max(0, amount - (balance - purchased))
+        grant_spends, from_plan = await self._spend_expiring(user_id, balances, amount)
+        from_bonus = sum(used for _, used in grant_spends)
+        from_purchased = amount - from_plan - from_bonus
         entry = await self._record(
             user_id,
             -amount,
             reason,
-            balances=(balance, purchased),
+            balances=balances,
             purchased_amount=-from_purchased,
+            bonus_amount=-from_bonus,
+            grant_spends=grant_spends,
             reference_id=reference_id,
             reference_type=reference_type,
         )
-        log.info(f"Credits deducted: user={user_id} amount={amount} purchased={from_purchased} reason={reason} balance={entry.balance_after}")
+        log.info(
+            f"Credits deducted: user={user_id} amount={amount} bonus={from_bonus} purchased={from_purchased} "
+            f"reason={reason} balance={entry.balance_after}"
+        )
         return entry
+
+    async def _spend_expiring(
+        self, user_id: str, balances: Balances, amount: int
+    ) -> tuple[list[tuple[CreditGrant, int]], int]:
+        """Split a charge over the credits that expire soonest: plan credits (gone
+        at the next reset) and bonus grants by their dates. Bought credits never
+        expire, so they pay for whatever is left. Returns what each grant pays
+        and what the plan part pays."""
+        now = datetime.utcnow()
+        subscription = await self._sub_repo.get_active_by_user(user_id)
+        anchor, _ = await self._credit_cycle(user_id, subscription)
+        plan_expires = cycle_start(anchor, now) + timedelta(days=CREDIT_CYCLE_DAYS) if anchor else datetime.max
+        # On a tie the plan part goes first: a grant may still be refunded into.
+        sources: list[tuple[datetime, int, CreditGrant | None]] = [(plan_expires, balances.plan, None)]
+        sources += [(g.expires_at, g.remaining, g) for g in await self._ledger_repo.open_grants(user_id, now)]
+
+        grant_spends: list[tuple[CreditGrant, int]] = []
+        from_plan = 0
+        left = amount
+        for _, available, grant in sorted(sources, key=lambda source: source[0]):
+            used = min(left, available)
+            if used <= 0:
+                continue
+            left -= used
+            if grant is None:
+                from_plan = used
+            else:
+                grant_spends.append((grant, used))
+        return grant_spends, from_plan
 
     async def refund_credits(self, user_id: str, amount: int, reason: str, reference_id: str | None = None, reference_type: str | None = None) -> CreditLedger:
         if amount <= 0:
             raise ValueError("Refund amount must be positive")
 
-        # Bought credits the refunded charge spent go back to the bought part,
-        # so a failed run cannot make them expire at the next reset.
-        charge = await self._ledger_repo.get_latest_charge(user_id, reference_id) if reference_id else None
-        to_purchased = min(amount, -charge.purchased_amount) if charge else 0
+        # Expire first: refunded credits may reopen a grant, and its unspent
+        # leftover must not come back with them.
+        await self.expire_bonus_credits(user_id)
+        balances = await self._locked_balances(user_id)
+        # Credits go back where the refunded charges took them from, so a failed
+        # run cannot turn bought credits into plan credits that expire at the
+        # next reset, or move bonus credits off the grant they expire with.
+        to_purchased = 0
+        grant_returns: list[tuple[CreditGrant, int]] = []
+        if reference_id:
+            to_purchased = min(amount, await self._ledger_repo.purchased_spent(user_id, reference_id))
+            left = amount - to_purchased
+            for grant, spent in await self._ledger_repo.grants_spent(user_id, reference_id):
+                give = min(left, spent)
+                if give <= 0 or grant.voided_at:
+                    continue
+                self._reopen(grant)
+                grant_returns.append((grant, -give))
+                left -= give
+        to_bonus = -sum(given for _, given in grant_returns)
         entry = await self._record(
             user_id,
             amount,
             reason,
+            balances=balances,
             purchased_amount=to_purchased,
+            bonus_amount=to_bonus,
+            grant_spends=grant_returns,
             reference_id=reference_id,
             reference_type=reference_type,
         )
-        log.info(f"Credits refunded: user={user_id} amount={amount} purchased={to_purchased} reason={reason} balance={entry.balance_after}")
+        log.info(
+            f"Credits refunded: user={user_id} amount={amount} bonus={to_bonus} purchased={to_purchased} "
+            f"reason={reason} balance={entry.balance_after}"
+        )
         return entry
+
+    @staticmethod
+    def _reopen(grant: CreditGrant) -> None:
+        """Make a grant spendable again for credits refunded into it after it
+        expired, for a short grace period rather than not at all."""
+        grace_until = datetime.utcnow() + timedelta(days=get_settings().BONUS_REFUND_GRACE_DAYS)
+        if grant.expired_at or grant.expires_at <= datetime.utcnow():
+            grant.expired_at = None
+            grant.expires_at = max(grant.expires_at, grace_until)
+
+    async def grant_bonus_credits(
+        self,
+        user_id: str,
+        amount: int,
+        expires_in_days: int,
+        source: str,
+        reason: str,
+        reference_id: str | None = None,
+        commit: bool = True,
+    ) -> CreditGrant:
+        """Give credits that expire ``expires_in_days`` from now. With
+        ``commit=False`` everything is only flushed, for the caller's transaction."""
+        if amount <= 0 or expires_in_days <= 0:
+            raise ValueError("A bonus needs a positive amount and lifetime")
+
+        balances = await self._locked_balances(user_id)
+        grant = await self._ledger_repo.add_grant(CreditGrant(
+            user_id=user_id,
+            amount=amount,
+            remaining=amount,
+            source=source,
+            reference_id=reference_id,
+            expires_at=datetime.utcnow() + timedelta(days=expires_in_days),
+        ))
+        await self._record(
+            user_id,
+            amount,
+            reason,
+            balances=balances,
+            bonus_amount=amount,
+            reference_id=grant.id,
+            reference_type=BONUS_GRANT_REFERENCE,
+            commit=commit,
+        )
+        log.info(f"Bonus credits granted: user={user_id} amount={amount} source={source} expires={grant.expires_at}")
+        return grant
+
+    async def void_grant(self, grant_id: str, reason: str, commit: bool = True) -> int:
+        """Take back what is left of a grant (a reward found to be abuse). Credits
+        already spent stay spent. Returns how many were taken back."""
+        grant = await self._ledger_repo.get_grant(grant_id)
+        if not grant or grant.voided_at:
+            return 0
+        balances = await self._locked_balances(grant.user_id)
+        # Read again under the lock: a charge may have used it meanwhile.
+        await self._ledger_repo.refresh(grant)
+        taken = grant.remaining if not grant.expired_at else 0
+        grant.voided_at = datetime.utcnow()
+        if taken:
+            await self._record(
+                grant.user_id,
+                -taken,
+                reason,
+                balances=balances,
+                bonus_amount=-taken,
+                grant_spends=[(grant, taken)],
+                reference_id=grant.id,
+                reference_type=BONUS_VOIDED_REFERENCE,
+                commit=commit,
+            )
+        else:
+            await self._flush_or_commit(commit)
+        log.info(f"Bonus grant voided: user={grant.user_id} grant={grant_id} taken={taken}")
+        return taken
+
+    async def expire_bonus_credits(self, user_id: str, commit: bool = True) -> int:
+        """Remove what is left of bonus grants past their date. Returns how many
+        credits expired; safe to call any number of times."""
+        now = datetime.utcnow()
+        if not await self._ledger_repo.due_grants(user_id, now):
+            return 0
+        balances = await self._locked_balances(user_id)
+        # Read again under the lock, so two callers cannot both expire a grant.
+        due = await self._ledger_repo.due_grants(user_id, now)
+        expiring = [(grant, grant.remaining) for grant in due if grant.remaining > 0]
+        for grant in due:
+            grant.expired_at = now
+        total = sum(left for _, left in expiring)
+        if total:
+            await self._record(
+                user_id,
+                -total,
+                f"{total} bonus credits expired",
+                balances=balances,
+                bonus_amount=-total,
+                grant_spends=expiring,
+                reference_type=BONUS_EXPIRED_REFERENCE,
+                commit=commit,
+            )
+        else:
+            await self._flush_or_commit(commit)
+        log.info(f"Bonus credits expired: user={user_id} amount={total} grants={len(due)}")
+        return total
 
     async def topup_credits(self, user_id: str, amount: int, reason: str, reference_id: str | None = None, reference_type: str | None = None, created_by: str | None = None) -> CreditLedger:
         if amount <= 0:
@@ -576,22 +766,27 @@ class SubscriptionService:
         amount: int,
         reason: str,
         *,
-        balances: tuple[int, int] | None = None,
+        balances: Balances | None = None,
         purchased_amount: int = 0,
+        bonus_amount: int = 0,
+        grant_spends: list[tuple[CreditGrant, int]] = (),
         reference_id: str | None = None,
         reference_type: str | None = None,
         created_by: str | None = None,
         commit: bool = True,
     ) -> CreditLedger:
-        """Write a ledger entry, carrying the bought part of the balance forward.
-        Every balance change goes through here so that part is never dropped."""
-        balance, purchased = balances or await self._ledger_repo.get_latest_balances(user_id)
+        """Write a ledger entry, carrying the bought and bonus parts of the balance
+        forward. Every balance change goes through here so they are never dropped."""
+        before = balances or await self._locked_balances(user_id)
         return await self._ledger_repo.add_entry(
             user_id=user_id,
             amount=amount,
-            balance_after=balance + amount,
-            purchased_balance_after=purchased + purchased_amount,
+            balances_after=Balances(
+                before.total + amount, before.purchased + purchased_amount, before.bonus + bonus_amount
+            ),
             purchased_amount=purchased_amount,
+            bonus_amount=bonus_amount,
+            grant_spends=grant_spends,
             reason=reason,
             reference_id=reference_id,
             reference_type=reference_type,
