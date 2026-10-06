@@ -19,12 +19,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    auth_provider = postgresql.ENUM("password", "google", "microsoft", name="auth_provider", create_type=True)
-    project_status = postgresql.ENUM("pending", "processing", "uploaded", "completed", "failed", name="project_status", create_type=True)
-    workspace_role = postgresql.ENUM("owner", "admin", "member", "viewer", name="workspace_role", create_type=True)
-    member_status = postgresql.ENUM("active", "pending", name="member_status", create_type=True)
-    step_status = postgresql.ENUM("pending", "running", "completed", "failed", "reverted", "skipped", name="step_status", create_type=True)
-    pipeline_step_type = postgresql.ENUM("download", "audio_extraction", "ai_noise_cancellation", "transcription", "clip_generation", "caption_styling", "auto_reframe", "export", name="pipeline_step_type", create_type=True)
+    # Each type is created once below; create_type=False stops create_table
+    # from creating it a second time.
+    auth_provider = postgresql.ENUM("password", "google", "microsoft", name="auth_provider", create_type=False)
+    project_status = postgresql.ENUM("pending", "processing", "uploaded", "completed", "failed", name="project_status", create_type=False)
+    workspace_role = postgresql.ENUM("owner", "admin", "member", "viewer", name="workspace_role", create_type=False)
+    member_status = postgresql.ENUM("active", "pending", name="member_status", create_type=False)
+    step_status = postgresql.ENUM("pending", "running", "completed", "failed", "reverted", "skipped", name="step_status", create_type=False)
+    pipeline_step_type = postgresql.ENUM("download", "audio_extraction", "ai_noise_cancellation", "transcription", "clip_generation", "caption_styling", "auto_reframe", "export", name="pipeline_step_type", create_type=False)
 
     auth_provider.create(op.get_bind())
     project_status.create(op.get_bind())
