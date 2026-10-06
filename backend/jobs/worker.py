@@ -16,7 +16,7 @@ import signal
 from typing import Any
 
 from core.config import get_settings
-from core.logging_config import get_logger
+from core.logging_config import get_logger, setup_logging
 from jobs.queue import Job, run_job, sqs_client
 
 log = get_logger(__name__)
@@ -131,4 +131,5 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     asyncio.run(main())
