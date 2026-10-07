@@ -8,6 +8,7 @@ editorial gates, checked here in order:
 * time: on screen long enough to read, never in the clip's first second;
 * budget: at most one graphic per ``SECONDS_PER_CUE`` of clip, never two on
   screen at once, with a breath between them; the most useful kinds win.
+  A light plan (every plan below Pro) takes only small pops, a few per clip.
 
 Where on screen a cue goes is decided at render time, from the layout the cut
 actually has there (see :mod:`motion.graphics`).
@@ -35,6 +36,9 @@ PRIORITY = {"cta": 0, "list": 1, "number": 2, "name": 3, "reaction": 4}
 TEMPLATE = {"list": LIST_CARD, "number": BIG_NUMBER, "name": ENTITY_TAG, "cta": CTA_CARD, "reaction": REACTION}
 REACTION_EMOJI = {"funny": "😂", "hype": "🔥", "wholesome": "🥹"}
 MAX_REACTIONS = 2
+# The light plan: small pops over the speaker, never a card that takes the screen.
+LITE_KINDS = frozenset({"number", "name", "reaction"})
+LITE_MAX_CUES = 2
 NAME_ICONS = {"place": "📍", "person": "👤", "brand": "🏷️", "product": "🏷️", "game": "🎮"}
 CTA_LABELS = {
     "code": "USE CODE", "link": "LINK IN BIO", "follow": "FOLLOW FOR MORE",
@@ -42,14 +46,20 @@ CTA_LABELS = {
 }
 
 
-def plan_motion(found: ClipMoments, body_start: float, body_end: float, body_seconds: float) -> MotionPlan:
+def plan_motion(
+    found: ClipMoments, body_start: float, body_end: float, body_seconds: float, lite: bool = False,
+) -> MotionPlan:
     """The clip's graphics: one cue per moment that passes every gate.
 
     ``body_start``/``body_end`` bound the clip in source seconds and
-    ``body_seconds`` is how long it plays (stitched clips skip time).
+    ``body_seconds`` is how long it plays (stitched clips skip time). ``lite``
+    keeps only the light plan's kinds and budget.
     """
     budget = max(1, int(body_seconds // SECONDS_PER_CUE))
-    candidates = [cue for cue in (_cue(m, found.mood) for m in found.moments) if cue is not None]
+    moments = [m for m in found.moments if m.kind in LITE_KINDS] if lite else found.moments
+    if lite:
+        budget = min(budget, LITE_MAX_CUES)
+    candidates = [cue for cue in (_cue(m, found.mood) for m in moments) if cue is not None]
     kept: list[Cue] = []
     names = reactions = 0
     for cue, moment in sorted(candidates, key=lambda pair: (PRIORITY[pair[1].kind], pair[0].start)):

@@ -31,6 +31,17 @@ source "${CONFIG}"
 : "${API_HOST:?set in ${CONFIG}}" "${WORKER_INSTANCE_ID:?set in ${CONFIG}}" "${CONFIG_S3_URI:?set in ${CONFIG}}"
 export AWS_PROFILE AWS_REGION EC2_KEY CONFIG_S3_URI AWS_PAGER=""
 SSH_OPTS=(-i "${EC2_KEY}" -o IdentitiesOnly=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new)
+CONFIG_BUCKET="${CONFIG_S3_URI#s3://}"
+CONFIG_BUCKET="${CONFIG_BUCKET%%/*}"
+
+# Brand and hook-bridge videos stay out of git; the servers pull them from
+# s3://<config bucket>/motion/ (see update_ec2.sh), so upload this computer's
+# copies first. Unchanged files are skipped.
+upload_motion() {
+    echo "=== Motion videos -> s3://${CONFIG_BUCKET}/motion/ ==="
+    aws s3 sync "${REPO_DIR}/backend/static/motion/" "s3://${CONFIG_BUCKET}/motion/" --only-show-errors \
+        --exclude '*' --include 'branding/*.mp4' --include 'hook_graphics/*.mp4'
+}
 
 deploy_api() {
     echo "=== API machine (${API_HOST}) ==="
@@ -55,6 +66,7 @@ deploy_worker() {
     bash "${REPO_DIR}/update_ec2.sh" worker "ec2-user@${ip}"
 }
 
+upload_motion
 case "${TARGET}" in
     api) deploy_api ;;
     worker) deploy_worker ;;

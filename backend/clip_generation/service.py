@@ -28,6 +28,7 @@ from clip_generation.hook import (
     trim_spans,
 )
 from hook_transitions.resolver import ClipContext, TransitionSpec, hook_text_from, resolve_transition
+from clip.model import VideoProject
 from clip_generation.model import ContentCategory, GeneratedClip, SocialPlatform, SOCIAL_PLATFORM_DEFAULTS
 from clip_generation.repository import ClipRepository
 from clip_generation.schema import ClipEditorSettings
@@ -428,6 +429,14 @@ class ClipService:
         except Exception as exc:
             log.warning("Presign failed: key=%s error=%s", key, exc)
             return None
+
+    def video_url(self, clip: GeneratedClip) -> str | None:
+        """Signed per read: stored URLs expire, the S3 keys do not."""
+        return self._presign(clip.s3_bucket, clip.s3_key) or clip.presigned_url
+
+    def source_video_url(self, project: VideoProject) -> str | None:
+        """The project's source video as stored, signed per read."""
+        return self._presign(project.s3_bucket, project.s3_key)
 
     def poster_url(self, clip: GeneratedClip, analysis: dict | None = None) -> str | None:
         """Signed per read: the stored poster URL expires, the S3 key does not."""
@@ -1723,14 +1732,13 @@ class ClipService:
             "score": clip.score,
             "scores": self._loads(clip.scores, {}),
             "content_category": clip.content_category,
-            # Signed per read: stored URLs expire, the S3 keys do not.
-            "presigned_url": self._presign(clip.s3_bucket, clip.s3_key) or clip.presigned_url,
+            "presigned_url": self.video_url(clip),
             "poster_url": self.poster_url(clip, analysis),
             "local_path": clip.local_path,
             "status": clip.status,
             "subtitle_style_id": clip.subtitle_style_id,
             "burned_subtitle_path": clip.burned_subtitle_path,
-            "burned_presigned_url": self._burned_url(clip),
+            "burned_presigned_url": self.burned_url(clip),
             "transcript": transcript,
             # Absolute-time transcript above, clip-relative words below: the
             # player needs the latter, the burner needs the former.
@@ -1791,7 +1799,7 @@ class ClipService:
                 edited.append({**segment, "words": kept, "text": text})
         return edited
 
-    def _burned_url(self, clip: GeneratedClip) -> str | None:
+    def burned_url(self, clip: GeneratedClip) -> str | None:
         # burned_subtitle_path holds the S3 key since renders moved to S3; older
         # rows hold a local path, for which only the stored URL is left.
         key = clip.burned_subtitle_path

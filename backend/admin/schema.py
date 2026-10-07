@@ -105,6 +105,28 @@ class AdminUserDetailResponse(BaseModel):
     credit_history: list[AdminCreditEntry]
 
 
+class AdminClip(BaseModel):
+    id: str
+    title: str
+    duration_seconds: float
+    score: float
+    status: str
+    # Signed links that expire; refetch to play again later.
+    video_url: Optional[str] = None
+    # The render with captions burned in, once the user has exported one.
+    captioned_video_url: Optional[str] = None
+    poster_url: Optional[str] = None
+    created_at: datetime
+
+
+class AdminProjectClipsResponse(BaseModel):
+    project_id: str
+    title: str
+    # The video the user uploaded or we downloaded, while it is still stored.
+    source_video_url: Optional[str] = None
+    clips: list[AdminClip]
+
+
 class AdminDailyGrowth(BaseModel):
     day: date
     signups: int

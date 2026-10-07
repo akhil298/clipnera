@@ -11,7 +11,7 @@ from motion.icons import icon_for
 from motion.moments import ClipMoments, Moment, reactions, validate
 from motion.overlay import build_overlay
 from motion.plan import BIG_NUMBER, CTA_CARD, LIST_CARD, REACTION, Cue, MotionPlan, dump_plan, load_plan
-from motion.planner import plan_motion
+from motion.planner import LITE_MAX_CUES, plan_motion
 from motion.sound import manifest, onset, sounds_for
 from subtitle_styling.ass_generator import build_ass_file
 
@@ -109,6 +109,14 @@ class TestPlanner:
         assert len(plan.cues) <= 3
         for a, b in zip(plan.cues, plan.cues[1:]):
             assert b.start >= a.end
+
+    def test_the_light_plan_keeps_only_a_few_small_pops(self):
+        found = validate({"mood": "funny", "lists": [ORDER],
+                          "numbers": [{"from": 19, "to": 21, "value": "$10,000", "label": ""}],
+                          "ctas": [{"from": 15, "to": 17, "kind": "code", "text": "KFSPEED"}]}, _clip(start=10.0))
+        assert [cue.kind for cue in plan_motion(found, 10.0, 40.0, 30.0, lite=True).cues] == [BIG_NUMBER]
+        moments = [Moment("number", 5.0 + i * 3, 5.5 + i * 3, {"value": str(100 + i), "label": ""}) for i in range(8)]
+        assert len(plan_motion(_moments(*moments), 0.0, 40.0, 40.0, lite=True).cues) == LITE_MAX_CUES
 
     def test_nothing_in_the_opening_second(self):
         plan = plan_motion(_moments(Moment("number", 0.3, 0.8, {"value": "500", "label": ""})), 0.0, 20.0, 20.0)

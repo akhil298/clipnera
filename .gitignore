@@ -56,11 +56,8 @@ backend/transcription_outputs/
 *.mkv
 *.mov
 *.part
-# Brand motion ships with the repo: exports are rendered with these files.
-!backend/static/branding/**/*.mp4
-!backend/static/branding/**/*.mov
-# Hook-bridge motion graphics (hook_transitions.graphics_source.render); EC2 deploys by git pull.
-!backend/static/hook_graphics/*.mp4
+# Brand and hook-bridge videos (backend/static/motion/{branding,hook_graphics})
+# reach the servers from S3, not git: deploy.sh uploads, update_ec2.sh pulls.
 !branding/motion-library/**/*.mp4
 
 # Logs

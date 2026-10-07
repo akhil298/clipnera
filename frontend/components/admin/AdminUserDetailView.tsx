@@ -9,6 +9,7 @@ import { isPaidPlanSlug, planLabel } from '@/hooks/useEntitlements';
 import { formatDate, formatDay, parseApiDate } from '@/lib/utils/dates';
 import { BILLING_PERIOD_LABELS, formatAmount, formatDateTime } from '@/lib/utils/payments';
 import { AdminLayout } from './AdminLayout';
+import { AdminProjectClips } from './AdminProjectClips';
 import { AdminError, AdminSpinner, AdminTable, StatTile, usd } from './AdminUi';
 
 const TIMELINE_PREVIEW = 30;
@@ -93,6 +94,7 @@ export function AdminUserDetailView() {
   const [detail, setDetail] = useState<AdminUserDetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showFullTimeline, setShowFullTimeline] = useState(false);
+  const [openProjectId, setOpenProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     adminUsersApi
@@ -175,13 +177,26 @@ export function AdminUserDetailView() {
                 </div>,
                 project.status,
                 project.duration_seconds ? `${Math.round(project.duration_seconds / 60)} min` : '—',
-                project.clips.toLocaleString(),
+                <span key="c" className="inline-flex items-center gap-2">
+                  {project.clips.toLocaleString()}
+                  <button
+                    type="button"
+                    onClick={() => setOpenProjectId((open) => (open === project.id ? null : project.id))}
+                    aria-pressed={openProjectId === project.id}
+                    className="text-xs font-bold text-amber-300 hover:text-amber-200"
+                  >
+                    {openProjectId === project.id ? 'Hide' : 'View'}
+                  </button>
+                </span>,
                 project.credits_charged.toLocaleString(),
                 usd(project.ai_cost_usd),
                 formatDateTime(project.created_at),
               ])}
               empty="No projects yet."
             />
+            {openProjectId && (
+              <AdminProjectClips userId={id} projectId={openProjectId} onClose={() => setOpenProjectId(null)} />
+            )}
           </Section>
 
           <Section title="Logins">

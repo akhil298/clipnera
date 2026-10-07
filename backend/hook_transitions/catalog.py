@@ -209,7 +209,14 @@ PHRASES: dict[str, Phrase] = {p.id: p for p in (
     Phrase("level_up", "Level up", ("gaming", "fitness", "hype")),
     Phrase("three_two_one", "3... 2... 1...", ("hype", "sports", "music")),
     Phrase("from_the_top", "From the top", ("general", "story")),
+    Phrase("full_episode", "Watch the full episode", ("podcast",)),
 )}
+
+# Auto's bridge on a podcast clip points viewers at the episode it was cut
+# from, held long enough to read.
+CTA_PHRASE = "full_episode"
+CTA_CATEGORIES = frozenset({"podcast_interview"})
+CTA_MIN_DURATION = 1.2
 
 # Hook intents Auto can detect; UI filters use the same names.
 INTENTS = (

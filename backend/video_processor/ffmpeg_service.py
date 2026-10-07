@@ -5,10 +5,11 @@ import os
 import subprocess
 import tempfile
 import time
+from fractions import Fraction
 from pathlib import Path
 from typing import Optional
 
-from video_processor.geometry import crop_tracking_path, target_crop_size
+from video_processor.geometry import CROP_PATH_RATE, crop_tracking_path, target_crop_size
 
 from core.logging_config import get_logger
 from core.exceptions import CustomException
@@ -32,6 +33,17 @@ PUNCH_IN_RAMP_SECONDS = 0.25
 # stream copy, and a waveform cut mid-cycle clicks; this is too short to hear.
 SEAM_FADE_SECONDS = 0.02
 
+# Parts are joined by stream copy, which only lines up when every part shares
+# one constant frame rate, one track timescale and a whole number of frames.
+# A punch-in part (zoompan, 1/11988) joined to a crop part (1/30000) left
+# hundreds of frames on one timestamp, then froze for seconds: the clip
+# stuttered and drifted off its audio and captions.
+STANDARD_FRAME_RATES = tuple(
+    Fraction(rate) for rate in ("24000/1001", "24", "25", "30000/1001", "30", "50", "60000/1001", "60")
+)
+DEFAULT_FRAME_RATE = Fraction(30)
+TRACK_TIMESCALE = "90000"
+
 
 def seam_fade_filter(duration: float) -> str:
     """Audio filter fading a part of ``duration`` seconds in and out, so joins do not click."""
@@ -39,18 +51,26 @@ def seam_fade_filter(duration: float) -> str:
     return f"afade=t=in:d={SEAM_FADE_SECONDS},afade=t=out:st={fade_out:.3f}:d={SEAM_FADE_SECONDS}"
 
 
-def punch_in_filter(zoom: float, width: int, height: int, fps: float) -> str:
+def punch_in_filter(zoom: float, width: int, height: int, rate: Fraction) -> str:
     """Centred zoom from 1x to ``zoom`` at a fixed ``width``x``height``.
 
     zoompan keeps the frame size constant (a per-frame ``scale`` resized the
-    stream and reset crop's centring); ``d=1`` with the source ``fps`` maps
-    frames one to one, so audio stays in sync.
+    stream and reset crop's centring); ``d=1`` with the exact source ``rate``
+    maps frames one to one, so audio stays in sync.
     """
     eased = f"1+{zoom - 1:.4f}*(1-pow(1-min(1,it/{PUNCH_IN_RAMP_SECONDS}),3))"
     return (
         f"zoompan=z='{eased}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-        f":d=1:s={width}x{height}:fps={fps:.3f}"
+        f":d=1:s={width}x{height}:fps={rate}"
     )
+
+
+def frame_exact(duration: float, rate: Fraction) -> tuple[float, list[str]]:
+    """``duration`` rounded to whole frames at ``rate``, and the output options
+    holding a part to exactly that many frames on the shared track timescale."""
+    frames = max(1, round(duration * rate))
+    exact = float(frames / rate)
+    return exact, ["-t", f"{exact:.6f}", "-frames:v", str(frames), "-video_track_timescale", TRACK_TIMESCALE]
 
 
 def zoom_filter(zoom: float, width: int, height: int) -> str:
@@ -244,17 +264,26 @@ class FFmpegService:
         except Exception as exc:
             raise CustomException(message=f"FFprobe failed: {exc}", code="FFPROBE_ERROR", status_code=500)
 
-    async def probe_fps(self, input_path: str) -> float:
-        """Frame rate of the first video stream; 30 when it cannot be read."""
-        info = await self.get_video_info(input_path)
-        stream = next((s for s in info.get("streams") or [] if s.get("codec_type") == "video"), {})
-        rate = str(stream.get("avg_frame_rate") or stream.get("r_frame_rate") or "")
+    async def probe_frame_rate(self, input_path: str) -> Fraction:
+        """Constant rate every part cut from this source renders at; 30 when it cannot be read.
+
+        Phone footage is variable-rate and averages to something like
+        1798200/60061, so a measured rate is snapped to the standard one it
+        approximates.
+        """
         try:
-            num, _, den = rate.partition("/")
-            fps = float(num) / float(den or 1)
+            info = await self.get_video_info(input_path)
+        except CustomException:
+            return DEFAULT_FRAME_RATE
+        stream = next((s for s in info.get("streams") or [] if s.get("codec_type") == "video"), {})
+        try:
+            measured = Fraction(str(stream.get("avg_frame_rate") or stream.get("r_frame_rate") or ""))
         except (ValueError, ZeroDivisionError):
-            fps = 0.0
-        return fps if fps > 0 else 30.0
+            return DEFAULT_FRAME_RATE
+        if measured <= 0:
+            return DEFAULT_FRAME_RATE
+        nearest = min(STANDARD_FRAME_RATES, key=lambda rate: abs(rate - measured))
+        return nearest if abs(nearest - measured) / measured < 0.02 else Fraction(max(1, round(measured)))
 
     async def get_video_info(self, input_path: str) -> dict:
         cmd = [
@@ -399,6 +428,8 @@ class FFmpegService:
             raise CustomException(message="Source video dimensions are unavailable", code="VIDEO_DIMENSIONS_UNAVAILABLE", status_code=400)
 
         crop_width, crop_height = target_crop_size(source_width, source_height, f"{target_width}:{target_height}")
+        rate = await self.probe_frame_rate(input_path)
+        duration, _ = frame_exact(duration, rate)
 
         # Tracking timestamps are absolute; the filter graph runs on the cut clip.
         relative_tracking = [
@@ -408,8 +439,10 @@ class FFmpegService:
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
 
+        # At least one crop position per frame, so a pan on 60fps footage glides too.
         path = crop_tracking_path(
             relative_tracking, source_width, source_height, crop_width, crop_height, duration,
+            rate=max(CROP_PATH_RATE, float(rate)),
         )
         _, start_x, start_y = path[0]
         # The crop starts at the path's first position and sendcmd moves it
@@ -423,8 +456,7 @@ class FFmpegService:
             f"{scale},setsar=1"
         )
         if zoom > 1.0 and ease:
-            fps = await self.probe_fps(input_path)
-            video_filter += "," + punch_in_filter(zoom, target_width, target_height, fps)
+            video_filter += "," + punch_in_filter(zoom, target_width, target_height, rate)
         elif zoom > 1.0:
             video_filter += "," + zoom_filter(zoom, target_width, target_height)
         log.debug("Crop filter graph", extra={"video_filter": video_filter})
@@ -478,7 +510,7 @@ class FFmpegService:
             source = input_path if "://" in input_path else str(Path(input_path).resolve())
             returncode, stderr = await self._run_ffmpeg(
                 source, str(output_file.resolve()),
-                start_time, duration, video_filter, encoder_args, cwd=workdir,
+                start_time, duration, video_filter, encoder_args, rate, cwd=workdir,
             )
 
         if returncode != 0:
@@ -493,7 +525,7 @@ class FFmpegService:
                 f"{scale},setsar=1"
             )
             returncode, fallback_stderr = await self._run_ffmpeg(
-                input_path, output_path, start_time, duration, fallback_filter, encoder_args
+                input_path, output_path, start_time, duration, fallback_filter, encoder_args, rate,
             )
             if returncode != 0 or not output_file.exists() or output_file.stat().st_size == 0:
                 raise CustomException(
@@ -621,13 +653,15 @@ class FFmpegService:
         """Encode ``graph`` (ending in ``[v]``) over a stretch of the source, with
         the same encoder settings as tracked crops so the parts join by stream copy."""
         encoder_args = await self._get_encoder_args()
+        rate = await self.probe_frame_rate(input_path)
+        duration, timing = frame_exact(duration, rate)
         source = input_path if "://" in input_path else str(Path(input_path).resolve())
         cmd = [
             "ffmpeg", "-y", "-nostdin",
             "-ss", str(start_time), "-i", source,
-            "-t", str(duration),
-            "-filter_complex", graph,
-            "-map", "[v]", "-map", "0:a?",
+            *timing,
+            "-filter_complex", f"{graph};[v]fps={rate}[out]",
+            "-map", "[out]", "-map", "0:a?",
             "-af", seam_fade_filter(duration),
             *encoder_args,
             "-c:a", "aac", "-b:a", "128k",
@@ -681,13 +715,15 @@ class FFmpegService:
         duration: float,
         video_filter: str,
         encoder_args: list[str],
+        rate: Fraction,
         cwd: str | None = None,
     ) -> tuple[int, str]:
+        duration, timing = frame_exact(duration, rate)
         cmd = [
             "ffmpeg", "-y",
             "-ss", str(start_time), "-i", input_path,
-            "-t", str(duration),
-            "-vf", video_filter,
+            *timing,
+            "-vf", f"{video_filter},fps={rate}",
             "-af", seam_fade_filter(duration),
             *encoder_args,
             "-c:a", "aac", "-b:a", "128k",

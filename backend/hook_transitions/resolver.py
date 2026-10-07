@@ -3,17 +3,26 @@
 Auto mode reads the clip -- its content category and the words of its hook --
 and picks a preset and a bridge line that fit. The pick is seeded by the clip
 id, so a re-export renders the same transition while a batch of clips still
-gets variety instead of one look repeated.
+gets variety instead of one look repeated. A podcast clip's bridge always
+points at the full episode, whatever look it gets.
 """
 
 from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Iterable
 
-from hook_transitions.catalog import PHRASES, PRESET_LIST, PRESETS, Preset
+from hook_transitions.catalog import (
+    CTA_CATEGORIES,
+    CTA_MIN_DURATION,
+    CTA_PHRASE,
+    PHRASES,
+    PRESET_LIST,
+    PRESETS,
+    Preset,
+)
 from hook_transitions.graphics import pick_graphic
 from hook_transitions.schema import HookTransitionConfig
 
@@ -121,6 +130,8 @@ def resolve_transition(
     intents = detect_intents(context.hook_text, context.category)
     if config.mode == "auto":
         base = pick_preset(context, intents)
+        if context.category in CTA_CATEGORIES:
+            base = replace(base, text=CTA_PHRASE, duration=max(base.duration, CTA_MIN_DURATION))
     else:
         base = PRESETS[config.preset_id] if config.preset_id else CUSTOM_DEFAULTS
 

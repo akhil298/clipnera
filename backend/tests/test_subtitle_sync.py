@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from hook_transitions.graph import Timeline
-from subtitle_styling.ass_generator import TITLE_SECONDS, ass_filter, AssGenerator, ass_time, burn_filter_args
+from subtitle_styling.ass_generator import TITLE_SECONDS, ass_filter, AssGenerator, ass_time, burn_filter_args, steady_caption_y
 from subtitle_styling.service import SubtitleStylingService
 
 
@@ -213,6 +213,29 @@ class TestStaticTitle:
             assert on_seam == (float(start_of(line).split(":")[-1]) < 0.8)
             # Words after the stack ends are never drawn on a line placed on its seam.
             assert not (on_seam and any(word in line for word in ("}D{", "}E{", "}F{")))
+
+    def test_captions_hold_their_height_when_it_clears_every_face(self, offset_segments) -> None:
+        words = SubtitleStylingService._extract_words_for_ass(offset_segments)
+        faces = [[0.3, 0.2, 0.4, 0.2], [0.3, 0.55, 0.4, 0.12]]  # one above the seam, one just below it
+        ass = AssGenerator().build_ass(words, clip_start=30.0, clip_end=40.0, seams=[(0.0, 2.0, 0.5)], faces=faces)
+        captions = [line for line in dialogue_lines(ass) if ",Caption," in line]
+        assert captions and not any("\\pos(540,960)" in line for line in captions)
+
+    def test_captions_stay_on_the_seam_when_their_height_would_cover_a_face(self, offset_segments) -> None:
+        words = SubtitleStylingService._extract_words_for_ass(offset_segments)
+        faces = [[0.3, 0.2, 0.4, 0.2], [0.3, 0.68, 0.4, 0.14]]  # the lower speaker sits on the usual line
+        ass = AssGenerator().build_ass(words, clip_start=30.0, clip_end=40.0, seams=[(0.0, 2.0, 0.5)], faces=faces)
+        captions = [line for line in dialogue_lines(ass) if ",Caption," in line]
+        # One height for the whole clip, not just while the stack is up.
+        assert captions and all("\\pos(540,960)" in line for line in captions)
+
+    def test_a_close_up_chin_near_the_seam_does_not_start_captions_hopping(self) -> None:
+        # Single close-up (chin at 0.47) and a stack whose lower face sits on the usual line.
+        faces = [[0.3, 0.27, 0.4, 0.2], [0.3, 0.1, 0.4, 0.2], [0.3, 0.63, 0.4, 0.14]]
+        assert steady_caption_y(0.76, [(3.0, 8.0, 0.5)], faces, 0.035) == 0.5
+
+    def test_steady_caption_y_gives_up_when_no_height_clears_the_faces(self) -> None:
+        assert steady_caption_y(0.76, [(0.0, 2.0, 0.5)], [[0, 0.45, 1, 0.4]], 0.03) is None
 
     def test_no_title_cue_without_a_title(self, offset_segments) -> None:
         ass = AssGenerator().build_ass(

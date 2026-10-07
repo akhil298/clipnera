@@ -467,6 +467,7 @@ class SubtitleStylingService:
                 # Stacks are built for vertical cuts only.
                 seams=_seams_on_output(seams, hook, gap) if media.height > media.width else None,
                 quiet=overlay.quiet if overlay else None,
+                faces=_faces_shown(motion) if media.height > media.width else None,
                 output_path=os.path.join(tmpdir, "captions.ass"),
             )
             filters = [ass_filter(ass_path)]
@@ -698,6 +699,14 @@ class SubtitleStylingService:
             max_chars=max_chars,
             max_words_per_line=max_words_per_line,
         )
+
+
+def _faces_shown(motion: Optional[MotionSource]) -> Optional[list[list[float]]]:
+    """Every face box the vertical cut shows; ``None`` for a cut made before
+    layouts were recorded, which keeps captions on the seams."""
+    if motion is None or not motion.frames:
+        return None
+    return [face for frame in motion.frames for face in frame.get("faces") or [] if len(face) == 4]
 
 
 def _seams_on_output(

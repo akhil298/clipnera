@@ -1446,6 +1446,28 @@ export interface AdminUserDetailResponse {
   credit_history: AdminCreditEntry[];
 }
 
+export interface AdminClip {
+  id: string;
+  title: string;
+  duration_seconds: number;
+  score: number;
+  status: string;
+  /** Signed links that expire; refetch to play again later. */
+  video_url: string | null;
+  /** The render with captions burned in, once the user has exported one. */
+  captioned_video_url: string | null;
+  poster_url: string | null;
+  created_at: string;
+}
+
+export interface AdminProjectClipsResponse {
+  project_id: string;
+  title: string;
+  /** The video the user uploaded or we downloaded, while it is still stored. */
+  source_video_url: string | null;
+  clips: AdminClip[];
+}
+
 export interface AdminDailyGrowth {
   /** UTC day, YYYY-MM-DD. */
   day: string;
@@ -1495,6 +1517,8 @@ export interface AdminOverviewResponse {
 export const adminUsersApi = {
   list: (params: AdminUserListParams = {}) => authedRequest<AdminUserResponse[]>(`/admin/users${queryString(params)}`),
   getDetail: (userId: string) => envelopeRequest<AdminUserDetailResponse>(`/admin/users/${userId}/detail`),
+  getProjectClips: (userId: string, projectId: string) =>
+    envelopeRequest<AdminProjectClipsResponse>(`/admin/users/${userId}/projects/${projectId}/clips`),
   setPlan: (userId: string, body: AdminUserPlanRequest) =>
     authedRequest<AdminUserResponse>(`/admin/users/${userId}/plan`, {
       method: 'PATCH',

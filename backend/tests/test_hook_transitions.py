@@ -108,6 +108,14 @@ class TestResolver:
         context = ClipContext("clip-42", "podcast_interview", "Why did nobody tell me this?")
         assert resolve_transition(None, context) == resolve_transition(None, context)
 
+    def test_auto_points_podcast_clips_at_the_full_episode(self):
+        for i in range(20):
+            spec = resolve_transition(None, ClipContext(f"p-{i}", "podcast_interview", "Why did nobody tell me this?"))
+            assert spec.text == PHRASES["full_episode"].text and spec.duration >= 1.2
+        custom = resolve_transition({"mode": "auto", "custom_text": "Part 2"}, ClipContext("p", "podcast_interview"))
+        assert custom.text == "Part 2"
+        assert resolve_transition(None, ClipContext("g", "gaming", "no way")).text != PHRASES["full_episode"].text
+
     def test_auto_varies_across_clips(self):
         picks = {resolve_transition(None, ClipContext(f"clip-{i}", "gaming", "no way that just happened")).preset_id
                  for i in range(30)}

@@ -851,8 +851,7 @@ class PipelineOrchestrator:
         )
         if self.clip_settings.get("broll"):
             await self._plan_broll()
-        if self.is_pro:
-            await self._plan_motion()
+        await self._plan_motion()
         self._notify("Clip generation complete", 100)
         return result
 
@@ -872,7 +871,7 @@ class PipelineOrchestrator:
             log.warning("B-roll planning failed: project=%s error=%s", self.project_id, exc)
 
     async def _plan_motion(self) -> None:
-        """Motion graphics for the new clips (Pro). Never fails the run: a clip without graphics is still a clip."""
+        """Motion graphics for the new clips (the light set below Pro). Never fails the run: a clip without graphics is still a clip."""
         try:
             count = await plan_project_motion(
                 self.project_id, self.user_id, self.is_pro, video_path=await self._project_video_path(),

@@ -310,7 +310,7 @@ export default function DashboardApp() {
           const progress = pipelineStatus?.is_completed
             ? 100
             : hasPipeline
-              ? Math.round((completedSteps / pipelineStatus!.steps.length) * 100)
+              ? Math.min(99, Math.round((completedSteps / pipelineStatus!.steps.length) * 100))
               : 0;
           const youtubeThumbnail = youtubeThumbnailUrl(project.source_url || '');
           const uploaded = project.source_type === 'upload';
@@ -459,9 +459,11 @@ export default function DashboardApp() {
           ((completedCount + runningPercent / 100) / stepCount) * 100
         );
 
+        // The steps can round to 100% while the last one is still cutting and
+        // saving clips; the project stays processing until the run reports done.
         handleUpdateProject(projectId, {
-          processingProgress: overallPercent,
-          processingStatus: overallPercent >= 100 ? 'completed' : 'processing',
+          processingProgress: Math.min(99, overallPercent),
+          processingStatus: 'processing',
         });
         return false;
       }
