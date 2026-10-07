@@ -190,6 +190,35 @@ CAPTION_ANIMATIONS = frozenset({
 })
 # Glow templates soften their outline into a halo by this much.
 GLOW_BLUR = 3
+# A caption row's height as a multiple of its em, and the clear air kept
+# between a caption line and a face, as a share of the frame height.
+CAPTION_LINE_HEIGHT = 1.25
+FACE_CLEARANCE = 0.01
+# The bottom of a face box a caption may touch: the chin, never eyes or mouth.
+# A close-up's chin sits near mid-frame, so without it no height would ever
+# clear a podcast and its captions would keep hopping.
+FACE_CHIN_SHARE = 0.2
+
+
+def steady_caption_y(
+    default_y: float,
+    seams: list[tuple[float, float, float]] | None,
+    faces: list[list[float]],
+    half_band: float,
+) -> float | None:
+    """One height for every caption line of a clip, as a share of the frame.
+
+    The style's own height, else a stack's seam, whichever keeps a band of
+    ``half_band`` either side clear of every face (``[x, y, w, h]`` boxes of
+    the output) the clip shows, the chin aside. Lines that hop to the seam and back each time
+    the layout flips read as captions jumping around the screen. ``None``
+    when no single height clears every face.
+    """
+    for y in dict.fromkeys([default_y, *(seam for _, _, seam in seams or [])]):
+        low, high = y - half_band - FACE_CLEARANCE, y + half_band + FACE_CLEARANCE
+        if all(face[1] + face[3] * (1 - FACE_CHIN_SHARE) <= low or face[1] >= high for face in faces):
+            return y
+    return None
 
 
 @dataclass(frozen=True)
@@ -558,6 +587,7 @@ class AssGenerator:
         segment_breaks: list[float] | None = None,
         seams: list[tuple[float, float, float]] | None = None,
         quiet: list[tuple[float, float]] | None = None,
+        faces: list[list[float]] | None = None,
     ) -> str:
         """``segment_breaks`` are times (on the words' timeline) where the picture
         cuts to a different segment, e.g. the end of the hook teaser; no caption
@@ -567,11 +597,11 @@ class AssGenerator:
         on the seam between them, as a share of the height, not over a face.
         ``quiet`` are ``(start, end)`` stretches, in seconds from the clip's
         start, where a motion graphic already shows what is said; caption lines
-        overlapping one are left out so text never sits on text."""
+        overlapping one are left out so text never sits on text.
+        ``faces`` are every face box the cut shows (see ``CutResult.frames``);
+        given, captions hold one height for the whole clip when one clears
+        them all, and only fall back to hopping onto seams when none does."""
         template = {**get_template(style_id), **(style_overrides or {})}
-        # A stack starting or ending moves the captions, so no line spans that either.
-        seam_edges = [clip_start + edge for low, high, _ in seams or [] for edge in (low, high)]
-        breaks = sorted([*(segment_breaks or []), *seam_edges])
         spoken = " ".join(str(w.get("text") or w.get("word") or "") for w in transcript_words)
         fallback = script_font(f"{spoken} {title or ''}")
         template["font_family"] = fallback[0] if fallback else bundled_family(template["font_family"])
@@ -586,6 +616,17 @@ class AssGenerator:
 
         caption_x = round(width / 2)
         caption_y = round(template["position_y"] * height)
+        rows = max(1, int(template.get("rows") or 1))
+        if faces is not None:
+            stack_height = 1 + (rows - 1) * float(template.get("second_line_scale") or 1.0)
+            steady = steady_caption_y(
+                template["position_y"], seams, faces, font_size_em * CAPTION_LINE_HEIGHT * stack_height / 2 / height,
+            )
+            if steady is not None:
+                caption_y, seams = round(steady * height), None
+        # A stack starting or ending moves the captions, so no line spans that either.
+        seam_edges = [clip_start + edge for low, high, _ in seams or [] for edge in (low, high)]
+        breaks = sorted([*(segment_breaks or []), *seam_edges])
         margin_h = round(width * (1 - CAPTION_SAFE_WIDTH) / 2)
 
         primary_color = _hex_to_ass_style(template["font_color"])
@@ -647,7 +688,6 @@ class AssGenerator:
             glow=bool(template.get("glow")),
             uppercase=bool(template.get("uppercase")),
         )
-        rows = max(1, int(template.get("rows") or 1))
 
         # --- Build header ---
         header_lines = [
@@ -979,6 +1019,7 @@ def build_ass_file(
     segment_breaks: list[float] | None = None,
     seams: list[tuple[float, float, float]] | None = None,
     quiet: list[tuple[float, float]] | None = None,
+    faces: list[list[float]] | None = None,
 ) -> str:
     """Generate an ASS subtitle file and return its path."""
     generator = AssGenerator()
@@ -997,6 +1038,7 @@ def build_ass_file(
         segment_breaks=segment_breaks,
         seams=seams,
         quiet=quiet,
+        faces=faces,
     )
 
     if output_path:

@@ -35,6 +35,7 @@ async def plan_project_motion(
 ) -> int:
     """Plan and store graphics for every clip of a project; returns how many clips got any.
 
+    Pro clips get the full set, the rest the light one (see ``motion.planner``).
     ``video_path`` (the local source) lets loud reactions be found; without it
     only spoken moments are planned.
     """
@@ -60,7 +61,7 @@ async def plan_project_motion(
         for clip, clip_moments, clip_word in zip(batch, found, words):
             clip_moments.moments += reactions(loudness, clip_word.words, clip_word.spans)
             clip_moments.moments.sort(key=lambda moment: moment.start)
-            planned[clip.id] = _plan_for(clip, clip_moments)
+            planned[clip.id] = _plan_for(clip, clip_moments, lite=not is_pro)
 
     with_graphics = 0
     async with AsyncSessionLocal() as session:
@@ -78,9 +79,9 @@ async def plan_project_motion(
     return with_graphics
 
 
-def _plan_for(clip: Any, found: Any) -> MotionPlan:
+def _plan_for(clip: Any, found: Any, lite: bool) -> MotionPlan:
     spans = parse_spans(clip.edit_spans) or [(clip.start_time, clip.end_time)]
-    return plan_motion(found, spans[0][0], spans[-1][1], sum(end - start for start, end in spans))
+    return plan_motion(found, spans[0][0], spans[-1][1], sum(end - start for start, end in spans), lite=lite)
 
 
 def motion_source(clip: Any, ratio: str = "9:16") -> MotionSource | None:

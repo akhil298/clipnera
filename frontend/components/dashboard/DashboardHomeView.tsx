@@ -659,9 +659,22 @@ export const DashboardHomeView: React.FC<DashboardHomeViewProps> = ({
                 >
                   <span className="relative w-20 aspect-video rounded-lg overflow-hidden bg-neutral-800 shrink-0">
                     {p.posterUrl ? (
-                      <img src={p.posterUrl} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                      <img
+                        src={p.posterUrl}
+                        alt=""
+                        className={`absolute inset-0 w-full h-full object-cover ${isProcessing ? 'opacity-40' : ''}`}
+                        loading="lazy"
+                      />
                     ) : (
                       <Film className="absolute inset-0 m-auto w-5 h-5 text-neutral-600" />
+                    )}
+                    {isProcessing && (
+                      <span className="absolute inset-x-0 bottom-0 h-0.5 bg-neutral-800">
+                        <span
+                          className="block h-full bg-amber-500 transition-all duration-500"
+                          style={{ width: `${Math.round(p.processingProgress || 0)}%` }}
+                        />
+                      </span>
                     )}
                   </span>
                   <span className="min-w-0 flex-1 space-y-1">
