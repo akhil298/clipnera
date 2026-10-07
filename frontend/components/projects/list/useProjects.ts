@@ -22,6 +22,7 @@ import { isRunning, projectView, type ProjectView } from './projectState';
 const LIVE_POLL_MS = 5_000;
 
 export function useProjectViews() {
+  const client = useQueryClient();
   // Ids running at the last render. Read by refetchInterval after each fetch, so polling stops once nothing runs.
   const running = useRef<ReadonlySet<string>>(new Set());
 

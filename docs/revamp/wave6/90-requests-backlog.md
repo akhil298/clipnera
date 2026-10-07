@@ -47,6 +47,12 @@ Collected from builder reports by the lead. An integration agent works through t
 - Move onboarding/connections.ts into a shared lib/api/social.ts plus lib/query/keys/social.ts.
 - **Owner decision (legacy file):** app/login/google/page.tsx should go to `takeSignInNext() ?? '/dashboard'` and call `markSignedIn()`. Without this, `?next=` only works once the dashboard is on the new UI. This edits a legacy file, so it needs the owner's OK.
 
+## Parity with clipnera commits merged on 2026-10-07 (aa8b4e9, 5ead812)
+- **Onboarding is now real on the backend:** GET/POST /onboarding (backend/onboarding/) and `onboarding_completed` on /me. The v2 onboarding (components/onboarding) must use these instead of localStorage, and match the legacy WelcomeForm fields (components/referral/WelcomeForm.tsx).
+- **Referrals:** legacy has /dashboard/referrals (ReferralsView, InvitedByCard), ReferralCapture in the root layout (kept), and /admin/referrals. v2 needs a Referrals screen (Settings area or sidebar account menu) and an admin referrals page.
+- **Expiring bonus credits:** legacy CreditsPopover and useEntitlements changed. The v2 CreditsPopover and the credit meter must show bonus credits and their expiry.
+- **Upload charges at submit:** legacy UploadModal changed. The v2 upload flow must match the new charging behaviour.
+
 ## Backend registry
 - New flags: share_links, post_analytics (spec 04).
 
