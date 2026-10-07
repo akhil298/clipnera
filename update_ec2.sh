@@ -271,10 +271,14 @@ disable_unit() {
     fi
 }
 
+CONFIG_BUCKET="${CONFIG_S3_URI#s3://}"
+# Brand and hook-bridge videos are kept out of git; both machines render
+# exports, so both pull them from beside the settings file (deploy.sh uploads).
+aws s3 sync "s3://${CONFIG_BUCKET%%/*}/motion/" "${BACKEND_DIR}/static/motion/" --only-show-errors
+
 if [[ "${ROLE}" == "worker" ]]; then
     # Face-detection models are too large for git; they live beside the
     # settings file and only the worker (which renders) needs them.
-    CONFIG_BUCKET="${CONFIG_S3_URI#s3://}"
     aws s3 sync "s3://${CONFIG_BUCKET%%/*}/models/" "${BACKEND_DIR}/models/" --only-show-errors
     disable_unit clipnera-backend
     disable_unit clipnera-publisher
