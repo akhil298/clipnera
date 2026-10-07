@@ -5,11 +5,13 @@ from typing import Any
 
 from admin.repository import REVENUE_CURRENCY, AdminRepository
 from admin.schema import (
+    AdminClip,
     AdminCreditEntry,
     AdminDailyGrowth,
     AdminGrowthResponse,
     AdminLoginEntry,
     AdminOverviewResponse,
+    AdminProjectClipsResponse,
     AdminUserDetailResponse,
     AdminUserPayment,
     AdminUserPlanRequest,
@@ -18,6 +20,7 @@ from admin.schema import (
     AdminUserSort,
 )
 from auth.model import User
+from clip_generation.service import ClipService
 from core.exceptions import CustomException
 from core.logging_config import get_logger
 from subscription.entitlements import PURCHASABLE_PLAN
@@ -97,6 +100,32 @@ class AdminService:
             credit_history=[
                 AdminCreditEntry.model_validate(entry, from_attributes=True)
                 for entry in await self._repo.user_credit_history(user_id, DETAIL_CREDIT_ENTRIES)
+            ],
+        )
+
+    async def project_clips(self, user_id: str, project_id: str) -> AdminProjectClipsResponse:
+        """A user's project with playable links to its source video and every clip."""
+        project = await self._repo.user_project(user_id, project_id)
+        if not project:
+            raise CustomException(message="Project not found", code="NOT_FOUND", status_code=404)
+        media = ClipService()
+        return AdminProjectClipsResponse(
+            project_id=project.id,
+            title=project.title,
+            source_video_url=media.source_video_url(project),
+            clips=[
+                AdminClip(
+                    id=clip.id,
+                    title=clip.title,
+                    duration_seconds=clip.duration_seconds,
+                    score=clip.score,
+                    status=clip.status,
+                    video_url=media.video_url(clip),
+                    captioned_video_url=media.burned_url(clip),
+                    poster_url=media.poster_url(clip),
+                    created_at=clip.created_at,
+                )
+                for clip in await self._repo.project_clips(project.id)
             ],
         )
 

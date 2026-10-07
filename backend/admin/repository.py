@@ -171,6 +171,15 @@ class AdminRepository:
         )
         return [tuple(row) for row in (await self._session.execute(stmt)).all()]
 
+    async def user_project(self, user_id: str, project_id: str) -> VideoProject | None:
+        stmt = select(VideoProject).where(VideoProject.id == project_id, VideoProject.user_id == user_id)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def project_clips(self, project_id: str) -> list[GeneratedClip]:
+        """The project's clips best first, as the user sees them."""
+        stmt = select(GeneratedClip).where(GeneratedClip.project_id == project_id).order_by(desc(GeneratedClip.score))
+        return list((await self._session.execute(stmt)).scalars().all())
+
     async def user_logins(self, user_id: str, limit: int) -> list[LoginEvent]:
         stmt = select(LoginEvent).where(LoginEvent.user_id == user_id).order_by(desc(LoginEvent.created_at)).limit(limit)
         return list((await self._session.execute(stmt)).scalars().all())

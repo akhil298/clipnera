@@ -9,6 +9,7 @@ from admin.repository import AdminRepository
 from admin.schema import (
     AdminGrowthResponse,
     AdminOverviewResponse,
+    AdminProjectClipsResponse,
     AdminUserDetailResponse,
     AdminUserPlanRequest,
     AdminUserResponse,
@@ -48,6 +49,12 @@ async def list_users(
 async def get_user_detail(user_id: str, service: AdminServiceDep):
     """One user's full history: projects and their sources, logins, payments and credits."""
     return ok(await service.user_detail(user_id))
+
+
+@admin.get("/users/{user_id}/projects/{project_id}/clips", response_model=ApiResponse[AdminProjectClipsResponse])
+async def get_project_clips(user_id: str, project_id: str, service: AdminServiceDep):
+    """Watch what a user made: the project's source video and its clips."""
+    return ok(await service.project_clips(user_id, project_id))
 
 
 @admin.patch("/users/{user_id}/plan", response_model=AdminUserResponse)
