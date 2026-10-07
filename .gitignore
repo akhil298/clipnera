@@ -57,10 +57,9 @@ backend/transcription_outputs/
 *.mov
 *.part
 # Brand motion ships with the repo: exports are rendered with these files.
-!backend/static/branding/**/*.mp4
-!backend/static/branding/**/*.mov
+!backend/static/motion/branding/**/*.mp4
 # Hook-bridge motion graphics (hook_transitions.graphics_source.render); EC2 deploys by git pull.
-!backend/static/hook_graphics/*.mp4
+!backend/static/motion/hook_graphics/*.mp4
 !branding/motion-library/**/*.mp4
 
 # Logs
