@@ -4,45 +4,41 @@ import { AudioLines, Captions, Crop, Film, Library, Sparkles, Type } from 'lucid
 import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/Button';
+import { MediaCard } from '@/components/ui/MediaCard';
+import { ToolRailItem } from '@/components/ui/ToolRailItem';
 import { Chip } from '@/components/ui/Chip';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { Switch } from '@/components/ui/Switch';
 import { cx, focusRing } from '@/lib/design/styles';
 
-import { MediaCard } from './MediaCard';
 import { BROLL_ALTERNATES } from './sample';
 import { TranscriptPanel } from './TranscriptPanel';
 
 export type Tool = 'transcript' | 'captions' | 'hook' | 'library' | 'format' | 'audio';
 
-export const TOOLS: ReadonlyArray<{ id: Tool; label: string; icon: ReactNode }> = [
-  { id: 'transcript', label: 'Transcript', icon: <Type /> },
-  { id: 'captions', label: 'Captions', icon: <Captions /> },
-  { id: 'hook', label: 'Hook', icon: <Sparkles /> },
-  { id: 'library', label: 'Library', icon: <Library /> },
-  { id: 'format', label: 'Format', icon: <Crop /> },
-  { id: 'audio', label: 'Audio', icon: <AudioLines /> },
+export const TOOLS: ReadonlyArray<{ id: Tool; label: string; icon: ReactNode; shortcut: string }> = [
+  { id: 'transcript', shortcut: '1', label: 'Transcript', icon: <Type /> },
+  { id: 'captions', shortcut: '2', label: 'Captions', icon: <Captions /> },
+  { id: 'hook', shortcut: '3', label: 'Hook', icon: <Sparkles /> },
+  { id: 'library', shortcut: '4', label: 'Library', icon: <Library /> },
+  { id: 'format', shortcut: '5', label: 'Format', icon: <Crop /> },
+  { id: 'audio', shortcut: '6', label: 'Audio', icon: <AudioLines /> },
 ];
 
 /** The left tool rail (was the studio's right-hand Inspector tabs; see Removals and moves). */
 export function ToolRail({ tool, onTool, orientation = 'vertical' }: { tool: Tool | null; onTool: (tool: Tool | null) => void; orientation?: 'vertical' | 'horizontal' }) {
   return (
-    <nav aria-label="Tools" className={cx('flex shrink-0 bg-cn-surface', orientation === 'vertical' ? 'w-14 flex-col items-center gap-1 border-r border-cn-border py-2' : 'h-14 items-center justify-around border-t border-cn-border px-1')}>
+    <nav aria-label="Tools" className={cx('flex shrink-0 bg-cn-surface', orientation === 'vertical' ? 'w-14 flex-col items-center gap-1 py-2' : 'h-14 items-center justify-around border-t border-cn-border px-1')}>
       {TOOLS.map((item) => (
-        <button
+        <ToolRailItem
           key={item.id}
-          type="button"
-          aria-pressed={tool === item.id}
+          label={item.label}
+          icon={item.icon}
+          shortcut={item.shortcut}
+          layout={orientation === 'vertical' ? 'rail' : 'tab'}
+          active={tool === item.id}
           onClick={() => onTool(tool === item.id ? null : item.id)}
-          className={cx(
-            'flex w-12 flex-col items-center gap-0.5 rounded-cn-md py-1.5 text-cn-caption [&_svg]:size-[18px]',
-            tool === item.id ? 'bg-cn-accent-subtle text-cn-accent-text' : 'text-cn-fg-secondary hover:bg-cn-surface-hover hover:text-cn-fg',
-            focusRing,
-          )}
-        >
-          <span aria-hidden>{item.icon}</span>
-          {item.label}
-        </button>
+        />
       ))}
     </nav>
   );
@@ -116,7 +112,7 @@ export function ToolPanel({
           <ul className="grid grid-cols-2 gap-2">
             {BROLL_ALTERNATES.map((shot) => (
               <li key={shot.id}>
-                <MediaCard size="sm" title={shot.title} length={shot.length} tone={shot.tone} meta={shot.source} actionLabel={`Add ${shot.title} at the playhead`} />
+                <MediaCard size="sm" title={shot.title} duration={shot.duration} meta={shot.source} actionLabel={`Add ${shot.title} at the playhead`} />
               </li>
             ))}
           </ul>

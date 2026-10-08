@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 
-import { Button, buttonClasses, EmptyState, InlineAlert, ToastProvider, useToast } from '@/components/ui';
+import { Button, buttonClasses, EmptyState, InlineAlert, useToast } from '@/components/ui';
 import { usePersistentState } from '@/lib/design/usePersistentState';
 
 import { DeleteProjectsDialog } from './DeleteProjectsDialog';
@@ -72,7 +72,7 @@ function summary(views: readonly ProjectView[]): string {
   return [plural(views.length, 'project'), plural(clips, 'clip'), seconds > 0 ? `${spokenLength(seconds)} of video` : ''].filter(Boolean).join(' · ');
 }
 
-function ProjectsContent() {
+export function ProjectsScreen() {
   const toast = useToast();
   const online = useOnline();
   const [filters, setFilters] = useFilters();
@@ -264,14 +264,5 @@ function ProjectsContent() {
 
       <DeleteProjectsDialog targets={deleteTargets} deleting={remove.isPending} onConfirm={confirmDelete} onClose={() => setDeleteTargets([])} />
     </div>
-  );
-}
-
-/** The Projects list island. ToastProvider stays here until the v2 shell mounts one (see report). */
-export function ProjectsScreen() {
-  return (
-    <ToastProvider>
-      <ProjectsContent />
-    </ToastProvider>
   );
 }

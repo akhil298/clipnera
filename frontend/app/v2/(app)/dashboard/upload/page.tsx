@@ -1,5 +1,15 @@
-import { Placeholder } from '@/app/v2/_platform/Placeholder';
+import type { Metadata } from 'next';
+import { Suspense } from 'react';
 
+import { NewVideoPage } from '@/components/upload/NewVideoPage';
+
+export const metadata: Metadata = { title: 'New video' };
+
+/** Direct load of /dashboard/upload. The form reads `?url=` / `?prompt=`, so it renders under Suspense. */
 export default function Page() {
-  return <Placeholder route="/dashboard/upload" area="Area 3 · Upload" />;
+  return (
+    <Suspense>
+      <NewVideoPage />
+    </Suspense>
+  );
 }

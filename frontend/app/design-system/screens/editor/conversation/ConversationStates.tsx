@@ -10,17 +10,15 @@ import { PromptBar } from '@/components/ui/PromptBar';
 import { ResultMessage } from '@/components/ui/ResultMessage';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { useToast } from '@/components/ui/Toast';
+import { CheckInCard, PromptQueue, SLASH_COMMANDS } from '@/components/ui';
 import { cx } from '@/lib/design/styles';
 
-import { CheckInCard } from '../_components/CheckInCard';
 import { ConversationPanel } from '../_components/Conversation';
-import { PromptQueue } from '../_components/PromptQueue';
 import type { RunStatus } from '../_components/run/events';
 import { SCENARIOS } from '../_components/run/scenarios';
 import { type QueuedPrompt, type Speed, useRunSimulator } from '../_components/run/useRunSimulator';
 import { CHIP_CAPTION, CHIP_CLIP, CHIP_RANGE } from '../_components/sample';
 import { ScreenShell, StateSwitcher } from '../_components/ScreenShell';
-import { filterCommands, SlashMenu } from '../_components/SlashMenu';
 import { ITEM_LOCKED_COPY } from '../_components/Timeline';
 
 /** Run status → what the conversation shows (backend §4.2; one row per status). */
@@ -60,6 +58,7 @@ export function ConversationStates() {
   const [scenario, setScenario] = useState('happy');
   const [contexts, setContexts] = useState<PromptContext[]>([CHIP_CLIP]);
   const [queue, setQueue] = useState(QUEUE);
+  const [slashText, setSlashText] = useState('/c');
   const [promptState, setPromptState] = useState('offline');
   const status = sim.turns[sim.turns.length - 1]?.status;
 
@@ -124,8 +123,8 @@ export function ConversationStates() {
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         <Card padding="md">
           <CardHeader title="Slash menu" description="Typing “/c” filters. ↑↓ move, Enter or Tab fill, Escape closes." level={3} />
-          <div className="mt-3">
-            <SlashMenu query="/c" items={filterCommands('/c')} activeIndex={0} onPick={() => undefined} onHover={() => undefined} textarea={null} />
+          <div className="mt-80">
+            <PromptBar value={slashText} onValueChange={setSlashText} onSubmit={() => undefined} slashCommands={SLASH_COMMANDS} label="Slash menu demo" />
           </div>
         </Card>
         <Card padding="md">
@@ -147,16 +146,16 @@ export function ConversationStates() {
           <CheckInCard
             className="mt-3"
             onDecide={() => undefined}
-            pause={{ reason: 'approval', credits: { estimate: 84, held: 0, spent: 0 }, approval: { kind: 'credits', text: 'This edit costs more than 60 credits.' }, options: ['continue', 'finish'] }}
+            checkIn={{ reason: 'approval', credits: { estimate: 84, spent: 0 }, approval: { text: 'This edit costs more than 60 credits.' }, options: ['continue', 'finish'] }}
           />
         </Card>
         <Card padding="md">
           <CardHeader title="Check-in: out of credits" level={3} />
-          <CheckInCard className="mt-3" onDecide={() => undefined} pause={{ reason: 'credits', credits: { estimate: 4, held: 4, spent: 4 }, needed: 3, options: ['add_credits', 'finish'] }} />
+          <CheckInCard className="mt-3" onDecide={() => undefined} checkIn={{ reason: 'credits', credits: { estimate: 4, spent: 4 }, needed: 3, options: ['add_credits', 'finish'] }} />
         </Card>
         <Card padding="md">
           <CardHeader title="Check-in: spend threshold" level={3} />
-          <CheckInCard className="mt-3" onDecide={() => undefined} pause={{ reason: 'credits', credits: { estimate: 70, held: 70, spent: 61 }, options: ['continue', 'finish'] }} />
+          <CheckInCard className="mt-3" onDecide={() => undefined} checkIn={{ reason: 'credits', credits: { estimate: 70, spent: 61 }, options: ['continue', 'finish'] }} />
         </Card>
         <Card padding="md">
           <CardHeader title="Stopped with changes kept" level={3} />

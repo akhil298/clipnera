@@ -39,7 +39,7 @@ export const UI_AREAS: readonly UiAreaRoute[] = [
     area: 'dashboard',
     flag: 'new_ui_dashboard',
     wave6Area: 3,
-    paths: [/^\/dashboard$/, /^\/dashboard\/(projects|folders|analytics|library|upload)(\/.*)?$/],
+    paths: [/^\/dashboard$/, /^\/dashboard\/(projects|folders|analytics|library|upload|referrals)(\/.*)?$/, /^\/dashboard\/welcome$/],
   },
   { area: 'admin', flag: 'new_ui_admin', wave6Area: 10, paths: [/^\/admin(\/.*)?$/] },
 ];
@@ -66,10 +66,12 @@ export type UiOverride = 'classic' | 'new' | 'auto';
 export const parseUiOverride = (value: string | null | undefined): UiOverride | null =>
   value === 'classic' || value === 'new' || value === 'auto' ? value : null;
 
-const AREA_FLAGS = new Set<FlagKey>(UI_AREAS.map((route) => route.flag));
+/** What middleware needs from the flags: the area flags, plus the switch for its auth redirects (frontend.md §1.4). */
+export const AUTH_ENFORCE_FLAG: FlagKey = 'auth_cookie_enforce';
+const AREA_FLAGS = new Set<FlagKey>([...UI_AREAS.map((route) => route.flag), AUTH_ENFORCE_FLAG]);
 const NONE = '-';
 
-/** The area flags that are on, as a cookie value. */
+/** The middleware flags that are on, as a cookie value. */
 export function encodeUiFlags(flags: Partial<Record<FlagKey, boolean>>): string {
   const on = (Object.keys(flags) as FlagKey[]).filter((key) => AREA_FLAGS.has(key) && flags[key]);
   return on.length ? on.join('~') : NONE;

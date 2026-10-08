@@ -12,6 +12,7 @@ import { AgentSection } from './AgentSection';
 import { ControlsSection } from './ControlsSection';
 import { DataSection } from './DataSection';
 import { DisplaySection } from './DisplaySection';
+import { EditorSection } from './EditorSection';
 import { FeedbackSection } from './FeedbackSection';
 import { FormsSection } from './FormsSection';
 import { FoundationsSection } from './FoundationsSection';
@@ -32,6 +33,7 @@ const SECTIONS = [
   { id: 'prompt', label: 'Prompt experience' },
   { id: 'agent', label: 'Agent replies' },
   { id: 'media', label: 'Media' },
+  { id: 'editor', label: 'Editor primitives' },
 ] as const;
 
 const THEMES = [
@@ -116,6 +118,7 @@ export function Gallery() {
             <PromptSection />
             <AgentSection />
             <MediaSection />
+            <EditorSection />
           </main>
         </div>
       </div>

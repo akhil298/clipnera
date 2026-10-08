@@ -272,8 +272,9 @@ export class PlaybackClock {
       this.handle = this.scheduler.request(this.tick);
       return;
     }
-    let time = skipForward(this.anchor.time + ((now - this.anchor.now) / 1000) * rate, this.skips);
-    if (time !== this.anchor.time + ((now - this.anchor.now) / 1000) * rate) this.anchor = { now, time };
+    const elapsed = this.anchor.time + ((now - this.anchor.now) / 1000) * rate;
+    let time = skipForward(elapsed, this.skips);
+    if (time !== elapsed) this.anchor = { now, time };
     if (loop && time >= loop.end) {
       time = loop.start;
       this.anchor = { now, time };

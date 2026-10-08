@@ -5,6 +5,7 @@ import { createContext, type ReactNode, useContext, useEffect, useMemo, useState
 import type { Workspace } from '@/lib/api/me';
 import { usePersistentState } from '@/lib/design/usePersistentState';
 
+import { THEME_STORAGE_KEY } from './theme';
 import { useMe, useWorkspaces } from './useAccount';
 
 export type ThemeChoice = 'dark' | 'light' | 'system';
@@ -62,7 +63,7 @@ function useApplyTheme(theme: ThemeChoice) {
 }
 
 export function ShellProvider({ children }: { children: ReactNode }) {
-  const [theme, setTheme] = usePersistentState<ThemeChoice>('cn_theme', 'dark');
+  const [theme, setTheme] = usePersistentState<ThemeChoice>(THEME_STORAGE_KEY, 'dark');
   // NEEDS-BACKEND: PATCH /me {active_workspace_id}; until then the choice is remembered per browser.
   const [storedWorkspaceId, setWorkspaceId] = usePersistentState<string | null>('cn_workspace', null);
   const [commandOpen, setCommandOpen] = useState(false);

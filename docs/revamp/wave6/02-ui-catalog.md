@@ -56,12 +56,14 @@ Legend: **new** = added in Wave 6. *legacy* = old-UI file kept for `app/dashboar
 
 | Component | API |
 |---|---|
-| **`Sidebar`** | `<Sidebar label="Main" collapsed onCollapsedChange header footer fullHeight>` — 240 px or 64 px rail; add `hidden md:flex` at the call site; persist `collapsed` with `usePersistentState` |
+| **`Sidebar`** | `<Sidebar label="Main" collapsed onCollapsedChange header footer fullHeight>` — 240 px or 56 px rail (`w-14`); add `hidden md:flex` at the call site; persist `collapsed` with `usePersistentState` |
 | **`SidebarSection`** | `<SidebarSection title?>` items `</SidebarSection>` (title hidden in the rail) |
 | **`SidebarNavItem`**, `useSidebarCollapsed` | `<SidebarNavItem label icon href? onClick? active count trailing disabled>` — `aria-current="page"`; rail shows tooltip, count becomes a dot |
-| **`TopBar`** | `<TopBar start end sticky variant="app\|editor">{middle}</TopBar>` — 56 px header, `z-cn-sticky` |
+| **`TopBar`** | `<TopBar start end sticky variant="app\|editor">{middle}</TopBar>` — 48 px header, solid `bg`, `z-cn-sticky` |
 | **`Breadcrumbs`** | `<Breadcrumbs items={[{label, href?}]}/>` — back link to parent on phones |
-| **`MobileTabBar`** | `<MobileTabBar label items={[{id,label,icon,href?,onClick?,count?}]} activeId placement="fixed\|inline">` — ≤ 5 tabs, < md; page needs `pb-16` |
+| **`MobileTabBar`** | `<MobileTabBar label items={[{id,label,icon,href?,onClick?,count?,emphasis?}]} activeId placement="fixed\|inline">` — ≤ 5 tabs, < md; page needs `pb-16` |
+| **`ToolRailItem`** | `<ToolRailItem label icon active onClick badge shortcut layout="rail\|tab">` — editor tool toggle (`aria-pressed`); wrap in `<nav aria-label="Tools">` |
+| **`SelectionBar`** | `<SelectionBar count noun onSelectAll onClear placement="floating\|inline">{actions}` — "3 clips selected · … · Clear (Esc)" toolbar |
 | **`ResizablePanels`** | `<ResizablePanels panels={[{id,label,defaultSize,minSize,maxSize,children}]} direction storageKey>` — separators: drag, ←/→ (Shift 10%), Home/End, Enter/double-click resets; sizes persist per browser |
 | **`Avatar`**, `initialsOf` | `<Avatar name src size={24\|32\|40} shape="person\|workspace" labelled status>` — initials fallback, broken-image safe |
 | **`AvatarMenu`** | `<AvatarMenu name detail src items={MenuEntry[]} compact side align>` — account button + Menu |
@@ -104,6 +106,9 @@ Legend: **new** = added in Wave 6. *legacy* = old-UI file kept for `app/dashboar
 |---|---|
 | **`VideoThumb`**, `ASPECT_CLASS` | `<VideoThumb poster aspect="9:16\|16:9\|1:1" duration score previewSrc previewing onScrub topLeft topRight bottomLeft dimmed selected rounded>` — decorative; the card's link names the video; hover preview after 150 ms, never under reduced motion; `onScrub(0–1)` is the sprite/seek hook |
 | **`ScoreBadge`** | `<ScoreBadge score>` — amber ≥ 85, emerald ≥ 70, neutral below; number always shown |
+| **`MediaCard`** | `<MediaCard title meta poster previewSrc duration aspect selected dimmed onOpen\|href actionLabel topLeft topRight bottomLeft onDragStart size>` — VideoThumb + `.cn-media-edge` + covering button/link |
+| **`QualityBadge`** | `<QualityBadge visible>` — "Preview quality" on the stage, always dark |
+| **`FloatingToolbar`**, `AnchorRect` | `<FloatingToolbar label anchor={{top,left,width,height}} storageKey onDismiss>{IconButtons}` — in a `relative` stage; flips under near the top; grip drags/arrow-keys to a corner; position persisted |
 | **`MediaGrid`** | `<MediaGrid label items getKey renderItem aspect loading skeletonCount empty>` — responsive columns, arrow keys between tiles, skeleton tiles in one live region |
 
 Compose a clip/library tile as in the gallery's `MediaSection`: `VideoThumb` + a title `<button|Link className={cardLinkOverlay}>` + a `Checkbox` (`relative z-cn-raised`) in `topLeft`.
@@ -112,8 +117,17 @@ Compose a clip/library tile as in the gallery's `MediaSection`: `VideoThumb` + a
 
 | Component | API |
 |---|---|
-| `PromptBar` | `<PromptBar value onValueChange onSubmit mode onModeChange running onStop contexts onRemoveContext onAttach creditCost queueCount size="hero\|docked" label ref>` |
-| `ContextChip` | `<ContextChip context={{id,kind,label,meta,thumbnailUrl}} onRemove>` |
+| `PromptBar` | `<PromptBar value onValueChange onSubmit mode? onModeChange? modes? running onStop contexts onRemoveContext onAttach attachMenu attachLabel onDropFile dropLabel creditCost hint queueCount slashCommands onSlashCommand footer size="hero\|docked" disabled disabledReason placeholder label ref>` — 07 §6.1 composer: hero `rounded-cn-3xl` raised, docked `rounded-cn-xl`; mode pill (Menu) shown when `modes` has ≥ 2 (default: none for hero, Edit/Ask/Plan docked); sends with an empty field when a chip is attached; `attachMenu` anchors a Popover on +; `onDropFile` gives the drag-over state; `running` adds the working edge, Stop, and Send → Add to queue; `footer` sits under the box |
+| `ContextChip` | `<ContextChip context={{id,kind:'source'\|'clip'\|'range'\|'caption'\|'asset'\|'moment',label,meta,thumbnailUrl}} onRemove>` — `source` shows a 16:9 poster |
+| **`SlashMenu`**, `SLASH_COMMANDS`, `slashGroups`, `isSlashQuery` | The `/` list (CommandList inside a floating surface). Usually via `PromptBar slashCommands={SLASH_COMMANDS} onSlashCommand`; commands carry `template(contexts)` or `href` |
+| **`PromptQueue`**, `QueuedPrompt` | `<PromptQueue items={[{id,prompt,chips}]} onChange>` — Up next: edit, move, remove; collapses past two |
+| **`CheckInCard`**, `CheckIn` | `<CheckInCard checkIn={{reason:'approval'\|'credits',credits:{estimate,spent},needed?,approval?:{text},options,decided?}} onDecide>` |
+| **`CitationChip`**, `Citation` | `<CitationChip citation={{start,end?,quote?,thumbnail?}} more onSeek onAttach onPreviewChange>` — mono timecode; 150 ms preview; Shift-click attaches |
+| **`SourceStrip`**, `Moment` | `<SourceStrip moments={[{id,quote,start,duration,tag,score,poster,pending}]} onSeek onUse maxVisible label>` — moment cards + "+N" |
+| **`BrollPick`**, `BrollShot` | `<BrollPick shot range reasons alternates onSwap onUndo onSearchElse>` — "Added at… Why…" + Swap |
+| **`VersionItem`**, `VersionSummary` | `<VersionItem version={{id,name,author,time,exactTime,poster,current,bookmarked,exported,restored}} viewing restoring onView onRestore onToggleBookmark onRename onCompare onJumpToMessage>` — inside an `<ol>` |
+| **`RenderCard`**, `RenderStatus` | `<RenderCard title meta poster aspect status="queued\|rendering\|checking\|done\|failed\|cancelled\|expired" step percent eta queuePosition keepTabOpen error facts onDownload downloadPrimary actions onCancel onRetry>` |
+| **`ActivityIndicator`**, `ActivityItem` | `<ActivityIndicator items={[{id,title,step,percent?,failed?,action?}]}>` — live-dot pill + popover; hidden when empty |
 | `ChoiceCard` | `<ChoiceCard question choices onChoose onSkip chosenId>` |
 | `StepList` | `<StepList steps={RunStep[]} elapsed expanded onExpandedChange onRetryStep>` |
 | `ResultMessage` | `<ResultMessage status summary changes notDone safeNote version onRetry suggestions onSuggestion details timestamp>` (now uses FollowUpChips) |
@@ -122,6 +136,18 @@ Compose a clip/library tile as in the gallery's `MediaSection`: `VideoThumb` + a
 | **`SourceList`** | `<SourceList sources maxVisible label highlightedId>` — horizontal strip, "+N more" |
 | **`CitationMarker`** | `<CitationMarker index onClick>` — inline `[n]` button |
 | **`FollowUpChips`** | `<FollowUpChips items={(string\|{id,label,icon})[]} onPick variant="chips\|list" label showLabel max loading>` — fills the bar, never sends |
+
+### Spec names → components (screens/02-editor §19.1)
+
+| Spec | Use |
+|---|---|
+| DS-E7 StreamedText | `StreamingText` (`streaming` = not done). No separate component |
+| DS-E8 CitationChip | `CitationChip` (timecodes). `CitationMarker` stays for numbered `[n]` web/doc sources |
+| DS-E15 SourceStrip | `SourceStrip` for video moments; `SourceList` stays for mixed sources (clips, B-roll, pages) |
+| DS-E6 MediaCard / Poster | `MediaCard` (wraps `VideoThumb`, which already does the hover preview) |
+| DS-E1 working sweep, Add to queue, + menu | `PromptBar running`, `attachMenu` |
+
+Page cross-fade (07 §4.3, 120 ms): no new keyframe — use `motion-safe:animate-in motion-safe:fade-in motion-safe:duration-cn-fast` (tailwindcss-animate) on the page wrapper.
 
 ## Helpers in `lib/design` (new this wave)
 
@@ -136,4 +162,4 @@ Compose a clip/library tile as in the gallery's `MediaSection`: `VideoThumb` + a
 
 ## Still to build (not in this pass)
 
-RadioGroup (02 §3.8, mock in `libraries/_components/Additions.tsx`), Select rebuild (§3.5), CreditMeter (DS-4), ActivityIndicator (§4.8), PromptBar `modes`/`onDropFile`/`footer` (DS-9), SelectionBar (DS-13), PromptQueue, VersionHistory item, VideoPlayer chrome, Timeline.
+RadioGroup (02 §3.8, mock in `libraries/_components/Additions.tsx`), Select rebuild (§3.5), CreditMeter (DS-4), VideoPlayer chrome, Timeline, MomentCard and TimelineChangeMarker (07 §6.4–6.5), SaveBar, PlatformMark, DateTimeField.

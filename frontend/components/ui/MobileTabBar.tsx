@@ -12,6 +12,8 @@ export interface MobileTab {
   onClick?: () => void;
   /** Unread or waiting count; a dot plus a spoken count. */
   count?: number;
+  /** The centre "New (+)" action: its icon sits on an amber-subtle circle. One per bar. */
+  emphasis?: boolean;
 }
 
 export interface MobileTabBarProps {
@@ -34,7 +36,7 @@ export function MobileTabBar({ label, items, activeId, placement = 'fixed', clas
     <nav
       aria-label={label}
       className={cx(
-        'border-t border-cn-border bg-cn-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur',
+        'border-t border-cn-border bg-cn-bg pb-safe',
         placement === 'fixed' && 'fixed inset-x-0 bottom-0 z-cn-sticky md:hidden',
         className,
       )}
@@ -50,7 +52,14 @@ export function MobileTabBar({ label, items, activeId, placement = 'fixed', clas
           );
           const content = (
             <>
-              <span aria-hidden className={cx('relative inline-flex', active && 'text-cn-accent-text')}>
+              <span
+                aria-hidden
+                className={cx(
+                  'relative inline-flex',
+                  item.emphasis && 'size-8 items-center justify-center rounded-cn-full bg-cn-accent-subtle text-cn-accent-text',
+                  active && 'text-cn-accent-text',
+                )}
+              >
                 {item.icon}
                 {item.count !== undefined && item.count > 0 && (
                   <span className="absolute -right-1 -top-0.5 size-2 rounded-cn-full bg-cn-accent ring-2 ring-cn-bg" />

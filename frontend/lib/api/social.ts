@@ -1,13 +1,6 @@
-'use client';
+import { apiFetch } from './client';
 
-import { useQuery } from '@tanstack/react-query';
-
-import { apiFetch } from '@/lib/api/client';
-
-/**
- * The two `/social` calls the welcome needs. Types mirror backend/social/schema.py.
- * Lives here until a shared `lib/api/social.ts` exists (requested from Platform / Area 8).
- */
+/** Typed wrappers for `/social` (connected channels). Types mirror backend/social/schema.py. */
 
 /** backend/social/schema.py `Platform`. */
 export type SocialPlatform = 'youtube' | 'tiktok' | 'instagram' | 'x';
@@ -53,16 +46,7 @@ export interface ConnectStartResponse {
   authorize_url: string;
 }
 
-export const socialKeys = {
-  all: ['social'] as const,
-  connections: () => [...socialKeys.all, 'connections'] as const,
-};
-
 export const getConnections = (signal?: AbortSignal) => apiFetch<ConnectionsResponse>('/social/connections', { signal });
 
 export const startConnect = (platform: SocialPlatform) =>
   apiFetch<ConnectStartResponse>(`/social/oauth/${platform}/start`, { method: 'POST' });
-
-export function useConnections() {
-  return useQuery({ queryKey: socialKeys.connections(), queryFn: ({ signal }) => getConnections(signal), staleTime: 60_000 });
-}

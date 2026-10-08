@@ -1,12 +1,12 @@
 'use client';
 
-import { LogOut, RotateCcw, Settings, ShieldCheck } from 'lucide-react';
+import { Gift, LogOut, RotateCcw, Settings, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { AvatarMenu, IconButton, type MenuEntry, Skeleton } from '@/components/ui';
 import { cx } from '@/lib/design/styles';
 
-import { ADMIN_HREF, SETTINGS_HREF } from './nav';
+import { ADMIN_HREF, REFERRALS_HREF, SETTINGS_HREF } from './nav';
 import { type ThemeChoice, useShell } from './ShellContext';
 import { planName, useMe, useWorkspaces } from './useAccount';
 import { useSignOut } from './useSignOut';
@@ -25,7 +25,7 @@ export interface AccountMenuProps {
   className?: string;
 }
 
-/** Who is signed in, with workspace switch, theme, settings, shortcuts, Admin (admins only) and sign out. */
+/** Who is signed in, with workspace switch, theme, settings, refer and earn, shortcuts, Admin (admins only) and sign out. */
 export function AccountMenu({ compact = false, side = 'top', align = 'start', className }: AccountMenuProps) {
   const router = useRouter();
   const me = useMe();
@@ -67,6 +67,7 @@ export function AccountMenu({ compact = false, side = 'top', align = 'start', cl
     ...THEMES.map((option) => ({ id: `theme-${option.id}`, label: option.label, checked: theme === option.id, onSelect: () => setTheme(option.id) })),
     { type: 'separator', id: 's-app' },
     { id: 'settings', label: 'Settings', icon: <Settings />, onSelect: () => router.push(SETTINGS_HREF) },
+    { id: 'referrals', label: 'Refer and earn', icon: <Gift />, onSelect: () => router.push(REFERRALS_HREF) },
     { id: 'shortcuts', label: 'Keyboard shortcuts', shortcut: ['?'], onSelect: () => setShortcutsOpen(true) },
     ...(user.role === 'admin' ? [{ id: 'admin', label: 'Admin', icon: <ShieldCheck />, onSelect: () => router.push(ADMIN_HREF) }] : []),
     { type: 'separator', id: 's-out' },

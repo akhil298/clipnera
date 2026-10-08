@@ -4,7 +4,7 @@ import { Suspense } from 'react';
 import { ProjectsScreen } from '@/components/projects/list/ProjectsScreen';
 import { ProjectsSkeleton } from '@/components/projects/list/ProjectsSkeleton';
 
-export const metadata: Metadata = { title: 'Projects · Clipnera' };
+export const metadata: Metadata = { title: 'Projects' };
 
 /** Projects list (screens/01 §8). Data loads on the client: the token is not visible to the server yet. */
 export default function ProjectsPage() {

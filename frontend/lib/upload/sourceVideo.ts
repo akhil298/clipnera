@@ -1,5 +1,5 @@
 import { apiFetch } from '@/lib/api/client';
-import { startClipRunWhenReady, type ClipRunRequest } from '@/lib/api/pipeline';
+import type { PipelineStartRequest } from '@/lib/api/pipeline';
 
 import { defineUploadKind } from './store';
 import type { UploadedPart } from './types';
@@ -25,6 +25,8 @@ export interface VideoUploadInitResponse {
 export interface VideoUploadCompleteRequest {
   upload_id: string;
   parts: UploadedPart[];
+  /** Started by the server once the upload is ready (charged then, refunded if it can't start). */
+  pipeline?: PipelineStartRequest | null;
 }
 
 export interface VideoUploadCompleteResponse {
@@ -50,13 +52,14 @@ export const isVideoContentType = (type: string): type is VideoContentType => (V
 export interface SourceVideoMeta {
   /** From the file's own metadata, so the server refuses an over-long video before any bytes move. */
   durationSeconds: number | null;
-  /** The clip run to start once the video is in. */
-  run: ClipRunRequest;
+  /** The clip run the server starts once the video is in. */
+  run: PipelineStartRequest;
 }
 
 /**
  * A project's source video: `begin` creates the project, the bytes go straight
- * to S3, and once the server has read the file the clip run starts.
+ * to S3, and `complete` hands the run to the server, which starts it once it
+ * has read the file. The tab is needed only until `complete` answers.
  */
 export const sourceVideoUpload = defineUploadKind<SourceVideoMeta>({
   kind: 'source_video',
@@ -70,16 +73,10 @@ export const sourceVideoUpload = defineUploadKind<SourceVideoMeta>({
     });
     return { id: init.project_id, plan: { uploadId: init.upload_id, partSize: init.part_size, partUrls: init.part_urls } };
   },
-  complete: async (target, parts) => {
-    await completeVideoUpload(target.id, { upload_id: target.plan.uploadId, parts });
+  complete: async (target, parts, meta) => {
+    await completeVideoUpload(target.id, { upload_id: target.plan.uploadId, parts, pipeline: meta.run });
   },
   abort: async (target) => {
     await abortVideoUpload(target.id, { upload_id: target.plan.uploadId });
-  },
-  after: {
-    step: 'Getting your video ready',
-    run: async (target, meta, signal) => {
-      await startClipRunWhenReady(target.id, meta.run, signal);
-    },
   },
 });

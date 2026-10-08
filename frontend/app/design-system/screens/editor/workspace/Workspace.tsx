@@ -39,8 +39,8 @@ const SPEEDS = [
 ];
 
 const JOBS = [
-  { id: 'j1', project: 'Kavya on pricing', step: 'Making the full-quality preview' },
-  { id: 'j2', project: 'Founders Q&A', step: 'Exporting 3 clips', percent: 42 },
+  { id: 'j1', title: 'Kavya on pricing', step: 'Making the full-quality preview' },
+  { id: 'j2', title: 'Founders Q&A', step: 'Exporting 3 clips', percent: 42 },
 ];
 
 const isField = (target: EventTarget | null) =>
@@ -234,7 +234,7 @@ export function Workspace() {
       versionCount={sim.editor.versionCount}
       versionPulse={sim.editor.versionPulse}
       saveState={sim.editor.online ? 'saved' : 'offline'}
-      jobs={sim.editor.quality === 'preview' ? JOBS : JOBS.slice(1)}
+      activity={sim.editor.quality === 'preview' ? JOBS : JOBS.slice(1)}
       balance={sim.editor.balance}
       onHistory={() => setHistory(true)}
       onUndo={undoLatest}

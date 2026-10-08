@@ -1,11 +1,12 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { Badge, Button, InlineAlert, Skeleton, SkeletonGroup } from '@/components/ui';
 import { isApiError } from '@/lib/api/errors';
-
-import { startConnect, useConnections, type ConnectionsResponse, type SocialPlatform } from './connections';
+import { getConnections, startConnect, type ConnectionsResponse, type SocialPlatform } from '@/lib/api/social';
+import { socialKeys } from '@/lib/query/keys/social';
 
 /** Only the platforms Clipnera claims (D3). */
 const OFFERED: readonly SocialPlatform[] = ['youtube', 'instagram'];
@@ -33,11 +34,11 @@ function rowsFrom(data: ConnectionsResponse): Row[] {
 }
 
 /**
- * Step 2: connect a channel, optional. Connecting leaves for the platform and
- * returns to Settings, so `onLeave` marks the welcome done first.
+ * Connect a channel, optional. Connecting leaves for the platform and returns
+ * to Settings; the welcome form is already saved by then, so nothing is lost.
  */
-export function ConnectStep({ onLeave }: { onLeave: () => void }) {
-  const connections = useConnections();
+export function ConnectStep() {
+  const connections = useQuery({ queryKey: socialKeys.connections(), queryFn: ({ signal }) => getConnections(signal), staleTime: 60_000 });
   const [opening, setOpening] = useState<SocialPlatform | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,7 +47,6 @@ export function ConnectStep({ onLeave }: { onLeave: () => void }) {
     setOpening(platform);
     try {
       const { authorize_url } = await startConnect(platform);
-      onLeave();
       window.location.assign(authorize_url);
     } catch (err) {
       setOpening(null);

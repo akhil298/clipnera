@@ -1,5 +1,7 @@
 'use client';
 
+import type { CheckInDecision } from '@/components/ui/CheckInCard';
+import type { QueuedPrompt } from '@/components/ui/PromptQueue';
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 
 import type { PromptContext } from '@/components/ui/ContextChip';
@@ -26,7 +28,7 @@ export interface TurnView {
   steps: RunStep[];
   checking: boolean;
   question?: { id: string; text: string; choices: { id: string; label: string; hint?: string }[]; chosenId?: string };
-  pause?: Extract<RunEvent, { type: 'run.paused' }>['data'] & { decided?: string };
+  pause?: Extract<RunEvent, { type: 'run.paused' }>['data'] & { decided?: CheckInDecision };
   stopping: boolean;
   answerText: string;
   findings: { severity: 'info' | 'warn'; text: string }[];
@@ -53,11 +55,7 @@ export interface EditorView {
   catchingUp: boolean;
 }
 
-export interface QueuedPrompt {
-  id: string;
-  prompt: string;
-  chips: PromptContext[];
-}
+export type { QueuedPrompt };
 
 interface State {
   turns: TurnView[];
@@ -82,7 +80,7 @@ type Action =
   | { kind: 'reset'; revision: number }
   | { kind: 'send'; turn: TurnView }
   | { kind: 'event'; turnId: string; event: RunEvent }
-  | { kind: 'decide'; turnId: string; decision: string }
+  | { kind: 'decide'; turnId: string; decision: CheckInDecision }
   | { kind: 'undo'; turnId: string; undone: boolean; revision: number }
   | { kind: 'catch-up-done' };
 
@@ -381,7 +379,7 @@ export function useRunSimulator(initialRevision = 40) {
     setQueue(rest);
     const base = stateRef.current.editor.revision;
     const scenario: Scenario = { ...scenarioById('happy'), id: 'follow-up', prompt: next.prompt, beats: followUpBeats(base) };
-    run(makeTurn(next.prompt, next.chips, 'edit'), scenario, scenario.beats);
+    run(makeTurn(next.prompt, [...next.chips], 'edit'), scenario, scenario.beats);
   };
 
   /** Starts a scenario as if the person had pressed Enter. Clears the conversation unless `keep`. */

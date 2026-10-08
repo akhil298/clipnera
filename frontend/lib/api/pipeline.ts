@@ -2,13 +2,10 @@ import type { CreatorIntro } from '@/lib/api';
 
 import { apiFetch } from './client';
 import type { Entitlements } from './credits';
-import { isApiError } from './errors';
-import { getDownloadProgress, type PipelineRunResponse } from './jobs';
 
 /**
- * Starting a clip run (`POST /pipeline/start/{project_id}`). The route takes a
- * plain dict (backend/pipeline/service.py `_plan_run`), so these types mirror
- * the keys it reads, not a Pydantic model:
+ * The settings of a clip run. PipelineStartRequest types its fields as plain
+ * dicts (backend/pipeline/schema.py), so these types mirror the keys the run reads:
  * - `audio_config`: backend/audio/enhancement/service.py `process_audio_pipeline` (snake_case keys;
  *   the legacy UploadModal sent camelCase, which the backend ignored).
  * - `output_aspect_ratios`: clamped to the plan by `resolve_output_aspect_ratios`.
@@ -54,52 +51,43 @@ export interface ClipRunRequest {
   clip_settings: ClipSettings;
 }
 
-/** Charges credits and queues the run. 409 VIDEO_NOT_READY until the source video is in. */
-export const startClipRun = (projectId: string, body: ClipRunRequest, idempotencyKey: string) =>
-  apiFetch<PipelineRunResponse>(`/pipeline/start/${encodeURIComponent(projectId)}`, {
-    method: 'POST',
-    body,
-    idempotencyKey,
-    timeoutMs: 30_000,
-  });
+/**
+ * The run settings sent with a YouTube download or an upload's `complete`
+ * (backend/pipeline/schema.py PipelineStartRequest): the server starts the run
+ * itself once the video is stored, so closing the tab afterwards is safe.
+ */
+export type PipelineStartRequest = ClipRunRequest;
 
-const READY_POLL_MS = 1500;
-const READY_WAIT_MS = 30 * 60_000;
-
-function pause(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener('abort', () => {
-      clearTimeout(timer);
-      reject(new DOMException('Stopped', 'AbortError'));
-    }, { once: true });
-  });
+/** `POST /clips/download` answer (backend/clip/schema.py VideoMetadataResponse). */
+export interface VideoDownloadResponse {
+  id: string;
+  title: string;
+  thumbnail_url: string;
+  channel_title: string;
+  duration_formatted: string;
+  resolution: string;
+  aspect_ratio: string | number;
+  file_size: number;
+  presigned_url: string;
+  original_url: string;
+  status: string;
+  created_at: string;
+  /** Charged now, when the download is requested with a run; 0 otherwise. */
+  credits_deducted: number;
 }
 
 /**
- * Waits for the source video (YouTube download or finished upload) and then
- * starts the run. Needs this tab open until the start lands.
- * NEEDS-BACKEND: `on_ready: {pipeline}` on POST /uploads and POST /imports/youtube (screens/01 §9),
- * so the server starts the run itself and closing the tab is safe.
+ * Creates the project, starts the download and charges for the run at once
+ * (charge at submit); the server starts the run when the video is stored and
+ * refunds the charge if it can't. 402 INSUFFICIENT_CREDITS when the balance is short.
  */
-export async function startClipRunWhenReady(projectId: string, body: ClipRunRequest, signal?: AbortSignal): Promise<PipelineRunResponse> {
-  const idempotencyKey = crypto.randomUUID();
-  const deadline = Date.now() + READY_WAIT_MS;
-  while (Date.now() < deadline) {
-    const progress = await getDownloadProgress(projectId, signal);
-    if (progress.status === 'error') throw new Error(progress.message || 'The video could not be read.');
-    // `idle`: the server no longer tracks the transfer (finished earlier, or restarted). Ask, and let it say.
-    if (progress.status === 'done' || progress.status === 'idle') {
-      try {
-        return await startClipRun(projectId, body, idempotencyKey);
-      } catch (err) {
-        if (!(isApiError(err) && err.code === 'VIDEO_NOT_READY')) throw err;
-      }
-    }
-    await pause(READY_POLL_MS, signal);
-  }
-  throw new Error('The video took too long to arrive.');
-}
+export const importYoutube = (url: string, pipeline: PipelineStartRequest, idempotencyKey: string) =>
+  apiFetch<VideoDownloadResponse>('/clips/download', {
+    method: 'POST',
+    body: { url, pipeline },
+    idempotencyKey,
+    timeoutMs: 60_000,
+  });
 
 /**
  * Credits a run costs: mirrors `SubscriptionService.calculate_video_credit_cost`

@@ -17,7 +17,7 @@ export const useSidebarCollapsed = () => useContext(RailContext);
 export interface SidebarProps {
   /** Landmark name of the navigation inside: "Main", "Admin". */
   label: string;
-  /** 64px icon rail instead of the 240px sidebar. Persist it with `usePersistentState`. */
+  /** 56px icon rail instead of the 240px sidebar. Persist it with `usePersistentState`. */
   collapsed?: boolean;
   /** Shows the collapse toggle in the header. */
   onCollapsedChange?: (collapsed: boolean) => void;
@@ -34,7 +34,7 @@ export interface SidebarProps {
 /**
  * The app's left sidebar: header, scrolling navigation, pinned footer. Shown
  * from `md` (add `hidden md:flex` at the call site); phones use MobileTabBar.
- * Width changes in 200 ms, instantly under reduced motion.
+ * Width changes over `slow` (280 ms), instantly under reduced motion.
  */
 export function Sidebar({ label, collapsed = false, onCollapsedChange, header, footer, children, fullHeight = true, className }: SidebarProps) {
   return (
@@ -44,13 +44,13 @@ export function Sidebar({ label, collapsed = false, onCollapsedChange, header, f
         className={cx(
           'flex shrink-0 flex-col border-r border-cn-border bg-cn-surface',
           fullHeight ? 'sticky top-0 h-dvh' : 'h-full',
-          'motion-safe:transition-[width] motion-safe:duration-cn-base motion-safe:ease-cn-in-out',
-          collapsed ? 'w-16' : 'w-60',
+          'motion-safe:transition-[width] motion-safe:duration-cn-slow motion-safe:ease-cn-in-out',
+          collapsed ? 'w-14' : 'w-60',
           className,
         )}
       >
         {(header || onCollapsedChange) && (
-          <div className={cx('flex shrink-0 items-center px-3', collapsed ? 'flex-col justify-center gap-1 py-2' : 'h-14 gap-2')}>
+          <div className={cx('flex shrink-0 items-center px-3', collapsed ? 'flex-col justify-center gap-1 px-2 py-2' : 'h-12 gap-2')}>
             {header}
             {onCollapsedChange && (
               <>
@@ -66,7 +66,7 @@ export function Sidebar({ label, collapsed = false, onCollapsedChange, header, f
             )}
           </div>
         )}
-        <nav aria-label={label} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overflow-x-hidden px-3 py-2">
+        <nav aria-label={label} className={cx('flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overflow-x-hidden py-2', collapsed ? 'px-2' : 'px-3')}>
           {children}
         </nav>
         {footer && <div className="flex shrink-0 flex-col gap-3 border-t border-cn-border p-3">{footer}</div>}

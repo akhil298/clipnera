@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { FirstRunGate } from '@/components/onboarding/FirstRunGate';
+import { InvitedByCard } from '@/components/referrals-v2/InvitedByCard';
 import { InlineAlert } from '@/components/ui';
 
 import { takePendingPrompt } from './handoff';
@@ -69,6 +70,7 @@ export function HomeScreen() {
       </section>
 
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-10 px-4">
+        <InvitedByCard />
         {projects.items && <InProgressRow items={projects.items} />}
         <ProjectSheet
           items={projects.items}

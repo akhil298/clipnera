@@ -1,16 +1,11 @@
 'use client';
 
 import { ChevronLeft, Download, History, Keyboard, Redo2, Share2, Undo2 } from 'lucide-react';
-import { motion } from 'framer-motion';
 
-import { Button } from '@/components/ui/Button';
-import { IconButton } from '@/components/ui/IconButton';
+import { type ActivityItem, ActivityIndicator, Button, IconButton } from '@/components/ui';
 import { ScoreRing } from '@/components/ui/ScoreRing';
 import { cx, focusRing } from '@/lib/design/styles';
-import { duration } from '@/lib/design/tokens';
-import { useReducedMotion } from '@/lib/design/useReducedMotion';
 
-import { type ActivityJob, ActivityIndicator } from './ActivityIndicator';
 import { CLIP, PROJECT } from './sample';
 
 export interface EditorTopBarProps {
@@ -18,7 +13,7 @@ export interface EditorTopBarProps {
   /** Increments when a version is added: the count pulses once (01 §10). */
   versionPulse: number;
   saveState: 'saved' | 'saving' | 'offline';
-  jobs: ReadonlyArray<ActivityJob>;
+  activity: ReadonlyArray<ActivityItem>;
   balance: number;
   onHistory: () => void;
   onUndo: () => void;
@@ -30,14 +25,13 @@ export interface EditorTopBarProps {
 }
 
 /**
- * Editor top bar (56 px, `z-cn-sticky`). Undo sits here and on the result
+ * Editor top bar (48 px, `z-cn-sticky`). Undo sits here and on the result
  * message (01 §3.4). Export is secondary in the Editor: the one amber action
  * on this screen is the prompt's Send.
  */
-export function EditorTopBar({ versionCount, versionPulse, saveState, jobs, balance, onHistory, onUndo, onRedo, onExport, onShare, onShortcuts, compact = false }: EditorTopBarProps) {
-  const reduced = useReducedMotion();
+export function EditorTopBar({ versionCount, versionPulse, saveState, activity, balance, onHistory, onUndo, onRedo, onExport, onShare, onShortcuts, compact = false }: EditorTopBarProps) {
   return (
-    <header className="z-cn-sticky flex h-14 shrink-0 items-center gap-1.5 border-b border-cn-border bg-cn-surface px-2 sm:gap-2 sm:px-3">
+    <header className="z-cn-sticky flex h-12 shrink-0 items-center gap-1.5 border-b border-cn-border bg-cn-surface px-2 sm:gap-2 sm:px-3">
       <a href="#clips" className={cx('inline-flex h-8 items-center gap-1 rounded-cn-sm px-1.5 text-cn-label font-semibold text-cn-fg-secondary hover:bg-cn-surface-hover hover:text-cn-fg', focusRing)}>
         <ChevronLeft aria-hidden className="size-4" />
         {!compact && 'Clips'}
@@ -58,17 +52,12 @@ export function EditorTopBar({ versionCount, versionPulse, saveState, jobs, bala
         className={cx('inline-flex h-8 items-center gap-1.5 rounded-cn-sm px-2 text-cn-label text-cn-fg-secondary hover:bg-cn-surface-hover hover:text-cn-fg', focusRing)}
       >
         <History aria-hidden className="size-4" />
-        <motion.span
-          key={versionPulse}
-          initial={reduced || versionPulse === 0 ? false : { scale: 1 }}
-          animate={reduced ? undefined : { scale: [1, 1.15, 1] }}
-          transition={{ duration: duration.slow / 1000 }}
-          className="font-cn-mono tabular-nums"
-        >
+        {/* Remounts on each new version, so the count pops once (CSS motion, none under reduced motion). */}
+        <span key={versionPulse} className={cx('font-cn-mono tabular-nums', versionPulse > 0 && 'motion-safe:animate-in motion-safe:zoom-in-110 motion-safe:duration-cn-slow')}>
           {versionCount}
-        </motion.span>
+        </span>
       </button>
-      {!compact && <ActivityIndicator jobs={jobs} />}
+      {!compact && <ActivityIndicator items={activity} />}
       {!compact && <span className="hidden font-cn-mono text-cn-caption tabular-nums text-cn-fg-muted xl:inline">{balance.toLocaleString('en-IN')} credits</span>}
       {!compact && <IconButton size="sm" label="Keyboard shortcuts (?)" icon={<Keyboard />} onClick={onShortcuts} />}
       {!compact && (

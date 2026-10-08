@@ -7,15 +7,15 @@ import { hasPendingPrompt, markSignedIn, takeSignInNext } from '@/components/aut
 import { useMe } from '@/components/shell';
 import { HOME_PATH } from '@/lib/routing/auth-rules';
 
-import { readOnboarding } from './preferences';
 import { WelcomeDialog } from './WelcomeDialog';
 
 /**
  * Runs once per signed-in page load, on Home:
  * 1. remembers that this device has signed in (hides the consent box next time);
  * 2. finishes `?next=` from sign-in, since the Google callback always lands on /dashboard;
- * 3. opens the welcome when this account hasn't seen it and arrived with nothing to do.
- *    A carried prompt wins: Home restores it and the welcome waits (screens/01 §4).
+ * 3. opens the welcome while `/me` says the one-time form isn't filled in and the person
+ *    arrived with nothing to do. A carried prompt wins: Home restores it and the welcome
+ *    waits for the next visit (screens/01 §4).
  *
  * `carriedIntent` is Home's own "I restored a prompt" flag. The gate also peeks
  * the draft itself, because its effect runs before Home's takes it.
@@ -25,7 +25,7 @@ export function FirstRunGate({ carriedIntent = false }: { carriedIntent?: boolea
   const pathname = usePathname();
   const me = useMe();
   const [decision, setDecision] = useState<'pending' | 'skip' | 'welcome'>('pending');
-  const userId = me.data?.id;
+  const formPending = me.data?.onboarding_completed === false;
 
   useEffect(() => {
     markSignedIn();
@@ -39,17 +39,17 @@ export function FirstRunGate({ carriedIntent = false }: { carriedIntent?: boolea
   }, [pathname, router]);
 
   useEffect(() => {
-    if (!userId || decision !== 'pending') return;
-    setDecision(pathname === HOME_PATH && !readOnboarding(userId) ? 'welcome' : 'skip');
-  }, [decision, pathname, userId]);
+    if (!me.data || decision !== 'pending') return;
+    setDecision(pathname === HOME_PATH && formPending ? 'welcome' : 'skip');
+  }, [decision, pathname, me.data, formPending]);
 
-  if (decision !== 'welcome' || carriedIntent || !userId) return null;
+  if (decision !== 'welcome' || carriedIntent || !me.data) return null;
   return (
     <WelcomeDialog
       open
       onClose={() => setDecision('skip')}
-      userId={userId}
-      creditMinutes={me.data?.ai_credits_minutes_remaining ?? null}
+      formDone={!formPending}
+      creditMinutes={me.data.ai_credits_minutes_remaining}
     />
   );
 }

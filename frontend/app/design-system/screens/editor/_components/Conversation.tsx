@@ -1,7 +1,7 @@
 'use client';
 
 import { ArrowDown, FileWarning, Pencil, Upload, WifiOff } from 'lucide-react';
-import { type KeyboardEvent, type RefObject, useEffect, useMemo, useRef, useState } from 'react';
+import { type RefObject, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import { ChoiceCard } from '@/components/ui/ChoiceCard';
@@ -10,20 +10,15 @@ import { IconButton } from '@/components/ui/IconButton';
 import { PromptBar, type PromptMode } from '@/components/ui/PromptBar';
 import { ResultMessage } from '@/components/ui/ResultMessage';
 import { StepList } from '@/components/ui/StepList';
-import { useToast } from '@/components/ui/Toast';
+import { BrollPick, CheckInCard, MediaCard, PromptQueue, SLASH_COMMANDS, StreamingText, useToast } from '@/components/ui';
 import { WorkingText } from '@/components/ui/WorkingText';
 import { cx, focusRing } from '@/lib/design/styles';
 
-import { BrollPick } from './BrollPick';
-import { CheckInCard } from './CheckInCard';
-import { MediaCard, Poster } from './MediaCard';
-import { PromptQueue } from './PromptQueue';
+import { Poster } from './MediaCard';
 import type { Suggestion } from './run/events';
 import { SCENARIOS } from './run/scenarios';
 import type { RunSimulator, TurnView } from './run/useRunSimulator';
-import { BROLL_ALTERNATES, CHIP_CLIP, clock } from './sample';
-import { filterCommands, type SlashCommand, SlashMenu } from './SlashMenu';
-import { StreamedText } from './StreamedText';
+import { BROLL_ALTERNATES, BROLL_PLACED, CHIP_CLIP, clock } from './sample';
 
 const TERMINAL = ['succeeded', 'partial', 'failed', 'cancelled'];
 
@@ -170,6 +165,7 @@ interface TurnActions {
 const lookup = (suggestions: ReadonlyArray<Suggestion>, label: string) => suggestions.find((item) => item.label === label)?.prompt ?? label;
 
 function AssistantTurn({ turn, now, actions }: { turn: TurnView; now: number; actions: TurnActions }) {
+  const toast = useToast();
   const [stepsOpen, setStepsOpen] = useState(false);
   const ended = TERMINAL.includes(turn.status);
   const reading = turn.status === 'sending' || (turn.status === 'acknowledged' && !turn.planText);
@@ -188,8 +184,8 @@ function AssistantTurn({ turn, now, actions }: { turn: TurnView; now: number; ac
         </p>
       )}
 
-      {turn.mode === 'ask' && turn.answerText && !turn.result && <StreamedText text={turn.answerText} className="text-cn-body text-cn-fg" />}
-      {turn.mode !== 'ask' && turn.planText && <StreamedText text={turn.planText} done={Boolean(turn.planSteps)} className="text-cn-body text-cn-fg" />}
+      {turn.mode === 'ask' && turn.answerText && !turn.result && <StreamingText text={turn.answerText} streaming />}
+      {turn.mode !== 'ask' && turn.planText && <StreamingText text={turn.planText} streaming={!turn.planSteps} />}
       {turn.mode === 'edit' && turn.credits && turn.credits.estimate > 0 && turn.planText && !ended && (
         <p className="text-cn-caption text-cn-fg-muted">Uses about {turn.credits.estimate} credits</p>
       )}
@@ -209,7 +205,7 @@ function AssistantTurn({ turn, now, actions }: { turn: TurnView; now: number; ac
         />
       )}
 
-      {turn.pause && <CheckInCard pause={turn.pause} onDecide={actions.onDecide} />}
+      {turn.pause && <CheckInCard checkIn={turn.pause} onDecide={actions.onDecide} />}
 
       {turn.mode === 'edit' && turn.steps.length > 0 && !ended && (
         <>
@@ -271,7 +267,17 @@ function AssistantTurn({ turn, now, actions }: { turn: TurnView; now: number; ac
             onSuggestion={(label) => actions.onSuggestion(lookup(turn.result?.suggestions ?? [], label))}
             timestamp={timestamp}
           />
-          {turn.pick && !turn.undone && <BrollPick pick={turn.pick} onOpenLibrary={actions.onOpenLibrary} />}
+          {turn.pick && !turn.undone && (
+            <BrollPick
+              className="ml-7"
+              shot={{ ...BROLL_PLACED, title: turn.pick.title, source: turn.pick.source }}
+              range={turn.pick.range}
+              reasons={turn.pick.reasons}
+              alternates={BROLL_ALTERNATES}
+              onSwap={(shot) => toast.show({ title: `Swapped B-roll at ${turn.pick?.range.split(' ')[0]}`, description: `Now “${shot.title}”. Saved as a new version.` })}
+              onSearchElse={actions.onOpenLibrary && (() => actions.onOpenLibrary?.('coffee pour'))}
+            />
+          )}
         </>
       )}
 
@@ -360,8 +366,6 @@ export function ConversationPanel({ sim, onCompare, onSeek, onOpenLibrary, conte
   const toast = useToast();
   const [value, setValue] = useState('');
   const [mode, setMode] = useState<PromptMode>('edit');
-  const [slashActive, setSlashActive] = useState(0);
-  const [slashDismissed, setSlashDismissed] = useState(false);
   const [resending, setResending] = useState<TurnView | null>(null);
   const [atBottom, setAtBottom] = useState(true);
   const [announcement, setAnnouncement] = useState('');
@@ -370,8 +374,6 @@ export function ConversationPanel({ sim, onCompare, onSeek, onOpenLibrary, conte
   const logRef = useRef<HTMLDivElement>(null);
   const now = useNow(sim.running);
 
-  const slashOpen = value.startsWith('/') && !slashDismissed && value.length < 24;
-  const slashItems = useMemo(() => (slashOpen ? filterCommands(value) : []), [slashOpen, value]);
   const brollQuery = value.startsWith('Add B-roll of ') ? value.slice(14).split(' at ')[0].split(' over ')[0].trim() : '';
 
   // Keep the newest message in view unless the person has scrolled up.
@@ -398,34 +400,6 @@ export function ConversationPanel({ sim, onCompare, onSeek, onOpenLibrary, conte
       const caret = text.indexOf('  ') >= 0 ? text.indexOf('  ') + 1 : text.length;
       textarea.setSelectionRange(caret, caret);
     });
-  };
-
-  const pickCommand = (item: SlashCommand) => {
-    setSlashDismissed(true);
-    if (item.group === 'Go to') {
-      setValue('');
-      toast.show({ title: `${item.description}`, description: 'Navigation is not wired in this mockup.' });
-      return;
-    }
-    fill(item.template(contexts));
-  };
-
-  const onKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!slashOpen || !(event.target instanceof HTMLTextAreaElement)) return;
-    const count = slashItems.length;
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault();
-      event.stopPropagation();
-      if (count) setSlashActive((index) => (index + (event.key === 'ArrowDown' ? 1 : -1) + count) % count);
-    } else if ((event.key === 'Enter' || event.key === 'Tab') && count) {
-      event.preventDefault();
-      event.stopPropagation();
-      pickCommand(slashItems[Math.min(slashActive, count - 1)]);
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      event.stopPropagation();
-      setSlashDismissed(true);
-    }
   };
 
   const submit = () => {
@@ -544,7 +518,7 @@ export function ConversationPanel({ sim, onCompare, onSeek, onOpenLibrary, conte
         </div>
       )}
 
-      <div className={cx('flex shrink-0 flex-col gap-2 border-t border-cn-border', compact ? 'p-2' : 'p-3')} onKeyDownCapture={onKeyDownCapture}>
+      <div className={cx('flex shrink-0 flex-col gap-2 border-t border-cn-border', compact ? 'p-2' : 'p-3')}>
         <PromptQueue items={sim.queue} onChange={sim.setQueue} />
         {resending && (
           <p className="flex items-center gap-2 rounded-cn-md bg-cn-surface-hover px-3 py-1.5 text-cn-caption text-cn-fg-secondary">
@@ -555,16 +529,6 @@ export function ConversationPanel({ sim, onCompare, onSeek, onOpenLibrary, conte
             </button>
           </p>
         )}
-        {slashOpen && (
-          <SlashMenu
-            query={value}
-            items={slashItems}
-            activeIndex={Math.min(slashActive, Math.max(slashItems.length - 1, 0))}
-            onPick={pickCommand}
-            onHover={setSlashActive}
-            textarea={textareaRef.current}
-          />
-        )}
         {brollQuery.length > 2 && (
           <div aria-label={`Top matches for ${brollQuery}`} role="group" className="rounded-cn-lg border border-cn-border bg-cn-surface p-2">
             <p className="mb-1.5 text-cn-caption text-cn-fg-muted">Top matches · click one to use it</p>
@@ -574,11 +538,10 @@ export function ConversationPanel({ sim, onCompare, onSeek, onOpenLibrary, conte
                   <MediaCard
                     size="sm"
                     title={shot.title}
-                    length={shot.length}
-                    tone={shot.tone}
+                    duration={shot.duration}
                     actionLabel={`Use ${shot.title}`}
                     onOpen={() => {
-                      onContextsChange([...contexts.filter((context) => context.kind !== 'asset'), { id: `asset-${shot.id}`, kind: 'asset', label: shot.title, meta: shot.length }]);
+                      onContextsChange([...contexts.filter((context) => context.kind !== 'asset'), { id: `asset-${shot.id}`, kind: 'asset', label: shot.title, meta: clock(shot.duration ?? 0) }]);
                       fill('Use this clip at ');
                     }}
                   />
@@ -590,10 +553,15 @@ export function ConversationPanel({ sim, onCompare, onSeek, onOpenLibrary, conte
         <PromptBar
           ref={textareaRef}
           value={value}
-          onValueChange={(next) => {
-            setValue(next);
-            if (!next.startsWith('/')) setSlashDismissed(false);
-            setSlashActive(0);
+          onValueChange={setValue}
+          slashCommands={SLASH_COMMANDS}
+          onSlashCommand={(command) => {
+            if (command.href) {
+              toast.show({ title: command.description, description: 'Navigation is not wired in this mockup.' });
+              return;
+            }
+            // Re-fill so the caret lands in the template's gap ("Add B-roll of | at").
+            fill(command.template?.(contexts) ?? '');
           }}
           onSubmit={submit}
           mode={mode}
@@ -604,6 +572,7 @@ export function ConversationPanel({ sim, onCompare, onSeek, onOpenLibrary, conte
           onRemoveContext={(id) => onContextsChange(contexts.filter((context) => context.id !== id))}
           onAttach={() => toast.show({ title: 'Attach a video, image, audio or link', description: 'Opens the file picker in the real screen.' })}
           creditCost={mode === 'edit' && value.trim() && !value.startsWith('/') ? 4 : undefined}
+          hint={mode === 'ask' ? 'Free · 17 of 20 left today' : undefined}
           queueCount={sim.queue.length}
           label="Prompt"
         />

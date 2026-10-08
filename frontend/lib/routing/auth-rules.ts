@@ -8,6 +8,8 @@
  */
 
 export const HOME_PATH = '/dashboard';
+/** The httpOnly session cookie the backend sets once the cookie migration lands (frontend.md §1.6). */
+export const SESSION_COOKIE = 'cn_session';
 export const LOGIN_PATH = '/login';
 
 const AUTH_PAGES = new Set([LOGIN_PATH, '/signup']);

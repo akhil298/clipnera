@@ -5,9 +5,9 @@ import { type KeyboardEvent, useState } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import { IconButton } from '@/components/ui/IconButton';
+import { QualityBadge } from '@/components/ui/QualityBadge';
 import { cx, focusRing } from '@/lib/design/styles';
 
-import { QualityBadge } from './QualityBadge';
 import { clock } from './sample';
 
 const CAPTIONS = ['SO HERE IS', 'WHY WE PRICED', 'IT AT ₹499', 'A MONTH', 'LESS THAN', 'TWO COFFEES', 'AND PEOPLE', 'ACTUALLY STAY', 'FOR A YEAR'];

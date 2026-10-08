@@ -8,8 +8,7 @@ import { useOnline } from '@/components/home/useOnline';
 import { useYoutubeSource } from '@/components/home/useYoutubeSource';
 import { useToast } from '@/components/ui';
 import { getEntitlements } from '@/lib/api/credits';
-import { homeApi } from '@/lib/api/home';
-import { runCreditCost, startClipRunWhenReady, type ClipRunRequest } from '@/lib/api/pipeline';
+import { importYoutube, runCreditCost, type PipelineStartRequest } from '@/lib/api/pipeline';
 import { listFolders, moveProjects, renameProject } from '@/lib/api/projects';
 import { useConfig, useFlag } from '@/lib/flags/useFlag';
 import { creditKeys } from '@/lib/query/keys/credits';
@@ -120,14 +119,15 @@ export function useNewVideo(onStarted: (projectId: string) => void) {
   const hasSource = picked !== null || (youtubeUrl !== null && youtube.isSuccess);
 
   const start = useMutation({
-    mutationFn: async (run: ClipRunRequest) => {
+    // The server owns the run from here: YouTube is charged now and started when the download lands;
+    // an upload carries the run in `complete`, so only the bytes need this tab.
+    mutationFn: async (run: PipelineStartRequest) => {
       if (picked) {
         const task = await startUpload(sourceVideoUpload, picked.file, { durationSeconds: picked.duration, run });
         watchUpload(task.id);
         return task.targetId!;
       }
-      const project = await homeApi.createFromYoutube(youtubeUrl!, crypto.randomUUID());
-      startWhenReady(project.id, run);
+      const project = await importYoutube(youtubeUrl!, run, crypto.randomUUID());
       return project.id;
     },
     onSuccess: (projectId) => {
@@ -136,30 +136,16 @@ export function useNewVideo(onStarted: (projectId: string) => void) {
       // project keeps the video's own title and no folder, and the start is not held up.
       if (name && name !== sourceTitle) void renameProject(projectId, name).catch(() => undefined);
       if (folderId) void moveProjects([projectId], folderId).catch(() => undefined);
+      void queryClient.invalidateQueries({ queryKey: creditKeys.entitlements() });
       void queryClient.invalidateQueries({ queryKey: projectKeys.all });
       void queryClient.invalidateQueries({ queryKey: homeKeys.projects() });
       onStarted(projectId);
     },
   });
 
-  /** The run starts from this tab once the video is in; if it can't, say so wherever the person is now. */
-  function startWhenReady(projectId: string, run: ClipRunRequest) {
-    startClipRunWhenReady(projectId, run)
-      .then(() => queryClient.invalidateQueries({ queryKey: creditKeys.entitlements() }))
-      .catch((err: unknown) =>
-        toast.show({
-          tone: 'danger',
-          title: 'Your clips didn’t start',
-          description: err instanceof Error ? err.message : 'Try again in a moment.',
-          duration: null,
-          action: { label: 'Try again', onClick: () => startWhenReady(projectId, run) },
-        }),
-      );
-  }
-
   function watchUpload(taskId: string) {
+    // Failure is told wherever the person is now; the toast host lives in the shell, not this form.
     onUploadSettled(taskId, (task) => {
-      if (task?.phase === 'done') return void queryClient.invalidateQueries({ queryKey: creditKeys.entitlements() });
       if (task?.phase !== 'failed') return;
       toast.show({
         tone: 'danger',

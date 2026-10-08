@@ -43,6 +43,11 @@ export interface Entitlements extends PlanCapabilities {
   credit_minutes_remaining: number;
   /** The bought part of `credit_minutes_remaining`; never expires. */
   purchased_credits_remaining: number;
+  /** The bonus part (referral rewards), which expires grant by grant. */
+  bonus_credits_remaining: number;
+  /** The soonest bonus expiry, and how many credits expire then. */
+  bonus_credits_expiring_at: string | null;
+  bonus_credits_expiring: number;
   current_period_end: string | null;
   subscription_status: string;
   plan_expires_at: string | null;
@@ -82,6 +87,17 @@ export interface Payment {
   screenshot_url: string | null;
   verified_at: string | null;
   created_at: string;
+}
+
+/**
+ * A balance split into its parts: plan credits (gone at the next reset), bonus
+ * credits (expire grant by grant) and bought ones (never expire). Each part is
+ * capped by what is left, so a fresher `remaining` never shows more than exists.
+ */
+export function creditSplit(entitlements: Entitlements, remaining = entitlements.credit_minutes_remaining) {
+  const bought = Math.min(entitlements.purchased_credits_remaining, remaining);
+  const bonus = Math.min(entitlements.bonus_credits_remaining, remaining - bought);
+  return { plan: Math.max(0, remaining - bought - bonus), bonus, bought };
 }
 
 export const getEntitlements = (signal?: AbortSignal) => apiFetch<Entitlements>('/subscription/entitlements', { signal });

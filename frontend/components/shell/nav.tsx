@@ -19,6 +19,7 @@ export const NEW_VIDEO_HREF = '/dashboard/upload';
 export const SETTINGS_HREF = '/dashboard/settings';
 export const BILLING_HREF = '/dashboard/settings/billing';
 export const ADMIN_HREF = '/admin';
+export const REFERRALS_HREF = '/dashboard/referrals';
 
 /** The sidebar's destinations, at most five (07 §5.2). Publish shows only with social publishing on. */
 export function useNavItems(): NavItem[] {

@@ -1,8 +1,7 @@
 /**
  * The resumable uploader's contract. One engine sends any file to S3 in
  * presigned parts; a `UploadKind` says which endpoints start, finish and
- * abort a multipart upload for one purpose (source video, B-roll, …) and
- * what the server does with the file afterwards.
+ * abort a multipart upload for one purpose (source video, B-roll, …).
  */
 
 /** Where the parts go: one presigned PUT URL per part, in order. */
@@ -24,19 +23,12 @@ export interface UploadTarget {
   plan: PartPlan;
 }
 
-/** What comes after the bytes land, while this tab is still needed (shown as `step`). */
-export interface UploadAfterStep<M> {
-  step: string;
-  run: (target: UploadTarget, meta: M, signal: AbortSignal) => Promise<void>;
-}
-
 export interface UploadKind<M> {
   /** Stable name; persisted uploads find their kind again by it after a reload. */
   kind: string;
   begin: (file: File, meta: M) => Promise<UploadTarget>;
   complete: (target: UploadTarget, parts: UploadedPart[], meta: M) => Promise<void>;
   abort: (target: UploadTarget) => Promise<void>;
-  after?: UploadAfterStep<M>;
 }
 
 /** Same words as `UploadProgressItem`'s status. */

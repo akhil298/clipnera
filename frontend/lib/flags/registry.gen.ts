@@ -16,6 +16,7 @@ export type FlagKey =
   | 'broll_studio.reels.footage'
   | 'broll_studio.reels.footage.opus_director'
   | 'agent_editor'
+  | 'referral_program'
   | 'new_ui_shell'
   | 'new_ui_auth'
   | 'new_ui_dashboard'
@@ -43,7 +44,8 @@ export type LegacyFlagKey =
   | 'broll_studio.ai_shots'
   | 'broll_studio.reels.footage'
   | 'broll_studio.reels.footage.opus_director'
-  | 'agent_editor';
+  | 'agent_editor'
+  | 'referral_program';
 
 export type ConfigKey =
   | 'agent.approval_credit_threshold'
@@ -86,6 +88,7 @@ export const FLAG_DEFAULTS: Record<FlagKey, boolean> = {
   'broll_studio.reels.footage': false,
   'broll_studio.reels.footage.opus_director': false,
   'agent_editor': false,
+  'referral_program': false,
   'new_ui_shell': false,
   'new_ui_auth': false,
   'new_ui_dashboard': false,
@@ -129,6 +132,7 @@ export const FLAG_LIVE_UPDATE: Record<FlagKey, 'immediate' | 'next_navigation'> 
   'broll_studio.reels.footage': 'immediate',
   'broll_studio.reels.footage.opus_director': 'immediate',
   'agent_editor': 'immediate',
+  'referral_program': 'immediate',
   'new_ui_shell': 'next_navigation',
   'new_ui_auth': 'next_navigation',
   'new_ui_dashboard': 'next_navigation',
@@ -158,6 +162,7 @@ export const FLAG_PARENTS: Record<FlagKey, FlagKey | null> = {
   'broll_studio.reels.footage': 'broll_studio.reels',
   'broll_studio.reels.footage.opus_director': 'broll_studio.reels.footage',
   'agent_editor': null,
+  'referral_program': null,
   'new_ui_shell': null,
   'new_ui_auth': 'new_ui_shell',
   'new_ui_dashboard': 'new_ui_shell',

@@ -1,5 +1,5 @@
 import type { ProjectSummary } from '@/lib/api/projects';
-import { CANCELLED_ERROR, type DownloadProgress, type PipelineStatus, type PipelineStepLog } from '@/lib/api/jobs';
+import { CANCELLED_ERROR, type DownloadProgress, type PipelineStatus, type PipelineStepLog, type PipelineStepName } from '@/lib/api/jobs';
 import type { ProgressStepStatus } from '@/components/ui/ProgressSteps';
 import type { RunStep } from '@/components/ui/StepList';
 import { formatTimecode } from '@/lib/design/timecode';

@@ -1,5 +1,12 @@
-import { Placeholder } from '@/app/v2/_platform/Placeholder';
+import { Suspense } from 'react';
 
+import { NewVideoDialog } from '@/components/upload/NewVideoDialog';
+
+/** /dashboard/upload opened from inside the app: the dialog over the current page; Back closes it. */
 export default function Page() {
-  return <Placeholder route="/dashboard/upload (modal)" area="Area 3 · Upload" />;
+  return (
+    <Suspense>
+      <NewVideoDialog />
+    </Suspense>
+  );
 }

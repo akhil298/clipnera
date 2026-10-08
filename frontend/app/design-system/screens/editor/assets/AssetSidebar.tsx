@@ -15,9 +15,11 @@ import { Skeleton, SkeletonGroup } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { cx, focusWithinRing } from '@/lib/design/styles';
 
-import { BrollPick } from '../_components/BrollPick';
-import { MediaCard } from '../_components/MediaCard';
-import { BROLL_ALTERNATES, CHIP_RANGE } from '../_components/sample';
+import { BrollPick } from '@/components/ui/BrollPick';
+import { MediaCard } from '@/components/ui/MediaCard';
+import { formatTimecode } from '@/lib/design/timecode';
+
+import { BROLL_ALTERNATES, BROLL_PLACED, BROLL_REASONS, CHIP_RANGE } from '../_components/sample';
 import { ScreenShell, StateSwitcher } from '../_components/ScreenShell';
 
 const STATES = [
@@ -30,8 +32,8 @@ const STATES = [
 ];
 
 const SOURCES = [
-  { title: 'kavya-interview.mov', length: '12:40', tone: 0, meta: 'Source · in this project' },
-  { title: 'office-walkthrough.mp4', length: '1:12', tone: 3, meta: 'Added 2 Oct' },
+  { title: 'kavya-interview.mov', duration: 760, meta: 'Source · in this project' },
+  { title: 'office-walkthrough.mp4', duration: 72, meta: 'Added 2 Oct' },
 ];
 
 export function AssetSidebar() {
@@ -98,7 +100,7 @@ export function AssetSidebar() {
         <ul className="grid grid-cols-2 gap-2">
           {items.map((item) => (
             <li key={item.id} className="relative">
-              <MediaCard size="sm" title={item.title} length={item.length} tone={item.tone} meta={item.meta} selected={picked === item.title} actionLabel={`Select ${item.title}`} onOpen={() => attachAsset(item.title, item.length)} />
+              <MediaCard size="sm" title={item.title} duration={item.duration} meta={item.meta} selected={picked === item.title} actionLabel={`Select ${item.title}`} onOpen={() => attachAsset(item.title, formatTimecode(item.duration ?? 0))} />
               <IconButton
                 size="sm"
                 variant="secondary"
@@ -184,8 +186,12 @@ export function AssetSidebar() {
                 onSuggestion={setValue}
               />
               <BrollPick
-                pick={{ title: 'Pouring coffee into a white mug', source: 'your uploads', range: '0:12 – 0:16', reasons: ['matches “coffee” and “pour”', 'is from your library', 'fits 9:16'] }}
-                onOpenLibrary={() => setState('results')}
+                shot={BROLL_PLACED}
+                range="0:12–0:16"
+                reasons={BROLL_REASONS}
+                alternates={BROLL_ALTERNATES}
+                onSwap={(shot) => toast.show({ title: 'Swapped B-roll at 0:12', description: `Now “${shot.title}”. Saved as a new version.` })}
+                onSearchElse={() => setState('results')}
               />
             </div>
           </Card>

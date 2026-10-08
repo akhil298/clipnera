@@ -4,6 +4,7 @@
  * contract is in frames (events.md §3.2).
  */
 
+import type { BrollShot } from '@/components/ui/BrollPick';
 import type { PromptContext } from '@/components/ui/ContextChip';
 
 export const PROJECT = {
@@ -165,20 +166,17 @@ export const CLIPS: ReadonlyArray<ClipRow> = [
   { id: 'c6', title: 'Do not discount', range: '10:12 – 10:44', length: '0:32', score: 76, hook: 'Never discount in your first year.', hookScore: 74, engage: 72, tone: 5 },
 ];
 
-export interface BrollShot {
-  id: string;
-  title: string;
-  length: string;
-  source: 'Clipnera library' | 'Your uploads';
-  tone: number;
-}
-
+/** B-roll shots in the `components/ui` BrollShot shape; durations in seconds, no posters (no external images). */
 export const BROLL_ALTERNATES: ReadonlyArray<BrollShot> = [
-  { id: 'b_2', title: 'Coffee cup on a desk', length: '0:05', source: 'Clipnera library', tone: 1 },
-  { id: 'b_3', title: 'Café counter, Mumbai', length: '0:08', source: 'Clipnera library', tone: 3 },
-  { id: 'b_4', title: 'Filter coffee pour', length: '0:04', source: 'Your uploads', tone: 5 },
-  { id: 'b_5', title: 'Two cups clinking', length: '0:06', source: 'Clipnera library', tone: 2 },
+  { id: 'b_2', title: 'Coffee cup on a desk', duration: 5, source: 'Clipnera library' },
+  { id: 'b_3', title: 'Café counter, Mumbai', duration: 8, source: 'Clipnera library' },
+  { id: 'b_4', title: 'Filter coffee pour', duration: 4, source: 'Your uploads' },
+  { id: 'b_5', title: 'Two cups clinking', duration: 6, source: 'Clipnera library' },
 ];
+
+/** The shot the sample run placed. */
+export const BROLL_PLACED: BrollShot = { id: 'b_1', title: 'Pouring coffee into a white mug', duration: 4, source: 'your uploads' };
+export const BROLL_REASONS = ['matches “coffee” and “pour”', 'from your library', 'fits 9:16'];
 
 /** Neutral poster tones: footage stand-ins that stay on palette. */
 export const POSTER_TONES = [

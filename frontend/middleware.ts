@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
 import {
+  AUTH_ENFORCE_FLAG,
   UI_FLAGS_COOKIE,
   UI_FLAGS_TTL_SECONDS,
   UI_OVERRIDE_COOKIE,
@@ -12,11 +13,13 @@ import {
   type UiAreaRoute,
   type UiOverride,
 } from '@/lib/flags/ui-areas';
+import { authRedirect, SESSION_COOKIE } from '@/lib/routing/auth-rules';
 
 /**
  * Per-area UI routing (docs/revamp/architecture/frontend.md §1.4–1.5). Picks the legacy tree or
  * app/v2 before rendering, so the URL never changes and nothing flickers. Not a security boundary:
- * the API authorizes every call. Auth redirects arrive with Area 2 (lib/routing/auth-rules.ts).
+ * the API authorizes every call. Auth redirects (lib/routing/auth-rules.ts) run only once the
+ * `auth_cookie_enforce` flag is on; until then the client guards do that work.
  */
 
 const DEV = process.env.NODE_ENV !== 'production';
@@ -26,6 +29,8 @@ const FLAGS_TIMEOUT_MS = 300;
 /** After a failed lookup, try again this soon rather than on every request. */
 const FAILED_LOOKUP_TTL_SECONDS = 30;
 const ANON_COOKIE = 'cn_anon';
+/** Pages the auth rules can redirect; flags are looked up for these even without a UI area. */
+const AUTH_RULE_PATHS = /^\/(dashboard|admin|login|signup)(\/|$)/;
 
 interface AreaFlags {
   value: string;
@@ -98,18 +103,20 @@ export async function middleware(req: NextRequest) {
   const route = uiAreaFor(pathname);
   const override = queryOverride ?? parseUiOverride(req.cookies.get(UI_OVERRIDE_COOKIE)?.value) ?? 'auto';
 
+  const forcedNew = override === 'new' && NEW_OVERRIDE_ALLOWED;
+  const needsFlags = AUTH_RULE_PATHS.test(pathname) || (route !== null && override !== 'classic' && !forcedNew);
+  const flags = needsFlags ? await lookupAreaFlags(req) : null;
+  const on = flags ? decodeUiFlags(flags.value) : new Set<string>();
+
+  const signInTo = authRedirect(pathname, req.cookies.has(SESSION_COOKIE), {
+    search: req.nextUrl.search,
+    enabled: on.has(AUTH_ENFORCE_FLAG),
+  });
+
   let res = NextResponse.next();
-  if (route && override !== 'classic') {
-    if (override === 'new' && NEW_OVERRIDE_ALLOWED) {
-      res = toV2(req, route);
-    } else {
-      const flags = await lookupAreaFlags(req);
-      if (decodeUiFlags(flags.value).has(route.flag)) res = toV2(req, route);
-      if (flags.maxAge) {
-        res.cookies.set(UI_FLAGS_COOKIE, flags.value, { path: '/', sameSite: 'lax', maxAge: flags.maxAge });
-      }
-    }
-  }
+  if (signInTo) res = NextResponse.redirect(new URL(signInTo, req.url));
+  else if (route && override !== 'classic' && (forcedNew || on.has(route.flag))) res = toV2(req, route);
+  if (flags?.maxAge) res.cookies.set(UI_FLAGS_COOKIE, flags.value, { path: '/', sameSite: 'lax', maxAge: flags.maxAge });
   return queryOverride ? setOverrideCookie(res, queryOverride) : res;
 }
 

@@ -21,7 +21,7 @@ interface Runtime {
   target: UploadTarget | null;
   done: Map<number, string>;
   controller: AbortController | null;
-  /** The bytes are in S3 and `complete` succeeded; a retry re-runs only the after step. */
+  /** `complete` succeeded; nothing is left to send or abort. */
   uploaded: boolean;
 }
 
@@ -68,22 +68,6 @@ function describe(err: unknown): string {
 
 const isAbort = (err: unknown) => err instanceof DOMException && err.name === 'AbortError';
 
-async function runAfter(id: string) {
-  const rt = runtime.get(id);
-  if (!rt?.target) return;
-  const after = rt.kind.after;
-  if (!after) return patch(id, { phase: 'done', step: null });
-  const controller = new AbortController();
-  rt.controller = controller;
-  patch(id, { phase: 'processing', step: after.step, error: null });
-  try {
-    await after.run(rt.target, rt.meta, controller.signal);
-    patch(id, { phase: 'done', step: null });
-  } catch (err) {
-    if (!controller.signal.aborted) patch(id, { phase: 'failed', step: null, error: describe(err) });
-  }
-}
-
 async function transfer(id: string) {
   const rt = runtime.get(id);
   if (!rt?.target) return;
@@ -114,12 +98,11 @@ async function transfer(id: string) {
     await rt.kind.complete(rt.target, parts, rt.meta);
     rt.uploaded = true;
     void forgetUpload(id);
+    patch(id, { phase: 'done', step: null });
   } catch (err) {
     if (controller.signal.aborted && isAbort(err)) return;
     patch(id, { phase: 'failed', bytesPerSecond: null, step: null, error: describe(err) });
-    return;
   }
-  await runAfter(id);
 }
 
 /**
@@ -164,7 +147,7 @@ export function resumeUpload(id: string) {
   const rt = runtime.get(id);
   const phase = getTask(id)?.phase;
   if (!rt || (phase !== 'paused' && phase !== 'failed')) return;
-  void (rt.uploaded ? runAfter(id) : transfer(id));
+  if (!rt.uploaded) void transfer(id);
 }
 
 /** Stops for good, tells the server to drop the parts, and removes the task. */
@@ -225,7 +208,7 @@ export function restoreUploads(): Promise<void> {
   return restoring;
 }
 
-/** Leaving the page now would lose the upload (or the hand-off after it), so the browser asks first. */
+/** Leaving the page now would lose the upload, so the browser asks first. */
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', (event) => {
     const busy = Object.values(useUploadStore.getState().tasks).some((task) => task.phase === 'queued' || task.phase === 'uploading' || task.phase === 'processing');

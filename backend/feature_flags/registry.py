@@ -177,6 +177,7 @@ _LEGACY_DEFINITIONS = (
         "Users share a referral code and earn bonus credits when the people they bring in buy Pro and process "
         "a video in time. Turning this off stops new codes from being accepted; referrals already running finish "
         "under their own rules.",
+        PRODUCT_OWNER, "ops", date(2026, 10, 7),
     ),
 )
 

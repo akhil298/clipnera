@@ -28,6 +28,8 @@ export interface UserProfile {
   /** Display only: admin pages are guarded server-side. */
   role: 'user' | 'admin';
   email_notifications: boolean;
+  /** False until the one-time welcome form (`POST /onboarding`) is filled in. */
+  onboarding_completed: boolean;
 }
 
 /** backend/workspace/schema.py WorkspaceResponse (`GET /workspaces`). */
