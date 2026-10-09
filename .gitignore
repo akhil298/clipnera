@@ -93,3 +93,4 @@ backend/static/motion/previews/
 
 # Local cleanup report for the gitignored library
 backend/static/motion/cleanup_report.json
+AI Editor/
