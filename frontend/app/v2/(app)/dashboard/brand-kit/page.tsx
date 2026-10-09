@@ -1,5 +1,10 @@
-import { Placeholder } from '@/app/v2/_platform/Placeholder';
+import type { Metadata } from 'next';
 
-export default function Page() {
-  return <Placeholder route="/dashboard/brand-kit" area="Area 9 · Brand kit" />;
+import { BrandKitScreen } from '@/components/settings/brand/form/BrandKitScreen';
+
+export const metadata: Metadata = { title: 'Brand kit' };
+
+/** Brand kit (screens/03 §16). Data loads on the client: the token is not visible to the server yet. */
+export default function BrandKitPage() {
+  return <BrandKitScreen />;
 }

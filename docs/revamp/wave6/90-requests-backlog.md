@@ -70,6 +70,34 @@ Collected from builder reports by the lead. An integration agent works through t
 - Platform: install hls.js for long sources (also needed by the share page); add "type": "module" to silence Node's MODULE_TYPELESS warning in lib tests.
 - Owner: should clip audio on the picture track play in the editor preview? (Only audio tracks play today.) There's no backend Timeline renderer yet, so the preview approximates slide and zoom transitions.
 
+## E1 follow-ups
+- Platform: a paged apiFetch that also returns meta.next_cursor (for listRuns, listVersions, activity). Also build lib/realtime (R-1) so E4a can wire live run events.
+- DS: point the mockup run/* files at lib/editor/dev/scenarios.ts (R-5). Add a `region` kind to ContextChip.
+- Editor backend stubs to build: EB-2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 17, 18, 21 (see 02-editor.md).
+
+## Export follow-ups
+- Switch lib/api.ts exportProject (legacy, owner OK needed), lib/api/clips.ts exportClip and lib/api/projects.ts exportProjectBundle to `socialExportRequest` + `exportVideoProject` from lib/api/export/request.ts. exportProjectBundle sends no style_type today.
+- Scheduler should read ?project=&clip=. R-2: add RenderCardSlot for the editor Outputs tab.
+- Owner: is an estimated file size OK until EB-24 returns real sizes?
+
+## Library + Brand kit follow-ups
+- U12 export getLibraryUsage (storage meter); U13 handle /dashboard/library/mine?upload=1; Area 1 export dashboardSegments; Area 4 accept ?insert=broll:<id> (A4-1).
+- DS promote: SectionNav, KeyValues, RadioGroup (cards), LibraryTile, justified grid, SaveBar, SettingsCard.
+- U8 replaces components/settings/brand/intro/index.ts (keep the ChannelIntroSection({brandName}) export and the #channel-intro id).
+- Owner: should the library hide non-public-domain sources (Pexels and Pixabay still appear)? Tab counts and storage stay hidden until real numbers exist. Should the brand font apply to burned captions?
+
+## Settings follow-ups
+- Area 1: add workspace, notifications and connections labels to ShellBreadcrumbs LABELS.
+- Landing: show ACCOUNT_DELETED_NOTICE once when sessionStorage has cn_account_deleted (lib/api/messages/account.ts), then clear it.
+- Lead: frontend.md lines 81 and 794 still say settings/[[...tab]].
+- Owner: with new_ui_settings on, the only way back to the classic UI is /api/ui/override?mode=classic. OK? Importing BUSINESS from legacy LegalPage.tsx: OK?
+
+## E3 composer follow-ups
+- DS: `PromptContext.locked` on ContextChip (lock icon, no ×), and a hint tone on PromptBar (danger-text).
+- E1: a `queue.update {turnId, prompt}` run-store action.
+- Platform: one shared useOnline (copies exist in components/home and components/projects; the composer imports Home's).
+- npm test only runs lib/. Component tests (components/editor/prompt) need adding to the test script.
+
 ## Backend registry
 - **Broken on ui-revamp-wave6 after the merge:** `backend/feature_flags/registry.py` `REFERRAL_PROGRAM` FlagDefinition lacks the `owner`, `kind`, `created` arguments the wave6 FlagDefinition requires, so the module fails to import (and `scripts.gen_flag_types` can't run, so `referral_program` is missing from lib/flags/registry.gen.ts). The v2 Refer and earn entry is therefore always shown; gate it on `useFlag('referral_program')` once regenerated.
 - Landing: BUSINESS and LEGAL_LINKS still come from components/legal/LegalPage.tsx; moving them to lib/legal.ts needs that legacy file to import from it (owner OK).
@@ -95,6 +123,10 @@ Collected from builder reports by the lead. An integration agent works through t
 - Optional CONSENT_REQUIRED error code (API-2); the backend returns 400 TERMS_NOT_ACCEPTED for new accounts without consent
 - Pipeline prompt is sent as clip_settings.prompt but nothing reads it (API-8)
 - Editor media: EB-12 540p proxies, storyboard and waveform; a signed-URL endpoint for editor assets (url, proxy_url, expires_at, refresh); URLs for music and SFX; EB-18 transcript words in timeline time
+- EB-24 async exports: POST /exports, GET /jobs/{id}, POST /jobs/{id}/cancel. Until then exports block, show no %, and editor-project exports are unavailable. The server ignores resolution, fps and quality options. EB-16: the export route has no envelope.
+- B-roll library API (L-API-1: search, browse, details, favourites, report, media, collections) plus U9-B1 sort and U9-B2 source/source_url; no /library routes exist yet
+- Brand kit: GET /subtitle-styles/presets returns a 500 (the service returns style_type/description/uses_ass and a dict config, but the schema wants id/is_preset and a str config; this is also broken on clipnera, though no legacy UI calls it). L-API-11 logo upload. logo_size and logo_opacity are read by no renderer.
+- Account: L-API-5 created_at/terms_accepted_at, L-API-6 sessions and sign out everywhere (/auth/logout does nothing on the server), L-API-7 the uploads-in-AI switch, a language/region field
 - GET /projects?sort=recent&limit= with a schema; today /clips/projects returns every clip (shell)
 - Spec 04 §22: about 40 items (share endpoints, reel publish, live post updates, reel chat reply, admin permissions endpoint, admin audit log, platform analytics)
 - Spec 02 and spec 03 have their own lists in their API-needs sections

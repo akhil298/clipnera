@@ -17,6 +17,12 @@ function manualTimers() {
       const index = due.findIndex((t) => t.handle === handle);
       if (index >= 0) due.splice(index, 1);
     },
+    /** Runs one due timer; false when none is left. */
+    tick() {
+      const timer = due.shift();
+      timer?.fn();
+      return Boolean(timer);
+    },
     drain() {
       for (let guard = 0; due.length && guard < 10_000; guard += 1) due.shift()!.fn();
     },
@@ -68,12 +74,23 @@ describe('dev run simulator', () => {
   it('stops mid-run, keeping completed work as a partial result', () => {
     const { sim, timers, turn, runs } = setup();
     sim.start('happy');
-    // Play until the first operation has landed.
-    for (let i = 0; i < 200 && !turn().revisions.length; i += 1) timers.drain.call({}), void 0;
+    while (!turn().revisions.length && timers.tick());
     sim.stop();
     timers.drain();
-    assert.ok(['partial', 'cancelled', 'succeeded'].includes(turn().status));
+    assert.equal(turn().status, 'partial');
+    assert.equal(turn().result?.version?.result_revision, 41);
+    assert.equal(turn().steps.at(-1)?.detail, 'Stopped before this step');
     assert.deepEqual(runs.store.getState().locks, {});
+  });
+
+  it('cancels when stopped before anything changed', () => {
+    const { sim, timers, turn } = setup();
+    sim.start('happy');
+    timers.tick();
+    sim.stop();
+    timers.drain();
+    assert.equal(turn().status, 'cancelled');
+    assert.equal(turn().cancelled?.changed, false);
   });
 
   it('replays events missed while offline on sync.reset', () => {

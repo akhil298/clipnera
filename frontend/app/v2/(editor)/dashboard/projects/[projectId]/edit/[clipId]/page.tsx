@@ -1,5 +1,11 @@
-import { Placeholder } from '@/app/v2/_platform/Placeholder';
+import { ClipModeFrame } from '@/components/editor/workspace/ClipModeFrame';
 
-export default function Page() {
-  return <Placeholder route="/dashboard/projects/[projectId]/edit/[clipId]" area="Area 4 · Clip studio" />;
+interface PageProps {
+  params: Promise<{ projectId: string; clipId: string }>;
+}
+
+/** `/dashboard/projects/[projectId]/edit/[clipId]`: the editor frame in clip mode (02-editor §12); CS1 fills it. */
+export default async function Page({ params }: PageProps) {
+  const { projectId, clipId } = await params;
+  return <ClipModeFrame projectId={projectId} clipId={clipId} />;
 }

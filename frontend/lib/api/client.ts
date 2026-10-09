@@ -1,6 +1,6 @@
 import { clearAuth, getToken } from '@/lib/auth';
 
-import { unwrap } from './envelope';
+import { toPage, unwrap, type Page, type PageMeta } from './envelope';
 import { ApiError, PLAN_ERROR_CODES } from './errors';
 
 /**
@@ -36,12 +36,13 @@ const DEFAULT_TIMEOUT_MS = 15_000;
 /** Fired on window for any plan error so the upsell can open wherever the call came from (same as lib/api.ts). */
 const UPGRADE_REQUIRED_EVENT = 'clipnera:upgrade-required';
 
-function apiBase(requestId: string): string {
+/** The full URL of an API path plus query, for callers that can't use `apiFetch` (the event stream). */
+export function apiUrl(path: string, query?: ApiFetchOptions['query'], requestId: string = crypto.randomUUID()): string {
   const origin = process.env.NEXT_PUBLIC_API_URL;
   if (!origin) {
     throw new ApiError({ status: 0, code: 'CONFIG', message: 'NEXT_PUBLIC_API_URL is not set', requestId });
   }
-  return `${origin}/api/v1`;
+  return `${origin}/api/v1${path}${queryString(query)}`;
 }
 
 function queryString(query: ApiFetchOptions['query']): string {
@@ -86,7 +87,8 @@ function validationFields(detail: unknown): Record<string, string[]> | undefined
   return fields;
 }
 
-function endSession(): void {
+/** Clears the token and sends the user to sign in, coming back here afterwards. */
+export function endSession(): void {
   clearAuth();
   if (typeof window === 'undefined') return;
   const next = `${window.location.pathname}${window.location.search}`;
@@ -108,10 +110,11 @@ function toApiError(res: Response, body: unknown, requestId: string): ApiError {
   });
 }
 
-export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+/** Sends the request and returns the parsed success body (still enveloped); throws `ApiError` otherwise. */
+async function request(path: string, options: ApiFetchOptions): Promise<unknown> {
   const { method = 'GET', query, body, signal, timeoutMs = DEFAULT_TIMEOUT_MS, idempotencyKey, auth = 'required' } = options;
   const requestId = crypto.randomUUID();
-  const url = `${apiBase(requestId)}${path}${queryString(query)}`;
+  const url = apiUrl(path, query, requestId);
 
   const token = getToken();
   if (!token && auth === 'required') {
@@ -167,5 +170,17 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   if (parsed === undefined) {
     throw new ApiError({ status: res.status, code: 'BAD_RESPONSE', message: 'The server sent an unreadable answer.', requestId });
   }
-  return unwrap<T>(parsed);
+  return parsed;
+}
+
+export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
+  return unwrap<T>(await request(path, options));
+}
+
+/**
+ * For list routes: the envelope's `data` plus its `meta` (`next_cursor`, `has_more`, and any extras the
+ * route declares through `M`). A route that sends no `meta` yet gives `{}`.
+ */
+export async function apiFetchPage<T, M extends PageMeta = PageMeta>(path: string, options: ApiFetchOptions = {}): Promise<Page<T, M>> {
+  return toPage<T, M>(await request(path, options));
 }

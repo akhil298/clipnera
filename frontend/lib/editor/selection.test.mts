@@ -23,7 +23,7 @@ describe('selection', () => {
       [
         ['clip', '03 · Hot take', true],
         ['range', '0:12 – 0:31', false],
-        ['caption', '“most people never tell you this one simp…”', false],
+        ['caption', '“most people never tell you this one sim…”', false],
         ['moment', 'Area at 0:14', false],
       ],
     );

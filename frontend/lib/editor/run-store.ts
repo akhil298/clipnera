@@ -350,7 +350,6 @@ function applyToTurn(turn: Turn, event: RunEvent): Turn {
         answerText: event.data.answer ?? turn.answerText,
         citations: mergeCitations(turn.citations, event.data.citations),
         steps: skipQueued(turn.steps, turn.stopping ? STOPPED : undefined),
-        question: undefined,
         pause: undefined,
       };
     case 'run.failed':

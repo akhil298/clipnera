@@ -1,5 +1,5 @@
-import { SegmentLoading } from '@/app/v2/_platform/SegmentLoading';
+import { EditorFrameSkeleton } from '@/components/editor/workspace/EditorFrameSkeleton';
 
 export default function Loading() {
-  return <SegmentLoading label="Opening the editor" shape="editor" />;
+  return <EditorFrameSkeleton />;
 }
