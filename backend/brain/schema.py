@@ -21,6 +21,9 @@ class TurnRequest(BaseModel):
     playhead: int = Field(0, ge=0)
     # The user's last few prompts, oldest first, so "again" and "that" make sense.
     recent_turns: list[str] = Field(default_factory=list, max_length=3)
+    # Questions the AI has asked in a row since it last did or answered something. After one it
+    # must decide for itself (brain.turns.QUESTIONS_PER_REQUEST).
+    questions_asked: int = Field(0, ge=0, le=20)
 
 
 class TurnChoice(BaseModel):

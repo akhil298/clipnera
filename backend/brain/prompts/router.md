@@ -37,8 +37,11 @@ brand colors, intro/outro bumpers.
 second clip", "the intro", "step 3", "this part", "what you just did". Copy the phrase exactly.
 "complexity": 1 = one property change; 2 = one agent, few ops; 3 = one agent, many ops or two agents;
 4 = multi-agent restructure; 5 = full edit from raw footage.
-"clarify": a short question ONLY if no reasonable default exists (e.g. "make it like the other one"
-when there is no other one). Otherwise null; downstream agents choose sensible defaults.
+"clarify": a short question ONLY if the message points at something that does not exist (e.g. "make it
+like the other one" when there is no other one). Otherwise null; downstream agents choose sensible
+defaults. Never ask what the footage contains, which part to use, how long, which style or which
+platform: the "Footage" lines say what is in the files, and the agents that follow watch and decide.
+An empty timeline with footage listed is a normal start, not something to ask about.
 "safety": block for unsafe; borderline when the request is allowed but sensitive; otherwise ok.
 "preference": when the message states a lasting preference ("always", "never", "from now on", "I prefer"),
 copy it as a short normalised sentence ("Captions: bold, yellow highlight"); otherwise null. A message can

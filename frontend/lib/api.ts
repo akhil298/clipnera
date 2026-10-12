@@ -2757,6 +2757,8 @@ export interface TurnRequest {
   playhead?: number;
   /** The user's last few prompts, oldest first. */
   recent_turns?: string[];
+  /** Questions the AI has asked in a row since it last did or answered something; after one it decides itself. */
+  questions_asked?: number;
 }
 
 export type TurnKind = 'edit' | 'answer' | 'clarify' | 'choices' | 'plan' | 'plan_needed' | 'refused';

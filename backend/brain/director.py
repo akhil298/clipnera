@@ -112,18 +112,25 @@ async def _ask(run: DirectorRun, args: AskInput) -> str:
     return "Asked. Stop now; the user will answer."
 
 
-TOOLS = ToolBox([
+_PLANNING = [
     *READ_ONLY.tools(),
     AgentTool("evaluate_plan_candidates", "Validate, compile and score your IntentFrame and 1-3 PlanIR candidates. "
                                           "Returns per candidate its score, components, errors and warnings.",
               EvaluateInput, _evaluate),
     AgentTool("plan_choose", "Choose the evaluated candidate to show the user.", ChooseInput, _choose),
-    AgentTool("ask_user", "Ask one question with 2-4 short options instead of planning.", AskInput, _ask),
+]
+TOOLS = ToolBox([
+    *_PLANNING,
+    AgentTool("ask_user", "Ask one question with 2-4 options drawn from the footage, after looking at it, "
+                          "when the request has two very different readings.", AskInput, _ask),
 ])
+# Once the user has been asked, the director can only plan.
+TOOLS_NO_ASK = ToolBox(_PLANNING)
 
 
 async def direct(service: EditorService, user_id: str, ctx: EditContext, prompt: str, decision: RouteDecision, *,
-                 allowed_owned: set[str], recent_turns: list[str], asked_in_conversation: int = 0) -> DirectorResult:
+                 allowed_owned: set[str], recent_turns: list[str], asked_in_conversation: int = 0,
+                 may_ask: bool = True) -> DirectorResult:
     run = DirectorRun(service, user_id, ctx.project_id, ctx, prompt, allowed_owned,
                       use_judge=int(ctx.features.get("ai.plan.candidates_k", 1)) > 1)
     route = decision.model_dump(exclude={"safety"})
@@ -133,12 +140,13 @@ async def direct(service: EditorService, user_id: str, ctx: EditContext, prompt:
             f"<route>{json.dumps(route, sort_keys=True)}</route>",
             f"<recent_turns>{json.dumps(recent_turns[-3:])}</recent_turns>",
             f"<human_owned_ok>{sorted(allowed_owned)}</human_owned_ok>",
+            f"<questions_left>{1 if may_ask else 0}</questions_left>",
             f"Request: {prompt}",
         ])},
     ]
     client = get_role_client("director", plan_override=str(ctx.features.get("ai.planner.model") or "") or None)
     try:
-        async for event in run_turn(client, messages, TOOLS, run, LIMITS):
+        async for event in run_turn(client, messages, TOOLS if may_ask else TOOLS_NO_ASK, run, LIMITS):
             if event.type == "text" and event.data.get("text"):
                 run.notes.append(event.data["text"])
             if run.chosen or run.question:
@@ -159,7 +167,7 @@ async def direct(service: EditorService, user_id: str, ctx: EditContext, prompt:
         reasons = [e for errors in run.evaluation.invalid.values() for e in errors][:3]
         reasons += [f"{k}: {v}" for s in run.evaluation.scored for k, v in s.summary()["step_errors"].items()][:3]
         return DirectorResult("failed", message="I couldn't make a plan that works: " + "; ".join(reasons or ["no valid candidate"]))
-    if run.frame is not None:
+    if run.frame is not None and may_ask:
         clarify = decide_clarify(run.frame, asked_this_turn=0, asked_in_conversation=asked_in_conversation)
         if clarify.ask:
             return DirectorResult("ask", frame=run.frame, question=clarify.question, options=clarify.options)

@@ -54,6 +54,20 @@ let nextId = 0;
 const id = () => `m${++nextId}`;
 const errorText = (error: unknown, fallback: string) => (error instanceof Error ? error.message : fallback);
 
+const QUESTIONS: ReadonlySet<AiMessage["kind"]> = new Set(["clarify", "choices"]);
+
+/** How many questions the AI has asked since it last did or answered something. */
+function questionsInARow(messages: AiMessage[]): number {
+	let count = 0;
+	for (const message of [...messages].reverse()) {
+		// The user's lines, and notes about files, sit between questions without ending the run.
+		if (message.role === "user" || !message.kind) continue;
+		if (!QUESTIONS.has(message.kind)) break;
+		count += 1;
+	}
+	return count;
+}
+
 // The plan being followed, its stream, and the hook that pauses it on a manual edit.
 let following: { planId: string; abort: AbortController; stopListening: () => void } | null = null;
 
@@ -148,6 +162,7 @@ export const useAiStore = create<AiState>((set, get) => {
 					selection: selection ?? editor.selection.getSelectedElements().map((ref) => ref.elementId),
 					playhead: Math.max(0, toFrame(editor.playback.getCurrentTime(), sync.getFps())),
 					recent_turns: earlier,
+					questions_asked: questionsInARow(messagesOf(projectId)),
 				});
 				if (result.version !== null) await sync.refresh();
 				if (result.plan) showPlan(result.plan);

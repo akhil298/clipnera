@@ -23,10 +23,16 @@ from core.exceptions import CustomException
 from editor.agent_tools import EditorContext
 from editor.history import HUMAN, Actor
 from editor.ops import RemoveItem, SplitItem
+from editor.schema import MediaAnalysisResponse
 from editor.service import EditorService
 from editor.timeline import ClipItem, Timeline
+from understanding.lcv import untrusted
 
 MICRO_AUTHOR = "agent:micro"
+# The AI may ask once about a request; after that it decides and says what it assumed.
+QUESTIONS_PER_REQUEST = 1
+# Best moments quoted per file to the router.
+ROUTER_MOMENTS = 2
 _UNDO = re.compile(r"^\s*(undo|go back|revert that|take that back)\b", re.I)
 _REDO = re.compile(r"^\s*(redo|put it back|do that again)\b", re.I)
 _SPLIT = re.compile(r"\b(split|cut)\b.*\b(here|playhead|this|now)\b", re.I)
@@ -35,18 +41,21 @@ _DELETE = re.compile(r"^\s*(delete|remove)\s+(this|that|it|these|those|the selec
 
 async def handle_turn(service: EditorService, user_id: str, project_id: str, prompt: str, *,
                       selection: Sequence[str] = (), playhead: int = 0,
-                      recent_turns: Sequence[str] = ()) -> TurnResult:
+                      recent_turns: Sequence[str] = (), questions_asked: int = 0) -> TurnResult:
     project = await service.get(user_id, project_id)
     timeline, version = project.timeline, project.version
+    may_ask = questions_asked < QUESTIONS_PER_REQUEST
 
     fast = await _deterministic(service, user_id, project_id, prompt, timeline, version, selection, playhead)
     if fast is not None:
         return fast
 
-    decision = await route(prompt, timeline, selection, playhead, recent_turns)
+    analyses = await service.analyses(user_id, project_id)
+    decision = await route(prompt, timeline, selection, playhead, recent_turns, footage=_footage(timeline, analyses))
     if decision.path == "refuse" or decision.safety == "block":
         return TurnResult(kind="refused", message="I can't help with that request.", route=decision)
-    if decision.clarify:
+    # A plan's questions are the director's to ask, after it has looked at the footage.
+    if decision.clarify and decision.path != "plan" and may_ask:
         return TurnResult(kind="clarify", message=decision.clarify, route=decision)
     if decision.path == "answer":
         if decision.intent == "export_request":
@@ -65,22 +74,65 @@ async def handle_turn(service: EditorService, user_id: str, project_id: str, pro
         result = await _micro(service, user_id, project_id, prompt, decision, timeline, version, selection, playhead)
         if result.kind != "plan_needed":
             return result
-    return await _plan(service, user_id, project_id, prompt, decision, selection, playhead, recent_turns)
+    not_ready = _not_ready(timeline, analyses)
+    if not_ready:
+        return TurnResult(kind="answer", message=not_ready, route=decision)
+    return await _plan(service, user_id, project_id, prompt, decision, selection, playhead, recent_turns,
+                       questions_asked)
+
+
+def _name(timeline: Timeline, asset_id: str) -> str:
+    asset = timeline.assets.get(asset_id)
+    return asset.key.rsplit("/", 1)[-1] if asset else asset_id
+
+
+def _footage(timeline: Timeline, analyses: Sequence[MediaAnalysisResponse]) -> str:
+    """What is in the project's files, for the router: it sees no media otherwise."""
+    lines = []
+    for row in analyses:
+        if row.asset_id not in timeline.assets:
+            continue
+        found = row.findings
+        if found is None:
+            lines.append(f"- {row.asset_id}: not analysed yet ({row.status}).")
+            continue
+        facts = [found.kind, f"{found.duration:.0f}s", f"{found.words} words spoken", f"{found.shots} shots"]
+        if found.tempo_bpm:
+            facts.append(f"music at {found.tempo_bpm:.0f} bpm")
+        said = " | ".join(moment.text for moment in found.moments[:ROUTER_MOMENTS])
+        lines.append(f"- {row.asset_id}: {', '.join(facts)}." + (f" Best moments: {untrusted(said)}" if said else ""))
+    return "Footage:\n" + "\n".join(lines) if lines else "Footage: none uploaded yet."
+
+
+def _not_ready(timeline: Timeline, analyses: Sequence[MediaAnalysisResponse]) -> str | None:
+    """Why a plan can't be made from the footage yet, as a line for the user; None when it can."""
+    if not timeline.assets:
+        return "Add a video, music or images first: drop them here in the chat and I'll work from what's in them."
+    status = {row.asset_id: row.status for row in analyses}
+    waiting = [_name(timeline, asset_id) for asset_id in timeline.assets
+               if status.get(asset_id, "pending") in ("pending", "running")]
+    if waiting:
+        return (f"I'm still going through {', '.join(waiting[:3])}. I'll edit from what is actually in it, "
+                "so ask me again in a moment.")
+    return None
 
 
 async def _plan(service: EditorService, user_id: str, project_id: str, prompt: str, decision: RouteDecision,
-                selection: Sequence[str], playhead: int, recent_turns: Sequence[str]) -> TurnResult:
+                selection: Sequence[str], playhead: int, recent_turns: Sequence[str],
+                questions_asked: int = 0) -> TurnResult:
     """The director plans it; the user sees a plan card to approve, edit or reject."""
     ctx = await build_context(service, user_id, project_id, selection=list(selection), playhead=playhead,
                               session=service.session)
     # The user may let the AI change what they selected, never anything else they made.
     result = await direct(service, user_id, ctx, prompt, decision, allowed_owned=set(selection),
-                          recent_turns=list(recent_turns))
+                          recent_turns=list(recent_turns), asked_in_conversation=questions_asked,
+                          may_ask=questions_asked < QUESTIONS_PER_REQUEST)
     if result.kind == "ask":
         return TurnResult(kind="clarify", message=result.question or "Which did you mean?", options=result.options,
                           route=decision)
     if result.kind == "failed":
-        return TurnResult(kind="clarify", message=result.message, route=decision)
+        # Not a question: nothing for the user to answer.
+        return TurnResult(kind="answer", message=result.message, route=decision)
     plan = await plans.save(service.session, user_id, project_id, prompt, ctx.version, result)
     card = await plans.card(service.session, plan)
     return TurnResult(kind="plan", message=card.summary, plan=card, route=decision)

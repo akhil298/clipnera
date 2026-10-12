@@ -86,9 +86,14 @@ def _describe(item: object) -> str:
 
 
 async def route(prompt: str, timeline: Timeline, selection: Sequence[str], playhead: int,
-                recent_turns: Sequence[str] = ()) -> RouteDecision:
-    """Classify one prompt; falls over to the other provider if the router's is down."""
+                recent_turns: Sequence[str] = (), footage: str = "") -> RouteDecision:
+    """Classify one prompt; falls over to the other provider if the router's is down.
+
+    ``footage`` says what is in the project's files, so a new project isn't read as an empty one.
+    """
     context = digest(timeline, selection, playhead)
+    if footage:
+        context += f"\n{footage}"
     if recent_turns:
         context += "\nLast turns:\n" + "\n".join(f"- {turn}" for turn in recent_turns[-3:])
     messages = [
