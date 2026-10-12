@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useSoundsStore } from "@opencut/sounds/sounds-store";
+import { searchSounds } from "@opencut/clipnera/sounds";
 
 export function useSoundSearch({
 	query,
@@ -46,26 +47,18 @@ export function useSoundSearch({
 				searchParams.set("q", query);
 			}
 
-			searchParams.set("commercial_only", commercialOnly.toString());
-			const response = await fetch(
-				`/api/sounds/search?${searchParams.toString()}`,
-			);
+			// Clipnera: its own sound library (clipnera/sounds.ts); every sound is cleared for commercial use.
+			const data = await searchSounds({ q: query.trim(), page: nextPage });
 
-			if (response.ok) {
-				const data = await response.json();
-
-				if (query.trim()) {
-					appendSearchResults(data.results);
-				} else {
-					appendTopSounds(data.results);
-				}
-
-				setCurrentPage({ page: nextPage });
-				setHasNextPage({ hasNext: !!data.next });
-				setTotalCount(data.count);
+			if (query.trim()) {
+				appendSearchResults({ results: data.results });
 			} else {
-				setSearchError({ error: `Load more failed: ${response.status}` });
+				appendTopSounds({ results: data.results });
 			}
+
+			setCurrentPage({ page: nextPage });
+			setHasNextPage({ hasNext: !!data.next });
+			setTotalCount({ count: data.count });
 		} catch (err) {
 			setSearchError({
 				error: err instanceof Error ? err.message : "Load more failed",
@@ -95,21 +88,14 @@ export function useSoundSearch({
 				setSearchError({ error: null });
 				resetPagination();
 
-				const response = await fetch(
-					`/api/sounds/search?q=${encodeURIComponent(query)}&type=effects&page=1`,
-				);
+				const data = await searchSounds({ q: query, page: 1 });
 
 				if (!ignore) {
-					if (response.ok) {
-						const data = await response.json();
-						setSearchResults({ results: data.results });
-						setLastSearchQuery({ query: query });
-						setHasNextPage({ hasNext: !!data.next });
-						setTotalCount({ count: data.count });
-						setCurrentPage({ page: 1 });
-					} else {
-						setSearchError({ error: `Search failed: ${response.status}` });
-					}
+					setSearchResults({ results: data.results });
+					setLastSearchQuery({ query: query });
+					setHasNextPage({ hasNext: !!data.next });
+					setTotalCount({ count: data.count });
+					setCurrentPage({ page: 1 });
 				}
 			} catch (err) {
 				if (!ignore) {

@@ -39,3 +39,17 @@ editor is open. Rebuild after changing classes in `src/`.
 
 - Projects and media live in the browser (IndexedDB/OPFS), not in Clipnera's backend.
 - The Sounds tab calls upstream's `/api/sounds` proxy, which Clipnera doesn't have.
+
+
+## Browser support (TODO 17.3)
+
+Not yet tried in real Safari or Firefox; this is what the code needs, and what it does without it.
+
+| Needs | Used for | Chrome / Edge | Safari | Firefox | Without it |
+|---|---|---|---|---|---|
+| WebCodecs (`VideoDecoder`/`VideoEncoder`, via mediabunny) | decoding imports, browser export | yes | decode from 16.4, encode from 17 | from 130 | imports may not preview; use **Render on server** to export |
+| WebGPU (`navigator.gpu`) | the preview renderer | yes | 26+ | 141+ (Windows) | falls back to canvas; the header shows "For the best experience, open the editor in Chrome" |
+| IndexedDB + OPFS | the media cache for opened projects | yes | yes (OPFS 15.2+) | yes | media downloads again on every open |
+| Streaming `fetch` bodies | following a running AI plan | yes | yes | yes | — |
+
+Screens under 1024 px wide get the mobile gate (`src/components/editor/mobile-gate.tsx`), in Clipnera's words.

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Clapperboard, Loader2, Plus, Trash2 } from 'lucide-react';
 import {
@@ -22,8 +23,10 @@ const ITEM_COLOURS: Record<Item['type'], string> = {
   text: 'bg-violet-500/30 border-violet-400/70',
   music: 'bg-amber-500/25 border-amber-400/70',
   sfx: 'bg-rose-500/30 border-rose-400/70',
+  graphic: 'bg-emerald-500/25 border-emerald-400/70',
 };
 const errorText = (err: unknown, fallback: string) => (err instanceof Error ? err.message : fallback);
+const studioHref = (id: string) => `/studio/${encodeURIComponent(id)}`;
 
 /** /dashboard/editor: the project list, or one open project. */
 export function EditorView({ projectId }: { projectId?: string }) {
@@ -47,12 +50,13 @@ function EditorHome() {
   }, []);
 
   const open = (id: string) => router.push(`/dashboard/editor/${encodeURIComponent(id)}`);
+  const openInStudio = (id: string) => router.push(studioHref(id));
 
-  const run = async (work: () => Promise<EditorProjectResponse>) => {
+  const run = async (work: () => Promise<EditorProjectResponse>, then: (id: string) => void = open) => {
     setBusy(true);
     setError(null);
     try {
-      open((await work()).id);
+      then((await work()).id);
     } catch (err) {
       setError(errorText(err, 'Could not open the project'));
       setBusy(false);
@@ -107,16 +111,26 @@ function EditorHome() {
           <h2 id="open-reel" className="text-sm font-semibold text-neutral-300">Keep editing a reel</h2>
           <div className="flex flex-wrap gap-2">
             {reels.map((reel) => (
-              <button
-                key={reel.id}
-                type="button"
-                disabled={busy}
-                onClick={() => run(() => editorApi.openReel(reel.id))}
-                className="inline-flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2 text-[13px] text-neutral-200 hover:border-amber-400"
-              >
-                <Clapperboard className="h-4 w-4 text-neutral-500" aria-hidden />
-                {reel.title}
-              </button>
+              <span key={reel.id} className="inline-flex items-stretch overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(() => editorApi.openReel(reel.id))}
+                  className="inline-flex items-center gap-2 px-3 py-2 text-[13px] text-neutral-200 hover:text-amber-300"
+                >
+                  <Clapperboard className="h-4 w-4 text-neutral-500" aria-hidden />
+                  {reel.title}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(() => editorApi.openReel(reel.id), openInStudio)}
+                  aria-label={`Open ${reel.title} in Studio`}
+                  className="border-l border-neutral-800 px-3 text-xs font-semibold text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+                >
+                  Open in Studio
+                </button>
+              </span>
             ))}
           </div>
         </section>
@@ -131,8 +145,15 @@ function EditorHome() {
         ) : (
           <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {projects.map((p) => (
-              <li key={p.id}>
-                <button type="button" onClick={() => open(p.id)} className="w-full rounded-2xl border border-neutral-800 bg-neutral-900 p-4 text-left hover:border-neutral-600">
+              <li key={p.id} className="relative">
+                <Link
+                  href={studioHref(p.id)}
+                  aria-label={`Open ${p.title} in Studio`}
+                  className="absolute right-3 top-3 z-10 rounded-lg border border-neutral-700 px-2 py-1 text-[11px] font-semibold text-amber-400 hover:border-amber-400 hover:text-amber-300"
+                >
+                  Open in Studio
+                </Link>
+                <button type="button" onClick={() => open(p.id)} className="w-full rounded-2xl border border-neutral-800 bg-neutral-900 p-4 pr-32 text-left hover:border-neutral-600">
                   <span className="block truncate font-semibold text-white">{p.title}</span>
                   <span className="mt-1 block text-xs text-neutral-500">
                     {p.duration_s.toFixed(1)} s · version {p.version} · edited {formatRelativeTime(p.updated_at)}
@@ -238,6 +259,8 @@ function describeItem(item: Item): string {
       return `Music · ${item.track}`;
     case 'sfx':
       return `Sound · ${item.name}`;
+    case 'graphic':
+      return `Graphic ${item.id}`;
   }
 }
 

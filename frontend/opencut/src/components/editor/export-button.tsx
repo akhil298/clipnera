@@ -1,5 +1,6 @@
 "use client";
 
+import { ServerRender } from "@opencut/clipnera/server-render";
 import { useState } from "react";
 import { TransitionTopIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -258,6 +259,8 @@ function ExportPopover({
 										Export
 									</Button>
 								</div>
+								{/* Clipnera: a full-quality render on the server, next to the browser export. */}
+								<ServerRender />
 							</>
 						)}
 

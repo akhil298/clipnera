@@ -2,6 +2,7 @@ import type { ElementType } from "react";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
+	AiMagicIcon,
 	ArrowRightDoubleIcon,
 	ClosedCaptionIcon,
 	Folder03Icon,
@@ -16,6 +17,8 @@ import {
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 
 export const TAB_KEYS = [
+	// Clipnera: the AI editor's tab (clipnera/ai-panel.tsx).
+	"ai",
 	"media",
 	"sounds",
 	"text",
@@ -36,6 +39,10 @@ const createHugeiconsIcon =
 	);
 
 export const tabs = {
+	ai: {
+		icon: createHugeiconsIcon({ icon: AiMagicIcon }),
+		label: "AI",
+	},
 	media: {
 		icon: createHugeiconsIcon({ icon: Folder03Icon }),
 		label: "Media",

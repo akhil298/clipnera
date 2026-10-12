@@ -14,6 +14,14 @@ import {
 	initializeGpuRenderer,
 	isGpuAvailable,
 } from "@opencut/services/renderer/gpu-renderer";
+import {
+	createBackendProject,
+	NEW_PROJECT_ID,
+	openBackendProject,
+} from "@opencut/clipnera/backend-project";
+import type { BackendSync } from "@opencut/clipnera/backend-sync";
+import { setCurrentSync } from "@opencut/clipnera/save-status";
+import { ApiError } from "@/lib/api";
 
 interface EditorProviderProps {
 	projectId: string;
@@ -33,50 +41,41 @@ export function EditorProvider({ projectId, children }: EditorProviderProps) {
 
 	useEffect(() => {
 		let cancelled = false;
+		let sync: BackendSync | null = null;
 		const editor = EditorCore.getInstance();
 
+		// Clipnera: projects live on the server (clipnera/backend-project.ts), not in browser storage.
 		const loadProject = async () => {
 			try {
 				setIsLoading(true);
+				if (projectId === NEW_PROJECT_ID) {
+					const newProjectId = await createBackendProject();
+					if (!cancelled) router.replace(`/studio/${newProjectId}`);
+					return;
+				}
 				await initializeGpuRenderer();
 				editor.renderer.setDegraded(!isGpuAvailable());
-				await editor.project.loadProject({ id: projectId });
+				sync = await openBackendProject({ editor, projectId });
 
-				if (cancelled) return;
-
+				if (cancelled) {
+					sync.stop();
+					return;
+				}
+				setCurrentSync(sync);
 				setIsLoading(false);
 				loadFontAtlas();
 			} catch (err) {
 				if (cancelled) return;
-
-				const isNotFound =
-					err instanceof Error &&
-					(err.message.includes("not found") ||
-						err.message.includes("does not exist"));
-
-				if (isNotFound) {
-					try {
-						const newProjectId = await editor.project.createNewProject({
-							name: "Untitled Project",
-						});
-						router.replace(`/studio/${newProjectId}`);
-					} catch (_createErr) {
-						setError("Failed to create project");
-						setIsLoading(false);
-					}
+				const wasmPanic = (window as Window & { __wasmPanic?: string }).__wasmPanic;
+				if (wasmPanic) {
+					delete (window as Window & { __wasmPanic?: string }).__wasmPanic;
+					setError(wasmPanic);
+				} else if (err instanceof ApiError && err.status === 404) {
+					setError("This project doesn't exist, or isn't yours.");
 				} else {
-					const wasmPanic = (window as Window & { __wasmPanic?: string })
-						.__wasmPanic;
-					if (wasmPanic) {
-						delete (window as Window & { __wasmPanic?: string }).__wasmPanic;
-						setError(wasmPanic);
-					} else {
-						setError(
-							err instanceof Error ? err.message : "Failed to load project",
-						);
-					}
-					setIsLoading(false);
+					setError(err instanceof Error ? err.message : "Failed to load project");
 				}
+				setIsLoading(false);
 			}
 		};
 
@@ -84,6 +83,9 @@ export function EditorProvider({ projectId, children }: EditorProviderProps) {
 
 		return () => {
 			cancelled = true;
+			setCurrentSync(null);
+			const closing = sync;
+			void closing?.flush().finally(() => closing.stop());
 		};
 	}, [projectId, router]);
 

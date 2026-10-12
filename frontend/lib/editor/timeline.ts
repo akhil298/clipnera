@@ -7,7 +7,13 @@
  * Node runs the tests on this file directly (`npm test`).
  */
 
-export type TrackKind = 'video' | 'overlay' | 'text' | 'audio';
+export type TrackKind = 'video' | 'overlay' | 'text' | 'audio' | 'graphic';
+
+/**
+ * What the studio (OpenCut) keeps that Timeline v1 has no field for: masks, effects,
+ * animations, text styling, a track's name. Carried untouched.
+ */
+export type Extra = Record<string, unknown>;
 export type KeyframeProp = 'x' | 'y' | 'scale' | 'rotation' | 'opacity';
 
 export interface Asset {
@@ -49,6 +55,7 @@ export interface ClipItem {
   type: 'clip';
   id: string;
   at: number;
+  extra: Extra;
   asset: string;
   src_in: number;
   src_out: number;
@@ -63,6 +70,7 @@ export interface TextItem {
   type: 'text';
   id: string;
   at: number;
+  extra: Extra;
   text: string;
   style: string;
   dur: number;
@@ -73,6 +81,7 @@ export interface MusicItem {
   type: 'music';
   id: string;
   at: number;
+  extra: Extra;
   /** A music library track id. */
   track: string;
   dur: number;
@@ -85,18 +94,30 @@ export interface SfxItem {
   type: 'sfx';
   id: string;
   at: number;
+  extra: Extra;
   name: string;
   dur: number;
   gain_db: number;
 }
 
-export type Item = ClipItem | TextItem | MusicItem | SfxItem;
+/** A sticker, graphic or effect made in the studio; what it draws lives in `extra`. */
+export interface GraphicItem {
+  type: 'graphic';
+  id: string;
+  at: number;
+  extra: Extra;
+  dur: number;
+}
+
+export type Item = ClipItem | TextItem | MusicItem | SfxItem | GraphicItem;
 
 export interface Track {
   id: string;
   kind: TrackKind;
   items: Item[];
   muted: boolean;
+  hidden: boolean;
+  extra: Extra;
 }
 
 export interface Captions {
@@ -136,10 +157,15 @@ export interface ItemPatch {
   offset?: number;
   gain_db?: number;
   duck?: boolean;
+  /** Replaces the item's studio-only data whole. */
+  extra?: Extra;
 }
 
 export type TimelineOp =
   | { op: 'add_track'; id: string; kind: TrackKind }
+  | { op: 'update_track'; track: string; muted?: boolean; hidden?: boolean; extra?: Extra }
+  | { op: 'remove_track'; track: string }
+  | { op: 'reorder_tracks'; order: string[] }
   | { op: 'add_item'; track: string; item: Item }
   | { op: 'remove_item'; item: string; ripple?: boolean }
   | { op: 'move_item'; item: string; at: number; track?: string | null }
@@ -170,6 +196,7 @@ const TRACK_ITEMS: Record<TrackKind, ReadonlyArray<Item['type']>> = {
   overlay: ['clip'],
   text: ['text'],
   audio: ['clip', 'music', 'sfx'],
+  graphic: ['graphic'],
 };
 
 const DEFAULT_CAPTION_STYLE = 'karaoke';
@@ -177,17 +204,20 @@ const DEFAULT_TRANSFORM: Transform = { x: 0.5, y: 0.5, scale: 1, rotation: 0 };
 
 /** Which patch fields each item type has, with the range the backend accepts. */
 type Rule = { min?: number; max?: number; above?: number; kind: 'number' | 'int' | 'text' | 'bool' | 'object' };
+const EXTRA_RULE: Rule = { kind: 'object' };
 const PATCH_RULES: Record<Item['type'], Partial<Record<keyof ItemPatch, Rule>>> = {
   clip: {
+    extra: EXTRA_RULE,
     speed: { kind: 'number', min: 0.25, max: 4 },
     volume: { kind: 'number', min: 0, max: 2 },
     transform: { kind: 'object' },
     keyframes: { kind: 'object' },
     transition_in: { kind: 'object' },
   },
-  text: { text: { kind: 'text', min: 1, max: 200 }, style: { kind: 'text', min: 1, max: 60 }, dur: { kind: 'int', min: 1 }, transform: { kind: 'object' } },
-  music: { dur: { kind: 'int', min: 1 }, offset: { kind: 'int', min: 0 }, gain_db: { kind: 'number', min: -60, max: 12 }, duck: { kind: 'bool' } },
-  sfx: { dur: { kind: 'int', min: 1 }, gain_db: { kind: 'number', min: -60, max: 12 } },
+  text: { extra: EXTRA_RULE, text: { kind: 'text', min: 1, max: 200 }, style: { kind: 'text', min: 1, max: 60 }, dur: { kind: 'int', min: 1 }, transform: { kind: 'object' } },
+  music: { extra: EXTRA_RULE, dur: { kind: 'int', min: 1 }, offset: { kind: 'int', min: 0 }, gain_db: { kind: 'number', min: -60, max: 12 }, duck: { kind: 'bool' } },
+  sfx: { extra: EXTRA_RULE, dur: { kind: 'int', min: 1 }, gain_db: { kind: 'number', min: -60, max: 12 } },
+  graphic: { extra: EXTRA_RULE, dur: { kind: 'int', min: 1 } },
 };
 const TRANSFORM_RULES: Record<keyof Transform, Rule> = {
   x: { kind: 'number', min: -1, max: 2 },
@@ -222,6 +252,8 @@ export function normalise(raw: unknown): Timeline {
       kind: track.kind as TrackKind,
       items: (track.items ?? []).map(normaliseItem),
       muted: track.muted ?? false,
+      hidden: track.hidden ?? false,
+      extra: track.extra ?? {},
     })),
     captions: t.captions
       ? { enabled: t.captions.enabled ?? true, style: t.captions.style ?? DEFAULT_CAPTION_STYLE, language: t.captions.language ?? 'en', follow: t.captions.follow }
@@ -239,15 +271,16 @@ function normaliseAsset(a: Partial<Asset>): Asset {
 
 /** Any item's fields, each optional, as an API payload may carry them. */
 type LooseItem = { type: Item['type'] } & Partial<Omit<ClipItem, 'type'>> & Partial<Omit<TextItem, 'type'>>
-  & Partial<Omit<MusicItem, 'type'>> & Partial<Omit<SfxItem, 'type'>>;
+  & Partial<Omit<MusicItem, 'type'>> & Partial<Omit<SfxItem, 'type'>> & Partial<Omit<GraphicItem, 'type'>>;
 
 function normaliseItem(raw: Partial<Item>): Item {
   const i = raw as LooseItem;
   const transform = { ...DEFAULT_TRANSFORM, ...(i.transform ?? {}) };
+  const extra = i.extra ?? {};
   switch (i.type) {
     case 'clip':
       return {
-        type: 'clip', id: i.id!, at: i.at!, asset: i.asset!, src_in: i.src_in!, src_out: i.src_out!,
+        type: 'clip', id: i.id!, at: i.at!, extra, asset: i.asset!, src_in: i.src_in!, src_out: i.src_out!,
         speed: i.speed ?? 1, volume: i.volume ?? 1, transform,
         keyframes: Object.fromEntries(Object.entries(i.keyframes ?? {}).map(([prop, points]) => [
           prop, (points ?? []).map((p) => ({ f: p.f, v: p.v, ease: p.ease ?? 'linear' })),
@@ -255,11 +288,13 @@ function normaliseItem(raw: Partial<Item>): Item {
         transition_in: i.transition_in ? { type: i.transition_in.type ?? 'cut', frames: i.transition_in.frames ?? 0 } : null,
       };
     case 'text':
-      return { type: 'text', id: i.id!, at: i.at!, text: i.text!, style: i.style!, dur: i.dur!, transform };
+      return { type: 'text', id: i.id!, at: i.at!, extra, text: i.text!, style: i.style!, dur: i.dur!, transform };
     case 'music':
-      return { type: 'music', id: i.id!, at: i.at!, track: i.track!, dur: i.dur!, offset: i.offset ?? 0, gain_db: i.gain_db ?? -20, duck: i.duck ?? true };
+      return { type: 'music', id: i.id!, at: i.at!, extra, track: i.track!, dur: i.dur!, offset: i.offset ?? 0, gain_db: i.gain_db ?? -20, duck: i.duck ?? true };
     case 'sfx':
-      return { type: 'sfx', id: i.id!, at: i.at!, name: i.name!, dur: i.dur!, gain_db: i.gain_db ?? 0 };
+      return { type: 'sfx', id: i.id!, at: i.at!, extra, name: i.name!, dur: i.dur!, gain_db: i.gain_db ?? 0 };
+    case 'graphic':
+      return { type: 'graphic', id: i.id!, at: i.at!, extra, dur: i.dur! };
   }
 }
 
@@ -395,7 +430,26 @@ function checkRule(field: string, value: unknown, rule: Rule): void {
 
 const APPLY: { [K in TimelineOp['op']]: Applier<K> } = {
   add_track: (doc, op) => {
-    doc.tracks.push({ id: op.id, kind: op.kind, items: [], muted: false });
+    doc.tracks.push({ id: op.id, kind: op.kind, items: [], muted: false, hidden: false, extra: {} });
+  },
+  update_track: (doc, op) => {
+    const track = findTrack(doc, op.track);
+    if (op.muted != null) track.muted = op.muted;
+    if (op.hidden != null) track.hidden = op.hidden;
+    if (op.extra != null) track.extra = structuredClone(op.extra);
+  },
+  remove_track: (doc, op) => {
+    const track = findTrack(doc, op.track);
+    if (track.items.length) throw new TimelineError('TRACK_NOT_EMPTY', `Track ${track.id} still has ${track.items.length} items on it.`);
+    if (doc.captions?.follow === track.id) throw new TimelineError('TRACK_IN_USE', `The captions follow track ${track.id}.`);
+    doc.tracks.splice(doc.tracks.indexOf(track), 1);
+  },
+  reorder_tracks: (doc, op) => {
+    const ids = doc.tracks.map((t) => t.id);
+    if ([...op.order].sort().join('\n') !== [...ids].sort().join('\n')) {
+      throw new TimelineError('BAD_ORDER', 'Name every track exactly once to reorder them.');
+    }
+    doc.tracks.sort((a, b) => op.order.indexOf(a.id) - op.order.indexOf(b.id));
   },
   add_item: (doc, op) => {
     findTrack(doc, op.track).items.push(normaliseItem(structuredClone(op.item)));

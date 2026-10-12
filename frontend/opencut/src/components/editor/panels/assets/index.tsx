@@ -1,5 +1,6 @@
 "use client";
 
+import { AiPanel } from "@opencut/clipnera/ai-panel";
 import { Separator } from "@opencut/components/ui/separator";
 import { type Tab, useAssetsPanelStore } from "@opencut/components/editor/panels/assets/assets-panel-store";
 import { TabBar } from "./tabbar";
@@ -15,6 +16,7 @@ export function AssetsPanel() {
 	const { activeTab } = useAssetsPanelStore();
 
 	const viewMap: Record<Tab, React.ReactNode> = {
+		ai: <AiPanel />,
 		media: <MediaView />,
 		sounds: <SoundsView />,
 		text: <TextView />,

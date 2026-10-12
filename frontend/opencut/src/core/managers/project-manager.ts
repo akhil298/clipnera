@@ -42,6 +42,9 @@ export class ProjectManager {
 	private savedProjects: TProjectMetadata[] = [];
 	private isLoading = true;
 	private isInitialized = false;
+	// Clipnera: the open project's document lives on the server (clipnera/backend-sync.ts saves
+	// it), so it is not written to browser storage and its frame rate stays the server's.
+	private isRemote = false;
 	private invalidProjectIds = new Set<string>();
 	private storageMigrationPromise: Promise<void> | null = null;
 	private listeners = new Set<() => void>();
@@ -132,6 +135,7 @@ export class ProjectManager {
 		}
 
 		this.editor.save.pause();
+		this.isRemote = false;
 		await this.ensureStorageMigrations();
 		this.editor.media.clearAllAssets();
 		this.editor.scenes.clearScenes();
@@ -186,6 +190,52 @@ export class ProjectManager {
 		}
 	}
 
+	/**
+	 * Clipnera: open a project built from the server's copy, with its media already loaded.
+	 * It is kept in memory only; clipnera/backend-sync.ts saves it.
+	 */
+	async openRemoteProject({
+		project,
+		mediaAssets,
+	}: {
+		project: TProject;
+		mediaAssets: MediaAsset[];
+	}): Promise<void> {
+		this.isLoading = true;
+		this.notify();
+		this.editor.save.pause();
+		this.isRemote = true;
+		this.editor.media.clearAllAssets();
+		this.editor.scenes.clearScenes();
+
+		try {
+			this.active = project;
+			this.notify();
+			this.editor.scenes.initializeScenes({
+				scenes: project.scenes,
+				currentSceneId: project.currentSceneId,
+			});
+			this.editor.media.setAssets({ assets: mediaAssets });
+			await loadFonts({
+				families: [
+					...new Set(
+						project.scenes.flatMap((scene) =>
+							getElementFontFamilies({ tracks: scene.tracks }),
+						),
+					),
+				],
+			});
+		} finally {
+			this.isLoading = false;
+			this.notify();
+			this.editor.save.resume();
+		}
+	}
+
+	getIsRemote(): boolean {
+		return this.isRemote;
+	}
+
 	async saveCurrentProject(): Promise<void> {
 		if (!this.active) return;
 
@@ -201,6 +251,10 @@ export class ProjectManager {
 				},
 			};
 
+			if (this.isRemote) {
+				this.active = updatedProject;
+				return;
+			}
 			await storageService.saveProject({ project: updatedProject });
 			this.active = updatedProject;
 			this.updateMetadata(updatedProject);
@@ -506,7 +560,7 @@ export class ProjectManager {
 	}: {
 		importedAssets: Array<Pick<MediaAsset, "type" | "fps">>;
 	}): import("opencut-wasm").FrameRate | null {
-		if (!this.active) return null;
+		if (!this.active || this.isRemote) return null;
 
 		const nextFps = getRaisedProjectFpsForImportedMedia({
 			currentFps: this.active.settings.fps,

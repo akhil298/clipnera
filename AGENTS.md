@@ -29,8 +29,16 @@ backend/          FastAPI app — routes, services, schemas, DB models
   depth_captions/ Depth-aware captions
   video_processor/ FFmpeg + OpenCV video processing
   content_intelligence/ AI scoring/analysis
+  editor/         Timeline v1, ops (+ inverses), op log, undo/redo, human ownership (history.py)
+  brain/          AI editor: router, refs, modifiers, director, PlanIR, solvers/, compile, rulebook/,
+                  score, plans + execution, verify/repair, critic, credits, style memory, metrics
+  understanding/  Per-asset Media Understanding Documents (MUD), LCV text view, media tools
+  agent_runtime/  Provider-neutral tool loop and typed tool boxes
+  clients/ai/     AI clients; roles.py picks a model per role (LLM_PROFILE), cassette.py for evals
+  evals/          Golden set + injection cases (python -m evals.runner)
   tests/          pytest tests
 frontend/         Next.js app (app router)
+  opencut/        Vendored OpenCut studio (MIT); src/clipnera/ = bridge to Timeline v1, sync, AI tab
   app/            Pages (dashboard, auth, landing)
   components/     UI components
   lib/            Utilities, API client, auth helpers
@@ -71,6 +79,14 @@ backend/.env      Environment secrets (IGNORED)
 - Always create Alembic migration after model changes
 - Environment files: `.env` is gitignored; use `.env.example` as template
 - Generated files (clips, transcriptions) are gitignored
+
+## AI editor notes
+- The studio (`/studio/[id]`, OpenCut) saves every edit to the backend as Timeline ops (`frontend/opencut/src/clipnera/backend-sync.ts`); mapping in `frontend/opencut/BRIDGE.md`.
+- Prompts: `POST /api/v1/editor/projects/{id}/turns` → `brain/turns.py`; plans: `/api/v1/editor/plans/*` (`brain/api.py`).
+- The AI never writes frame times: the director names moments by id (PlanIR); `brain/solvers/` place frames.
+- Agent edits go through `EditorService.apply` with an `Actor`: human ownership, op budgets and the never-do list (`brain/invariants.py`) apply there.
+- Feature flag `agent_editor` gates it all; it can be on for named test users only (`/admin/features`).
+- Design docs: `AI Editor/BLUEPRINT.md`, build list `AI Editor/TODO.md`.
 
 ## Notes
 - `.vscode/` is fully gitignored — do not commit VSCode files

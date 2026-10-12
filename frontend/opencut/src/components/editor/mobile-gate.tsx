@@ -52,9 +52,9 @@ export function MobileGate({ children }: MobileGateProps) {
 						Desktop only (for now)
 					</h1>
 					<p className="text-muted-foreground text-sm leading-relaxed">
-						OpenCut isn't optimized for mobile or iPad yet. Things will break
-						and the layout will be a mess. Come back on a desktop for the real
-						experience.
+						The Clipnera studio needs a bigger screen: the timeline, preview and
+						AI panel don't fit on a phone or iPad yet. Open this project on a
+						laptop or desktop, in Chrome or Edge, for the full editor.
 					</p>
 				</div>
 				<div className="flex items-center gap-3">

@@ -4,6 +4,8 @@ import { User, CreditCard, Share2, Users, Zap, Plus, Crown } from 'lucide-react'
 import { UserProfile, Workspace } from '@/lib/types';
 import { Avatar } from './Avatar';
 import { AccountPrivacyPanel } from './AccountPrivacyPanel';
+import { AiStylePanel } from './AiStylePanel';
+import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 import { workspaceApi, type AssignableWorkspaceRole, type CreditPackResponse } from '@/lib/api';
 import { TableSkeleton } from '@/components/skeletons';
 import { PlanSelectionModal, type SelectedPlan } from './PlanSelectionModal';
@@ -53,6 +55,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [selectedPack, setSelectedPack] = useState<CreditPackResponse | null>(null);
   const [paymentsRefreshKey, setPaymentsRefreshKey] = useState(0);
   const { entitlements, isLoading: loadingSub, refresh: refreshPlan } = useEntitlements();
+  const { flags } = useFeatureFlags();
   const { isPro, canUse, promptUpgrade } = usePlan();
   const canAddMembers = canUse('team_members');
 
@@ -229,6 +232,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 <p className="text-[11.5px] text-neutral-500">Your name and email come from your Google account.</p>
               </section>
               <AccountPrivacyPanel user={user} onUpdateUser={onUpdateUser} />
+              {flags.agent_editor && <AiStylePanel />}
             </>
           )}
 

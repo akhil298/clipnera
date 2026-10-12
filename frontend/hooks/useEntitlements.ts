@@ -40,6 +40,9 @@ export const FREE_TIER_FALLBACK: EntitlementsResponse = {
   social_posts_per_day: 3,
   custom_aspect_ratios: false,
   creator_intro: false,
+  ai_plan_candidates_k: 1,
+  ai_critic_max_rounds: 1,
+  ai_planner_model: 'openai',
   features: {
     remove_watermark: false,
     pro_ai: false,

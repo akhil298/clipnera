@@ -1,5 +1,6 @@
 "use client";
 
+import { searchSounds } from "@opencut/clipnera/sounds";
 import { useEffect, useState } from "react";
 import { Button } from "@opencut/components/ui/button";
 import {
@@ -123,16 +124,10 @@ function SoundEffectsView() {
 					setError({ error: null });
 				}
 
-				const response = await fetch(
-					"/api/sounds/search?page_size=50&sort=downloads",
-				);
+				// Clipnera: its own sound library instead of Freesound (clipnera/sounds.ts).
+				const data = await searchSounds({ pageSize: 50 });
 
 				if (!shouldIgnore) {
-					if (!response.ok) {
-						throw new Error(`Failed to fetch: ${response.status}`);
-					}
-
-					const data = await response.json();
 					setTopSoundEffects({ sounds: data.results });
 					setHasLoaded({ loaded: true });
 

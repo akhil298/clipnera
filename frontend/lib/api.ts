@@ -569,6 +569,14 @@ function queryString(params: object): string {
   return qs ? `?${qs}` : '';
 }
 
+/** A refused API call. Still an Error with the server's message; `code` is its error code (e.g. STALE_VERSION). */
+export class ApiError extends Error {
+  constructor(message: string, readonly status: number, readonly code: string | null) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 async function authedRequest<T>(path: string, options?: RequestInit): Promise<T> {
   const token = getToken();
   if (!token) {
@@ -594,14 +602,14 @@ async function authedRequest<T>(path: string, options?: RequestInit): Promise<T>
   if (!res.ok) {
     const { message = 'Something went wrong', error, feature } = data as ApiErrorBody;
     if (res.status === 401) {
-      throw new Error(`Unauthorized: ${message}`);
+      throw new ApiError(`Unauthorized: ${message}`, res.status, error ?? null);
     }
     if (error && PLAN_ERROR_CODES.has(error) && typeof window !== 'undefined') {
       window.dispatchEvent(
         new CustomEvent<UpgradeRequiredDetail>(UPGRADE_REQUIRED_EVENT, { detail: { error, feature, message } }),
       );
     }
-    throw new Error(message);
+    throw new ApiError(message, res.status, error ?? null);
   }
   return data as T;
 }
@@ -1155,6 +1163,12 @@ export interface PlanCapabilities {
   custom_aspect_ratios: boolean;
   /** A channel intro played before every export (backend creator_intro/). */
   creator_intro: boolean;
+  /** AI editor: plan candidates the director compares. */
+  ai_plan_candidates_k: number;
+  /** AI editor: critic repair rounds (cap 3). */
+  ai_critic_max_rounds: number;
+  /** AI editor: the planner's model, "provider:model" or a bare provider. */
+  ai_planner_model: string;
   features: Record<PlanFeature, boolean>;
 }
 
@@ -1823,6 +1837,8 @@ export interface AdminFeatureFlagResponse {
   enabled: boolean;
   effective: boolean;
   updated_at: string | null;
+  /** Emails the flag is on for even while it's off (a staged rollout). */
+  test_users: string[];
 }
 
 export interface AdminFeatureFlagListResponse {
@@ -1857,6 +1873,24 @@ export const notificationsApi = {
     subscribeEvents<InAppNotificationResponse>('/notifications/stream', onNotification, onError),
 };
 
+/** How the AI editor is doing over the last ``days`` (backend brain/schema.py RolloutMetrics). */
+export interface RolloutMetrics {
+  days: number;
+  turns: number;
+  plans: number;
+  plans_approved: number;
+  ai_steps: number;
+  ai_steps_undone: number;
+  /** Share of AI steps a person undid. */
+  undo_rate: number;
+  cost_per_turn_usd: number;
+  spend: Record<string, { calls: number; usd: number }>;
+}
+
+export const adminAiEditorApi = {
+  metrics: (days = 7) => envelopeRequest<RolloutMetrics>(`/admin/ai-editor/metrics?days=${days}`),
+};
+
 export const featuresApi = {
   get: () => envelopeRequest<FeatureFlagsResponse>('/features'),
 };
@@ -1867,6 +1901,12 @@ export const adminFeaturesApi = {
     envelopeRequest<AdminFeatureFlagListResponse>(`/admin/features/${encodeURIComponent(key)}`, {
       method: 'PATCH',
       body: JSON.stringify({ enabled }),
+    }),
+  /** Turns a flag on (or back off) for one user while it stays off for everyone else. */
+  setTestUser: (key: FeatureFlagKey, email: string, allowed: boolean) =>
+    envelopeRequest<AdminFeatureFlagListResponse>(`/admin/features/${encodeURIComponent(key)}/users`, {
+      method: 'PUT',
+      body: JSON.stringify({ email, allowed }),
     }),
 };
 
@@ -2666,10 +2706,157 @@ export interface EditorProjectSummary {
 
 export interface EditorProjectResponse extends EditorProjectSummary {
   timeline: Timeline;
+  /** Asset id -> a signed URL the studio plays and decodes it from; valid for an hour. */
+  asset_urls: Record<string, string>;
+}
+
+export type EditorAssetType =
+  | 'video/mp4' | 'video/quicktime' | 'video/webm'
+  | 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
+  | 'audio/mpeg' | 'audio/wav' | 'audio/x-wav' | 'audio/mp4' | 'audio/x-m4a' | 'audio/webm' | 'audio/ogg';
+
+export interface EditorAssetInitRequest {
+  filename: string;
+  content_type: EditorAssetType;
+  size_bytes: number;
+}
+
+// -- AI editor turns (backend brain/schema.py) ---------------------------------------
+
+export type RouteIntent =
+  | 'new_edit' | 'refine_edit' | 'undo' | 'redo' | 'direct_op' | 'question' | 'export_request'
+  | 'asset_search' | 'chitchat' | 'unsafe';
+export type RoutePath = 'plan' | 'micro' | 'answer' | 'deterministic' | 'refuse';
+export type RouteAgent = 'cut' | 'audio' | 'text' | 'color' | 'transitions' | 'curator' | 'reframe' | 'brand';
+export type RouteRefKind =
+  | 'clip' | 'title' | 'caption' | 'music' | 'effect' | 'transition' | 'step' | 'range' | 'selection' | 'unknown';
+
+/** How the router classified a prompt (brain/route.py RouteDecision). */
+export interface RouteDecision {
+  intent: RouteIntent;
+  path: RoutePath;
+  agents: RouteAgent[];
+  references: { phrase: string; kind: RouteRefKind }[];
+  constraints: {
+    targetDurationSec: number | null;
+    aspect: '16:9' | '9:16' | '1:1' | '4:5' | null;
+    mood: string | null;
+    mustKeep: string[];
+  };
+  complexity: 1 | 2 | 3 | 4 | 5;
+  clarify: string | null;
+  safety: 'ok' | 'borderline' | 'block';
+  preference: string | null;
+}
+
+export interface TurnRequest {
+  prompt: string;
+  /** Ids of the items selected in the studio. */
+  selection?: string[];
+  /** The playhead, in timeline frames. */
+  playhead?: number;
+  /** The user's last few prompts, oldest first. */
+  recent_turns?: string[];
+}
+
+export type TurnKind = 'edit' | 'answer' | 'clarify' | 'choices' | 'plan' | 'plan_needed' | 'refused';
+export type PlanStatus = 'proposed' | 'approved' | 'running' | 'paused' | 'done' | 'failed' | 'rejected' | 'stopped';
+export type PlanStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped';
+
+/** One step of a plan card (backend brain/schema.py PlanCardStep). */
+export interface PlanCardStep {
+  id: string;
+  kind: string;
+  intent: string;
+  why: string;
+  enabled: boolean;
+  optional: boolean;
+  status: PlanStepStatus;
+  credits: number;
+  depends_on: string[];
+  note: string;
+  /** Once done: pass to editorApi.undoStep to undo just this step. */
+  undo_step_id: string | null;
+}
+
+/** A shot the plan would place, for the dashed preview on the timeline (frames). */
+export interface GhostClip {
+  at: number;
+  end: number;
+  label: string;
+}
+
+export interface PlanCard {
+  id: string;
+  status: PlanStatus;
+  title: string;
+  summary: string;
+  result_line: string;
+  /** The most this plan can cost, in credits. */
+  credits: number;
+  credits_charged: number;
+  steps: PlanCardStep[];
+  assumptions: string[];
+  warnings: string[];
+  premium: string[];
+  ghost: GhostClip[];
+  fps: number;
+  runner_up_title: string | null;
+  error: string | null;
+}
+
+export interface PlanPatch {
+  enabled?: Record<string, boolean>;
+  order?: string[] | null;
+}
+
+/** Live events while a plan runs (GET /editor/plans/{id}/stream). */
+export type PlanEvent =
+  | { event: 'plan.updated'; data: PlanCard }
+  | { event: 'agent.step'; data: { step_id: string; status: PlanStepStatus; note: string } }
+  | { event: 'op.applied'; data: { version: number; cursor: { author: string; items: string[] } | null } }
+  | { event: 'done'; data: { status: PlanStatus } };
+
+export interface TurnChoice {
+  id: string;
+  label: string;
+}
+
+export interface TurnResult {
+  kind: TurnKind;
+  message: string;
+  /** Set when the project changed. */
+  version: number | null;
+  /** Pass to editorApi.undoStep for this turn's Undo chip. */
+  undo_step_id: string | null;
+  choices: TurnChoice[];
+  /** Chips for a clarifying question; picking one sends it as the next prompt. */
+  options: string[];
+  plan: PlanCard | null;
+  route: RouteDecision | null;
+}
+
+/** How far the AI has got understanding one asset of an editor project (backend understanding/). */
+export interface MediaAnalysisResponse {
+  asset_id: string;
+  status: 'pending' | 'running' | 'ready' | 'failed';
+  error: string | null;
+  updated_at: string;
+}
+
+/** Where to PUT the file (sending `content_type`), and the key to add it under with an `add_asset` op. */
+export interface EditorAssetUpload {
+  key: string;
+  url: string;
+  content_type: string;
 }
 
 export interface EditorOpsRequest {
-  /** The project version the ops were made against; a stale one is refused with 409 STALE_VERSION. */
+  /**
+   * The project version the ops were made against. An older one is applied on top of the newer
+   * changes when they don't clash (409 CONFLICT when a person changed the same field since, or
+   * STALE_VERSION when the ops no longer fit).
+   */
   base_version: number;
   ops: TimelineOp[];
 }
@@ -2679,6 +2866,104 @@ export interface EditorOpsResponse {
   timeline: Timeline;
 }
 
+/** A sound effect from Clipnera's own clean-licensed library (backend brain/schema.py LibrarySound). */
+export interface LibrarySound {
+  id: string;
+  name: string;
+  tags: string[];
+  seconds: number;
+  /** Path on the API host, e.g. /static/sfx/pop.wav; see apiUrl. */
+  url: string;
+  licence: string;
+}
+
+export interface SoundSearchResponse {
+  results: LibrarySound[];
+  count: number;
+  has_more: boolean;
+}
+
+/** A server render of an editor project (backend brain/schema.py RenderStatus). */
+export interface RenderStatus {
+  id: string;
+  status: 'queued' | 'rendering' | 'done' | 'failed';
+  stage: string;
+  version: number;
+  /** A signed link once done; valid for an hour. */
+  download_url: string | null;
+  error: string | null;
+}
+
+export const rendersApi = {
+  start: (projectId: string) => envelopeRequest<RenderStatus>(`/editor/projects/${projectId}/renders`, post({})),
+  get: (projectId: string, renderId: string) =>
+    envelopeRequest<RenderStatus>(`/editor/projects/${projectId}/renders/${renderId}`),
+};
+
+export const soundsApi = {
+  search: (params: { q?: string; page?: number; page_size?: number }) =>
+    envelopeRequest<SoundSearchResponse>(`/editor/sounds${queryString(params)}`),
+};
+
+/** A full URL for a path the API serves directly (static files). */
+export const apiUrl = (path: string) => `${API_BASE}${path}`;
+
+/** Something the AI editor learned from the user's corrections (backend brain/schema.py StylePreference). */
+export interface StylePreference {
+  key: string;
+  label: string;
+  value: string;
+  confidence: number;
+  /** Confident enough to shape plans. */
+  in_use: boolean;
+}
+
+export const styleApi = {
+  list: () => envelopeRequest<StylePreference[]>('/editor/style'),
+  forget: (key: string) => envelopeRequest<StylePreference[]>(`/editor/style/${encodeURIComponent(key)}`, { method: 'DELETE' }),
+};
+
+export const plansApi = {
+  get: (planId: string) => envelopeRequest<PlanCard>(`/editor/plans/${planId}`),
+  /** Holds the plan's credit ceiling and starts it; 402 INSUFFICIENT_CREDITS when it doesn't fit. */
+  approve: (planId: string) => envelopeRequest<PlanCard>(`/editor/plans/${planId}/approve`, post({})),
+  reject: (planId: string) => envelopeRequest<PlanCard>(`/editor/plans/${planId}/reject`, post({})),
+  edit: (planId: string, patch: PlanPatch) =>
+    envelopeRequest<PlanCard>(`/editor/plans/${planId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+  pause: (planId: string) => envelopeRequest<PlanCard>(`/editor/plans/${planId}/pause`, post({})),
+  resume: (planId: string) => envelopeRequest<PlanCard>(`/editor/plans/${planId}/resume`, post({})),
+  /** Stops for good and keeps every applied step ("Take over"). */
+  stop: (planId: string) => envelopeRequest<PlanCard>(`/editor/plans/${planId}/stop`, post({})),
+  /** The runner-up as a new proposed plan ("Try the other version"). */
+  alternative: (planId: string) => envelopeRequest<PlanCard>(`/editor/plans/${planId}/alternative`, post({})),
+
+  /** Follows a running plan; calls onEvent per server-sent event until the plan finishes or ``signal`` aborts. */
+  async stream(planId: string, onEvent: (event: PlanEvent) => void, signal?: AbortSignal): Promise<void> {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/v1/editor/plans/${planId}/stream`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      signal,
+    });
+    if (!res.ok || !res.body) throw new ApiError(`Couldn't follow the plan (${res.status})`, res.status, null);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      buffer += decoder.decode(value, { stream: true });
+      let split: number;
+      while ((split = buffer.indexOf('\n\n')) >= 0) {
+        const block = buffer.slice(0, split);
+        buffer = buffer.slice(split + 2);
+        const name = /^event: (.+)$/m.exec(block)?.[1];
+        const data = /^data: (.+)$/m.exec(block)?.[1];
+        if (name && data) onEvent({ event: name, data: JSON.parse(data) } as PlanEvent);
+      }
+    }
+  },
+};
+
 export const editorApi = {
   create: (payload: EditorProjectCreate) => envelopeRequest<EditorProjectResponse>('/editor/projects', post(payload)),
   /** Opens a footage reel's current edit as a new editor project. */
@@ -2687,6 +2972,40 @@ export const editorApi = {
   get: (projectId: string) => envelopeRequest<EditorProjectResponse>(`/editor/projects/${projectId}`),
   applyOps: (projectId: string, payload: EditorOpsRequest) =>
     envelopeRequest<EditorOpsResponse>(`/editor/projects/${projectId}/ops`, post(payload)),
+  /** Undo the last change still in effect (an AI step undoes as one); 409 NOTHING_TO_UNDO when there's none. */
+  undo: (projectId: string) => envelopeRequest<EditorOpsResponse>(`/editor/projects/${projectId}/undo`, post({})),
+  redo: (projectId: string) => envelopeRequest<EditorOpsResponse>(`/editor/projects/${projectId}/redo`, post({})),
+  /** Undo everything one AI step changed, even with later edits on top. */
+  undoStep: (projectId: string, stepId: string) =>
+    envelopeRequest<EditorOpsResponse>(`/editor/projects/${projectId}/steps/${encodeURIComponent(stepId)}/undo`, post({})),
+  /** One prompt from the studio's AI tab. */
+  turn: (projectId: string, payload: TurnRequest) =>
+    envelopeRequest<TurnResult>(`/editor/projects/${projectId}/turns`, post(payload)),
+  /** The AI's analysis of each asset; it starts by itself when an asset is added. */
+  analysis: (projectId: string) => envelopeRequest<MediaAnalysisResponse[]>(`/editor/projects/${projectId}/analysis`),
+  retryAnalysis: (projectId: string, assetId: string) =>
+    envelopeRequest<MediaAnalysisResponse>(
+      `/editor/projects/${projectId}/analysis/${encodeURIComponent(assetId)}/retry`, post({}),
+    ),
+  initAsset: (projectId: string, payload: EditorAssetInitRequest) =>
+    envelopeRequest<EditorAssetUpload>(`/editor/projects/${projectId}/assets/init`, post(payload)),
+
+  /** PUTs a file straight to S3, reporting the share sent so far (0-1); resolves with its storage key. */
+  uploadAsset(projectId: string, file: File, contentType: EditorAssetType, onProgress?: (share: number) => void): Promise<string> {
+    return editorApi.initAsset(projectId, { filename: file.name, content_type: contentType, size_bytes: file.size }).then(
+      (upload) => new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', upload.url);
+        xhr.setRequestHeader('Content-Type', upload.content_type);
+        xhr.upload.onprogress = (event) => event.lengthComputable && onProgress?.(event.loaded / event.total);
+        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300
+          ? resolve(upload.key)
+          : reject(new Error(`Upload of ${file.name} failed (${xhr.status})`)));
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        xhr.send(file);
+      }),
+    );
+  },
 };
 
 // -- Welcome form (backend onboarding/) and referrals (backend referral/) ----

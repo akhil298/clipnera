@@ -18,6 +18,7 @@ import { CommandIcon, Logout05Icon, Video01Icon } from "@hugeicons/core-free-ico
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ShortcutsDialog } from "@opencut/actions/components/shortcuts-dialog";
 import { cn } from "@opencut/utils/ui";
+import { SaveStatus } from "@opencut/clipnera/save-status";
 
 export function EditorHeader() {
 	return (
@@ -26,7 +27,8 @@ export function EditorHeader() {
 				<ProjectDropdown />
 				<EditableProjectName />
 			</div>
-			<nav className="flex items-center gap-2">
+			<nav className="flex items-center gap-3">
+				<SaveStatus />
 				<ExportButton />
 			</nav>
 		</header>
