@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from core.database import Base
@@ -32,6 +32,10 @@ class MediaAnalysis(Base):
     asset_key: Mapped[str] = mapped_column(String(500), nullable=False)
     kind: Mapped[str] = mapped_column(String(10), nullable=False)
     status: Mapped[str] = mapped_column(String(10), nullable=False, default=AnalysisStatus.PENDING)
+    # The analyzer at work while running (understanding.build.STAGES).
+    stage: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # What was found (understanding.findings.AnalysisFindings), once ready.
+    findings: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # The MUD JSON in S3, once ready.
     mud_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)

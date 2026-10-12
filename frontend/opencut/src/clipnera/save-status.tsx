@@ -24,15 +24,18 @@ export function setCurrentSync(sync: BackendSync | null): void {
 	notify();
 }
 
+const subscribeToCurrent = (listener: () => void) => {
+	listeners.add(listener);
+	return () => listeners.delete(listener);
+};
+
+/** The open project's sync, re-rendering when a project opens or closes. */
+export function useCurrentSync(): BackendSync | null {
+	return useSyncExternalStore(subscribeToCurrent, () => current, () => null);
+}
+
 function useSaveStatus(): SyncStatus | null {
-	return useSyncExternalStore(
-		(listener) => {
-			listeners.add(listener);
-			return () => listeners.delete(listener);
-		},
-		() => current?.getStatus() ?? null,
-		() => null,
-	);
+	return useSyncExternalStore(subscribeToCurrent, () => current?.getStatus() ?? null, () => null);
 }
 
 const LOOK: Record<SyncStatus, { label: string; dot: string }> = {

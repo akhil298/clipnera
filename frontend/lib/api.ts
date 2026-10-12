@@ -2837,9 +2837,35 @@ export interface TurnResult {
 }
 
 /** How far the AI has got understanding one asset of an editor project (backend understanding/). */
+export interface FoundMoment {
+  t0: number;
+  t1: number;
+  /** What is said in it, or why it stood out when nothing is. */
+  text: string;
+}
+
+/** What the AI found in one asset (backend understanding/findings.py). Times are seconds. */
+export interface AnalysisFindings {
+  kind: 'video' | 'image' | 'audio';
+  duration: number;
+  language: string | null;
+  words: number;
+  fillers: number;
+  dead_air: number;
+  shots: number;
+  tempo_bpm: number | null;
+  moments: FoundMoment[];
+  problems: string[];
+  /** Prompts the chat offers as one-click next steps. */
+  suggestions: string[];
+}
+
 export interface MediaAnalysisResponse {
   asset_id: string;
   status: 'pending' | 'running' | 'ready' | 'failed';
+  /** The step being run while `status` is "running": shots, transcript, music or moments. */
+  stage: string | null;
+  findings: AnalysisFindings | null;
   error: string | null;
   updated_at: string;
 }

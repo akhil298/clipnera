@@ -38,7 +38,7 @@ backend/          FastAPI app — routes, services, schemas, DB models
   evals/          Golden set + injection cases (python -m evals.runner)
   tests/          pytest tests
 frontend/         Next.js app (app router)
-  opencut/        Vendored OpenCut studio (MIT); src/clipnera/ = bridge to Timeline v1, sync, AI tab
+  opencut/        Vendored OpenCut studio (MIT); src/clipnera/ = bridge to Timeline v1, sync, AI chat
   app/            Pages (dashboard, auth, landing)
   components/     UI components
   lib/            Utilities, API client, auth helpers
@@ -82,6 +82,8 @@ backend/.env      Environment secrets (IGNORED)
 
 ## AI editor notes
 - The studio (`/studio/[id]`, OpenCut) saves every edit to the backend as Timeline ops (`frontend/opencut/src/clipnera/backend-sync.ts`); mapping in `frontend/opencut/BRIDGE.md`.
+- The AI chat is the studio's right-hand column (`clipnera/ai-panel.tsx`). Files dropped there or on the Editor home go to the media library; `clipnera/footage.ts` follows each one (upload → analysis step → ready), posts what the AI found (`understanding/findings.py`), and holds a prompt until the files are understood.
+- Rebuild the studio's stylesheet after changing classes under `frontend/opencut/src`: `cd frontend/opencut/tools && npm run build`.
 - Prompts: `POST /api/v1/editor/projects/{id}/turns` → `brain/turns.py`; plans: `/api/v1/editor/plans/*` (`brain/api.py`).
 - The AI never writes frame times: the director names moments by id (PlanIR); `brain/solvers/` place frames.
 - Agent edits go through `EditorService.apply` with an `Actor`: human ownership, op budgets and the never-do list (`brain/invariants.py`) apply there.

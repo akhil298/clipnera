@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from editor.ops import Op
 from editor.timeline import Timeline
+from understanding.findings import AnalysisFindings
 
 AspectRatio = Literal["9:16", "1:1", "4:5", "16:9"]
 EditorAssetType = Literal[
@@ -75,5 +76,8 @@ class MediaAnalysisResponse(BaseModel):
 
     asset_id: str
     status: Literal["pending", "running", "ready", "failed"]
+    # While running: "shots", "transcript", "music" or "moments".
+    stage: str | None
+    findings: AnalysisFindings | None
     error: str | None
     updated_at: datetime

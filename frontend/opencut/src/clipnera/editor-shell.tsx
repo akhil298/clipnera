@@ -15,11 +15,11 @@ import { MigrationDialog } from "@opencut/project/components/migration-dialog";
 import { usePanelStore } from "@opencut/editor/panel-store";
 import { usePasteMedia } from "@opencut/media/use-paste-media";
 import { MobileGate } from "@opencut/components/editor/mobile-gate";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@opencut/components/ui/tooltip";
 import { useEditor } from "@opencut/editor/use-editor";
-import { Cancel01Icon } from "@hugeicons/core-free-icons";
+import { AiMagicIcon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@opencut/components/ui/button";
 import {
@@ -33,6 +33,10 @@ import {
 	bookmarkNotesPreviewOverlay,
 	getBookmarkPreviewOverlaySource,
 } from "@opencut/timeline/bookmarks/index";
+import { AiPanel } from "./ai-panel";
+
+// The chat starts open in every project; hiding it lasts for the visit.
+const CHAT_HIDDEN_KEY = "clipnera-ai-chat-hidden";
 
 /** The OpenCut editor screen (vendored from opencut-classic's editor page), without its
  * onboarding tour and changelog popup. Clipnera mounts it from app/studio. */
@@ -58,7 +62,7 @@ export function OpenCutEditor({ projectId }: { projectId: string }) {
 						<DegradedRendererBanner />
 						<EditorHeader />
 						<div className="min-h-0 min-w-0 flex-1">
-							<EditorLayout />
+							<StudioLayout />
 						</div>
 						<MigrationDialog />
 					</div>
@@ -86,6 +90,40 @@ function DegradedRendererBanner() {
 				<HugeiconsIcon icon={Cancel01Icon} />
 			</Button>
 		</div>
+	);
+}
+
+/** The editor with the AI chat as its own column on the right. */
+function StudioLayout() {
+	const [chatHidden, setChatHidden] = useState(false);
+
+	useEffect(() => setChatHidden(sessionStorage.getItem(CHAT_HIDDEN_KEY) === "true"), []);
+	const hide = (hidden: boolean) => {
+		setChatHidden(hidden);
+		sessionStorage.setItem(CHAT_HIDDEN_KEY, String(hidden));
+	};
+
+	if (chatHidden) {
+		return (
+			<div className="relative size-full">
+				<EditorLayout />
+				<Button className="absolute right-3 bottom-3 z-20 shadow-lg" onClick={() => hide(false)}>
+					<HugeiconsIcon icon={AiMagicIcon} />
+					Ask AI
+				</Button>
+			</div>
+		);
+	}
+	return (
+		<ResizablePanelGroup direction="horizontal" className="size-full">
+			<ResizablePanel defaultSize={76} minSize={55} className="min-w-0">
+				<EditorLayout />
+			</ResizablePanel>
+			<ResizableHandle withHandle />
+			<ResizablePanel defaultSize={24} minSize={18} maxSize={45} className="min-w-0 pr-3 pb-3">
+				<AiPanel onCollapse={() => hide(true)} />
+			</ResizablePanel>
+		</ResizablePanelGroup>
 	);
 }
 

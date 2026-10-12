@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Clapperboard, Loader2, Plus, Trash2 } from 'lucide-react';
+import { ArrowUp, Clapperboard, Loader2, Paperclip, Trash2, X } from 'lucide-react';
 import {
   editorApi,
   editsApi,
@@ -12,11 +12,14 @@ import {
   type EditorProjectSummary,
   type EditSummary,
 } from '@/lib/api';
+import { setStudioHandoff } from '@/lib/editor/handoff';
 import { applyOps, duration, itemEnd, normalise, TimelineError, type Item, type Timeline, type TimelineOp } from '@/lib/editor/timeline';
 import { formatRelativeTime } from '@/lib/utils/dates';
 import { PageHeader } from '@/components/ui/PageHeader';
 
 const ASPECTS: EditorAspect[] = ['9:16', '1:1', '4:5', '16:9'];
+const START_FILE_TYPES = 'video/mp4,video/quicktime,video/webm,image/*,audio/*';
+const TITLE_CHARS = 60;
 const OPENABLE_REELS: EditSummary['status'][] = ['planned', 'done'];
 const ITEM_COLOURS: Record<Item['type'], string> = {
   clip: 'bg-sky-500/30 border-sky-400/70',
@@ -38,7 +41,10 @@ function EditorHome() {
   const brief = useSearchParams().get('brief') ?? '';
   const [projects, setProjects] = useState<EditorProjectSummary[] | null>(null);
   const [reels, setReels] = useState<EditSummary[]>([]);
-  const [title, setTitle] = useState(brief.slice(0, 300));
+  const [prompt, setPrompt] = useState(brief.slice(0, 2000));
+  const [files, setFiles] = useState<File[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const picker = useRef<HTMLInputElement>(null);
   const [aspect, setAspect] = useState<EditorAspect>('9:16');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +57,21 @@ function EditorHome() {
 
   const open = (id: string) => router.push(`/dashboard/editor/${encodeURIComponent(id)}`);
   const openInStudio = (id: string) => router.push(studioHref(id));
+
+  const addFiles = (added: File[]) => setFiles((current) => [...current, ...added]);
+
+  /** Make the project in the background and open it in the studio with the files and prompt. */
+  const start = () => {
+    const text = prompt.trim();
+    const title = (files[0]?.name.replace(/\.[^.]+$/, '') || text || 'Untitled project').slice(0, TITLE_CHARS);
+    void run(
+      () => editorApi.create({ title, aspect }),
+      (id) => {
+        setStudioHandoff({ projectId: id, files, prompt: text });
+        openInStudio(id);
+      },
+    );
+  };
 
   const run = async (work: () => Promise<EditorProjectResponse>, then: (id: string) => void = open) => {
     setBusy(true);
@@ -65,43 +86,93 @@ function EditorHome() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="New" title="Editor" description="Build a video on a timeline. Start a project, or open one of your reels to keep editing it." />
+      <PageHeader eyebrow="New" title="Editor" description="Drop in your footage and say what you want. The AI edits it on a timeline you can change by hand." />
 
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          run(() => editorApi.create({ title: title.trim() || 'Untitled project', aspect }));
+          start();
         }}
-        className="flex flex-col gap-3 rounded-2xl border border-neutral-800 bg-neutral-900/80 p-4 sm:flex-row sm:items-end"
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes('Files')) return;
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          addFiles([...e.dataTransfer.files]);
+        }}
+        className={`space-y-3 rounded-2xl border bg-neutral-900/80 p-4 ${dragging ? 'border-amber-400' : 'border-neutral-800'}`}
       >
-        <label className="flex-1">
-          <span className="mb-1.5 block text-xs font-semibold text-neutral-300">Project name</span>
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            maxLength={300}
-            placeholder="Goa trip reel"
-            className="h-10 w-full rounded-xl border border-neutral-800 bg-neutral-950 px-3 text-[13px] text-white placeholder:text-neutral-600 focus:border-amber-400 focus:outline-none"
+        <label className="block">
+          <span className="mb-1.5 block text-sm font-semibold text-white">What do you want to make?</span>
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                start();
+              }
+            }}
+            maxLength={2000}
+            rows={3}
+            placeholder="Drop your videos here and say what you want, e.g. “a 45-second reel of the best moments, with captions”"
+            className="w-full resize-none rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-[13px] text-white placeholder:text-neutral-600 focus:border-amber-400 focus:outline-none"
           />
         </label>
-        <div role="radiogroup" aria-label="Shape" className="flex gap-1.5">
-          {ASPECTS.map((a) => (
-            <button
-              key={a}
-              type="button"
-              role="radio"
-              aria-checked={aspect === a}
-              onClick={() => setAspect(a)}
-              className={`h-10 rounded-xl border px-3 text-xs font-bold ${aspect === a ? 'border-amber-400 bg-amber-500/10 text-amber-300' : 'border-neutral-800 text-neutral-400 hover:text-white'}`}
-            >
-              {a}
-            </button>
-          ))}
+
+        {files.length > 0 && (
+          <ul className="flex flex-wrap gap-1.5" aria-label="Files to start with">
+            {files.map((file, index) => (
+              <li key={`${file.name}-${file.size}-${index}`} className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-800 px-2 py-1 text-xs text-neutral-200">
+                <span className="max-w-[14rem] truncate">{file.name}</span>
+                <button type="button" aria-label={`Remove ${file.name}`} onClick={() => setFiles(files.filter((_, i) => i !== index))} className="text-neutral-500 hover:text-rose-400">
+                  <X className="h-3.5 w-3.5" aria-hidden />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={picker}
+            type="file"
+            multiple
+            accept={START_FILE_TYPES}
+            className="hidden"
+            onChange={(e) => {
+              addFiles([...(e.target.files ?? [])]);
+              e.target.value = '';
+            }}
+          />
+          <button type="button" onClick={() => picker.current?.click()} className="inline-flex h-10 items-center gap-2 rounded-xl border border-neutral-800 px-3 text-xs font-bold text-neutral-300 hover:border-neutral-600 hover:text-white">
+            <Paperclip className="h-4 w-4" aria-hidden />
+            Add videos, music or images
+          </button>
+          <div role="radiogroup" aria-label="Shape" className="flex gap-1.5">
+            {ASPECTS.map((a) => (
+              <button
+                key={a}
+                type="button"
+                role="radio"
+                aria-checked={aspect === a}
+                onClick={() => setAspect(a)}
+                className={`h-10 rounded-xl border px-3 text-xs font-bold ${aspect === a ? 'border-amber-400 bg-amber-500/10 text-amber-300' : 'border-neutral-800 text-neutral-400 hover:text-white'}`}
+              >
+                {a}
+              </button>
+            ))}
+          </div>
+          <button type="submit" disabled={busy} className="ml-auto inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 text-sm font-bold text-neutral-950 hover:bg-amber-400 disabled:opacity-60">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ArrowUp className="h-4 w-4" aria-hidden />}
+            Start
+          </button>
         </div>
-        <button type="submit" disabled={busy} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 text-sm font-bold text-neutral-950 hover:bg-amber-400 disabled:opacity-60">
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Plus className="h-4 w-4" aria-hidden />}
-          New project
-        </button>
+        <p className="text-xs text-neutral-500">The AI goes through your files first, tells you what it found, then edits as you ask.</p>
       </form>
 
       {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}

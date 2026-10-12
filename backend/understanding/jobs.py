@@ -17,6 +17,7 @@ from jobs.queue import Job, handler
 from sqlalchemy import select
 from subscription.service import SubscriptionService
 from understanding.build import build_mud
+from understanding.findings import findings_of
 from understanding.model import AnalysisStatus, MediaAnalysis
 from understanding.service import ANALYZE_JOB, mud_key
 from usage.context import llm_scope
@@ -33,16 +34,18 @@ async def analyze_asset(job: Job) -> None:
     try:
         # Not charged to a pipeline project: llm_usage.project_id points at video projects.
         with llm_scope(user_id=row.user_id, step="media_understanding"):
-            key = await _build(row)
+            key, findings = await _build(row)
     except Exception as exc:
         log.exception("Media understanding failed: project=%s asset=%s", project_id, asset_id)
         detail = str(exc) if isinstance(exc, ValueError) else "please try again"
-        await _set(project_id, asset_id, status=AnalysisStatus.FAILED, error=f"Couldn't understand this file: {detail}"[:500])
+        await _set(project_id, asset_id, status=AnalysisStatus.FAILED, stage=None,
+                   error=f"Couldn't understand this file: {detail}"[:500])
         return
-    await _set(project_id, asset_id, status=AnalysisStatus.READY, mud_key=key, error=None)
+    await _set(project_id, asset_id, status=AnalysisStatus.READY, stage=None, mud_key=key, findings=findings, error=None)
 
 
-async def _build(row: MediaAnalysis) -> str:
+async def _build(row: MediaAnalysis) -> tuple[str, dict]:
+    """Build and store the MUD; returns its key and what was found."""
     s3, bucket = S3(), get_settings().S3_BUCKET_NAME
     async with AsyncSessionLocal() as session:
         is_pro = (await SubscriptionService.for_session(session).get_entitlements(row.user_id)).pro_ai_provider
@@ -50,11 +53,12 @@ async def _build(row: MediaAnalysis) -> str:
         work = Path(workdir)
         local = work / f"source{Path(row.asset_key).suffix}"
         await asyncio.to_thread(s3.download_file, bucket, row.asset_key, str(local))
-        mud = await build_mud(str(local), row.asset_id, row.kind, is_pro=is_pro, workdir=work)
+        mud = await build_mud(str(local), row.asset_id, row.kind, is_pro=is_pro, workdir=work,
+                              on_stage=lambda name: _set(row.project_id, row.asset_id, stage=name))
     key = mud_key(row.asset_key)
     await asyncio.to_thread(s3.put_object, bucket, key, mud.model_dump_json(exclude_defaults=True),
                             ContentType="application/json")
-    return key
+    return key, findings_of(mud).model_dump()
 
 
 async def _set(project_id: str, asset_id: str, **fields: object) -> MediaAnalysis | None:

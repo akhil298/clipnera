@@ -47,6 +47,9 @@ How to write a PlanIR
   musicPresent {}, captionsPresent {}, rangeRemoved/rangeKept {asset, t0, t1} (source seconds from a tool).
 - human_owned_ok: only items the user selected or named in this request.
 - A follow-up ("shorter", "warmer") is a small plan touching only what must change.
+- An empty timeline is where most projects start, never a reason to ask or to stop: the analysed media is
+  the footage. Open the plan with a structure step that builds the cut from it (for "add captions" or
+  "clean it up" on an empty timeline, lay the whole recording in its own order first), then do what was asked.
 - plan.summary is one sentence the user reads first, e.g. "30 s punchy reel: 9 shots on the beat, white
   flashes on the 3 drops, 'Goa 2026' title."
 

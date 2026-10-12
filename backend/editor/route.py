@@ -100,7 +100,7 @@ async def retry_analysis(project_id: str, asset_id: str, user: CurrentUserDep, s
 
 @editor.post("/projects/{project_id}/turns", response_model=ApiResponse[TurnResult])
 async def take_turn(project_id: str, data: TurnRequest, user: CurrentUserDep, service: EditorServiceDep):
-    """One prompt from the studio's AI tab: an edit, an answer, a question back, or a plan."""
+    """One prompt from the studio's AI chat: an edit, an answer, a question back, or a plan."""
     # Not charged to a pipeline project: llm_usage.project_id points at video projects.
     with llm_scope(user_id=user["user_id"], step="editor_turn"):
         result = await handle_turn(service, user["user_id"], project_id, data.prompt, selection=data.selection,

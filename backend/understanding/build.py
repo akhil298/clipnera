@@ -22,8 +22,17 @@ from understanding.mud import MUD, Shot, Utterance, Word, check_mud
 
 log = get_logger(__name__)
 
+# The steps of a build, in order; the studio shows which one is running.
+STAGES = ("shots", "transcript", "music", "moments")
+StageHook = Callable[[str], Awaitable[None]]
 
-async def build_mud(path: str, asset_id: str, kind: str, *, is_pro: bool, workdir: Path) -> MUD:
+
+async def build_mud(path: str, asset_id: str, kind: str, *, is_pro: bool, workdir: Path,
+                    on_stage: StageHook | None = None) -> MUD:
+    async def stage(name: str) -> None:
+        if on_stage:
+            await on_stage(name)
+
     if kind == "image":
         return MUD(asset_id=asset_id, kind="image", duration=0.0, analyzers={"probe": "skipped"})
     info = await perception.probe_media(path)
@@ -36,9 +45,11 @@ async def build_mud(path: str, asset_id: str, kind: str, *, is_pro: bool, workdi
 
     raw_shots: list[dict[str, Any]] = []
     if info.has_video:
+        await stage("shots")
         raw_shots = await _run(mud, "shots", lambda: _shots(path, info, is_pro)) or []
     audio = workdir / f"{asset_id}.wav"
     if info.has_audio and await _run(mud, "audio", lambda: perception.extract_audio(path, str(audio))) is not False:
+        await stage("transcript")
         words, language = await _run(mud, "transcript", lambda: _transcribe(str(audio), duration)) or ([], None)
         mud.language = language
         mud.words = analyzers.tag_fillers(words)
@@ -47,10 +58,12 @@ async def build_mud(path: str, asset_id: str, kind: str, *, is_pro: bool, workdi
         speech = sum(u.t1 - u.t0 for u in mud.utterances)
         mud.speech_ratio = round(min(1.0, speech / duration), 3)
         if mud.kind == "audio" and mud.speech_ratio < analyzers.MUSIC_SPEECH_RATIO:
+            await stage("music")
             beats_and_music = await _run(mud, "music", lambda: asyncio.to_thread(analyzers.analyze_music, str(audio)))
             if beats_and_music:
                 mud.beats, mud.music = beats_and_music
 
+    await stage("moments")
     shots = [_shot(n, raw, duration, len(raw_shots)) for n, raw in enumerate(raw_shots)]
     mud.scenes, mud.shots = analyzers.group_scenes(shots, mud.utterances, mud.silences, duration)
     mud.quality = analyzers.quality_ranges(mud.shots)

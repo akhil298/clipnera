@@ -16,6 +16,13 @@ import { loadMedia } from "./media";
 
 export type SyncStatus = "saved" | "saving" | "offline" | "error";
 
+/** One file on its way to the project: ``share`` is 0..1 of it sent. */
+export interface UploadProgress {
+	id: string;
+	name: string;
+	share: number;
+}
+
 const DEBOUNCE_MS = 700;
 // Refusals that mean "the project moved on": reload it and put our edit on top if it still fits.
 const RELOAD_CODES: ReadonlySet<string> = new Set(["STALE_VERSION", "CONFLICT"]);
@@ -37,7 +44,7 @@ export class BackendSync {
 	private sending = false;
 	private changedWhileSending = false;
 	// Media being uploaded, and uploaded media whose add_asset hasn't been saved yet.
-	private uploading = new Set<string>();
+	private uploading = new Map<string, UploadProgress>();
 	private uploaded = new Map<string, Asset>();
 	private failedUploads = new Set<string>();
 
@@ -90,6 +97,20 @@ export class BackendSync {
 		return this.status;
 	}
 
+	/** Files still being sent to the project. */
+	getUploads(): UploadProgress[] {
+		return [...this.uploading.values()];
+	}
+
+	/** Whether this file is part of the saved project yet (so the AI can see it). */
+	isSaved(mediaId: string): boolean {
+		return Boolean(this.saved.assets[mediaId]);
+	}
+
+	hasFailedUpload(mediaId: string): boolean {
+		return this.failedUploads.has(mediaId);
+	}
+
 	subscribe(listener: () => void): () => void {
 		this.listeners.add(listener);
 		return () => this.listeners.delete(listener);
@@ -132,6 +153,10 @@ export class BackendSync {
 	private setStatus(status: SyncStatus): void {
 		if (status === this.status) return;
 		this.status = status;
+		this.notify();
+	}
+
+	private notify(): void {
 		for (const listener of this.listeners) listener();
 	}
 
@@ -238,6 +263,7 @@ export class BackendSync {
 		for (const id of this.uploaded.keys()) {
 			if (this.saved.assets[id]) this.uploaded.delete(id);
 		}
+		this.notify();
 	}
 
 	/** Put a Timeline from the server on screen, loading any media the browser doesn't have yet. */
@@ -278,11 +304,15 @@ export class BackendSync {
 			});
 			return;
 		}
-		this.uploading.add(media.id);
+		const progress: UploadProgress = { id: media.id, name: media.name, share: 0 };
+		this.uploading.set(media.id, progress);
 		this.setStatus("saving");
+		this.notify();
 		const toastId = toast.loading(`Uploading ${media.name}…`);
 		try {
 			const key = await editorApi.uploadAsset(this.projectId, media.file, type as EditorAssetType, (share) => {
+				this.uploading.set(media.id, { ...progress, share });
+				this.notify();
 				toast.loading(`Uploading ${media.name} — ${Math.round(share * 100)}%`, { id: toastId });
 			});
 			this.uploaded.set(media.id, assetFor({ media, key, fps: this.saved.fps }));
@@ -295,6 +325,7 @@ export class BackendSync {
 			});
 		} finally {
 			this.uploading.delete(media.id);
+			this.notify();
 			this.schedule(0);
 		}
 	}

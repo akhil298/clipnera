@@ -22,6 +22,8 @@ export interface AiMessage {
 	kind?: TurnKind | "error";
 	choices?: TurnChoice[];
 	options?: string[];
+	// Whole prompts offered as one-click next steps.
+	suggestions?: string[];
 	planId?: string;
 	// The prompt a choice chip re-sends with that item selected.
 	prompt?: string;
@@ -33,7 +35,10 @@ interface AiState {
 	byProject: Record<string, AiMessage[]>;
 	plans: Record<string, PlanCard>;
 	busy: boolean;
-	send: (prompt: string, selection?: string[]) => Promise<void>;
+	/** ``shown``: the prompt is already in the chat (it waited for the files to be understood). */
+	send: (prompt: string, selection?: string[], shown?: boolean) => Promise<void>;
+	/** Put a message from the AI in the chat without a model call, after the user's line if given. */
+	note: (projectId: string, userText: string | null, text: string, suggestions?: string[]) => void;
 	undo: (messageId: string) => Promise<void>;
 	approve: (planId: string) => Promise<void>;
 	reject: (planId: string) => Promise<void>;
@@ -122,13 +127,19 @@ export const useAiStore = create<AiState>((set, get) => {
 		plans: {},
 		busy: false,
 
-		async send(prompt, selection) {
+		note(projectId, userText, text, suggestions) {
+			if (userText) push(projectId, { id: id(), role: "user", text: userText });
+			push(projectId, { id: id(), role: "ai", text, suggestions });
+		},
+
+		async send(prompt, selection, shown = false) {
 			const text = prompt.trim();
 			if (!text) return;
 			await guarded("Something went wrong. Try again.", async (projectId) => {
 				const sync = getCurrentSync()!;
-				const earlier = messagesOf(projectId).filter((m) => m.role === "user").slice(-RECENT_TURNS).map((m) => m.text);
-				push(projectId, { id: id(), role: "user", text });
+				const said = messagesOf(projectId).filter((m) => m.role === "user").map((m) => m.text);
+				const earlier = (shown ? said.slice(0, -1) : said).slice(-RECENT_TURNS);
+				if (!shown) push(projectId, { id: id(), role: "user", text });
 				// The AI must see every edit made by hand so far.
 				await sync.flush();
 				const editor = EditorCore.getInstance();
