@@ -71,7 +71,8 @@ class BaseConfig(BaseSettings):
     # Per-role pins over the profile, as JSON: {"director": "anthropic:claude-opus-5-5"}.
     LLM_ROLE_MODELS: dict[str, str] = {}
     # Providers tried in order when a role's call fails on a rate limit, 5xx or timeout.
-    LLM_FALLBACK: list[str] = ["openai", "anthropic"]
+    # OpenAI only: a failed call errors instead of moving to another provider.
+    LLM_FALLBACK: list[str] = ["openai"]
     # AI-editor credits (brain/credits.py) per Clipnera credit: a 30-credit plan costs 3 credits at 10.
     AI_CREDIT_RATE: int = 10
     # Evals (backend/evals): "record" saves every role call's reply as a cassette keyed by the
