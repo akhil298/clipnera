@@ -40,7 +40,10 @@ export function FeatureSwitches({ show, onError }: { show: (key: FeatureFlagKey)
   if (!flags) return <p className="text-xs text-neutral-400">Loading…</p>;
   return (
     <>
-      {flags.filter((flag) => show(flag.key)).map((flag) => (
+      {flags.filter((flag) => show(flag.key)).map((flag) => {
+        // A backend from before per-user rollout sends no list.
+        const testUsers = flag.test_users ?? [];
+        return (
         <div key={flag.key} className={`flex items-center justify-between gap-4 ${flag.parent ? 'pl-6' : ''}`}>
           <div>
             <p className="text-xs font-bold text-white">{flag.label}</p>
@@ -51,11 +54,11 @@ export function FeatureSwitches({ show, onError }: { show: (key: FeatureFlagKey)
             {!flag.enabled && (
               <div className="mt-1.5 space-y-1">
                 <p className="text-[11px] text-neutral-500">
-                  Test users (on for them only){flag.test_users.length ? ':' : ': none'}
+                  Test users (on for them only){testUsers.length ? ':' : ': none'}
                 </p>
-                {flag.test_users.length > 0 && (
+                {testUsers.length > 0 && (
                   <div className="flex flex-wrap gap-1">
-                    {flag.test_users.map((email) => (
+                    {testUsers.map((email) => (
                       <span key={email} className="inline-flex items-center gap-1 rounded-md bg-neutral-800 px-1.5 py-0.5 text-[11px] text-neutral-200">
                         {email}
                         <button type="button" aria-label={`Remove ${email}`} disabled={busy !== null}
@@ -91,7 +94,8 @@ export function FeatureSwitches({ show, onError }: { show: (key: FeatureFlagKey)
             />
           </button>
         </div>
-      ))}
+        );
+      })}
     </>
   );
 }
