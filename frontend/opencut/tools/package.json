@@ -1,0 +1,14 @@
+{
+  "name": "clipnera-opencut-css",
+  "private": true,
+  "description": "Builds the vendored OpenCut editor's Tailwind v4 styles apart from Clipnera's Tailwind v3.",
+  "scripts": {
+    "build": "tailwindcss -i editor.css -o editor.built.css --minify && node scope.mjs editor.built.css ../../public/opencut/editor.css && rm editor.built.css"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.2.1",
+    "@tailwindcss/typography": "0.5.19",
+    "tailwindcss": "4.2.1",
+    "tailwindcss-animate": "1.0.7"
+  }
+}
