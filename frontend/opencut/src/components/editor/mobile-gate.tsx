@@ -60,8 +60,9 @@ export function MobileGate({ children }: MobileGateProps) {
 				<div className="flex items-center gap-3">
 					<Button onClick={handleContinue}>Take a look anyway</Button>
 					<Button variant="ghost" asChild>
-						<Link href="/roadmap" className="flex items-center gap-1">
-							Roadmap
+						{/* Clipnera: OpenCut's roadmap page does not exist here. */}
+						<Link href="/dashboard" className="flex items-center gap-1">
+							Back to dashboard
 							<HugeiconsIcon icon={ArrowRight01Icon} size={14} />
 						</Link>
 					</Button>
