@@ -36,6 +36,8 @@ TOKEN_PRICES: dict[tuple[str, str], TokenPrice] = {
     ("anthropic", "claude-sonnet-5"): TokenPrice(2.00, 10.00),
     ("anthropic", "claude-haiku-4-5"): TokenPrice(1.00, 5.00),
     ("openai", "gpt-4.1-mini"): TokenPrice(0.40, 1.60),
+    ("openai", "gpt-4.1"): TokenPrice(2.00, 8.00),
+    ("openai", "gpt-5"): TokenPrice(1.25, 10.00),
     ("openai", "gpt-4o-mini"): TokenPrice(0.15, 0.60),
     ("groq", "openai/gpt-oss-20b"): TokenPrice(0.075, 0.30),
     ("groq", "openai/gpt-oss-120b"): TokenPrice(0.15, 0.60),

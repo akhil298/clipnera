@@ -1,0 +1,13 @@
+# Audio (§3B.2.6) and colour (§3B.2.7).
+- {id: AU-01, title: Dialogue loudness, severity: H, check: none, params: {lufs: [-16, -14]}, penalty: 1.0, explain: "Speech sits at -16 to -14 LUFS."}
+- {id: AU-02, title: Duck music under speech, severity: G, check: none, params: {duck_db: -15}, penalty: 0.0, explain: "Music drops 15 dB under speech."}
+- {id: AU-03, title: True peak, severity: H, check: true_peak, params: {max_dbtp: -1.0}, penalty: 1.0, explain: "The mix never peaks above -1 dBTP."}
+- {id: AU-04, title: Crossfades at edits, severity: H, check: none, params: {}, penalty: 1.0, explain: "Every audio cut has a short fade."}
+- {id: AU-05, title: Music fades, severity: S, check: none, params: {}, penalty: 0.05, explain: "Music fades in and out."}
+- {id: AU-06, title: No dead silence, severity: S, check: silence, params: {max_s: 0.4}, penalty: 0.05, explain: "No unwanted silence."}
+- {id: AU-07, title: SFX level, severity: S, check: none, params: {}, penalty: 0.05, explain: "Sound effects sit under the voice."}
+- {id: AU-08, title: Speech clarity, severity: S, check: none, params: {}, penalty: 0.05, explain: "Noisy speech gets enhanced."}
+- {id: CC-01, title: Matched shots in a scene, severity: S, check: none, params: {max_delta_e: 6}, penalty: 0.05, explain: "Shots in one scene match in colour."}
+- {id: CC-02, title: One look, severity: S, check: none, params: {}, penalty: 0.05, explain: "One look for the whole edit."}
+- {id: CC-03, title: Skin tones, severity: H, check: none, params: {}, penalty: 1.0, explain: "Grades keep skin natural."}
+- {id: CC-04, title: Exposure, severity: S, check: none, params: {}, penalty: 0.05, explain: "Grades don't clip highlights or crush shadows."}

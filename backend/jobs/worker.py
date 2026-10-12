@@ -103,6 +103,9 @@ def load_handlers() -> None:
     import reels.jobs  # noqa: F401
     import creator_intro.jobs  # noqa: F401
     import edit_engine.jobs  # noqa: F401
+    import understanding.jobs  # noqa: F401
+    import brain.execute  # noqa: F401
+    import brain.server_render  # noqa: F401
 
 
 def _worker() -> Any:

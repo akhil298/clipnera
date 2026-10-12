@@ -46,3 +46,4 @@ nltk>=3.9.1
 pandas>=2.2.3,<2.3.0
 pyannote.audio>=3.3.2,<4.0.0
 transformers>=4.48.0
+PyYAML>=6.0

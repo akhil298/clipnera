@@ -8,6 +8,7 @@ person would see "that clip overlaps the next one" and try again.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -18,6 +19,9 @@ from clients.ai.base import ToolCall, ToolResult, ToolSpec
 from core.exceptions import CustomException
 
 ToolOutput = str | dict[str, Any] | list[Any]
+
+# The names both OpenAI and Anthropic accept: no dots, at most 64 characters.
+_TOOL_NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
 
 @dataclass(frozen=True)
@@ -35,9 +39,15 @@ class AgentTool:
 class ToolBox:
     def __init__(self, tools: Iterable[AgentTool]) -> None:
         self._tools = {tool.name: tool for tool in tools}
+        bad = [name for name in self._tools if not _TOOL_NAME.match(name)]
+        if bad:
+            raise ValueError(f"Tool names must be letters, digits, _ or - (no dots): {bad}")
 
     def specs(self) -> list[ToolSpec]:
         return [tool.spec() for tool in self._tools.values()]
+
+    def tools(self) -> list[AgentTool]:
+        return list(self._tools.values())
 
     async def call(self, context: Any, call: ToolCall) -> ToolResult:
         tool = self._tools.get(call.name)

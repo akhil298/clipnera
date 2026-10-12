@@ -21,3 +21,14 @@ class FeatureFlag(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
     )
+
+
+class FeatureFlagUser(Base):
+    """A user a flag is on for even while it is off for everyone else (a staged rollout)."""
+
+    __tablename__ = "feature_flag_users"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    added_by: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

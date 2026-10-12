@@ -31,6 +31,8 @@ class LlmUsage(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     step: Mapped[str] = mapped_column(String(60), nullable=False)
+    # The AI-editor role (clients.ai.roles) for editor calls; null for the pipeline.
+    role: Mapped[str | None] = mapped_column(String(30), nullable=True)
     provider: Mapped[str] = mapped_column(String(30), nullable=False)
     model: Mapped[str] = mapped_column(String(80), nullable=False)
     effort: Mapped[str | None] = mapped_column(String(20), nullable=True)

@@ -64,6 +64,20 @@ class BaseConfig(BaseSettings):
     ANTHROPIC_MODEL: str = "claude-opus-5-5"
     # Thinking depth for steps without their own setting: low | medium | high | xhigh | max.
     ANTHROPIC_EFFORT: str = "high"
+    # Models for the AI editor's roles (clients.ai.roles). "openai": every role on
+    # OPENAI_MODEL. "anthropic": Haiku, Sonnet or Opus by role. "mixed": the
+    # judgement roles (director, critic, judge) on Opus, the rest on OpenAI.
+    LLM_PROFILE: Literal["openai", "anthropic", "mixed"] = "openai"
+    # Per-role pins over the profile, as JSON: {"director": "anthropic:claude-opus-5-5"}.
+    LLM_ROLE_MODELS: dict[str, str] = {}
+    # Providers tried in order when a role's call fails on a rate limit, 5xx or timeout.
+    LLM_FALLBACK: list[str] = ["openai", "anthropic"]
+    # AI-editor credits (brain/credits.py) per Clipnera credit: a 30-credit plan costs 3 credits at 10.
+    AI_CREDIT_RATE: int = 10
+    # Evals (backend/evals): "record" saves every role call's reply as a cassette keyed by the
+    # request's hash, "replay" answers from them with no API call. "live" in production.
+    LLM_MODE: Literal["live", "record", "replay"] = "live"
+    LLM_CASSETTE_DIR: str = "evals/cassettes"
     # Most a pipeline run may spend on AI, per minute of source video. At 80%
     # the remaining calls drop to low effort; at 100% they stop and the
     # heuristic fallbacks take over, so a video never ends up without clips.

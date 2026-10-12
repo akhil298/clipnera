@@ -8,6 +8,7 @@ from feature_flags.dependencies import FeatureFlagServiceDep
 from feature_flags.schema import (
     AdminFeatureFlagListResponse,
     AdminFeatureFlagUpdateRequest,
+    AdminFeatureFlagUserRequest,
     FeatureFlagsResponse,
 )
 
@@ -18,8 +19,8 @@ admin_features = APIRouter(
 
 
 @features.get("", response_model=ApiResponse[FeatureFlagsResponse])
-async def get_features(_: CurrentUserDep, service: FeatureFlagServiceDep):
-    return ok(FeatureFlagsResponse(flags=await service.effective()))
+async def get_features(user: CurrentUserDep, service: FeatureFlagServiceDep):
+    return ok(FeatureFlagsResponse(flags=await service.effective(user["user_id"])))
 
 
 @admin_features.get("", response_model=ApiResponse[AdminFeatureFlagListResponse])
@@ -33,3 +34,12 @@ async def set_flag(
 ):
     await service.set(key, body.enabled, admin.id)
     return ok(await service.admin_list(), message="Feature updated")
+
+
+@admin_features.put("/{key}/users", response_model=ApiResponse[AdminFeatureFlagListResponse])
+async def set_test_user(
+    key: str, body: AdminFeatureFlagUserRequest, admin: CurrentAdminDep, service: FeatureFlagServiceDep
+):
+    """Turn a flag on (or back off) for one user by email while it stays off for everyone else."""
+    await service.set_test_user(key, body.email, body.allowed, admin.id)
+    return ok(await service.admin_list(), message="Test users updated")

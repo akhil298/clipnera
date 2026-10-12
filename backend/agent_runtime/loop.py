@@ -17,7 +17,7 @@ from agent_runtime.tools import ToolBox
 from clients.ai.base import BaseAI, ToolResult
 from usage.context import RunBudget, llm_scope
 
-StopReason = Literal["answered", "steps", "time", "budget"]
+StopReason = Literal["answered", "steps", "time", "budget", "refused"]
 
 
 @dataclass(frozen=True)
@@ -56,6 +56,10 @@ async def run_turn(client: BaseAI, messages: list[dict[str, Any]], toolbox: Tool
         messages.append(reply.message)
         if reply.text:
             yield AgentEvent("text", {"text": reply.text})
+        if reply.refused:
+            # Nothing in a declined reply is run, even a tool call that came before the decline.
+            yield _done("refused", step + 1, budget)
+            return
         if not reply.calls:
             yield _done("answered", step + 1, budget)
             return

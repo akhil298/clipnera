@@ -1,0 +1,10 @@
+# Titles and captions (§3B.2.5).
+- {id: TX-01, title: Safe areas, severity: H, check: safe_area, params: {vertical: {x: [0.06, 0.94], y: [0.12, 0.80]}, wide: {x: [0.05, 0.95], y: [0.05, 0.95]}, square: {x: [0.06, 0.94], y: [0.06, 0.90]}}, penalty: 1.0, explain: "Text stays clear of the platform's buttons and bars."}
+- {id: TX-02, title: Contrast, severity: H, check: none, params: {min_ratio: 4.5}, penalty: 1.0, explain: "Text is readable on its background."}
+- {id: TX-03, title: Text size, severity: H, check: none, params: {}, penalty: 1.0, explain: "Captions and titles are big enough."}
+- {id: TX-04, title: Reading speed, severity: H, check: reading_speed, params: {min_title_s: 0.8, words_per_second: 3.0, max_cps: 17}, penalty: 1.0, explain: "Text stays long enough to read."}
+- {id: TX-05, title: Characters per line, severity: H, check: chars_per_line, params: {vertical: 22, square: 28, wide: 42}, penalty: 1.0, explain: "Lines fit the frame."}
+- {id: TX-06, title: Caption sync, severity: H, check: none, params: {max_ms: 80}, penalty: 1.0, explain: "Captions start with their words."}
+- {id: TX-07, title: No text over faces, severity: S, check: none, params: {}, penalty: 0.1, explain: "Text moves off faces."}
+- {id: TX-08, title: Two typefaces at most, severity: S, check: none, params: {}, penalty: 0.05, explain: "Keep fonts consistent."}
+- {id: TX-09, title: No overflow, severity: H, check: none, params: {}, penalty: 1.0, explain: "Text never spills out of its box."}

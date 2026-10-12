@@ -1,0 +1,15 @@
+# Story arc (BLUEPRINT §3B.2.1). severity: H hard (blocks unless asked), S soft (scored), G generator default.
+- {id: SA-01, title: Hook in the opening, severity: S, check: hook, params: {max_hook_seconds: 1.5, min_hook_score: 0.6}, penalty: 0.2,
+   explain: "The opening second and a half should hold one of the strongest moments."}
+- {id: SA-02, title: No title card alone at the start, severity: S, check: title_alone_start, params: {seconds: 1.5}, penalty: 0.1,
+   explain: "On short-form, a title should sit over the hook, not on its own."}
+- {id: SA-03, title: Arc follows the genre, severity: S, check: arc, params: {min_r: 0.6}, penalty: 0.1,
+   explain: "Section energy should rise to the payoff."}
+- {id: SA-04, title: Payoff late and on the drop, severity: S, check: payoff, params: {from: 0.7, to: 0.9}, penalty: 0.1,
+   explain: "The payoff lands at 70-90% of the runtime, on the music's drop when there is one."}
+- {id: SA-05, title: CTA at the end, severity: S, check: cta_end, params: {min_s: 1.5, max_s: 3.0}, penalty: 0.1,
+   explain: "A call to action fills the last 1.5-3 seconds."}
+- {id: SA-06, title: Never end mid-sentence, severity: H, check: ending, params: {}, penalty: 1.0,
+   explain: "The edit must not stop in the middle of a sentence."}
+- {id: SA-07, title: Tutorial steps in order, severity: H, check: tutorial_order, params: {}, penalty: 1.0,
+   explain: "A tutorial keeps its steps in the order they were taught."}

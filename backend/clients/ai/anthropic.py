@@ -4,7 +4,8 @@ The two providers differ in ways the callers must not have to care about:
 
 * Claude takes the system prompt as a top-level argument rather than a message.
 * Sampling controls (``temperature``, ``top_p``) are rejected with a 400 on the
-  current models, so they are dropped rather than forwarded.
+  current models, so they are dropped rather than forwarded -- except on Haiku
+  4.5, which keeps them and in turn rejects ``effort``.
 * JSON reliability comes from a schema the API enforces (``output_config.format``)
   instead of a "return JSON only" instruction, which is why a caller that passes
   ``json_schema`` gets output that cannot be malformed.
@@ -15,6 +16,7 @@ The two providers differ in ways the callers must not have to care about:
 
 from __future__ import annotations
 
+import base64
 import json
 import time
 from typing import Any, AsyncIterator
@@ -77,9 +79,21 @@ THINKING_ALLOWANCE_BY_EFFORT: dict[str, int] = {
 }
 
 
-def output_token_cap(requested: int, effort: str = "high") -> int:
-    """``max_tokens`` to send: the caller's reply budget plus thinking room."""
+def output_token_cap(requested: int, effort: str | None = "high") -> int:
+    """``max_tokens`` to send: the caller's reply budget plus thinking room (none without effort)."""
+    if effort is None:
+        return requested
     return requested + THINKING_ALLOWANCE_BY_EFFORT.get(effort, THINKING_TOKEN_ALLOWANCE)
+
+
+# Haiku 4.5 predates ``effort`` (a 400 if sent) and runs without thinking unless
+# asked; it is also the one current model that still accepts sampling controls.
+_PRE_EFFORT_MODELS = ("claude-haiku-4",)
+_SAMPLING_CONTROLS = ("temperature", "top_p", "top_k")
+
+
+def takes_effort(model: str) -> bool:
+    return not model.startswith(_PRE_EFFORT_MODELS)
 
 
 def estimate_tokens(text: str) -> int:
@@ -178,21 +192,15 @@ class Anthropic(BaseAI):
 
         Accepts the same keyword arguments as the Groq client so callers can be
         pointed at either provider. ``temperature`` and other sampling controls
-        are accepted and discarded, because the current Claude models reject them.
+        are accepted and discarded on the models that reject them.
         """
         requested_max_tokens = int(kwargs.pop("max_tokens", None) or 4096)
         json_mode = bool(kwargs.pop("json_mode", False))
         json_schema = kwargs.pop("json_schema", None)
-        # Rejected with a 400 on current models; dropped rather than forwarded so
-        # a caller written for Groq does not fail here.
-        for unsupported in ("temperature", "top_p", "top_k"):
-            kwargs.pop(unsupported, None)
+        self._sampling(kwargs)
 
         system, conversation = self._split_system(messages)
-
-        budget = check_budget()
-        # Near the run's cap, finish on the cheapest thinking rather than stop.
-        effort = "low" if budget is not None and budget.tight else self.effort
+        effort = self._effort()
 
         request: dict[str, Any] = {
             "model": self.model,
@@ -206,13 +214,14 @@ class Anthropic(BaseAI):
                 {"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}
             ]
 
-        output_config: dict[str, Any] = {"effort": effort}
+        output_config: dict[str, Any] = {"effort": effort} if effort else {}
         if json_schema:
             # The API enforces this: the reply cannot come back malformed or
             # missing a required field, which is the whole reason to prefer
             # Claude for the steps whose output the pipeline parses.
             output_config["format"] = {"type": "json_schema", "schema": sanitize_schema(json_schema)}
-        request["output_config"] = output_config
+        if output_config:
+            request["output_config"] = output_config
         request.update(kwargs)
 
         log.debug(
@@ -220,6 +229,9 @@ class Anthropic(BaseAI):
             self.model, len(conversation), request["max_tokens"], bool(json_schema),
         )
         response = await self._send(request, effort)
+        if response.stop_reason == "refusal":
+            details = getattr(response, "stop_details", None)
+            raise RuntimeError(f"Anthropic declined the request: {getattr(details, 'category', 'unknown')}")
 
         text = "".join(block.text for block in response.content if block.type == "text")
         usage = response.usage
@@ -254,8 +266,24 @@ class Anthropic(BaseAI):
                 log.warning("Anthropic reply in json_mode was not valid JSON: model=%s", self.model)
         return text
 
-    async def _send(self, request: dict[str, Any], effort: str) -> Any:
-        """Stream one request to its final message, record what it cost, and refuse a declined reply."""
+    def _sampling(self, kwargs: dict[str, Any]) -> None:
+        """Keep sampling controls only where the model takes them; current models reject them with a 400,
+        so they are dropped rather than forwarded and a caller written for Groq does not fail here."""
+        if takes_effort(self.model):
+            for control in _SAMPLING_CONTROLS:
+                kwargs.pop(control, None)
+        elif self.temperature is not None:
+            kwargs.setdefault("temperature", self.temperature)
+
+    def _effort(self) -> str | None:
+        """This call's effort, or None for a model without it. Near the run's cap, the cheapest thinking."""
+        budget = check_budget()
+        if not takes_effort(self.model):
+            return None
+        return "low" if budget is not None and budget.tight else self.effort
+
+    async def _send(self, request: dict[str, Any], effort: str | None) -> Any:
+        """Stream one request to its final message and record what it cost, declined or not."""
         started = time.monotonic()
         try:
             # Streamed so a long reply cannot hit the HTTP timeout; the helper
@@ -291,7 +319,7 @@ class Anthropic(BaseAI):
             raise
 
         usage = response.usage
-        # Recorded before any check below can raise: a refused or truncated
+        # Recorded before callers check the reply: a refused or truncated
         # reply is still billed.
         await record_llm_call(
             "anthropic", self.model,
@@ -302,18 +330,13 @@ class Anthropic(BaseAI):
             effort=effort,
             latency_ms=int((time.monotonic() - started) * 1000),
             response=reply_text(response),
+            role=self.role,
         )
-        if response.stop_reason == "refusal":
-            details = getattr(response, "stop_details", None)
-            raise RuntimeError(
-                f"Anthropic declined the request: {getattr(details, 'category', 'unknown')}"
-            )
         return response
 
     async def chat_with_tools(self, messages: list[dict[str, Any]], tools: list[ToolSpec], *,
                               max_tokens: int = 4096) -> ToolReply:
-        budget = check_budget()
-        effort = "low" if budget is not None and budget.tight else self.effort
+        effort = self._effort()
         system, conversation = self._split_system(messages)
         definitions = [
             {"name": t.name, "description": t.description, "input_schema": t.schema,
@@ -329,8 +352,10 @@ class Anthropic(BaseAI):
             "max_tokens": output_token_cap(max_tokens, effort),
             "messages": conversation,
             "tools": definitions,
-            "output_config": {"effort": effort},
         }
+        if effort:
+            request["output_config"] = {"effort": effort}
+        self._sampling(request)
         if system:
             request["system"] = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
         response = await self._send(request, effort)
@@ -343,7 +368,16 @@ class Anthropic(BaseAI):
             # Every block, thinking included, goes back unchanged on the next step.
             message={"role": "assistant", "content": [b.model_dump(mode="json", exclude_none=True) for b in response.content]},
             truncated=response.stop_reason == "max_tokens",
+            refused=response.stop_reason == "refusal",
         )
+
+    def image_message(self, text: str, jpegs: list[bytes]) -> dict[str, Any]:
+        """Claude takes images as base64 source blocks, best placed before the text."""
+        parts: list[dict[str, Any]] = [
+            {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": base64.b64encode(j).decode()}}
+            for j in jpegs
+        ]
+        return {"role": "user", "content": [*parts, {"type": "text", "text": text}]}
 
     def tool_results(self, results: list[ToolResult]) -> list[dict[str, Any]]:
         # All results of one step go back in a single message, or Claude learns to stop calling tools in parallel.
@@ -356,16 +390,17 @@ class Anthropic(BaseAI):
         requested_max_tokens = int(kwargs.pop("max_tokens", None) or 4096)
         kwargs.pop("json_mode", None)
         kwargs.pop("json_schema", None)
-        for unsupported in ("temperature", "top_p", "top_k"):
-            kwargs.pop(unsupported, None)
+        self._sampling(kwargs)
 
         system, conversation = self._split_system(messages)
+        effort = self.effort if takes_effort(self.model) else None
         request: dict[str, Any] = {
             "model": self.model,
-            "max_tokens": output_token_cap(requested_max_tokens, self.effort),
+            "max_tokens": output_token_cap(requested_max_tokens, effort),
             "messages": conversation,
-            "output_config": {"effort": self.effort},
         }
+        if effort:
+            request["output_config"] = {"effort": effort}
         if system:
             request["system"] = system
         request.update(kwargs)

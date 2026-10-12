@@ -12,7 +12,7 @@ two in step.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -21,7 +21,7 @@ from subtitle_styling.templates import DEFAULT_STYLE
 
 Frame = Annotated[int, Field(ge=0)]
 Id = Annotated[str, Field(min_length=1, max_length=40, pattern=r"^[A-Za-z0-9_-]+$")]
-TrackKind = Literal["video", "overlay", "text", "audio"]
+TrackKind = Literal["video", "overlay", "text", "audio", "graphic"]
 KeyframeProp = Literal["x", "y", "scale", "rotation", "opacity"]
 
 # Which item types each kind of track holds.
@@ -30,7 +30,13 @@ TRACK_ITEMS: dict[str, frozenset[str]] = {
     "overlay": frozenset({"clip"}),
     "text": frozenset({"text"}),
     "audio": frozenset({"clip", "music", "sfx"}),
+    "graphic": frozenset({"graphic"}),
 }
+
+# What the studio (OpenCut) keeps that Timeline v1 has no field for: masks,
+# effects, animations, text styling, a track's name. Carried untouched, so a
+# project opened in the studio comes back as it was left.
+Extra = dict[str, Any]
 
 
 class TimelineError(CustomException):
@@ -85,6 +91,7 @@ class Transition(_Strict):
 class _Item(_Strict):
     id: Id
     at: Frame
+    extra: Extra = Field(default_factory=dict)
 
     @property
     def frames(self) -> int:
@@ -149,7 +156,18 @@ class SfxItem(_Item):
         return self.dur
 
 
-Item = Annotated[ClipItem | TextItem | MusicItem | SfxItem, Field(discriminator="type")]
+class GraphicItem(_Item):
+    """A sticker, graphic or effect made in the studio; what it draws lives in ``extra``."""
+
+    type: Literal["graphic"]
+    dur: int = Field(ge=1)
+
+    @property
+    def frames(self) -> int:
+        return self.dur
+
+
+Item = Annotated[ClipItem | TextItem | MusicItem | SfxItem | GraphicItem, Field(discriminator="type")]
 
 
 class Track(_Strict):
@@ -157,6 +175,8 @@ class Track(_Strict):
     kind: TrackKind
     items: list[Item] = Field(default_factory=list)
     muted: bool = False
+    hidden: bool = False
+    extra: Extra = Field(default_factory=dict)
 
 
 class Captions(_Strict):

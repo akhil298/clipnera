@@ -36,12 +36,18 @@ _REASONING_MODEL = re.compile(r"^(o\d|gpt-5)(?!.*chat)")
 REASONING_ALLOWANCE = {"minimal": 1024, "low": 2048, "medium": 8192, "high": 16384, "xhigh": 32768}
 
 
-def reasoning_effort(model: str) -> str | None:
-    """OPENAI_REASONING_EFFORT for a reasoning model; None for any other model."""
+def reasoning_effort(model: str, requested: str | None = None) -> str | None:
+    """``requested`` (else OPENAI_REASONING_EFFORT) for a reasoning model; None for any other.
+
+    gpt-4.1 and gpt-4o reject ``reasoning_effort``, so a role's effort is dropped there.
+    """
     if not _REASONING_MODEL.match((model or "").strip().lower()):
         return None
-    effort = (getattr(settings, "OPENAI_REASONING_EFFORT", "") or "").strip().lower()
-    return effort if effort in REASONING_ALLOWANCE else None
+    for effort in (requested, getattr(settings, "OPENAI_REASONING_EFFORT", "")):
+        effort = (effort or "").strip().lower()
+        if effort in REASONING_ALLOWANCE:
+            return effort
+    return None
 
 
 def input_token_budget(max_output_tokens: int) -> int:
@@ -94,6 +100,14 @@ def _strict_compatible(schema: Any) -> bool:
     return all(_strict_compatible(value) for value in schema.values())
 
 
+def _function(tool: ToolSpec) -> dict[str, Any]:
+    """A tool definition, strict whenever its schema meets the strict rules, so arguments match it exactly."""
+    function = {"name": tool.name, "description": tool.description, "parameters": tool.schema}
+    if _strict_compatible(tool.schema):
+        function["strict"] = True
+    return function
+
+
 def _is_retryable_openai_error(exc: BaseException) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code == 429 or exc.response.status_code >= 500
@@ -104,10 +118,14 @@ class OpenAI(BaseAI):
     """OpenAI chat completion client with retries, usage recording and tool calling."""
 
     BASE_URL = _base_url()
+    # Reasoning effort for this client's calls; None means OPENAI_REASONING_EFFORT.
+    effort: str | None = None
 
-    def __init__(self, api_key: str | None = None, model: str | None = None, timeout: float = 120.0) -> None:
+    def __init__(self, api_key: str | None = None, model: str | None = None, timeout: float = 120.0,
+                 effort: str | None = None) -> None:
         self.api_key = (api_key or settings.OPENAI_API_KEY or "").strip()
         self.model = model or settings.OPENAI_MODEL
+        self.effort = effort
         if not self.api_key:
             log.warning("OpenAI API key is missing; OpenAI-backed steps will fail or fall back.")
         self._client = httpx.AsyncClient(
@@ -161,20 +179,20 @@ class OpenAI(BaseAI):
         check_budget()
         response = await self._create(
             messages, mode="tools", max_tokens=max_tokens,
-            tools=[{"type": "function", "function": {"name": t.name, "description": t.description, "parameters": t.schema}}
-                   for t in tools],
+            tools=[{"type": "function", "function": _function(t)} for t in tools],
             tool_choice="auto",
         )
         choice = response["choices"][0]
         message = choice["message"]
         raw_calls = message.get("tool_calls") or []
         return ToolReply(
-            text=message.get("content") or "",
+            text=message.get("content") or message.get("refusal") or "",
             calls=[ToolCall(id=c["id"], name=c["function"]["name"], arguments=_arguments(c["function"]["arguments"]))
                    for c in raw_calls],
             message={"role": "assistant", "content": message.get("content") or "",
                      **({"tool_calls": raw_calls} if raw_calls else {})},
             truncated=choice.get("finish_reason") == "length",
+            refused=bool(message.get("refusal")),
         )
 
     def tool_results(self, results: list[ToolResult]) -> list[dict[str, Any]]:
@@ -191,7 +209,9 @@ class OpenAI(BaseAI):
     def _build_payload(self, messages: list[dict[str, Any]], stream: bool, **kwargs: Any) -> dict[str, Any]:
         # ``max_tokens`` is the callers' name for the cap; current models take it as ``max_completion_tokens``.
         max_tokens = int(kwargs.pop("max_tokens", None) or DEFAULT_MAX_TOKENS)
-        effort = kwargs.pop("reasoning_effort", None) or reasoning_effort(self.model)
+        if self.temperature is not None:
+            kwargs.setdefault("temperature", self.temperature)
+        effort = reasoning_effort(self.model, kwargs.pop("reasoning_effort", None) or self.effort)
         if effort:
             # Reasoning models accept only their default sampling.
             kwargs.pop("temperature", None)
@@ -236,6 +256,7 @@ class OpenAI(BaseAI):
                     output_tokens=int(usage.get("completion_tokens") or 0),
                     latency_ms=int((time.monotonic() - started) * 1000),
                     response=reply_text(data),
+                    role=self.role,
                 )
                 log.debug(
                     "OpenAI API call succeeded: mode=%s, model=%s, finish_reason=%s",

@@ -165,8 +165,8 @@ def _has_key(provider: str) -> bool:
 
 
 def _build(choice: ModelChoice) -> BaseAI:
-    if choice.provider == "anthropic":
-        return Anthropic(model=choice.model, effort=choice.effort)
+    if choice.provider in ("anthropic", "openai"):
+        return TEXT_PROVIDERS[choice.provider](model=choice.model, effort=choice.effort)
     return TEXT_PROVIDERS[choice.provider](model=choice.model)
 
 
@@ -212,8 +212,15 @@ def get_text_client(
     return _build(choice)
 
 
+# After everything above: roles builds on ModelChoice and the client factory.
+from .roles import Role, call_with_fallback, get_role_client, model_for_role  # noqa: E402
+
 __all__ = [
     "BaseAI",
+    "Role",
+    "get_role_client",
+    "model_for_role",
+    "call_with_fallback",
     "openai_only",
     "provider_for_tier",
     "model_for_step",

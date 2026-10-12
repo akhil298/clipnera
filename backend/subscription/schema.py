@@ -119,6 +119,10 @@ class PlanCapabilities(BaseModel):
     social_posts_per_day: int
     custom_aspect_ratios: bool
     creator_intro: bool
+    # The AI editor: plan candidates compared, critic repair rounds, the planner's model.
+    ai_plan_candidates_k: int = 1
+    ai_critic_max_rounds: int = 1
+    ai_planner_model: str = "openai"
     # Every boolean capability by name, as checked by require_feature.
     features: Dict[str, bool]
 

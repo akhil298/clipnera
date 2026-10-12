@@ -123,6 +123,11 @@ class Entitlements:
     custom_aspect_ratios: bool
     # A channel intro (creator_intro/) made once and played before every export.
     creator_intro: bool
+    # The AI editor (brain/): plan candidates the director compares, critic repair rounds (cap 3),
+    # and the planner's model as "provider:model" or a bare provider (clients.ai.roles pins).
+    ai_plan_candidates_k: int = 1
+    ai_critic_max_rounds: int = 1
+    ai_planner_model: str = "openai"
 
     def allows_caption_style(self, style: str) -> bool:
         # Retired ids are judged as the style they now render as.
@@ -192,6 +197,9 @@ _PRO_FEATURES: dict[str, Any] = {
     "social_posts_per_day": 25,
     "custom_aspect_ratios": True,
     "creator_intro": True,
+    "ai_plan_candidates_k": 2,
+    "ai_critic_max_rounds": 2,
+    "ai_planner_model": "openai",
 }
 
 ENTITLEMENTS: dict[str, Entitlements] = {

@@ -430,6 +430,7 @@ class Groq(BaseAI):
                         effort=kwargs.get("reasoning_effort"),
                         latency_ms=int((time.monotonic() - started) * 1000),
                         response=reply_text(response),
+                        role=self.role,
                     )
                     return response
                 except Exception as exc:

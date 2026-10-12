@@ -1,0 +1,10 @@
+# Cut theory (§3B.2.3).
+- {id: CT-01, title: Cut on action, severity: S, check: none, params: {}, penalty: 0.05, explain: "Cut early in a movement and keep its direction."}
+- {id: CT-02, title: J and L cuts for dialogue, severity: G, check: none, params: {lead_frames: 6}, penalty: 0.0, explain: "Audio leads the picture at speaker changes."}
+- {id: CT-03, title: Avoid jump cuts, severity: S, check: jump_cut, params: {}, penalty: 0.15, overridable: true, explain: "Two cuts of the same framing look like a glitch."}
+- {id: CT-04, title: 180-degree awareness, severity: S, check: none, params: {}, penalty: 0.05, explain: "Keep people on their side of the frame."}
+- {id: CT-05, title: Shot-scale progression, severity: S, check: none, params: {}, penalty: 0.05, explain: "Change scale between shots of the same subject."}
+- {id: CT-06, title: Never cut inside a word, severity: H, check: word_cut, params: {tolerance_s: 0.02}, penalty: 1.0, explain: "A cut must fall between words."}
+- {id: CT-07, title: Minimum shot length, severity: H, check: min_shot, params: {frames: 8}, penalty: 1.0, explain: "No shot shorter than 8 frames, except flashes."}
+- {id: CT-08, title: No duplicate footage, severity: H, check: duplicate_source, params: {max_overlap_s: 0.3}, penalty: 1.0, explain: "The same footage must not play twice."}
+- {id: CT-09, title: Few transitions, severity: S, check: transitions, params: {per_cuts: 4}, penalty: 0.05, explain: "Hard cuts by default; at most one fancy transition per four cuts."}

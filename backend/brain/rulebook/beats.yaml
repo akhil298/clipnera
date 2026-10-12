@@ -1,0 +1,8 @@
+# Beat sync (§3B.2.4).
+- {id: BS-01, title: Cuts on beats in music-led sections, severity: S, check: beat_alignment, params: {}, penalty: 0.1, explain: "Cuts land on beats, downbeats preferred."}
+- {id: BS-02, title: Within a frame of the beat, severity: H, check: beat_error, params: {max_frames: 1}, penalty: 1.0, when_asked: true, explain: "An asked-for beat cut is within one frame."}
+- {id: BS-03, title: Flash frames on drops, severity: G, check: none, params: {frames_30: 2, frames_60: 4}, penalty: 0.0, explain: "Two frames at 30 fps, four at 60."}
+- {id: BS-04, title: Music phase alignment, severity: G, check: none, params: {}, penalty: 0.0, explain: "The music is shifted so beats land on frame edges."}
+- {id: BS-05, title: Music cut on bars, severity: H, check: none, params: {}, penalty: 1.0, explain: "Music is cut only at bar lines."}
+- {id: BS-06, title: Ramps on beats, severity: G, check: none, params: {}, penalty: 0.0, explain: "Speed ramps start and end on beats."}
+- {id: BS-07, title: Few punches, severity: S, check: none, params: {per_bar: 1}, penalty: 0.05, explain: "At most one zoom punch per bar."}

@@ -1,7 +1,7 @@
 """Turns a provider's usage report into a costed ledger row.
 
-Calls made outside a pipeline scope (tests, ad-hoc scripts) are only logged:
-there is no project to charge them to, and writing them would mix test traffic
+Calls made outside any scope (tests, ad-hoc scripts) are only logged: there is
+no project or user to charge them to, and writing them would mix test traffic
 into the spend figures. Recording never raises into the AI call it describes.
 """
 
@@ -30,11 +30,13 @@ async def record_llm_call(
     effort: str | None = None,
     latency_ms: int = 0,
     response: str | None = None,
+    role: str | None = None,
 ) -> float:
     """Cost the call, charge the run's budget, log it and persist a row. Returns the cost in USD.
 
     ``response`` is what the model answered; it is logged in full on the same
-    line, so the log shows every AI decision the run was built on.
+    line, so the log shows every AI decision the run was built on. ``role`` is
+    the AI-editor role the call was made for (clients.ai.roles), if any.
     """
     if video_seconds is not None:
         cost = video_cost(provider, model, resolution or "720p", video_seconds)
@@ -44,12 +46,14 @@ async def record_llm_call(
         cost = token_cost(provider, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
 
     scope = current_scope()
-    log.info("AI %s/%s %s %.1fs $%.5f%s", provider, model, _usage_summary(
+    log.info("AI %s/%s%s %s %.1fs $%.5f%s", provider, model, f" [{role}]" if role else "", _usage_summary(
         input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, audio_seconds, video_seconds,
     ), latency_ms / 1000, cost, f" -> {' '.join(response.split())}" if response else "")
     if scope is not None and scope.budget is not None:
         scope.budget.charge(cost)
-    if scope is None or scope.project_id is None:
+    # Calls with neither a project nor a user (tests, scripts) are only logged. AI-editor calls carry
+    # the user but no pipeline project (llm_usage.project_id points at video projects), and are kept.
+    if scope is None or (scope.project_id is None and scope.user_id is None):
         return cost
 
     try:
@@ -58,6 +62,7 @@ async def record_llm_call(
                 project_id=scope.project_id,
                 user_id=scope.user_id,
                 step=scope.step,
+                role=role,
                 provider=provider,
                 model=model,
                 effort=effort,

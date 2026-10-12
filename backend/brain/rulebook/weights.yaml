@@ -1,0 +1,4 @@
+# Score weights per genre (§3B.4.1). Missing genres use default.
+default: {IF: 0.30, ST: 0.15, PA: 0.10, BA: 0.08, LG: 0.08, AQ: 0.08, VQ: 0.08, PR: 0.08, NV: 0.05}
+beat_edit: {IF: 0.25, ST: 0.10, PA: 0.10, BA: 0.20, LG: 0.07, AQ: 0.07, VQ: 0.08, PR: 0.08, NV: 0.05}
+tutorial: {IF: 0.40, ST: 0.15, PA: 0.10, BA: 0.02, LG: 0.10, AQ: 0.08, VQ: 0.06, PR: 0.06, NV: 0.03}

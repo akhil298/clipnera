@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class FeatureFlagsResponse(BaseModel):
@@ -21,6 +21,8 @@ class AdminFeatureFlagResponse(BaseModel):
     enabled: bool
     effective: bool
     updated_at: Optional[datetime] = None
+    # Emails the flag is on for even while it's off (a staged rollout).
+    test_users: List[str] = []
 
 
 class AdminFeatureFlagListResponse(BaseModel):
@@ -29,3 +31,8 @@ class AdminFeatureFlagListResponse(BaseModel):
 
 class AdminFeatureFlagUpdateRequest(BaseModel):
     enabled: bool
+
+
+class AdminFeatureFlagUserRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=320)
+    allowed: bool

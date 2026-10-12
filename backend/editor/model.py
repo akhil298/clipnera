@@ -38,7 +38,22 @@ class EditorOp(Base):
     project_id: Mapped[str] = mapped_column(String(36), ForeignKey("editor_projects.id", ondelete="CASCADE"), nullable=False)
     # The project version these operations produced.
     version: Mapped[int] = mapped_column(Integer, nullable=False)
-    # "user", or "agent:<name>" for the in-app agent and connected agents.
+    # Who made the change: "user" (the person, the actor_kind "human"), or "agent:<name>"
+    # for the in-app agent and connected agents.
     author: Mapped[str] = mapped_column(String(60), nullable=False)
+    # "edit", or "undo"/"redo" of the versions in ``targets``.
+    kind: Mapped[str] = mapped_column(String(10), nullable=False, default="edit", server_default="edit")
+    targets: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # An agent's plan step and turn; a step's batches undo together.
+    step_id: Mapped[str | None] = mapped_column(String(60), nullable=True, index=True)
+    turn_id: Mapped[str | None] = mapped_column(String(60), nullable=True)
     ops: Mapped[str] = mapped_column(Text, nullable=False)
+    # The ops that undo this batch, and {item id: [fields]} it changed. Null on rows from before
+    # undo existed, which can't be undone.
+    inverse: Mapped[str | None] = mapped_column(Text, nullable=True)
+    touched: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+
+    @property
+    def by_agent(self) -> bool:
+        return self.author.startswith("agent:")

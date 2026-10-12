@@ -19,17 +19,33 @@ from clients.ai.base import ToolCall
 from core.exceptions import CustomException
 from edit_engine.model import EditProject, EditStatus
 from editor.agent_tools import EDITOR_TOOLS, EditorContext
+from editor.history import Actor
 from editor.model import EditorOp
 from editor.ops import Op
 from editor.schema import EditorProjectCreate
 from editor.service import EditorService
 from editor.timeline import TimelineError
+import understanding.service
 from test_plans_db import TEST_DATABASE_URL, db  # noqa: F401  the shared database fixture
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.skipif(not TEST_DATABASE_URL, reason="TEST_DATABASE_URL is not set")]
 
 OPS = TypeAdapter(list[Op])
-CLIP_ASSET = {"op": "add_asset", "asset": {"id": "a1", "kind": "video", "key": "u/a1.mp4", "frames": 300, "has_audio": True}}
+
+
+class _NoQueue:
+    async def enqueue(self, job) -> None:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def no_background_jobs(monkeypatch):
+    # Adding an asset queues its analysis; the job would reach the real S3 and database.
+    monkeypatch.setattr(understanding.service, "get_queue", _NoQueue)
+def clip_asset(owner: str, project_id: str) -> dict:
+    # Only files uploaded under the project's own folder may be added (editor.service.asset_prefix).
+    key = f"editor/{owner}/{project_id}/a1.mp4"
+    return {"op": "add_asset", "asset": {"id": "a1", "kind": "video", "key": key, "frames": 300, "has_audio": True}}
 
 
 def clip(item_id: str, at: int) -> dict:
@@ -58,8 +74,10 @@ async def test_each_batch_of_ops_is_one_logged_version(db) -> None:
     async with db() as session:
         service = EditorService(session)
         project = await service.create(owner, EditorProjectCreate())
-        first = await service.apply(owner, project.id, 0, OPS.validate_python([CLIP_ASSET, clip("c1", 0)]))
-        second = await service.apply(owner, project.id, 1, OPS.validate_python([clip("c2", 90)]), author="agent:editor")
+        first = await service.apply(owner, project.id, 0, OPS.validate_python([clip_asset(owner, project.id), clip("c1", 0)]))
+        # Different footage from c1: an agent may never repeat the same source (rule CT-08, never-do ND-05).
+        agent_clip = {**clip("c2", 90), "item": {**clip("c2", 90)["item"], "src_in": 100, "src_out": 190}}
+        second = await service.apply(owner, project.id, 1, OPS.validate_python([agent_clip]), Actor(author="agent:editor"))
     assert (first.version, second.version) == (1, 2)
     async with db() as session:
         reloaded = await EditorService(session).get(owner, project.id)
@@ -68,14 +86,14 @@ async def test_each_batch_of_ops_is_one_logged_version(db) -> None:
     assert [(row.version, row.author, len(json.loads(row.ops))) for row in log] == [(1, "user", 2), (2, "agent:editor", 1)]
 
 
-async def test_a_stale_version_is_refused_and_says_the_current_one(db) -> None:
+async def test_a_version_the_project_never_had_is_refused_and_says_the_current_one(db) -> None:
     owner = await user(db)
     async with db() as session:
         service = EditorService(session)
         project = await service.create(owner, EditorProjectCreate())
-        await service.apply(owner, project.id, 0, OPS.validate_python([CLIP_ASSET]))
+        await service.apply(owner, project.id, 0, OPS.validate_python([clip_asset(owner, project.id)]))
         with pytest.raises(CustomException) as caught:
-            await service.apply(owner, project.id, 0, OPS.validate_python([clip("c1", 0)]))
+            await service.apply(owner, project.id, 5, OPS.validate_python([clip("c1", 0)]))
     assert (caught.value.code, caught.value.extra) == ("STALE_VERSION", {"version": 1})
 
 
@@ -85,7 +103,7 @@ async def test_a_bad_op_saves_nothing(db) -> None:
         service = EditorService(session)
         project = await service.create(owner, EditorProjectCreate())
         with pytest.raises(TimelineError):
-            await service.apply(owner, project.id, 0, OPS.validate_python([CLIP_ASSET, clip("c1", 0), clip("c2", 30)]))
+            await service.apply(owner, project.id, 0, OPS.validate_python([clip_asset(owner, project.id), clip("c1", 0), clip("c2", 30)]))
     async with db() as session:
         assert (await EditorService(session).get(owner, project.id)).version == 0
         assert (await session.execute(select(EditorOp))).first() is None
@@ -137,10 +155,10 @@ async def test_the_agent_reads_and_edits_through_its_tools(db) -> None:
         service = EditorService(session)
         project = await service.create(owner, EditorProjectCreate())
         context = EditorContext(service, owner, project.id)
-        await service.apply(owner, project.id, 0, OPS.validate_python([CLIP_ASSET, clip("c1", 0), clip("c2", 90)]))
+        await service.apply(owner, project.id, 0, OPS.validate_python([clip_asset(owner, project.id), clip("c1", 0), clip("c2", 90)]))
         refused = await EDITOR_TOOLS.call(context, ToolCall("1", "apply_edits", {"base_version": 1, "ops": [
             {"op": "trim_item", "item": "c1", "src_out": 120}]}))
-        edited = await EDITOR_TOOLS.call(context, ToolCall("2", "apply_edits", {"base_version": 1, "ops": [
+        edited = await EDITOR_TOOLS.call(context, ToolCall("2", "apply_edits", {"base_version": 1, "human_owned_ok": ["c1"], "ops": [
             {"op": "update_item", "item": "c1", "patch": {"keyframes": {"scale": [{"f": 0, "v": 1}, {"f": 12, "v": 1.15}]}}}]}))
         seen = json.loads((await EDITOR_TOOLS.call(context, ToolCall("3", "get_timeline", {}))).content)
     assert refused.is_error and refused.content.startswith("OVERLAP") and '"op_index": 0' in refused.content

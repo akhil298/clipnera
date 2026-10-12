@@ -1,0 +1,9 @@
+# Pacing curves (§3B.2.2): median shot seconds, log sigma and hard bounds per genre/platform.
+- {id: PC-01, title: Reels and shorts, severity: S, check: pacing, params: {genres: [reels, tiktok, shorts], median: 1.2, sigma: 0.45, min: 0.4, max: 4.0}, penalty: 0.1, explain: "Short-form cuts fast."}
+- {id: PC-02, title: YouTube vlog, severity: S, check: pacing, params: {genres: [youtube, vlog], median: 3.5, sigma: 0.6, min: 0.8, max: 15.0}, penalty: 0.1, explain: "Vlogs breathe."}
+- {id: PC-03, title: Ads, severity: S, check: pacing, params: {genres: [ad], median: 1.0, sigma: 0.4, min: 0.4, max: 3.0}, penalty: 0.1, explain: "Ads cut fast and slow into the CTA."}
+- {id: PC-04, title: Podcast clip, severity: S, check: pacing, params: {genres: [podcast_clip], median: 6.0, sigma: 0.7, min: 1.5, max: 30.0}, penalty: 0.1, explain: "Podcasts cut on sentences."}
+- {id: PC-05, title: Wedding, severity: S, check: pacing, params: {genres: [wedding], median: 3.0, sigma: 0.5, min: 1.0, max: 10.0}, penalty: 0.1, explain: "Weddings bookend calm-peak-calm."}
+- {id: PC-06, title: Travel montage, severity: S, check: pacing, params: {genres: [travel], median: 1.6, sigma: 0.5, min: 0.5, max: 5.0}, penalty: 0.1, explain: "Travel follows the music."}
+- {id: PC-07, title: Tutorial, severity: S, check: pacing, params: {genres: [tutorial], median: 5.0, sigma: 0.6, min: 1.5, max: 40.0}, penalty: 0.1, explain: "Tutorials never cut inside a demonstration."}
+- {id: PC-08, title: Beat edit, severity: S, check: pacing, params: {genres: [beat_edit], median: 0.5, sigma: 0.0, min: 0.25, max: 2.0}, penalty: 0.1, explain: "Every beat when asked."}
