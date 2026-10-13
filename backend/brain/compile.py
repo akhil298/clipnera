@@ -32,7 +32,7 @@ from editor.ops import (
     apply_ops,
 )
 from editor.timeline import ClipItem, Keyframe, TextItem, Timeline, TimelineError, Track
-from understanding.mud import MUD
+from understanding.mud import MUD, Word
 
 ASPECT_SIZES = {"9:16": (1080, 1920), "1:1": (1080, 1080), "4:5": (1080, 1350), "16:9": (1920, 1080)}
 TITLE_SECONDS = 3.0
@@ -42,6 +42,15 @@ SAFE_X = (0.1, 0.9)
 SAFE_Y = (0.12, 0.78)
 WORD_END_PAD = 0.06
 WORD_START_PAD = 0.09
+# How much a stretch named by word numbers is worth next to a rated moment (0..1).
+WORDS_SCORE = 0.6
+# A sentence shorter than this ("Um.", "First, pricing.") is never added to fill a cut out to length.
+FILL_LINE_WORDS = 4
+# An edge this close to a word's own edge counts as on it (rule CT-06's tolerance; half a frame at 30 fps fits).
+WORD_EDGE_SLACK = 0.02
+# An end this far into a sentence, and this far from its end, is mid-sentence (rule SA-06).
+LINE_START_SLACK = 0.2
+LINE_END_SLACK = 0.3
 MUSIC_TRACK, TITLE_TRACK, FLASH_TRACK = "ai_music", "ai_titles", "ai_flashes"
 PACE_TARGET_SHOT = {"slow": 4.0, "medium": 2.5, "fast": 1.4}
 
@@ -147,6 +156,10 @@ class _State:
         if self.pieces is None:
             self.pieces = [Piece(i.asset, i.src_in, i.src_out, i.id) for i in self._main().items
                            if isinstance(i, ClipItem)]
+            if not self.pieces:
+                # Nothing is on the timeline yet: the edit starts from the whole of each recording.
+                self.pieces = [self._piece(asset.id, 0.0, asset.frames / self.fps)
+                               for asset in self.timeline.assets.values() if asset.kind == "video"]
         return self.pieces
 
     def _relayout(self, step: PlanStep, pieces: list[Piece], warnings: list[str]) -> list[Any]:
@@ -156,7 +169,7 @@ class _State:
         if mine:
             raise CompileError(step.id, f"That would replace clips you made ({', '.join(i.id for i in mine)}). "
                                         "Name them in the request to let the AI change them.")
-        pieces = _repair_word_edges(pieces, self.muds, self.fps)
+        pieces = _finish_last_sentence(_repair_word_edges(pieces, self.muds, self.fps), self.muds, self.fps)
         ops: list[Any] = [RemoveItem(op="remove_item", item=i.id) for i in main.items]
         at = 0
         for n, piece in enumerate(pieces):
@@ -174,18 +187,19 @@ class _State:
         sections: list[str] = []
         for section in self.plan.structure:
             for index, ref in enumerate(section.moments):
-                span = self._span(ref)
-                if span is None:
+                found = self._candidates(ref, hook=section.section == "hook" and index == 0)
+                if not found:
                     warnings.append(f"Skipped a moment of {ref.asset} that has no time.")
-                    continue
-                t0, t1, score = span
-                candidates.append(timing.Candidate(ref.asset, t0, t1, score, ref.must_include,
-                                                   hook=section.section == "hook" and index == 0, ref=_ref_name(ref)))
-                sections.append(section.section)
+                candidates += found
+                sections += [section.section] * len(found)
         if not candidates:
             raise CompileError(step.id, "The plan names no moments to build the cut from.")
         if self.plan.target_seconds:
             result = timing.fit(candidates, dict(self.muds), self.plan.target_seconds, self.fps)
+            if result.total_frames < result.target_frames - timing.tolerance_frames(self.plan.target_seconds, self.fps):
+                # The named moments are too short for the length asked: draw on the other lines too.
+                candidates, sections = self._with_other_lines(candidates, sections)
+                result = timing.fit(candidates, dict(self.muds), self.plan.target_seconds, self.fps)
             warnings += result.warnings
             chosen = result.pieces
         else:
@@ -204,9 +218,43 @@ class _State:
         if ref.shot is not None:
             shot = next((s for s in mud.shots if s.id == ref.shot), None)
             return (shot.t0, shot.t1, 0.5 if shot.usable else 0.2) if shot else None
-        if ref.words is not None and ref.words[1] < len(mud.words):
-            return mud.words[ref.words[0]].t0, mud.words[ref.words[1]].t1, 0.6
+        if ref.words is not None and ref.words[0] < len(mud.words):
+            return mud.words[ref.words[0]].t0, mud.words[min(ref.words[1], len(mud.words) - 1)].t1, WORDS_SCORE
         return None
+
+    def _candidates(self, ref: MomentRef, hook: bool) -> list[timing.Candidate]:
+        """The footage ``ref`` names. With a length to fit, a stretch of several sentences is offered
+        sentence by sentence, so the fit drops whole sentences instead of cutting into one."""
+        span = self._span(ref)
+        if span is None:
+            return []
+        t0, t1, score = span
+        name = _ref_name(ref)
+        mud = self.muds[ref.asset]
+        lines = [u for u in mud.utterances if u.t0 >= t0 - 0.05 and u.t1 <= t1 + 0.05]
+        if not self.plan.target_seconds or ref.moment is not None or len(lines) < 2:
+            return [timing.Candidate(ref.asset, t0, t1, score, ref.must_include, hook=hook, ref=name)]
+        return [
+            timing.Candidate(ref.asset, u.t0, u.t1, _line_score(mud, u.t0, u.t1, score), ref.must_include,
+                             hook=hook and n == 0, ref=f"{name}:{u.id}")
+            for n, u in enumerate(lines)
+        ]
+
+    def _with_other_lines(self, candidates: list[timing.Candidate],
+                          sections: list[str]) -> tuple[list[timing.Candidate], list[str]]:
+        """``candidates`` plus every other sentence of the same recordings, in the order spoken."""
+        rows = list(zip(candidates, sections))
+        for asset in dict.fromkeys(c.asset for c in candidates):
+            mud = self.muds[asset]
+            taken = [(c.t0, c.t1) for c in candidates if c.asset == asset]
+            rows += [
+                (timing.Candidate(asset, u.t0, u.t1, _line_score(mud, u.t0, u.t1, WORDS_SCORE), ref=f"{asset}:{u.id}"), "body")
+                for u in mud.utterances
+                if u.w1 - u.w0 + 1 >= FILL_LINE_WORDS and not any(u.t1 > t0 and u.t0 < t1 for t0, t1 in taken)
+            ]
+        order = {asset: n for n, asset in enumerate(dict.fromkeys(c.asset for c in candidates))}
+        rows.sort(key=lambda row: (order[row[0].asset], row[0].t0))
+        return [c for c, _ in rows], [s for _, s in rows]
 
     def _piece(self, asset: str, t0: float, t1: float, ref: str = "", section: str = "body") -> Piece:
         frames = self.timeline.assets[asset].frames
@@ -416,23 +464,55 @@ def _ref_name(ref: MomentRef) -> str:
     return f"{ref.asset}:w{ref.words[0]}-{ref.words[1]}" if ref.words else ref.asset
 
 
+def _line_score(mud: MUD, t0: float, t1: float, fallback: float) -> float:
+    """A sentence is worth what the best moment it sits in is; one in no moment, half the fallback."""
+    inside = [m.score for m in mud.moments if m.t1 > t0 and m.t0 < t1]
+    return max(inside) if inside else fallback / 2
+
+
 def _repair_word_edges(pieces: list[Piece], muds: Mapping[str, MUD], fps: int) -> list[Piece]:
-    """8.3.3: an edge inside a word moves out of it (the end to just after, the start to just before)."""
+    """8.3.3: an edge inside a word moves out of it (the end to just after, the start to just before).
+
+    The breath of padding only goes into silence: words that touch leave no room, and padding
+    across the boundary would put the edge inside the neighbour instead.
+    """
     fixed = []
     for piece in pieces:
         mud = muds.get(piece.asset)
         if mud is None or not mud.words:
             fixed.append(piece)
             continue
+        words = mud.words
         t0, t1 = piece.src_in / fps, piece.src_out / fps
-        start_word = next((w for w in mud.words if w.t0 < t0 < w.t1), None)
-        end_word = next((w for w in mud.words if w.t0 < t1 < w.t1), None)
+        start_word = _word_at(words, t0)
+        end_word = _word_at(words, t1)
         if start_word:
-            t0 = max(0.0, start_word.t0 - WORD_START_PAD)
+            before = words[start_word.i - 1].t1 if start_word.i > 0 else 0.0
+            t0 = max(before, start_word.t0 - WORD_START_PAD)
         if end_word:
-            t1 = min(mud.duration, end_word.t1 + WORD_END_PAD)
+            after = words[end_word.i + 1].t0 if end_word.i + 1 < len(words) else mud.duration
+            t1 = min(after, end_word.t1 + WORD_END_PAD)
         fixed.append(Piece(piece.asset, round(t0 * fps), max(round(t0 * fps) + 1, round(t1 * fps)), piece.ref, piece.section))
     return fixed
+
+
+def _finish_last_sentence(pieces: list[Piece], muds: Mapping[str, MUD], fps: int) -> list[Piece]:
+    """An edit that would stop partway through a sentence runs to that sentence's end (rule SA-06)."""
+    if not pieces:
+        return pieces
+    last = pieces[-1]
+    mud = muds.get(last.asset)
+    end = last.src_out / fps
+    line = next((u for u in mud.utterances if u.t0 + LINE_START_SLACK < end < u.t1 - LINE_END_SLACK), None) if mud else None
+    if line is None:
+        return pieces
+    src_out = round(min(mud.duration, line.t1 + WORD_END_PAD) * fps)
+    return [*pieces[:-1], Piece(last.asset, last.src_in, max(last.src_out, src_out), last.ref, last.section)]
+
+
+def _word_at(words: Sequence[Word], t: float) -> Word | None:
+    """The word ``t`` falls inside, by more than the slack rule CT-06 allows at its edges."""
+    return next((w for w in words if w.t0 + WORD_EDGE_SLACK < t < w.t1 - WORD_EDGE_SLACK), None)
 
 
 def _safe(item: TextItem) -> TextItem:

@@ -28,6 +28,11 @@ SCENE_MAX_SECONDS = 45.0
 MAX_MOMENTS = 40
 # Action peaks need this many usable shots to compare, and score 1.0 at this much motion.
 MIN_SHOTS_FOR_PEAKS = 4
+# A line is a quote moment at this score, with at least this many words.
+QUOTE_SCORE = 0.2
+MIN_QUOTE_WORDS = 4
+# Lines kept as moments when the scorer rates none of them highly.
+FALLBACK_QUOTES = 5
 FULL_MOTION = 40.0
 # Share of an audio file that must be speech before it is treated as voice, not music.
 MUSIC_SPEECH_RATIO = 0.3
@@ -142,19 +147,16 @@ def _spans_between(pauses: Sequence[Silence], duration: float) -> list[tuple[flo
     return [(a, b) for a, b in zip(edges[::2], edges[1::2]) if b - a > 0.05] or [(0.0, duration)]
 
 
-def find_moments(utterances: Sequence[Utterance], shots: Sequence[Shot]) -> list[Moment]:
-    """Quote moments (lines the clip scorer rates) and action peaks (the busiest usable shots)."""
-    found: list[tuple[float, str, float, float, str]] = []
-    for u in utterances:
-        text, length = u.text.lower(), max(0.1, u.t1 - u.t0)
-        parts = {
-            "hook": ClipScorer._hook_score(text), "emotion": ClipScorer._engagement_score(text, length),
-            "value": ClipScorer._value_score(text, length),
-        }
-        score = sum(parts.values()) / 75.0
-        if score >= 0.2 and len(text.split()) >= 4:
-            why = " + ".join(name for name, value in sorted(parts.items(), key=lambda kv: -kv[1]) if value >= 6) or "spoken line"
-            found.append((score, "quote", u.t0, u.t1, why))
+def find_moments(utterances: Sequence[Utterance], shots: Sequence[Shot],
+                 picks: Sequence[tuple[float, float, float, str]] = ()) -> list[Moment]:
+    """Quote moments and action peaks (the busiest usable shots).
+
+    ``picks`` are the quotes a model chose reading the transcript, as (score, t0, t1, why). Without
+    them the clip scorer rates each line, and the best few are kept even when none rates highly:
+    a recording with speech always has moments to cut from.
+    """
+    quotes = [(score, "quote", t0, t1, why) for score, t0, t1, why in picks] or _scored_quotes(utterances)
+    found = list(quotes)
     motions = [s.motion for s in shots if s.usable]
     # Peaks only mean something against other shots: the busiest sixth of at least a few.
     if len(motions) >= MIN_SHOTS_FOR_PEAKS:
@@ -170,6 +172,23 @@ def find_moments(utterances: Sequence[Utterance], shots: Sequence[Shot]) -> list
         moments.append(Moment(id=f"m{n:03d}", t0=round(t0, 3), t1=round(t1, 3), score=round(score, 3),
                               kind=kind, why=why, shot_ids=in_shots))  # type: ignore[arg-type]
     return moments
+
+
+def _scored_quotes(utterances: Sequence[Utterance]) -> list[tuple[float, str, float, float, str]]:
+    """Each full line rated by the clip scorer: those over the bar, or the best few when none is."""
+    rated = []
+    for u in utterances:
+        text, length = u.text.lower(), max(0.1, u.t1 - u.t0)
+        if len(text.split()) < MIN_QUOTE_WORDS:
+            continue
+        parts = {
+            "hook": ClipScorer._hook_score(text), "emotion": ClipScorer._engagement_score(text, length),
+            "value": ClipScorer._value_score(text, length),
+        }
+        why = " + ".join(name for name, value in sorted(parts.items(), key=lambda kv: -kv[1]) if value >= 6) or "spoken line"
+        rated.append((min(1.0, sum(parts.values()) / 75.0), "quote", u.t0, u.t1, why))
+    strong = [quote for quote in rated if quote[0] >= QUOTE_SCORE]
+    return strong or sorted(rated, key=lambda quote: -quote[0])[:FALLBACK_QUOTES]
 
 
 def analyze_music(audio_path: str) -> tuple[list[Beat], Music]:

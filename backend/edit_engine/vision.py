@@ -19,6 +19,7 @@ import numpy as np
 from groq import AsyncGroq
 
 from clients.ai.base import reply_text
+from clients.ai.roles import get_role_client
 from core.config import get_settings
 from core.logging_config import get_logger
 from reels.vision import FREE_MODEL
@@ -92,8 +93,24 @@ async def caption_sheet(sheet: bytes) -> dict[int, str]:
                               response=reply_text(response))
         return parse_tiles(response.choices[0].message.content or "")
     except Exception as exc:
+        log.warning("Contact sheet captioning on Groq failed (%s); using the captioner role", exc)
+    return await _caption_with_role(sheet)
+
+
+async def _caption_with_role(sheet: bytes) -> dict[int, str]:
+    """The same captions from the configured captioner model, for when Groq is down or its key is dead."""
+    try:
+        client = get_role_client("captioner")
+    except Exception as exc:
+        log.warning("No captioner model is available: %s", exc)
+        return {}
+    try:
+        return parse_tiles(await client.chat([client.image_message(PROMPT, [sheet])], max_tokens=700))
+    except Exception as exc:
         log.warning("Contact sheet captioning failed: %s", exc)
         return {}
+    finally:
+        await client.close()
 
 
 def shots_to_caption(shots: list[dict[str, Any]], is_pro: bool) -> list[int]:

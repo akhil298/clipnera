@@ -99,8 +99,8 @@ def _footage(timeline: Timeline, analyses: Sequence[MediaAnalysisResponse]) -> s
         facts = [found.kind, f"{found.duration:.0f}s", f"{found.words} words spoken", f"{found.shots} shots"]
         if found.tempo_bpm:
             facts.append(f"music at {found.tempo_bpm:.0f} bpm")
-        said = " | ".join(moment.text for moment in found.moments[:ROUTER_MOMENTS])
-        lines.append(f"- {row.asset_id}: {', '.join(facts)}." + (f" Best moments: {untrusted(said)}" if said else ""))
+        said = " | ".join(filter(None, [found.summary, *(moment.text for moment in found.moments[:ROUTER_MOMENTS])]))
+        lines.append(f"- {row.asset_id}: {', '.join(facts)}." + (f" About and best moments: {untrusted(said)}" if said else ""))
     return "Footage:\n" + "\n".join(lines) if lines else "Footage: none uploaded yet."
 
 

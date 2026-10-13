@@ -192,6 +192,8 @@ function report(name: string, found: AnalysisFindings): { text: string; suggesti
 		found.tempo_bpm && `${Math.round(found.tempo_bpm)} bpm`,
 	].filter(Boolean);
 	const lines = [`I've gone through ${name} (${clock(found.duration)})${facts.length ? `: ${facts.join(", ")}.` : "."}`];
+	if (found.summary) lines.push("", found.summary);
+	if (found.topics.length) lines.push(`Topics: ${found.topics.join(" · ")}`);
 	if (found.kind === "video" && found.words === 0) lines.push("Nobody speaks in it, so I'll cut it by the picture.");
 	if (found.moments.length) {
 		lines.push("", "Best moments:", ...found.moments.map((moment) => `• ${clock(moment.t0)}  ${moment.text}`));

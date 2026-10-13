@@ -149,7 +149,8 @@ def ref_errors(plan: PlanIR, muds: Mapping[str, MUD]) -> list[str]:
             errors.append(_unknown("moment", ref.moment, ref.asset, [m.id for m in mud.moments]))
         if ref.shot is not None and ref.shot not in {s.id for s in mud.shots}:
             errors.append(_unknown("shot", ref.shot, ref.asset, [s.id for s in mud.shots]))
-        if ref.words is not None and not (0 <= ref.words[0] and ref.words[1] < len(mud.words)):
+        # A last index past the end is read as "to the end" (brain.compile clamps it).
+        if ref.words is not None and not 0 <= ref.words[0] < len(mud.words):
             errors.append(f"{ref.asset} has words 0-{len(mud.words) - 1}; {ref.words} is outside them.")
     if plan.music and plan.music.asset and plan.music.asset not in muds:
         errors.append(f"There is no analysed music asset {plan.music.asset}.")

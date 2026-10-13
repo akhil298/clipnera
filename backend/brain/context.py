@@ -100,7 +100,9 @@ def digests(media: ProjectMedia, budget: int = DIGEST_BUDGET) -> str:
         # File names are the uploader's text: fenced like speech.
         head = (f"{asset_id} {untrusted(media.names[asset_id])}: {mud.kind} {mud.duration:.1f}s, speech {round(mud.speech_ratio * 100)}%"
                 + (f", music {mud.music.tempo_bpm:.0f} bpm, drops {[d.t for d in mud.music.drops]}" if mud.music else "")
-                + (f", {len(mud.shots)} shots, {len(mud.words)} words" if mud.kind == "video" else ""))
+                + (f", {len(mud.shots)} shots, {len(mud.words)} words" if mud.kind == "video" else "")
+                + (f". About: {untrusted(mud.summary)}" if mud.summary else "")
+                + (f" Topics: {untrusted(', '.join(mud.topics))}" if mud.topics else ""))
         moments = sorted(mud.moments, key=lambda m: -m.score)[:MOMENTS_PER_ASSET]
         lines = [f"  {m.id} {m.t0:.1f}-{m.t1:.1f}s {m.kind} {m.score:.2f} {_quote(mud, m.t0, m.t1)}" for m in
                  sorted(moments, key=lambda m: m.t0)]

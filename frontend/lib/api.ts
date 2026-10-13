@@ -2850,6 +2850,9 @@ export interface FoundMoment {
 export interface AnalysisFindings {
   kind: 'video' | 'image' | 'audio';
   duration: number;
+  /** What it is about, in a sentence, and its topics in order. */
+  summary: string | null;
+  topics: string[];
   language: string | null;
   words: number;
   fillers: number;

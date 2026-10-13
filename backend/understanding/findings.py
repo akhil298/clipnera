@@ -22,6 +22,7 @@ TIGHTEN_FROM_SECONDS = 3.0
 QUALITY_FROM_SECONDS = 2.0
 ANALYZER_PROBLEMS = {
     "transcript": "I couldn't make out the speech, so I can't cut by what is said.",
+    "reading": "I couldn't judge which lines are the strongest, so my pick of moments is rough.",
     "audio": "I couldn't read the sound.",
     "shots": "I couldn't split the picture into shots.",
     "music": "I couldn't find the beat.",
@@ -39,6 +40,9 @@ class FoundMoment(BaseModel):
 class AnalysisFindings(BaseModel):
     kind: Literal["video", "image", "audio"]
     duration: float
+    # What it is about, in a sentence, and the topics in order.
+    summary: str | None = None
+    topics: list[str] = Field(default_factory=list)
     language: str | None = None
     words: int = 0
     fillers: int = 0
@@ -54,7 +58,8 @@ class AnalysisFindings(BaseModel):
 
 def findings_of(mud: MUD) -> AnalysisFindings:
     found = AnalysisFindings(
-        kind=mud.kind, duration=mud.duration, language=mud.language, words=len(mud.words),
+        kind=mud.kind, duration=mud.duration, summary=mud.summary, topics=mud.topics, language=mud.language,
+        words=len(mud.words),
         fillers=sum(1 for word in mud.words if word.filler),
         dead_air=round(sum(s.t1 - s.t0 for s in mud.silences if s.kind == "dead_air"), 1),
         shots=len(mud.shots), tempo_bpm=mud.music.tempo_bpm if mud.music else None,

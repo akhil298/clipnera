@@ -44,6 +44,12 @@ def validate(plan: PlanIR, frame: IntentFrame, ctx: EditContext, allowed_owned: 
     uncovered = sorted({a.id for a in frame.asks} - {ask for step in plan.steps for ask in step.satisfies})
     if uncovered:
         errors.append(f"No step satisfies asks {uncovered}; list them in a step's satisfies.")
+    kinds = {step.kind for step in plan.steps}
+    # A style nothing carries out would show the user a plan that promises it and doesn't do it.
+    if plan.style.tighten != "none" and "tighten" not in kinds:
+        errors.append("style.tighten is set but no step has kind tighten; add one after the structure step.")
+    if plan.style.captions and "captions" not in kinds:
+        errors.append("style.captions is on but no step has kind captions; add one.")
     extra_owned = sorted(set(plan.human_owned_ok) - allowed_owned)
     if extra_owned:
         errors.append(f"human_owned_ok may only name items the user selected or named: {extra_owned} weren't.")
@@ -62,6 +68,8 @@ async def evaluate_candidates(prompt: str, frame: IntentFrame, plans: Sequence[P
         too_big = [s.step_id for s in compiled.steps if len(s.ops) > STEP_OP_BUDGET]
         touched_owned = sorted(compiled.touched_items() & (ctx.human_owned - set(plan.human_owned_ok)))
         problems = []
+        if compiled.timeline.duration == 0:
+            problems.append("The plan leaves the timeline empty. Start with a structure step that places the footage.")
         if too_big:
             problems.append(f"Steps {too_big} need more than {STEP_OP_BUDGET} operations; split them.")
         if compiled.op_count > TURN_OP_BUDGET:

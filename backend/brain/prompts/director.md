@@ -62,5 +62,37 @@ How to write a PlanIR
 - plan.summary is one sentence the user reads first, e.g. "30 s punchy reel: 9 shots on the beat, white
   flashes on the 3 drops, 'Goa 2026' title."
 
+A complete evaluate_plan_candidates call, for "30 second reel of the best moments with captions" on one
+talking video (ids come from get_moments; yours will differ). Copy this shape exactly:
+{"frame": {"asks": [
+    {"id": "len", "kind": "structure", "text": "about 30 seconds",
+     "predicate": {"kind": "durationBetween", "args": {"min_s": 27, "max_s": 33}}},
+    {"id": "caps", "kind": "captions", "text": "captions on", "predicate": {"kind": "captionsPresent"}}],
+  "platform": "reels", "target_seconds": 30, "aspect": "9:16",
+  "assumptions": ["Vertical 9:16 for Reels", "Opens on the strongest line"]},
+ "candidates": [{
+  "strategy": "hook_first", "title": "30s best-moments reel",
+  "summary": "30 s reel: opens on the revenue line, three strongest moments, captions on.",
+  "target_seconds": 30, "aspect": "9:16",
+  "structure": [
+    {"section": "hook", "moments": [{"asset": "a1", "moment": "m004"}]},
+    {"section": "body", "moments": [{"asset": "a1", "moment": "m001"}, {"asset": "a1", "moment": "m007"}]}],
+  "style": {"pace": "fast", "captions": true, "tighten": "tight"},
+  "steps": [
+    {"id": "s1", "kind": "structure", "intent": "Build the cut from the 3 strongest moments",
+     "why": "m004 has the biggest number; m001 and m007 set it up and pay it off", "satisfies": ["len"]},
+    {"id": "s2", "kind": "tighten", "intent": "Cut pauses and filler words", "depends_on": ["s1"]},
+    {"id": "s3", "kind": "captions", "intent": "Add captions", "depends_on": ["s1"], "satisfies": ["caps"]}]}]}
+Every candidate needs "steps", and every ask id must appear in some step's "satisfies".
+- target_seconds and the durationBetween ask are there only because that user asked for 30 seconds. For
+  "clean this up", "cut the pauses" or "add captions" leave target_seconds out, put the whole recording in
+  the structure (one {"asset", "words": [0, <last word index>]} ref, or its shots when nobody speaks:
+  {"asset": "a1", "shot": "sh0000"}), then add the tighten or captions step.
+- Prefer moment ids from get_moments over word ranges: they are already whole sentences.
+- A plan only does what its steps do. Cutting pauses, dead air or filler words needs a tighten step (and
+  style.tighten set); captions need a captions step. The structure step alone only lays footage down.
+- "frame" and each candidate's "style" take only the fields shown or listed above; pace is slow, medium
+  or fast, and tighten is none, natural, tight or punchy.
+
 Output discipline: the plan exists only as tool arguments. Do not write it in text. Text you write between
 calls is shown as a progress note: keep it to a few words ("Finding the drops…").

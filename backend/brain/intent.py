@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from brain.plan_ir import Aspect, StepKind
 from editor.timeline import ClipItem, GraphicItem, MusicItem, TextItem, Timeline
@@ -18,9 +18,15 @@ from understanding.mud import MUD
 
 PredicateKind = Literal["durationBetween", "aspectIs", "textPresent", "solidOnEvents", "musicPresent",
                         "captionsPresent", "rangeRemoved", "rangeKept", "and", "or"]
+_PREDICATE_KINDS = frozenset(PredicateKind.__args__)
 ASPECTS: dict[str, float] = {"9:16": 9 / 16, "1:1": 1.0, "4:5": 4 / 5, "16:9": 16 / 9}
 # A flash must start within this many frames of its event.
 EVENT_TOLERANCE_FRAMES = 1
+
+
+# Other names models give the bounds of durationBetween.
+_ARG_ALIASES = {"min": "min_s", "max": "max_s", "minInclusive": "min_s", "maxInclusive": "max_s",
+                "min_seconds": "min_s", "max_seconds": "max_s"}
 
 
 class _Closed(BaseModel):
@@ -34,12 +40,41 @@ class PredicateSpec(_Closed):
     args: dict[str, Any] = Field(default_factory=dict)
     children: list[PredicateSpec] = Field(default_factory=list)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_flat_shapes(cls, value: Any) -> Any:
+        """Models write the same predicate three ways; all mean {"kind", "args"}:
+        {"durationBetween": {"min_s": 28}}, {"kind": "durationBetween", "min_s": 28}, and the canonical one."""
+        if not isinstance(value, dict):
+            return value
+        value = dict(value)
+        if "kind" not in value and len(value) == 1:
+            (kind, args), = value.items()
+            value = {"kind": kind, "args": args if isinstance(args, dict) else {}}
+        args = dict(value.get("args") or {})
+        args.update({key: value.pop(key) for key in list(value) if key not in ("kind", "args", "children")})
+        for alias, name in _ARG_ALIASES.items():
+            if alias in args and name not in args:
+                args[name] = args.pop(alias)
+        return {**value, "args": args}
+
 
 class Ask(_Closed):
     id: str
     kind: StepKind
     text: str = Field(..., max_length=200)
     predicate: PredicateSpec | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_unknown_predicate(cls, value: Any) -> Any:
+        """A predicate of a kind there is no check for can't be tested; the ask stands without one."""
+        if isinstance(value, dict) and isinstance(value.get("predicate"), dict):
+            spec = value["predicate"]
+            kind = spec.get("kind") or (next(iter(spec)) if len(spec) == 1 else None)
+            if kind not in _PREDICATE_KINDS:
+                value = {**value, "predicate": None}
+        return value
 
 
 class Interpretation(_Closed):

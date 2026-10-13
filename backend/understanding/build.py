@@ -16,11 +16,16 @@ from typing import Any
 from core.logging_config import get_logger
 from edit_engine import perception, story, vision
 from transcription.groq_whisper import GroqWhisperTranscriber
+from transcription.local_whisper import transcribe_local
 from transcription.word_timing import clean_word_timings
-from understanding import analyzers
+from understanding import analyzers, reading
 from understanding.mud import MUD, Shot, Utterance, Word, check_mud
 
 log = get_logger(__name__)
+
+SUMMARY_CHARS = 240
+TOPIC_CHARS = 40
+WHY_CHARS = 80
 
 # The steps of a build, in order; the studio shows which one is running.
 STAGES = ("shots", "transcript", "music", "moments")
@@ -67,9 +72,28 @@ async def build_mud(path: str, asset_id: str, kind: str, *, is_pro: bool, workdi
     shots = [_shot(n, raw, duration, len(raw_shots)) for n, raw in enumerate(raw_shots)]
     mud.scenes, mud.shots = analyzers.group_scenes(shots, mud.utterances, mud.silences, duration)
     mud.quality = analyzers.quality_ranges(mud.shots)
-    mud.moments = analyzers.find_moments(mud.utterances, mud.shots)
+    read = await _run(mud, "reading", lambda: reading.read_transcript(mud.utterances)) if mud.utterances else None
+    if read:
+        mud.summary, mud.topics = _plain(read.summary, SUMMARY_CHARS), [_plain(t, TOPIC_CHARS) for t in read.topics[:reading.MAX_TOPICS]]
+    mud.moments = analyzers.find_moments(mud.utterances, mud.shots, _picks(read, mud.utterances) if read else ())
     check_mud(mud)
     return mud
+
+
+def _plain(text: str, limit: int) -> str:
+    """One line of a model's words about untrusted speech: no line breaks to hide a second message in."""
+    return " ".join(text.split())[:limit]
+
+
+def _picks(read: reading.Reading, utterances: list[Utterance]) -> list[tuple[float, float, float, str]]:
+    """The model's moments as (score, t0, t1, why); a pick naming lines that don't exist is dropped."""
+    by_id = {u.id: u for u in utterances}
+    picks = []
+    for pick in read.moments[:reading.MAX_PICKS]:
+        first, last = by_id.get(pick.first), by_id.get(pick.last)
+        if first and last and first.t0 < last.t1:
+            picks.append((pick.score, first.t0, last.t1, _plain(pick.why, WHY_CHARS) or "spoken line"))
+    return picks
 
 
 async def _run(mud: MUD, name: str, work: Callable[[], Awaitable[Any]]) -> Any:
@@ -107,7 +131,7 @@ def _shot(n: int, raw: dict[str, Any], duration: float, count: int) -> Shot:
 
 
 async def _transcribe(audio: str, duration: float) -> tuple[list[Word], str | None]:
-    segments, language = await GroqWhisperTranscriber().transcribe(audio, duration)
+    segments, language = await _speech(audio, duration)
     timed = clean_word_timings([w for s in segments for w in s.get("words") or []])
     words = [
         Word(i=i, t0=min(w["start"], duration), t1=min(w["end"], duration), text=str(w["word"]).strip(),
@@ -115,6 +139,18 @@ async def _transcribe(audio: str, duration: float) -> tuple[list[Word], str | No
         for i, w in enumerate(w for w in timed if str(w.get("word", "")).strip())
     ]
     return words, language or None
+
+
+async def _speech(audio: str, duration: float) -> tuple[list[dict[str, Any]], str]:
+    """The hosted transcription, or this machine's when the hosted one has no key, fails or hears nothing."""
+    if GroqWhisperTranscriber.available():
+        try:
+            segments, language = await GroqWhisperTranscriber().transcribe(audio, duration)
+            if segments:
+                return segments, language
+        except Exception as exc:
+            log.warning("Hosted transcription failed, transcribing on this machine: %s", exc)
+    return await transcribe_local(audio)
 
 
 def _utterances(words: list[Word]) -> list[Utterance]:

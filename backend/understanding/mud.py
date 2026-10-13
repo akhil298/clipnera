@@ -124,6 +124,9 @@ class MUD(_Strict):
     # analyzer -> "ok" | "skipped" | "failed"
     analyzers: dict[str, str] = Field(default_factory=dict)
     speech_ratio: Conf = 0.0
+    # What it is about and the topics in order, as a model read them from the transcript.
+    summary: str | None = None
+    topics: list[str] = Field(default_factory=list)
     words: list[Word] = Field(default_factory=list)
     utterances: list[Utterance] = Field(default_factory=list)
     silences: list[Silence] = Field(default_factory=list)

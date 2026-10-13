@@ -20,18 +20,19 @@ from agent_runtime.tools import AgentTool, ToolBox
 from brain.answer import READ_ONLY
 from brain.clarify import decide_clarify
 from brain.context import EditContext
+from brain.credits import to_clipnera
 from brain.evaluate import Evaluation, evaluate_candidates
 from brain.intent import IntentFrame
 from brain.plan_ir import PlanIR
 from brain.route import RouteDecision
-from brain.score import ScoredPlan
+from brain.score import ScoredPlan, closest
 from clients.ai import get_role_client
 from editor.service import EditorService
 
 PROMPTS = Path(__file__).parent / "prompts"
 SYSTEM = (PROMPTS / "sp_common.md").read_text(encoding="utf-8") + "\n\n" + (PROMPTS / "director.md").read_text(encoding="utf-8")
 LIMITS = TurnLimits(max_steps=10, seconds=240, usd=1.0, max_tokens=8000)
-MAX_EVALUATIONS = 2
+MAX_EVALUATIONS = 3
 MAX_CANDIDATES = 3
 
 
@@ -88,19 +89,25 @@ class DirectorResult:
 
 async def _evaluate(run: DirectorRun, args: EvaluateInput) -> dict[str, Any]:
     if run.evaluations >= MAX_EVALUATIONS:
-        return {"error": "You've evaluated twice already. Call plan_choose with the best valid candidate."}
+        return {"error": "You've used every evaluation. Call plan_choose with the best valid candidate."}
     run.evaluations += 1
     run.frame = args.frame
     run.evaluation = await evaluate_candidates(run.prompt, args.frame, args.candidates, run.ctx,
                                                allowed_owned=run.allowed_owned, use_judge=run.use_judge)
     best, _ = run.evaluation.best()
-    return {"candidates": run.evaluation.report(),
-            "best_valid": f"c{best.index + 1}" if best else None,
-            "next": "Call plan_choose." if best else "Every candidate failed; fix the errors and evaluate again."}
+    near = None if best else closest(run.evaluation.scored)
+    if best:
+        advice = "Call plan_choose."
+    elif near:
+        advice = (f"c{near.index + 1} runs but misses asks {near.unmet_asks}. Drop any ask the user did not state, or "
+                  f"fix the plan and evaluate again; if it can't be met, call plan_choose with c{near.index + 1}.")
+    else:
+        advice = "Every candidate failed; fix the errors and evaluate again."
+    return {"candidates": run.evaluation.report(), "best_valid": f"c{best.index + 1}" if best else None, "next": advice}
 
 
 async def _choose(run: DirectorRun, args: ChooseInput) -> str:
-    valid = {f"c{s.index + 1}" for s in (run.evaluation.scored if run.evaluation else []) if s.eligible}
+    valid = {f"c{s.index + 1}" for s in (run.evaluation.scored if run.evaluation else []) if s.usable}
     if args.candidate not in valid:
         return f"{args.candidate} isn't a valid evaluated candidate. Valid: {sorted(valid) or 'none'}."
     run.chosen, run.reason = args.candidate, args.reason
@@ -163,7 +170,16 @@ async def direct(service: EditorService, user_id: str, ctx: EditContext, prompt:
         chosen = next(s for s in run.evaluation.scored if f"c{s.index + 1}" == run.chosen)
         runner_up = best if best is not chosen else runner_up
         best = chosen
+    best = best or closest(run.evaluation.scored)
+    if best is not None and best.unmet_asks and run.frame is not None:
+        missed = [ask.text for ask in run.frame.asks if ask.id in best.unmet_asks]
+        best.warnings.insert(0, "This plan doesn't fully meet: " + "; ".join(missed) + ".")
     if best is None:
+        unaffordable = [s for s in run.evaluation.scored if s.gates["TV"] and not s.unmet_asks and not s.gates["EC"]]
+        if unaffordable:
+            cost = min(to_clipnera(s.credits) for s in unaffordable)
+            return DirectorResult("failed", message=f"That edit needs {cost} credit{'' if cost == 1 else 's'} and you "
+                                                    f"have {ctx.credits_left}. Top up, or ask for a smaller change.")
         reasons = [e for errors in run.evaluation.invalid.values() for e in errors][:3]
         reasons += [f"{k}: {v}" for s in run.evaluation.scored for k, v in s.summary()["step_errors"].items()][:3]
         return DirectorResult("failed", message="I couldn't make a plan that works: " + "; ".join(reasons or ["no valid candidate"]))

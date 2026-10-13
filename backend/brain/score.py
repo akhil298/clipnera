@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from brain.compile import CompiledPlan
 from brain.intent import IntentFrame, event_frames, failed_asks, is_solid
 from brain.plan_ir import PlanIR
+from brain.credits import to_clipnera
 from brain.rules import Violation, hard_violations, rulebook, soft_violations, weights
 from editor.timeline import ClipItem, TextItem, Timeline
 from understanding.mud import MUD
@@ -52,6 +53,11 @@ class ScoredPlan:
     def eligible(self) -> bool:
         return all(self.gates.values()) and not self.unmet_asks
 
+    @property
+    def usable(self) -> bool:
+        """It runs cleanly and the user can afford it, though it may miss something asked for."""
+        return all(self.gates.values())
+
     def summary(self) -> dict[str, Any]:
         """What the director (and the plan card) sees about this candidate."""
         return {
@@ -71,7 +77,8 @@ def plan_score(index: int, plan: PlanIR, compiled: CompiledPlan, frame: IntentFr
     timeline = compiled.timeline
     violations = hard_violations(timeline, muds, overridden=overridden)
     credits = plan_credits(plan)
-    gates = {"TV": compiled.ok and not violations, "EC": credits <= credits_left}
+    # The plan is priced in AI credits; the balance is in Clipnera credits.
+    gates = {"TV": compiled.ok and not violations, "EC": to_clipnera(credits) <= credits_left}
     unmet = [ask.id for ask in failed_asks(frame, timeline, muds)]
     det = {
         "IF": 1.0 - (len(unmet) / len(frame.asks) if frame.asks else 0.0),
@@ -102,6 +109,13 @@ def select_best(scored: Sequence[ScoredPlan]) -> tuple[ScoredPlan | None, Scored
     if not ok:
         return None, None
     return ok[0], ok[1] if len(ok) > 1 else None
+
+
+def closest(scored: Sequence[ScoredPlan]) -> ScoredPlan | None:
+    """With no candidate meeting every ask: the usable one that misses the fewest. Showing it with what it
+    missed beats refusing, since the user can still approve, edit or reject it."""
+    usable = [s for s in scored if s.usable]
+    return min(usable, key=lambda s: (len(s.unmet_asks), s.compiled.op_count, s.index)) if usable else None
 
 
 # ---------------------------------------------------------------------------- components

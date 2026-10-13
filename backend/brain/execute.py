@@ -110,7 +110,9 @@ async def _run_step(plan_id: str, user_id: str, ir: PlanIR, step: PlanStep) -> b
         service = EditorService(session)
         plan = await session.get(EditPlan, plan_id)
         assert plan is not None
-        ctx = await build_context(service, user_id, plan.project_id, selection=[], playhead=0, session=session)
+        # Read now: a refused apply rolls the session back and the row can't be read after it.
+        project_id = plan.project_id
+        ctx = await build_context(service, user_id, project_id, selection=[], playhead=0, session=session)
         compiled = compile_plan(ir, ctx.timeline, ctx.muds, human_owned=ctx.human_owned, only=[step.id], style=ctx.style)
         out = compiled.steps[0]
         actor = Actor(author=AUTHOR, step_id=log_step_id(plan_id, step.id), turn_id=plan_id,
@@ -118,7 +120,7 @@ async def _run_step(plan_id: str, user_id: str, ir: PlanIR, step: PlanStep) -> b
                       allowed_text=frozenset(t.content for t in ir.text), may_resize=step.kind == "reframe")
         if out.error is None and out.ops:
             try:
-                result = await service.apply(user_id, plan.project_id, ctx.version, out.ops, actor)
+                result = await service.apply(user_id, project_id, ctx.version, out.ops, actor)
             except CustomException as exc:
                 out.error = f"{exc.code}: {exc.message}"
             else:
@@ -131,7 +133,7 @@ async def _run_step(plan_id: str, user_id: str, ir: PlanIR, step: PlanStep) -> b
             return True
 
         if step.kind in SPECIALIST_FOR:
-            outcome = await run_specialist(service, user_id, plan.project_id, plan_id, step, actor, reason=out.error or "")
+            outcome = await run_specialist(service, user_id, project_id, plan_id, step, actor, reason=out.error or "")
             await _set_step(plan_id, step.id, status=StepStatus.DONE if outcome.ok else StepStatus.FAILED,
                             note=outcome.note[:500], ops=outcome.ops, version_after=outcome.version)
             return outcome.ok
