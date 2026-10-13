@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from agent_runtime.loop import TurnLimits, run_turn
 from agent_runtime.tools import AgentTool, ToolBox
+from brain import library, polish
 from brain.answer import READ_ONLY
 from brain.clarify import decide_clarify
 from brain.context import EditContext
@@ -34,6 +35,7 @@ SYSTEM = (PROMPTS / "sp_common.md").read_text(encoding="utf-8") + "\n\n" + (PROM
 LIMITS = TurnLimits(max_steps=10, seconds=240, usd=1.0, max_tokens=8000)
 MAX_EVALUATIONS = 3
 MAX_CANDIDATES = 3
+MAX_SOUNDS = 12
 
 
 class _Closed(BaseModel):
@@ -119,8 +121,20 @@ async def _ask(run: DirectorRun, args: AskInput) -> str:
     return "Asked. Stop now; the user will answer."
 
 
+class SoundsInput(_Closed):
+    query: str = Field("", max_length=60, description="Words to look for, e.g. 'whoosh', 'pop', 'money', 'impact'.")
+
+
+async def _sounds(run: DirectorRun, args: SoundsInput) -> dict[str, Any]:
+    found = library.search_sounds(args.query)[:MAX_SOUNDS]
+    return {"sounds": [{"id": s.id, "seconds": round(s.seconds, 2), "category": s.category, "tags": list(s.tags)}
+                       for s in found], "total_in_library": len(library.sounds())}
+
+
 _PLANNING = [
     *READ_ONLY.tools(),
+    AgentTool("library_sounds", "Search Clipnera's sound-effect library; use a returned id as an sfx step's "
+                                "params.sound.", SoundsInput, _sounds),
     AgentTool("evaluate_plan_candidates", "Validate, compile and score your IntentFrame and 1-3 PlanIR candidates. "
                                           "Returns per candidate its score, components, errors and warnings.",
               EvaluateInput, _evaluate),
@@ -133,6 +147,17 @@ TOOLS = ToolBox([
 ])
 # Once the user has been asked, the director can only plan.
 TOOLS_NO_ASK = ToolBox(_PLANNING)
+
+
+async def _polished(run: DirectorRun, best: ScoredPlan) -> ScoredPlan:
+    """``best`` with a short's finishing touches, when the fuller plan still runs and is affordable."""
+    fuller = polish.enrich(best.plan, run.ctx.muds)
+    if fuller is None or run.frame is None:
+        return best
+    scored = (await evaluate_candidates(run.prompt, run.frame, [fuller], run.ctx, allowed_owned=run.allowed_owned,
+                                        use_judge=False)).scored
+    better = scored[0] if scored and scored[0].usable and len(scored[0].unmet_asks) <= len(best.unmet_asks) else None
+    return better or best
 
 
 async def direct(service: EditorService, user_id: str, ctx: EditContext, prompt: str, decision: RouteDecision, *,
@@ -171,6 +196,8 @@ async def direct(service: EditorService, user_id: str, ctx: EditContext, prompt:
         runner_up = best if best is not chosen else runner_up
         best = chosen
     best = best or closest(run.evaluation.scored)
+    if best is not None and polish.wants_polish(prompt):
+        best = await _polished(run, best)
     if best is not None and best.unmet_asks and run.frame is not None:
         missed = [ask.text for ask in run.frame.asks if ask.id in best.unmet_asks]
         best.warnings.insert(0, "This plan doesn't fully meet: " + "; ".join(missed) + ".")

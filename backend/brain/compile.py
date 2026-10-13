@@ -18,6 +18,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from brain import library
 from brain.intent import event_frames
 from brain.plan_ir import MomentRef, PlanIR, PlanStep
 from brain.solvers import beat_snap, music_fit, reframe, speech_tighten, timing
@@ -31,7 +32,7 @@ from editor.ops import (
     ItemPatch,
     apply_ops,
 )
-from editor.timeline import ClipItem, Keyframe, TextItem, Timeline, TimelineError, Track
+from editor.timeline import ClipItem, Keyframe, SfxItem, TextItem, Timeline, TimelineError, Track
 from understanding.mud import MUD, Word
 
 ASPECT_SIZES = {"9:16": (1080, 1920), "1:1": (1080, 1080), "4:5": (1080, 1350), "16:9": (1920, 1080)}
@@ -52,6 +53,23 @@ WORD_EDGE_SLACK = 0.02
 LINE_START_SLACK = 0.2
 LINE_END_SLACK = 0.3
 MUSIC_TRACK, TITLE_TRACK, FLASH_TRACK = "ai_music", "ai_titles", "ai_flashes"
+SFX_TRACK, CALLOUT_TRACK = "ai_sfx", "ai_callouts"
+# Zoom: a slow push over the shot, or alternate shots held a little closer so jump cuts read as a change of frame.
+PUSH_ZOOM = 1.08
+PUNCH_ZOOM = 1.14
+MIN_ZOOM_FRAMES = 15
+# A transition's length, and how far a zoom or slide one starts from the resting frame.
+TRANSITION_FRAMES = 8
+TRANSITION_ZOOM = 1.18
+TRANSITION_SLIDE = 0.12
+# Sound effects: at most this many in one edit, and the default for each kind of event.
+MAX_SFX = 12
+SFX_FOR = {"cuts": "whoosh_short", "callouts": "pop", "titles": "whoosh", "start": "riser", "end": "boom"}
+SFX_GAIN_DB = -10.0
+# A callout stays this long (seconds), a little above the middle of the frame, away from the captions.
+CALLOUT_SECONDS = (1.0, 2.6)
+CALLOUT_Y = 0.3
+CALLOUT_SCALE = 1.0
 PACE_TARGET_SHOT = {"slow": 4.0, "medium": 2.5, "fast": 1.4}
 
 
@@ -397,6 +415,129 @@ class _State:
             ops.append(AddItem(op="add_item", track=track.id, item=_safe(item)))
         # Titles on one track can't overlap: keep only those that fit one after another.
         return _no_overlap(ops)
+
+    # ------------------------------------------------------------------ motion, transitions, sound, callouts
+
+    def _ai_clips(self) -> list[ClipItem]:
+        """The main track's clips the AI may change, in playing order."""
+        return sorted((i for i in self._main().items if isinstance(i, ClipItem) and i.id not in self.owned),
+                      key=lambda clip: clip.at)
+
+    def _step_zoom(self, step: PlanStep, warnings: list[str]) -> list[Any]:
+        style = str(step.params.get("style") or "push")
+        ops: list[Any] = []
+        for n, clip in enumerate(self._ai_clips()):
+            if clip.frames < MIN_ZOOM_FRAMES:
+                continue
+            rest = clip.transform.scale
+            if style == "punch":
+                # Every other shot sits closer for its whole length.
+                near = round(rest * PUNCH_ZOOM, 4) if n % 2 else rest
+                keys = [Keyframe(f=0, v=near), Keyframe(f=clip.frames, v=near)]
+            else:
+                near = round(rest * PUSH_ZOOM, 4)
+                start, end = (rest, near) if n % 2 == 0 else (near, rest)
+                keys = [Keyframe(f=0, v=start, ease="in_out"), Keyframe(f=clip.frames, v=end)]
+            ops.append(UpdateItem(op="update_item", item=clip.id, patch=ItemPatch(keyframes={**clip.keyframes, "scale": keys})))
+        if not ops:
+            warnings.append("No shot is long enough to zoom on.")
+        return ops
+
+    def _step_transitions(self, step: PlanStep, warnings: list[str]) -> list[Any]:
+        kind = str(step.params.get("type") or "fade")
+        if kind not in ("fade", "zoom", "slide"):
+            raise CompileError(step.id, "A transition is fade, zoom or slide.")
+        prop = {"fade": "opacity", "zoom": "scale", "slide": "x"}[kind]
+        ops: list[Any] = []
+        skipped = 0
+        # The first shot opens the edit; transitions sit on the cuts after it.
+        for clip in self._ai_clips()[1:]:
+            length = min(TRANSITION_FRAMES, clip.frames // 2)
+            if length < 2:
+                continue
+            if kind != "fade" and prop in clip.keyframes:
+                # The shot already moves this way (a zoom or a reframe); two moves would fight.
+                skipped += 1
+                continue
+            rest = {"opacity": 1.0, "scale": clip.transform.scale, "x": clip.transform.x}[prop]
+            start = {"opacity": 0.0, "scale": round(rest * TRANSITION_ZOOM, 4), "x": round(rest + TRANSITION_SLIDE, 4)}[prop]
+            keys = [Keyframe(f=0, v=start, ease="out"), Keyframe(f=length, v=rest)]
+            ops.append(UpdateItem(op="update_item", item=clip.id, patch=ItemPatch(keyframes={**clip.keyframes, prop: keys})))
+        if skipped:
+            warnings.append(f"{skipped} cut{'' if skipped == 1 else 's'} kept a plain cut: the shot already moves.")
+        if not ops:
+            warnings.append("There are no cuts to put a transition on.")
+        return ops
+
+    def _step_sfx(self, step: PlanStep, warnings: list[str]) -> list[Any]:
+        on = str(step.params.get("on") or "cuts")
+        if on not in SFX_FOR:
+            raise CompileError(step.id, f"Sound effects go on: {', '.join(SFX_FOR)}.")
+        sound = library.sounds().get(str(step.params.get("sound") or SFX_FOR[on]))
+        if sound is None:
+            raise CompileError(step.id, f"There is no sound called {step.params.get('sound')} in the library.")
+        clips = self._ai_clips()
+        total = self.timeline.duration
+        events = {
+            "cuts": [clip.at for clip in clips[1:]],
+            "callouts": [i.at for t in self.timeline.tracks if t.id == CALLOUT_TRACK for i in t.items],
+            "titles": [i.at for t in self.timeline.tracks if t.id == TITLE_TRACK for i in t.items],
+            "start": [0], "end": [max(0, total - 1)] if total else [],
+        }[on]
+        if len(events) > MAX_SFX:
+            # Too many would be noise: keep them evenly spread.
+            events = [events[round(n * (len(events) - 1) / (MAX_SFX - 1))] for n in range(MAX_SFX)]
+        ops: list[Any] = []
+        # A track per kind of event: a pop on a callout may sound over the whoosh of a cut.
+        track = self._track(f"{SFX_TRACK}_{on}", "audio", ops)
+        mine = [i for i in track.items if i.id not in self.owned]
+        ops += [RemoveItem(op="remove_item", item=i.id) for i in mine]
+        busy = sorted((i.at, i.end) for i in track.items if i not in mine)
+        length = max(1, round(sound.seconds * self.fps))
+        for n, frame in enumerate(sorted(set(events))):
+            # The sound's peak lands on the event.
+            at = max(0, frame - round(sound.peak * self.fps))
+            if any(at < end and start < at + length for start, end in busy):
+                continue
+            busy.append((at, at + length))
+            ops.append(AddItem(op="add_item", track=track.id, item=SfxItem(
+                type="sfx", id=self._id(step, n), at=at, name=sound.id[:40], dur=length, gain_db=SFX_GAIN_DB,
+                extra={"on": on, "url": sound.url})))
+        if not any(isinstance(op, AddItem) for op in ops):
+            warnings.append(f"There was nowhere to put a sound on the {on}.")
+        return ops
+
+    def _frame_of(self, asset: str, seconds: float) -> int | None:
+        """The timeline frame where ``seconds`` of ``asset`` plays on the main track, if it is in the cut."""
+        source = round(seconds * self.fps)
+        for clip in self._main().items:
+            if isinstance(clip, ClipItem) and clip.asset == asset and clip.src_in <= source < clip.src_out:
+                return clip.at + round((source - clip.src_in) / clip.speed)
+        return None
+
+    def _step_callouts(self, step: PlanStep, warnings: list[str]) -> list[Any]:
+        callouts = [t for t in self.plan.text if t.kind == "callout" and t.anchor is not None]
+        if not callouts:
+            raise CompileError(step.id, "The plan has no callout text with an anchor for this step.")
+        ops: list[Any] = []
+        track = self._track(CALLOUT_TRACK, "text", ops)
+        ops += [RemoveItem(op="remove_item", item=i.id) for i in track.items if i.id not in self.owned]
+        shortest, longest = (round(seconds * self.fps) for seconds in CALLOUT_SECONDS)
+        missing = 0
+        for n, text in enumerate(callouts):
+            span = self._span(text.anchor)
+            at = self._frame_of(text.anchor.asset, span[0]) if span else None
+            if at is None:
+                missing += 1
+                continue
+            spoken = round((span[1] - span[0]) * self.fps)
+            item = TextItem(type="text", id=self._id(step, n), at=at, text=text.content, style="callout",
+                            dur=max(shortest, min(longest, spoken)))
+            item.transform.y, item.transform.scale = CALLOUT_Y, CALLOUT_SCALE
+            ops.append(AddItem(op="add_item", track=track.id, item=_safe(item)))
+        if missing:
+            warnings.append(f"{missing} callout{'' if missing == 1 else 's'} sat on words that aren't in the cut.")
+        return _no_overlap(sorted(ops, key=lambda op: op.item.at if isinstance(op, AddItem) else -1))
 
     def _step_captions(self, step: PlanStep, warnings: list[str]) -> list[Any]:
         style = str(step.params.get("style") or self.plan.style.caption_style or "")

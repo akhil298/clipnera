@@ -125,6 +125,8 @@ class LibrarySound(BaseModel):
     # Path under the API host, e.g. /static/sfx/pop.wav.
     url: str
     licence: str
+    # What kind of sound it is: transition, impact, pop, ui, money…
+    category: str
 
 
 class SoundSearchResponse(BaseModel):

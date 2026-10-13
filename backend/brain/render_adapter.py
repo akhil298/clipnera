@@ -2,8 +2,9 @@
 
 Used for the verify render (360p, Phase 12) and for "Render on server" (Phase 17). What the
 reel renderer draws: the main video track's clips back to back (zoom = scale, crop centre =
-x), their speech, one music track ducked under it, titles and burned captions. What it
-doesn't (and the verifier checks on the Timeline instead): overlay tracks, flash solids,
+x; a zoom that moves is held at its middle), their speech, one music track ducked under it,
+sound effects as its four built-in sounds, titles and burned captions. What it doesn't (and
+the verifier checks on the Timeline instead): overlay tracks, flash solids, fades and slides,
 speed changes, graphics; and it always crops to 9:16.
 """
 
@@ -15,12 +16,18 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from brain import library
 from clients.services.s3 import S3
 from core.config import get_settings
-from editor.timeline import ClipItem, TextItem, Timeline
+from editor.timeline import ClipItem, SfxItem, TextItem, Timeline
 from understanding.mud import MUD
 
 PREVIEW_SIZE = (360, 640)
+# A library sound whose name holds the word plays as this renderer sound (edit_engine.render.SFX).
+RENDER_SOUNDS = (
+    ("whoosh", "whoosh"), ("swoosh", "whoosh"), ("slide", "whoosh"), ("pop", "pop"), ("click", "pop"),
+    ("ding", "ding"), ("chime", "ding"), ("success", "ding"), ("boom", "hit"), ("punch", "hit"), ("thud", "hit"),
+)
 
 
 def main_clips(timeline: Timeline) -> list[ClipItem]:
@@ -61,11 +68,14 @@ def to_reel(timeline: Timeline, muds: Mapping[str, MUD], *, size: tuple[int, int
         start, end = clip.src_in / fps, clip.src_out / fps
         x = clip.keyframes.get("x")
         crop_x = sum(k.v for k in x) / len(x) if x else clip.transform.x
+        # The renderer holds one framing per shot: a zoom that moves is drawn at its middle.
+        scale = clip.keyframes.get("scale")
+        zoom = sum(k.v for k in scale) / len(scale) if scale else clip.transform.scale
         if asset.kind == "image":
             picture.append({"kind": "image", "src": src(clip.asset), "at": round(at, 3), "dur": round(clip.frames / fps, 3)})
         else:
             picture.append({"kind": "video", "src": src(clip.asset), "in": round(start, 3), "out": round(end, 3),
-                            "at": round(at, 3), "zoom": max(1.0, clip.transform.scale), "crop_x": crop_x})
+                            "at": round(at, 3), "zoom": max(1.0, zoom), "crop_x": crop_x})
             if asset.has_audio and clip.volume > 0:
                 voice.append({"src": src(clip.asset), "in": round(start, 3), "out": round(end, 3), "at": round(at, 3)})
             if timeline.captions and timeline.captions.enabled and (mud := muds.get(clip.asset)):
@@ -85,7 +95,7 @@ def to_reel(timeline: Timeline, muds: Mapping[str, MUD], *, size: tuple[int, int
     width, height = size or (timeline.width, timeline.height)
     compiled = {
         "duration": round(cursor, 3), "width": width, "height": height, "look": timeline.look,
-        "picture": picture, "voice": voice, "texts": sorted(texts, key=lambda t: t["at"]), "sfx": [],
+        "picture": picture, "voice": voice, "texts": sorted(texts, key=lambda t: t["at"]), "sfx": _sfx(timeline),
         "words": sorted(words, key=lambda w: w["start"]),
         "caption_style": timeline.captions.style if timeline.captions else None,
         "music": None if music is None else {
@@ -96,6 +106,21 @@ def to_reel(timeline: Timeline, muds: Mapping[str, MUD], *, size: tuple[int, int
     if music is not None:
         src(music.asset)
     return compiled, order
+
+
+def _sfx(timeline: Timeline) -> list[dict[str, Any]]:
+    """The Timeline's sound effects as the renderer's four built-in sounds, by what each is."""
+    cues = []
+    for track in timeline.tracks:
+        if track.kind != "audio" or track.muted:
+            continue
+        for item in track.items:
+            sound = next((name for word, name in RENDER_SOUNDS if isinstance(item, SfxItem) and word in item.name), None)
+            if sound:
+                # The renderer lines its own sound's peak up with ``at``: give it the event, not the item's start.
+                known = library.sounds().get(item.name)
+                cues.append({"sound": sound, "at": round(item.at / timeline.fps + (known.peak if known else 0.0), 3)})
+    return sorted(cues, key=lambda cue: cue["at"])
 
 
 async def download(timeline: Timeline, asset_ids: list[str], work: Path, s3: S3 | None = None) -> dict[str, Path]:

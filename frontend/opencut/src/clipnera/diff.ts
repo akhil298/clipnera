@@ -26,10 +26,13 @@ export function diffTimelines({
 	prev,
 	next,
 	keep,
+	sameOrder = false,
 }: {
 	prev: Timeline;
 	next: Timeline;
 	keep: ReadonlySet<string>;
+	// The studio's tracks are in the order it first showed them: that isn't a reorder.
+	sameOrder?: boolean;
 }): TimelineOp[] {
 	const head: TimelineOp[] = [
 		...Object.values(next.assets)
@@ -50,7 +53,7 @@ export function diffTimelines({
 		result = applyOps(prev, ops); // A Timeline that can't be reached this way is a bug: let it throw.
 	}
 	const order = finalOrder(prev, next, keep);
-	if (order.join("\n") !== result.tracks.map((t) => t.id).join("\n")) {
+	if (!sameOrder && order.join("\n") !== result.tracks.map((t) => t.id).join("\n")) {
 		ops.push({ op: "reorder_tracks", order });
 	}
 	return ops;
@@ -184,7 +187,9 @@ function itemEdits(
 	return { updates, moves, recreate: false };
 }
 
-const PATCHABLE: ReadonlyArray<keyof ItemPatch> = ["speed", "volume", "transform", "text", "dur", "gain_db", "extra"];
+const PATCHABLE: ReadonlyArray<keyof ItemPatch> = [
+	"speed", "volume", "transform", "keyframes", "text", "dur", "gain_db", "extra",
+];
 
 function patchOf(a: Item, b: Item): ItemPatch {
 	const patch: Record<string, unknown> = {};

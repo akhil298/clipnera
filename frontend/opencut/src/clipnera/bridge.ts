@@ -3,9 +3,12 @@
  * backend, the agent and the renderer share. See ../../BRIDGE.md for the field-by-field mapping.
  *
  * The bridge owns a few fields of each item (timing, source range, speed, volume, placement,
- * text). Everything else an element carries rides along in `item.extra.element`, and whatever the
- * backend item has that the studio doesn't (keyframes, a caption style) is kept from `base`.
+ * text, a clip's keyframes). Everything else an element carries rides along in
+ * `item.extra.element`, and whatever the backend item has that the studio doesn't (a caption
+ * style) is kept from `base`.
  */
+
+import type { ElementAnimations, ScalarAnimationKey } from "@opencut/animation/types";
 
 import type { MediaAsset } from "@opencut/media/types";
 import type { ParamValues } from "@opencut/params";
@@ -22,11 +25,15 @@ import type {
 } from "@opencut/timeline/types";
 import { generateUUID } from "@opencut/utils/id";
 import { type MediaTime, roundMediaTime, TICKS_PER_SECOND } from "@opencut/wasm";
+import { apiUrl } from "@/lib/api";
 import {
 	type Asset,
+	type ClipItem,
 	type Extra,
 	type Item,
 	itemFrames,
+	type Keyframe,
+	type KeyframeProp,
 	type Timeline,
 	type Track,
 	type TrackKind,
@@ -44,6 +51,22 @@ const MAX_TEXT = 200;
 const MAX_SFX_NAME = 40;
 const NEW_TEXT_STYLE = "studio";
 const DEFAULT_TRANSFORM: Transform = { x: 0.5, y: 0.5, scale: 1, rotation: 0 };
+// The studio animation channels each Timeline keyframe property drives.
+const KEYFRAME_PATHS: Record<KeyframeProp, string[]> = {
+	x: ["transform.positionX"],
+	y: ["transform.positionY"],
+	scale: ["transform.scaleX", "transform.scaleY"],
+	rotation: ["transform.rotate"],
+	opacity: ["opacity"],
+};
+// How the studio draws text the AI placed, by the item's style.
+const TEXT_LOOKS: Record<string, ParamValues> = {
+	callout: {
+		fontSize: 5, fontWeight: "bold", color: "#0a0a0a",
+		"background.enabled": true, "background.color": "#fbbf24", "background.cornerRadius": 18,
+		"background.paddingX": 24, "background.paddingY": 12,
+	},
+};
 
 // Element fields the bridge maps to item fields; the rest goes into extra.element.
 const OWNED_FIELDS = ["id", "startTime", "duration"] as const;
@@ -149,8 +172,9 @@ function elementToItem({
 			const asset = assets[element.mediaId];
 			if (!asset) return null;
 			const speed = element.type === "video" && element.retime ? round4(clamp(element.retime.rate, 0.25, 4)) : 1;
+			const clip = clipBase(base);
 			return {
-				...clipBase(base),
+				...clip,
 				id: element.id,
 				at,
 				asset: asset.id,
@@ -158,6 +182,7 @@ function elementToItem({
 				speed,
 				volume: linearVolume(element.params),
 				transform: transformOf(element.params, canvas),
+				keyframes: keyframesOf({ animations: element.animations, canvas, frames, base: clip.keyframes }),
 				extra: { element: element_ },
 			};
 		}
@@ -170,7 +195,8 @@ function elementToItem({
 					dur: frames,
 					name: (element.name || "Sound").slice(0, MAX_SFX_NAME),
 					gain_db: round4(clamp(numberParam(element.params, "volume", 0), -60, 12)),
-					extra: { element: element_ },
+					// What the AI recorded about the sound (which event it marks, its file) stays.
+					extra: { ...(base?.type === "sfx" ? base.extra : {}), element: element_ },
 				};
 			}
 			const asset = assets[element.mediaId];
@@ -205,6 +231,89 @@ function elementToItem({
 		case "effect":
 			return { type: "graphic", id: element.id, at, dur: frames, extra: { element: element_ } };
 	}
+}
+
+/** Timeline keyframes for the studio's animation channels, for the properties the Timeline has. */
+function keyframesOf({
+	animations,
+	canvas,
+	frames,
+	base,
+}: {
+	animations: ElementAnimations | undefined;
+	canvas: Canvas;
+	frames: number;
+	base: ClipItem["keyframes"];
+}): ClipItem["keyframes"] {
+	const found: ClipItem["keyframes"] = {};
+	for (const prop of Object.keys(KEYFRAME_PATHS) as KeyframeProp[]) {
+		const keys = scalarKeys(animations?.[KEYFRAME_PATHS[prop][0]]);
+		if (!keys.length) continue;
+		const points = new Map<number, Keyframe>();
+		for (const key of keys) {
+			const f = clamp(toFrame(key.time, canvas.fps), 0, frames);
+			points.set(f, { f, v: round4(fromStudio(prop, key.value, canvas)), ease: "linear" });
+		}
+		const made = [...points.values()].sort((a, b) => a.f - b.f);
+		const kept = base[prop];
+		// Unchanged in the studio: keep the saved ones, which also carry their easing.
+		found[prop] = kept && sameKeyframes(kept, made) ? kept : made;
+	}
+	return found;
+}
+
+function sameKeyframes(a: Keyframe[], b: Keyframe[]): boolean {
+	return a.length === b.length && a.every((key, n) => key.f === b[n].f && Math.abs(key.v - b[n].v) < 1e-3);
+}
+
+function scalarKeys(channel: unknown): ScalarAnimationKey[] {
+	const keys = (channel as { keys?: unknown } | undefined)?.keys;
+	return Array.isArray(keys) ? keys.filter((key): key is ScalarAnimationKey => typeof key?.value === "number") : [];
+}
+
+const toStudio = (prop: KeyframeProp, value: number, canvas: Canvas): number =>
+	prop === "x" ? (value - 0.5) * canvas.width : prop === "y" ? (value - 0.5) * canvas.height : value;
+
+const fromStudio = (prop: KeyframeProp, value: number, canvas: Canvas): number =>
+	prop === "x" ? 0.5 + value / canvas.width : prop === "y" ? 0.5 + value / canvas.height : value;
+
+/**
+ * The studio animations a clip's keyframes play as. Channels the studio already holds for the
+ * same keyframes are kept (they carry curve handles made there); the Timeline's win otherwise.
+ */
+function animationsFor({
+	keyframes,
+	stored,
+	canvas,
+	frames,
+}: {
+	keyframes: ClipItem["keyframes"];
+	stored: ElementAnimations | undefined;
+	canvas: Canvas;
+	frames: number;
+}): ElementAnimations | undefined {
+	const animations: ElementAnimations = { ...(stored ?? {}) };
+	const held = keyframesOf({ animations: stored, canvas, frames, base: {} });
+	for (const prop of Object.keys(KEYFRAME_PATHS) as KeyframeProp[]) {
+		const points = keyframes[prop] ?? [];
+		if (held[prop] && sameKeyframes(held[prop], points)) continue;
+		for (const path of KEYFRAME_PATHS[prop]) {
+			if (!points.length) {
+				delete animations[path];
+				continue;
+			}
+			animations[path] = {
+				keys: points.map((point): ScalarAnimationKey => ({
+					id: `${path}:${point.f}`,
+					time: toTicks(point.f, canvas.fps),
+					value: round4(toStudio(prop, point.v, canvas)),
+					segmentToNext: "linear",
+					tangentMode: "flat",
+				})),
+			};
+		}
+	}
+	return Object.keys(animations).length ? animations : undefined;
 }
 
 function clipBase(base: Item | undefined) {
@@ -370,9 +479,16 @@ function itemToElement({
 				...(type === "audio" ? {} : transformParams(item.transform, canvas, stored)),
 			};
 			const retime = item.speed === 1 ? undefined : { ...((stored?.retime as object) ?? {}), rate: item.speed };
+			const animations = animationsFor({
+				keyframes: item.keyframes,
+				stored: stored?.animations as ElementAnimations | undefined,
+				canvas,
+				frames: itemFrames(item),
+			});
 			const element = {
 				...(type === "video" ? { isSourceAudioEnabled: true, hidden: false } : {}),
 				...stored,
+				...(animations ? { animations } : { animations: undefined }),
 				...timing,
 				type,
 				name: String(stored?.name ?? file.name),
@@ -397,6 +513,8 @@ function itemToElement({
 				trimEnd: roundMediaTime({ time: 0 }),
 				params: {
 					...buildDefaultElementParams({ type: "text" }),
+					// Text the AI placed has no studio styling yet: give it its style's look.
+					...(stored ? {} : TEXT_LOOKS[item.style] ?? {}),
 					...((stored?.params as ParamValues | undefined) ?? {}),
 					content: full,
 					...transformParams(item.transform, canvas, stored),
@@ -405,16 +523,26 @@ function itemToElement({
 		}
 		case "graphic":
 			return stored ? ({ ...stored, ...timing } as TimelineElement) : null;
-		case "sfx":
-			// Only sounds added in the studio carry their library URL.
-			return stored
-				? ({
-						...stored,
-						...timing,
-						name: stored.name ?? item.name,
-						params: { ...((stored.params as ParamValues | undefined) ?? {}), volume: item.gain_db },
-					} as unknown as TimelineElement)
-				: null;
+		case "sfx": {
+			// A sound added in the studio carries its element; one the AI placed carries its library file.
+			if (!stored && typeof item.extra.url !== "string") return null;
+			return {
+				type: "audio",
+				sourceType: "library",
+				sourceUrl: apiUrl(String(item.extra.url)),
+				trimStart: roundMediaTime({ time: 0 }),
+				trimEnd: roundMediaTime({ time: 0 }),
+				sourceDuration: timing.duration,
+				...stored,
+				...timing,
+				name: String(stored?.name ?? item.name),
+				params: {
+					...buildDefaultElementParams({ type: "audio" }),
+					...((stored?.params as ParamValues | undefined) ?? {}),
+					volume: item.gain_db,
+				},
+			} as TimelineElement;
+		}
 		case "music":
 			return null;
 	}

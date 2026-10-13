@@ -9,9 +9,11 @@ import { toast } from "sonner";
 import type { EditorCore } from "@opencut/core";
 import type { MediaAsset } from "@opencut/media/types";
 import { ApiError, editorApi, type EditorAssetType } from "@/lib/api";
-import { type Asset, applyOps, normalise, type Timeline, type TimelineOp, TimelineError } from "@/lib/editor/timeline";
+import {
+	type Asset, applyOps, type Extra, normalise, type Timeline, type TimelineOp, TimelineError,
+} from "@/lib/editor/timeline";
 import { assetFor, sceneToTimeline, timelineToScene } from "./bridge";
-import { diffTimelines } from "./diff";
+import { diffTimelines, sameJson } from "./diff";
 import { loadMedia } from "./media";
 
 export type SyncStatus = "saved" | "saving" | "offline" | "error";
@@ -47,6 +49,11 @@ export class BackendSync {
 	private uploading = new Map<string, UploadProgress>();
 	private uploaded = new Map<string, Asset>();
 	private failedUploads = new Set<string>();
+	// What the studio's own defaults put in each item's and track's `extra` when it showed the saved
+	// Timeline, and the track order it showed. Still being the same is not an edit: saving it would
+	// log a change by the user on everything the AI made, and the AI may not touch what they changed.
+	private shownExtra = new Map<string, Extra>();
+	private shownOrder = "";
 
 	constructor(
 		private editor: EditorCore,
@@ -59,6 +66,7 @@ export class BackendSync {
 
 	start(): void {
 		if (this.unsubscribers.length) return;
+		this.markShown();
 		const changed = () => {
 			// No debounce for the pause signal: a running plan should stop within a few hundred ms (11.5.4).
 			if (!this.refreshing && this.editListeners.size) this.notifyIfEdited();
@@ -129,22 +137,57 @@ export class BackendSync {
 	}
 
 	private notifyIfEdited(): void {
-		const scene = this.editor.scenes.getActiveSceneOrNull();
-		const project = this.editor.project.getActiveOrNull();
-		if (!scene || !project) return;
 		try {
-			const next = sceneToTimeline({
-				tracks: scene.tracks,
-				canvas: { fps: this.saved.fps, ...project.settings.canvasSize },
-				assets: { ...this.saved.assets, ...Object.fromEntries(this.uploaded) },
-				base: this.saved,
-			});
-			if (diffTimelines({ prev: this.saved, next, keep: this.unshown }).length) {
+			if (this.pendingOps().length) {
 				for (const listener of this.editListeners) listener();
 			}
 		} catch {
 			// A half-made edit can't be compared yet; the next change will be.
 		}
+	}
+
+	/** The Timeline the scene amounts to now, or null while no project is open. */
+	private sceneTimeline(): Timeline | null {
+		const scene = this.editor.scenes.getActiveSceneOrNull();
+		const project = this.editor.project.getActiveOrNull();
+		if (!scene || !project) return null;
+		return sceneToTimeline({
+			tracks: scene.tracks,
+			canvas: { fps: this.saved.fps, ...project.settings.canvasSize },
+			assets: { ...this.saved.assets, ...Object.fromEntries(this.uploaded) },
+			base: this.saved,
+		});
+	}
+
+	/** Remember what the studio shows for the Timeline just loaded (see ``shownExtra``). */
+	private markShown(): void {
+		const shown = this.sceneTimeline();
+		this.shownExtra.clear();
+		if (!shown) return;
+		for (const track of shown.tracks) {
+			this.shownExtra.set(`track:${track.id}`, track.extra);
+			for (const item of track.items) this.shownExtra.set(item.id, item.extra);
+		}
+		this.shownOrder = shown.tracks.map((track) => track.id).join("\n");
+	}
+
+	/** The operations that would save the scene; none when the user has changed nothing. */
+	private pendingOps(): TimelineOp[] {
+		const next = this.sceneTimeline();
+		if (!next) return [];
+		const savedTracks = new Map(this.saved.tracks.map((track) => [track.id, track]));
+		const savedItems = new Map(this.saved.tracks.flatMap((track) => track.items.map((item) => [item.id, item] as const)));
+		const untouched = (key: string, extra: Extra) => this.shownExtra.has(key) && sameJson(this.shownExtra.get(key), extra);
+		for (const track of next.tracks) {
+			const savedTrack = savedTracks.get(track.id);
+			if (savedTrack && untouched(`track:${track.id}`, track.extra)) track.extra = savedTrack.extra;
+			for (const item of track.items) {
+				const savedItem = savedItems.get(item.id);
+				if (savedItem && untouched(item.id, item.extra)) item.extra = savedItem.extra;
+			}
+		}
+		const sameOrder = next.tracks.map((track) => track.id).join("\n") === this.shownOrder;
+		return diffTimelines({ prev: this.saved, next, keep: this.unshown, sameOrder });
 	}
 
 	private schedule(delay = DEBOUNCE_MS): void {
@@ -170,20 +213,12 @@ export class BackendSync {
 			this.changedWhileSending = true;
 			return;
 		}
-		const scene = this.editor.scenes.getActiveSceneOrNull();
-		const project = this.editor.project.getActiveOrNull();
-		if (!scene || !project || this.editor.project.getIsLoading()) return;
+		if (!this.editor.project.getActiveOrNull() || this.editor.project.getIsLoading()) return;
 
 		this.startUploads();
 		let ops: TimelineOp[];
 		try {
-			const next = sceneToTimeline({
-				tracks: scene.tracks,
-				canvas: { fps: this.saved.fps, ...project.settings.canvasSize },
-				assets: { ...this.saved.assets, ...Object.fromEntries(this.uploaded) },
-				base: this.saved,
-			});
-			ops = diffTimelines({ prev: this.saved, next, keep: this.unshown });
+			ops = this.pendingOps();
 		} catch (error) {
 			this.fail(error);
 			return;
@@ -287,6 +322,7 @@ export class BackendSync {
 		this.refreshing = true;
 		try {
 			this.editor.timeline.updateTracks(tracks);
+			this.markShown();
 		} finally {
 			this.refreshing = false;
 		}

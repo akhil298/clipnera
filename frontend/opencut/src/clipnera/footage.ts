@@ -39,7 +39,7 @@ interface FootageState {
 
 const POLL_MS = 2500;
 // What auto mode asks for when the user dropped files and said nothing.
-const AUTO_PROMPT = "Edit this into the best version of itself: keep the strongest moments, cut the pauses and filler words, and add captions.";
+const AUTO_PROMPT = "Edit this into a polished, engaging short: keep the strongest moments, cut the pauses and filler words, and add captions.";
 // Opening a project with more ready files than this doesn't replay what was found in each.
 const REPLAY_FILES = 3;
 const STAGES: Record<string, string> = {

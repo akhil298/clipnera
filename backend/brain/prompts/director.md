@@ -48,7 +48,18 @@ How to write a PlanIR
 - steps, in this order when used: structure (build the cut), tighten (cut pauses/fillers; params.style:
   natural|tight|punchy), music (lay the song; plan.music.asset is an analysed music asset), beat_sync (move
   cuts onto beats; after music), flash (params.events: drops|downbeats; after music), reframe, look
-  (params.look), title (plan.text), captions. Each step: id (s1, s2…), intent (≤ 80 chars, present tense,
+  (params.look), zoom (camera movement on every shot; params.style: push = a slow push in or out, punch =
+  every other shot held closer so jump cuts read as a new angle), transitions (on every cut after the first;
+  params.type: fade|zoom|slide), title (plan.text), callouts (a key number or phrase pops on screen as it is
+  said: one plan.text entry each with kind "callout", content of at most 4 words such as "+18% revenue", and
+  anchor {"asset", "words": [first, last]} from get_transcript_range), captions, sfx (sound effects from
+  Clipnera's library; params.on: cuts|callouts|titles|start|end, one step per kind of event; params.sound is
+  a sound id from library_sounds, or leave it out for the usual one). zoom, transitions, callouts and sfx come
+  after structure and tighten, because re-cutting replaces the shots they sit on.
+- A polished short for social ("make it engaging", "punchy", "viral", "like a pro editor", or auto mode's
+  first edit) uses structure, tighten, zoom (punch), callouts on the 2-4 strongest numbers or phrases, captions,
+  and sfx on the cuts and on the callouts. A plain request ("cut the pauses", "add captions") gets only what
+  was asked. Each step: id (s1, s2…), intent (≤ 80 chars, present tense,
   shown to the user), why (≤ 200 chars, cite evidence: moment ids, beat counts, a line), depends_on,
   satisfies (the frame's ask ids it meets).
 - frame.asks: one per explicit requirement, each with a predicate the result can be checked against:
@@ -62,8 +73,9 @@ How to write a PlanIR
 - plan.summary is one sentence the user reads first, e.g. "30 s punchy reel: 9 shots on the beat, white
   flashes on the 3 drops, 'Goa 2026' title."
 
-A complete evaluate_plan_candidates call, for "30 second reel of the best moments with captions" on one
-talking video (ids come from get_moments; yours will differ). Copy this shape exactly:
+A complete evaluate_plan_candidates call, for "make a punchy 30 second reel with captions" on one talking
+video (ids and word numbers come from get_moments and get_transcript_range; yours will differ). Copy this
+shape exactly:
 {"frame": {"asks": [
     {"id": "len", "kind": "structure", "text": "about 30 seconds",
      "predicate": {"kind": "durationBetween", "args": {"min_s": 27, "max_s": 33}}},
@@ -71,18 +83,27 @@ talking video (ids come from get_moments; yours will differ). Copy this shape ex
   "platform": "reels", "target_seconds": 30, "aspect": "9:16",
   "assumptions": ["Vertical 9:16 for Reels", "Opens on the strongest line"]},
  "candidates": [{
-  "strategy": "hook_first", "title": "30s best-moments reel",
-  "summary": "30 s reel: opens on the revenue line, three strongest moments, captions on.",
+  "strategy": "hook_first", "title": "30s punchy reel",
+  "summary": "30 s reel: opens on the revenue line, three strongest moments, key numbers on screen, captions on.",
   "target_seconds": 30, "aspect": "9:16",
   "structure": [
     {"section": "hook", "moments": [{"asset": "a1", "moment": "m004"}]},
     {"section": "body", "moments": [{"asset": "a1", "moment": "m001"}, {"asset": "a1", "moment": "m007"}]}],
   "style": {"pace": "fast", "captions": true, "tighten": "tight"},
+  "text": [
+    {"kind": "callout", "content": "+18% revenue", "anchor": {"asset": "a1", "words": [39, 49]}},
+    {"kind": "callout", "content": "200 to 40,000 followers", "anchor": {"asset": "a1", "words": [95, 105]}}],
   "steps": [
     {"id": "s1", "kind": "structure", "intent": "Build the cut from the 3 strongest moments",
      "why": "m004 has the biggest number; m001 and m007 set it up and pay it off", "satisfies": ["len"]},
     {"id": "s2", "kind": "tighten", "intent": "Cut pauses and filler words", "depends_on": ["s1"]},
-    {"id": "s3", "kind": "captions", "intent": "Add captions", "depends_on": ["s1"], "satisfies": ["caps"]}]}]}
+    {"id": "s3", "kind": "zoom", "intent": "Hold every other shot closer", "depends_on": ["s2"], "params": {"style": "punch"}},
+    {"id": "s4", "kind": "callouts", "intent": "Put the 2 key numbers on screen", "depends_on": ["s2"]},
+    {"id": "s5", "kind": "captions", "intent": "Add captions", "depends_on": ["s2"], "satisfies": ["caps"]},
+    {"id": "s6", "kind": "sfx", "intent": "Whoosh on the cuts", "depends_on": ["s3"], "params": {"on": "cuts"}},
+    {"id": "s7", "kind": "sfx", "intent": "Pop on each number", "depends_on": ["s4"], "params": {"on": "callouts"}}]}]}
+A callout shows only what is said: its words and numbers come from the lines it is anchored to, shortened,
+never a figure the speaker did not say.
 Every candidate needs "steps", and every ask id must appear in some step's "satisfies".
 - target_seconds and the durationBetween ask are there only because that user asked for 30 seconds. For
   "clean this up", "cut the pauses" or "add captions" leave target_seconds out, put the whole recording in

@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import brain.execute  # noqa: F401 -- registers the plan execution job handler
 from auth.dependencies import CurrentUserDep
-from brain import plans
+from brain import library, plans
 from brain.model import EditPlan, PlanStepRow
 from brain import style
 from brain import server_render
@@ -33,10 +33,6 @@ style_router = APIRouter(prefix="/editor/style", tags=["editor"], dependencies=[
 renders_router = APIRouter(prefix="/editor/projects", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
 admin_router = APIRouter(prefix="/admin/ai-editor", tags=["admin"], dependencies=[Depends(get_current_admin)])
 sounds_router = APIRouter(prefix="/editor/sounds", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
-SOUND_TAGS = {"pop": ["pop", "bubble", "ui"], "click": ["click", "ui", "button"], "soft_click": ["click", "soft", "ui"],
-              "whoosh": ["whoosh", "transition", "swoosh"], "whoosh_short": ["whoosh", "fast", "transition"],
-              "ding": ["ding", "bell", "notification"], "cash": ["cash", "money", "register"],
-              "tick": ["tick", "clock", "ui"], "boom": ["boom", "impact", "hit"], "riser": ["riser", "build", "tension"]}
 SessionDep = Annotated[AsyncSession, Depends(get_db)]
 STREAM_POLL_SECONDS = 1.0
 STREAM_MAX_SECONDS = 20 * 60
@@ -164,18 +160,9 @@ async def forget_style(key: str, user: CurrentUserDep, session: SessionDep):
 
 @sounds_router.get("", response_model=ApiResponse[SoundSearchResponse])
 async def search_sounds(_: CurrentUserDep, q: str = "", page: int = 1, page_size: int = 50):
-    """17.1: the studio's Sounds tab searches Clipnera's own library instead of Freesound."""
-    from motion.sound import manifest
-
-    words = [w for w in q.lower().split() if w]
-    found = []
-    for name, entry in sorted(manifest().items()):
-        tags = SOUND_TAGS.get(name, [name])
-        haystack = " ".join([name.replace("_", " "), *tags])
-        if all(w in haystack for w in words):
-            found.append(LibrarySound(id=name, name=name.replace("_", " ").title(), tags=tags,
-                                      seconds=float(entry.get("seconds", 0)), url=f"/static/sfx/{entry['file']}",
-                                      licence="Clipnera library (cleared for commercial use)"))
+    """The studio's Sounds tab: Clipnera's own library, the same shelf the AI picks from."""
+    found = [LibrarySound(id=sound.id, name=sound.name, tags=list(sound.tags), seconds=sound.seconds, url=sound.url,
+                          licence=sound.licence, category=sound.category) for sound in library.search_sounds(q)]
     page, page_size = max(1, page), min(100, max(1, page_size))
     start = (page - 1) * page_size
     return ok(SoundSearchResponse(results=found[start:start + page_size], count=len(found),

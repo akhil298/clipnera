@@ -22,7 +22,7 @@ function numericId(id: string): number {
 function toSoundEffect(sound: LibrarySound): SoundEffect {
 	const url = apiUrl(sound.url);
 	return {
-		id: numericId(sound.id), name: sound.name, description: sound.tags.join(", "), url, previewUrl: url,
+		id: numericId(sound.id), name: sound.name, description: [sound.category, ...sound.tags].join(", "), url, previewUrl: url,
 		downloadUrl: url, duration: sound.seconds, filesize: 0, type: "wav", channels: 2, bitrate: 0, bitdepth: 16,
 		samplerate: 48000, username: "Clipnera", tags: sound.tags, license: sound.licence, created: "",
 		downloads: 0, rating: 0, ratingCount: 0,

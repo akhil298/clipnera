@@ -2908,6 +2908,8 @@ export interface LibrarySound {
   /** Path on the API host, e.g. /static/sfx/pop.wav; see apiUrl. */
   url: string;
   licence: string;
+  /** What kind of sound it is: transition, impact, pop, ui, money… */
+  category: string;
 }
 
 export interface SoundSearchResponse {

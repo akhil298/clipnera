@@ -17,7 +17,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from understanding.mud import MUD
 
 SectionName = Literal["hook", "build", "payoff", "cta", "body", "outro"]
-StepKind = Literal["structure", "tighten", "beat_sync", "music", "title", "captions", "look", "reframe", "flash"]
+StepKind = Literal["structure", "tighten", "beat_sync", "music", "title", "captions", "look", "reframe", "flash",
+                   "zoom", "transitions", "sfx", "callouts"]
 Strategy = Literal["chronological", "hook_first", "thematic", "music_led", "dialogue_led", "emotional_arc"]
 Aspect = Literal["9:16", "1:1", "4:5", "16:9"]
 MAX_STEPS = 12
@@ -58,10 +59,13 @@ class PlanSection(_Closed):
 
 
 class PlanText(_Closed):
-    kind: Literal["title", "cta", "lower_third"]
+    # A callout is a word or number that pops on screen as it is said (the callouts step).
+    kind: Literal["title", "cta", "lower_third", "callout"]
     content: str = Field(..., min_length=1, max_length=80)
     # Over the opening, the closing, or a section of the structure.
     at: Literal["start", "end", "hook", "build", "payoff", "cta", "body", "outro"] = "start"
+    # A callout's place: the words it appears over, as {"asset", "words": [first, last]}.
+    anchor: MomentRef | None = None
 
 
 class PlanMusic(_Closed):

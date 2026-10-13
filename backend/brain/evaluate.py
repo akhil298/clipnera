@@ -9,6 +9,7 @@ the user made is touched unless the request named it.
 from __future__ import annotations
 
 from collections.abc import Sequence
+import re
 from dataclasses import dataclass, field
 
 from brain.compile import compile_plan
@@ -17,6 +18,9 @@ from brain.intent import IntentFrame
 from brain.plan_ir import PlanIR, ref_errors
 from brain.score import ScoredPlan, judge, plan_score, select_best
 from editor.history import STEP_OP_BUDGET, TURN_OP_BUDGET
+
+
+_NUMBER = re.compile(r"\d+(?:\.\d+)?")
 
 
 @dataclass
@@ -50,9 +54,35 @@ def validate(plan: PlanIR, frame: IntentFrame, ctx: EditContext, allowed_owned: 
         errors.append("style.tighten is set but no step has kind tighten; add one after the structure step.")
     if plan.style.captions and "captions" not in kinds:
         errors.append("style.captions is on but no step has kind captions; add one.")
+    errors += _callout_errors(plan, ctx)
     extra_owned = sorted(set(plan.human_owned_ok) - allowed_owned)
     if extra_owned:
         errors.append(f"human_owned_ok may only name items the user selected or named: {extra_owned} weren't.")
+    return errors
+
+
+def _numbers(text: str) -> list[str]:
+    """The numbers in ``text``, however a transcriber split them ("40 ,000", "4 .8")."""
+    return _NUMBER.findall(re.sub(r"\s+(?=[.,%])", "", text).replace(",", ""))
+
+
+def _callout_errors(plan: PlanIR, ctx: EditContext) -> list[str]:
+    """A callout must sit on words, and may show no number those words don't say."""
+    callouts = [text for text in plan.text if text.kind == "callout"]
+    if callouts and not any(step.kind == "callouts" for step in plan.steps):
+        return ["plan.text has callouts but no step has kind callouts; add one after the structure step."]
+    errors = []
+    for text in callouts:
+        anchor = text.anchor
+        mud = ctx.muds.get(anchor.asset) if anchor else None
+        if anchor is None or anchor.words is None or mud is None or anchor.words[0] >= len(mud.words):
+            errors.append(f"Callout “{text.content}” needs an anchor {{asset, words: [first, last]}} on analysed speech.")
+            continue
+        said = " ".join(word.text for word in mud.words[anchor.words[0]:anchor.words[1] + 1])
+        unsaid = sorted(set(_numbers(text.content)) - set(_numbers(said)))
+        if unsaid:
+            errors.append(f"Callout “{text.content}” shows {', '.join(unsaid)}, which isn't said in words "
+                          f"{anchor.words}: «{said[:80]}». Use the speaker's own numbers.")
     return errors
 
 

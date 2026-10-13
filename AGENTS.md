@@ -83,6 +83,8 @@ backend/.env      Environment secrets (IGNORED)
 ## AI editor notes
 - The studio (`/studio/[id]`, OpenCut) saves every edit to the backend as Timeline ops (`frontend/opencut/src/clipnera/backend-sync.ts`); mapping in `frontend/opencut/BRIDGE.md`.
 - The AI chat is the studio's right-hand column (`clipnera/ai-panel.tsx`). Files dropped there or on the Editor home go to the media library; `clipnera/footage.ts` follows each one (upload → analysis step → ready), posts what the AI found (`understanding/findings.py`), and holds a prompt until the files are understood.
+- AI steps (`brain/plan_ir.py` StepKind, compiled in `brain/compile.py`): structure, tighten, beat_sync, music, flash, reframe, look, zoom, transitions, title, callouts, captions, sfx. Zooms and transitions are clip keyframes; `clipnera/bridge.ts` maps them to the studio's animations both ways. Sounds come from `brain/library.py` (the same shelf as the Sounds tab). `brain/polish.py` adds a short's finishing touches by rule.
+- Opening a project must not save anything: `BackendSync` remembers what the studio's defaults add (`shownExtra`), or every AI item would be logged as changed by the user and become off-limits to the AI.
 - Rebuild the studio's stylesheet after changing classes under `frontend/opencut/src`: `cd frontend/opencut/tools && npm run build`.
 - Prompts: `POST /api/v1/editor/projects/{id}/turns` → `brain/turns.py`; plans: `/api/v1/editor/plans/*` (`brain/api.py`).
 - The AI never writes frame times: the director names moments by id (PlanIR); `brain/solvers/` place frames.
