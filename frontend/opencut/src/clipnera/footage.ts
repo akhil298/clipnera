@@ -23,6 +23,8 @@ export interface FootageFile {
 	state: FileState;
 	// What to show under the name: "Uploading 40%", "Listening to what's said"…
 	detail: string;
+	// How far along it is, 0..1.
+	progress: number;
 	canRetry: boolean;
 }
 
@@ -44,6 +46,9 @@ const STAGES: Record<string, string> = {
 	music: "Finding the beat",
 	moments: "Picking out the best moments",
 };
+// Share of the bar each phase ends at: the upload fills the first part, each analysis step a bit more.
+const UPLOAD_SHARE = 0.4;
+const STAGE_ORDER = ["shots", "transcript", "music", "moments"];
 const UNSETTLED: ReadonlySet<FileState> = new Set(["uploading", "saving", "waiting", "understanding"]);
 
 let analyses = new Map<string, MediaAnalysisResponse>();
@@ -156,17 +161,21 @@ export function watchFootage(sync: BackendSync): () => void {
 function describe(sync: BackendSync): FootageFile[] {
 	const uploads = new Map(sync.getUploads().map((upload) => [upload.id, upload]));
 	return EditorCore.getInstance().media.getAssets().map((media) => {
-		const file = (state: FileState, detail: string, canRetry = false): FootageFile =>
-			({ id: media.id, name: media.name, state, detail, canRetry });
+		const file = (state: FileState, detail: string, progress: number, canRetry = false): FootageFile =>
+			({ id: media.id, name: media.name, state, detail, progress, canRetry });
 		const upload = uploads.get(media.id);
-		if (upload) return file("uploading", `Uploading ${Math.round(upload.share * 100)}%`);
-		if (sync.hasFailedUpload(media.id)) return file("upload_failed", "Couldn't upload this file");
-		if (!sync.isSaved(media.id)) return file("saving", "Saving to your project");
+		if (upload) return file("uploading", `Uploading ${Math.round(upload.share * 100)}%`, upload.share * UPLOAD_SHARE);
+		if (sync.hasFailedUpload(media.id)) return file("upload_failed", "Couldn't upload this file", 0);
+		if (!sync.isSaved(media.id)) return file("saving", "Saving to your project", UPLOAD_SHARE);
 		const row = analyses.get(media.id);
-		if (!row || row.status === "pending") return file("waiting", "Waiting to be looked at");
-		if (row.status === "running") return file("understanding", STAGES[row.stage ?? ""] ?? "Looking through it");
-		if (row.status === "failed") return file("failed", row.error ?? "Couldn't understand this file", true);
-		return file("ready", "Ready");
+		if (!row || row.status === "pending") return file("waiting", "Waiting to be looked at", UPLOAD_SHARE);
+		if (row.status === "running") {
+			const step = Math.max(0, STAGE_ORDER.indexOf(row.stage ?? "")) + 1;
+			const done = UPLOAD_SHARE + ((1 - UPLOAD_SHARE) * step) / (STAGE_ORDER.length + 1);
+			return file("understanding", STAGES[row.stage ?? ""] ?? "Looking through it", done);
+		}
+		if (row.status === "failed") return file("failed", row.error ?? "Couldn't understand this file", 0, true);
+		return file("ready", "Ready", 1);
 	});
 }
 

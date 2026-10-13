@@ -49,7 +49,7 @@ export function TabBar() {
 		<div className="relative flex">
 			<div
 				ref={scrollRef}
-				className="scrollbar-hidden relative flex size-full p-1 flex-col items-center justify-start gap-0.5 overflow-y-auto"
+				className="scrollbar-hidden relative flex size-full p-1 flex-col items-center justify-start gap-1 overflow-y-auto"
 			>
 				{TAB_KEYS.map((tabKey) => {
 					const tab = tabs[tabKey];
@@ -61,13 +61,13 @@ export function TabBar() {
 									size="icon"
 									aria-label={tab.label}
 									className={cn(
-										"shrink-0",
-										"h-8 w-8",
+										"h-11 w-11 shrink-0 flex-col gap-1 rounded-lg",
 										activeTab !== tabKey && "text-muted-foreground",
 									)}
 									onClick={() => setActiveTab(tabKey)}
 								>
 									<tab.icon />
+									<span className="max-w-full truncate text-[0.52rem] leading-none font-medium">{tab.label}</span>
 								</Button>
 							</TooltipTrigger>
 							<TooltipContent

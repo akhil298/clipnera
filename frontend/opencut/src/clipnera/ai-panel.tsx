@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight01Icon, Attachment01Icon } from "@hugeicons/core-free-icons";
+import { AiMagicIcon, ArrowRight01Icon, ArrowUp02Icon, Attachment01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { Button } from "@opencut/components/ui/button";
 import { Switch } from "@opencut/components/ui/switch";
 import { Textarea } from "@opencut/components/ui/textarea";
-import { PanelView } from "@opencut/components/editor/panels/assets/views/base-panel";
 import { cn } from "@opencut/utils/ui";
 import type { PlanCard, PlanCardStep } from "@/lib/api";
 import { takeStudioHandoff } from "@/lib/editor/handoff";
@@ -16,12 +15,12 @@ import { useCurrentSync } from "./save-status";
 
 const EXAMPLES = ["Make the title bigger", "Music a bit quieter", "Make a 30s reel of the best moments", "What did I say about pricing?"];
 const FILE_TYPES = "video/mp4,video/quicktime,video/webm,image/*,audio/*";
-const FILE_DOT: Record<FootageFile["state"], string> = {
-	uploading: "bg-amber-400 animate-pulse",
-	saving: "bg-amber-400 animate-pulse",
-	waiting: "bg-muted-foreground animate-pulse",
-	understanding: "bg-sky-400 animate-pulse",
-	ready: "bg-emerald-500",
+const FILE_BAR: Record<FootageFile["state"], string> = {
+	uploading: "bg-primary",
+	saving: "bg-primary",
+	waiting: "bg-primary/60 animate-pulse",
+	understanding: "bg-primary animate-pulse",
+	ready: "bg-constructive",
 	failed: "bg-destructive",
 	upload_failed: "bg-destructive",
 };
@@ -62,19 +61,8 @@ export function AiPanel({ onCollapse }: { onCollapse?: () => void }) {
 		return stop;
 	}, [sync]);
 
-	const collapse = onCollapse && (
-		<Button variant="text" size="icon" aria-label="Hide the AI chat" onClick={onCollapse}>
-			<HugeiconsIcon icon={ArrowRight01Icon} />
-		</Button>
-	);
-
-	if (!projectId) {
-		return (
-			<PanelView title="AI" actions={collapse}>
-				<p className="text-muted-foreground p-2 text-sm">Open a project saved to Clipnera to use the AI.</p>
-			</PanelView>
-		);
-	}
+	const working = files.some((file) => file.state !== "ready" && file.state !== "failed" && file.state !== "upload_failed");
+	const status = busy ? "Working on it…" : working ? "Going through your files…" : "Ready when you are";
 
 	const submit = () => {
 		const prompt = draft.trim();
@@ -85,15 +73,15 @@ export function AiPanel({ onCollapse }: { onCollapse?: () => void }) {
 
 	return (
 		<div
-			className={cn("bg-background flex h-full flex-col rounded-md border", dragging && "ring-primary ring-2")}
+			className={cn("panel ai-panel bg-background flex h-full flex-col overflow-hidden border", dragging && "ring-primary ring-2")}
 			onDragOver={(event) => {
-				if (!event.dataTransfer.types.includes("Files")) return;
+				if (!projectId || !event.dataTransfer.types.includes("Files")) return;
 				event.preventDefault();
 				setDragging(true);
 			}}
 			onDragLeave={() => setDragging(false)}
 			onDrop={(event) => {
-				if (!event.dataTransfer.files.length) return;
+				if (!projectId || !event.dataTransfer.files.length) return;
 				event.preventDefault();
 				// The timeline and media panel have their own drop handling.
 				event.stopPropagation();
@@ -101,68 +89,121 @@ export function AiPanel({ onCollapse }: { onCollapse?: () => void }) {
 				void addFiles([...event.dataTransfer.files]);
 			}}
 		>
-			<PanelView title="AI" actions={collapse} className="min-h-0 flex-1" contentClassName="space-y-2 pb-3">
-				{files.length > 0 && <Files files={files} />}
-				{messages.length === 0 && (
-					<div className="space-y-2 p-1">
-						<p className="text-muted-foreground text-xs">
-							{files.length === 0
-								? "Drop your videos, music and images here, or attach them below. I'll go through them and tell you what I found."
-								: "Ask for a change, a whole edit, or a question. Select a clip or move the playhead to point at something."}
-						</p>
-						<div className="flex flex-wrap gap-1.5">
-							{EXAMPLES.map((example) => (
-								<Button key={example} variant="outline" size="sm" className="h-7 text-xs" onClick={() => setDraft(example)}>
-									{example}
+			<header className="flex h-14 shrink-0 items-center gap-2.5 border-b px-3">
+				<span className="ai-sheen flex size-8 items-center justify-center rounded-lg shadow-md" aria-hidden>
+					<HugeiconsIcon icon={AiMagicIcon} className="size-4" />
+				</span>
+				<div className="min-w-0 flex-1">
+					<p className="text-sm leading-tight font-semibold">Clipnera AI</p>
+					<p className="text-muted-foreground flex items-center gap-1.5 text-[0.68rem] leading-tight" role="status">
+						<span className={cn("size-1.5 rounded-full", busy || working ? "bg-primary animate-pulse" : "bg-constructive")} aria-hidden />
+						{projectId ? status : "No project open"}
+					</p>
+				</div>
+				{onCollapse && (
+					<Button variant="text" size="icon" aria-label="Hide the AI chat" onClick={onCollapse}>
+						<HugeiconsIcon icon={ArrowRight01Icon} />
+					</Button>
+				)}
+			</header>
+
+			{!projectId ? (
+				<p className="text-muted-foreground p-4 text-sm">Open a project saved to Clipnera to use the AI.</p>
+			) : (
+				<>
+					<div className="scrollbar-hidden min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+						{files.length > 0 && <Files files={files} />}
+						{messages.length === 0 && (
+							<div className="ai-rise space-y-3 pt-1">
+								{files.length === 0 && (
+									<button
+										type="button"
+										onClick={() => picker.current?.click()}
+										className="hover:border-primary/60 hover:bg-primary/5 flex w-full flex-col items-center gap-1.5 rounded-xl border border-dashed px-3 py-6 text-center transition-colors"
+									>
+										<span className="bg-accent flex size-9 items-center justify-center rounded-full">
+											<HugeiconsIcon icon={Attachment01Icon} className="size-4" />
+										</span>
+										<span className="text-sm font-medium">Drop your videos, music and images</span>
+										<span className="text-muted-foreground text-xs">I&apos;ll go through them and tell you what I found</span>
+									</button>
+								)}
+								<p className="text-muted-foreground px-0.5 text-xs">
+									Ask for a change, a whole edit, or a question. Select a clip or move the playhead to point at something.
+								</p>
+								<div className="flex flex-wrap gap-1.5">
+									{EXAMPLES.map((example) => (
+										<button key={example} type="button" onClick={() => setDraft(example)}
+											className="bg-accent/60 hover:bg-accent hover:border-primary/40 rounded-full border px-3 py-1.5 text-xs transition-colors">
+											{example}
+										</button>
+									))}
+								</div>
+							</div>
+						)}
+						{messages.map((message) => (
+							<Message key={message.id} message={message} />
+						))}
+						{(busy || held) && (
+							<div className="text-muted-foreground flex items-center gap-2 px-1 text-xs">
+								<span className="flex gap-1" aria-hidden>
+									<span className="bg-primary size-1.5 animate-bounce rounded-full" />
+									<span className="bg-primary size-1.5 animate-bounce rounded-full [animation-delay:120ms]" />
+									<span className="bg-primary size-1.5 animate-bounce rounded-full [animation-delay:240ms]" />
+								</span>
+								{busy ? "Working…" : "Going through your files first…"}
+							</div>
+						)}
+						<div ref={end} />
+					</div>
+
+					<div className="shrink-0 p-3 pt-1">
+						<div className="bg-accent/50 focus-within:border-primary/60 rounded-2xl border p-2 transition-colors">
+							<Textarea
+								value={draft}
+								onChange={(event) => setDraft(event.target.value)}
+								onKeyDown={(event) => {
+									if (event.key === "Enter" && !event.shiftKey) {
+										event.preventDefault();
+										submit();
+									}
+								}}
+								placeholder="Ask AI to edit…"
+								aria-label="Ask AI to edit"
+								rows={2}
+								maxLength={2000}
+								className="resize-none border-0 bg-transparent px-1.5 text-sm shadow-none focus-visible:ring-0"
+							/>
+							<div className="mt-1 flex items-center justify-between">
+								<input
+									ref={picker}
+									type="file"
+									multiple
+									accept={FILE_TYPES}
+									className="hidden"
+									onChange={(event) => {
+										void addFiles([...(event.target.files ?? [])]);
+										event.target.value = "";
+									}}
+								/>
+								<Button variant="ghost" size="sm" className="text-muted-foreground rounded-full" onClick={() => picker.current?.click()}>
+									<HugeiconsIcon icon={Attachment01Icon} />
+									Attach
 								</Button>
-							))}
+								<button
+									type="button"
+									aria-label="Send"
+									onClick={submit}
+									disabled={busy || Boolean(held) || !draft.trim()}
+									className="ai-sheen flex size-8 items-center justify-center rounded-full shadow-md transition-opacity disabled:opacity-35"
+								>
+									<HugeiconsIcon icon={ArrowUp02Icon} className="size-4" />
+								</button>
+							</div>
 						</div>
 					</div>
-				)}
-				{messages.map((message) => (
-					<Message key={message.id} message={message} />
-				))}
-				{busy && <p className="text-muted-foreground animate-pulse px-1 text-xs">Working…</p>}
-				{held && !busy && <p className="text-muted-foreground animate-pulse px-1 text-xs">Going through your files first…</p>}
-				<div ref={end} />
-			</PanelView>
-			<div className="border-t p-2">
-				<Textarea
-					value={draft}
-					onChange={(event) => setDraft(event.target.value)}
-					onKeyDown={(event) => {
-						if (event.key === "Enter" && !event.shiftKey) {
-							event.preventDefault();
-							submit();
-						}
-					}}
-					placeholder="Ask AI to edit…"
-					aria-label="Ask AI to edit"
-					rows={2}
-					maxLength={2000}
-					className="resize-none text-sm"
-				/>
-				<div className="mt-1.5 flex items-center justify-between">
-					<input
-						ref={picker}
-						type="file"
-						multiple
-						accept={FILE_TYPES}
-						className="hidden"
-						onChange={(event) => {
-							void addFiles([...(event.target.files ?? [])]);
-							event.target.value = "";
-						}}
-					/>
-					<Button variant="outline" size="sm" onClick={() => picker.current?.click()}>
-						<HugeiconsIcon icon={Attachment01Icon} />
-						Attach
-					</Button>
-					<Button size="sm" onClick={submit} disabled={busy || Boolean(held) || !draft.trim()}>
-						Send
-					</Button>
-				</div>
-			</div>
+				</>
+			)}
 		</div>
 	);
 }
@@ -171,16 +212,25 @@ export function AiPanel({ onCollapse }: { onCollapse?: () => void }) {
 function Files({ files }: { files: FootageFile[] }) {
 	const retry = useFootageStore((state) => state.retry);
 	return (
-		<ul className="max-h-40 space-y-1 overflow-y-auto rounded-md border p-1.5" aria-label="Your files">
+		<ul className="max-h-48 space-y-1.5 overflow-y-auto" aria-label="Your files">
 			{files.map((file) => (
-				<li key={file.id} className="flex items-center gap-2 text-xs">
-					<span className={cn("size-2 shrink-0 rounded-full", FILE_DOT[file.state])} aria-hidden />
-					<span className="min-w-0 flex-1 truncate" title={file.name}>{file.name}</span>
-					<span className="text-muted-foreground shrink-0">{file.detail}</span>
-					{file.canRetry && (
-						<Button variant="text" size="sm" className="h-4 px-0 text-[11px] underline" onClick={() => void retry(file.id)}>
-							Retry
-						</Button>
+				<li key={file.id} className="bg-accent/50 rounded-xl border px-2.5 py-2">
+					<div className="flex items-baseline gap-2 text-xs">
+						<span className="min-w-0 flex-1 truncate font-medium" title={file.name}>{file.name}</span>
+						<span className={cn("shrink-0 text-[0.68rem]", file.state === "ready" ? "text-constructive" : "text-muted-foreground")}>
+							{file.state === "ready" ? "✓ Ready" : file.detail}
+						</span>
+						{file.canRetry && (
+							<Button variant="text" size="sm" className="h-4 px-0 text-[11px] underline" onClick={() => void retry(file.id)}>
+								Retry
+							</Button>
+						)}
+					</div>
+					{file.state !== "ready" && (
+						<div className="bg-muted/50 mt-1.5 h-1 overflow-hidden rounded-full" aria-hidden>
+							<div className={cn("h-full rounded-full transition-[width] duration-500", FILE_BAR[file.state])}
+								style={{ width: `${Math.max(6, Math.round(file.progress * 100))}%` }} />
+						</div>
 					)}
 				</li>
 			))}
@@ -197,11 +247,11 @@ function Message({ message }: { message: AiMessage }) {
 	const mine = message.role === "user";
 	if (card) return <PlanCardView card={card} />;
 	return (
-		<div className={cn("flex", mine ? "justify-end" : "justify-start")}>
+		<div className={cn("ai-rise flex", mine ? "justify-end" : "justify-start")}>
 			<div
 				className={cn(
-					"max-w-[90%] rounded-md px-2.5 py-1.5 text-sm",
-					mine ? "bg-foreground text-background" : "bg-accent text-foreground",
+					"max-w-[92%] px-3 py-2 text-sm leading-relaxed",
+					mine ? "ai-sheen rounded-2xl rounded-br-md font-medium" : "bg-accent/70 text-foreground rounded-2xl rounded-bl-md border",
 					message.kind === "error" && "text-destructive",
 				)}
 			>
@@ -209,7 +259,7 @@ function Message({ message }: { message: AiMessage }) {
 				{(message.choices?.length ?? 0) > 0 && (
 					<div className="mt-1.5 flex flex-wrap gap-1">
 						{message.choices!.map((choice) => (
-							<Button key={choice.id} variant="outline" size="sm" className="h-6 text-xs" disabled={busy}
+							<Button key={choice.id} variant="outline" size="sm" className="h-auto rounded-full px-3 py-1 text-left text-xs whitespace-normal" disabled={busy}
 								onClick={() => message.prompt && void send(message.prompt, [choice.id])}>
 								{choice.label}
 							</Button>
@@ -219,7 +269,7 @@ function Message({ message }: { message: AiMessage }) {
 				{(message.options?.length ?? 0) > 0 && (
 					<div className="mt-1.5 flex flex-wrap gap-1">
 						{message.options!.map((option) => (
-							<Button key={option} variant="outline" size="sm" className="h-6 text-xs" disabled={busy}
+							<Button key={option} variant="outline" size="sm" className="h-auto rounded-full px-3 py-1 text-left text-xs whitespace-normal" disabled={busy}
 								onClick={() => void send(`${message.prompt ?? ""} — ${option}`.trim())}>
 								{option}
 							</Button>
@@ -229,7 +279,7 @@ function Message({ message }: { message: AiMessage }) {
 				{(message.suggestions?.length ?? 0) > 0 && (
 					<div className="mt-1.5 flex flex-wrap gap-1">
 						{message.suggestions!.map((suggestion) => (
-							<Button key={suggestion} variant="outline" size="sm" className="h-6 text-xs" disabled={busy}
+							<Button key={suggestion} variant="outline" size="sm" className="h-auto rounded-full px-3 py-1 text-left text-xs whitespace-normal" disabled={busy}
 								onClick={() => ask(suggestion)}>
 								{suggestion}
 							</Button>
@@ -254,7 +304,7 @@ function PlanCardView({ card }: { card: PlanCard }) {
 	const running = card.status === "running" || card.status === "approved";
 
 	return (
-		<div className="bg-accent/60 space-y-2 rounded-md border p-2.5 text-sm">
+		<div className="ai-rise bg-accent/60 border-primary/25 space-y-2 rounded-2xl border p-3 text-sm">
 			<div>
 				<div className="flex items-start justify-between gap-2">
 					<p className="font-medium">{card.title}</p>

@@ -75,22 +75,23 @@
 }
 
 .dark {
-  --background: hsl(0, 0%, 4%);
-  --foreground: hsl(0 0% 87%);
-  --card: hsl(0, 0%, 5%);
-  --card-foreground: hsl(0 0% 87%);
-  --popover: hsl(0, 0%, 5%);
-  --popover-hover: hsl(0, 0%, 13%);
+  --background: hsl(0, 0%, 3.5%);
+  --foreground: hsl(0 0% 92%);
+  --card: hsl(0, 0%, 6%);
+  --card-foreground: hsl(0 0% 92%);
+  --popover: hsl(0, 0%, 8%);
+  --popover-hover: hsl(0, 0%, 14%);
   --popover-foreground: hsl(0 0% 95%);
   --secondary: hsl(32, 80%, 11%);
   --secondary-border: hsl(32, 80%, 16%);
   --secondary-foreground: hsl(43, 96%, 58%);
   --muted: hsl(0 0% 20%);
-  --accent: hsl(0, 0%, 14%);
+  --muted-foreground: hsl(0 0% 60%);
+  --accent: hsl(0, 0%, 13%);
   --accent-foreground: hsl(0 0% 95%);
-  --border: hsl(0 0% 16%);
-  --input: hsl(0 0% 5%);
-  --ring: hsl(0, 0%, 50%);
+  --border: hsl(0 0% 100% / 0.08);
+  --input: hsl(0 0% 7%);
+  --ring: hsl(38, 92%, 50%);
   --caution: hsl(38, 92%, 60%);
   --caution-foreground: hsl(0, 0%, 10%);
   --sidebar-background: hsl(0 0% 8%);
@@ -105,19 +106,20 @@
 }
 
 .dark .panel {
-  --background: hsl(0 0% 10%);
-  --foreground: hsl(0 0% 85%);
+  --background: hsl(0 0% 7.5%);
+  --foreground: hsl(0 0% 90%);
   --card: hsl(0, 0%, 10%);
-  --card-foreground: hsl(0 0% 85%);
+  --card-foreground: hsl(0 0% 90%);
   --secondary: hsl(32, 70%, 9%);
   --secondary-border: hsl(32, 80%, 14%);
   --secondary-foreground: hsl(43, 96%, 60%);
   --muted: hsl(0 0% 22%);
-  --accent: hsl(0, 0%, 15%);
+  --muted-foreground: hsl(0 0% 58%);
+  --accent: hsl(0, 0%, 13.5%);
   --accent-foreground: hsl(0 0% 93%);
-  --border: hsl(0 0% 18%);
-  --input: hsl(0 0% 22%);
-  --ring: hsl(0, 0%, 52%);
+  --border: hsl(0 0% 100% / 0.07);
+  --input: hsl(0 0% 12%);
+  --ring: hsl(38, 92%, 50%);
 }
 
 @layer base {
@@ -165,9 +167,9 @@
   --text-xs--line-height: calc(1 / 0.8);
 
   /* Border radius */
-  --radius-lg: 0.82rem;
-  --radius-md: 0.65rem;
-  --radius-sm: 0.35rem;
+  --radius-lg: 1rem;
+  --radius-md: 0.75rem;
+  --radius-sm: 0.5rem;
 
   /* Palette mapped to root design tokens */
   --color-background: var(--background);
@@ -292,5 +294,71 @@
   }
   .oc-root {
     @apply bg-background text-foreground;
+  }
+}
+
+/* ── Clipnera studio skin ──────────────────────────────────────────────────────────────────
+   Unlayered, so it sits above the utilities OpenCut's own markup carries (rounded-sm border). */
+
+/* Clipnera's own stylesheet (Tailwind v3, unlayered) sets a border colour on every element, and
+   unlayered rules beat this file's layers: borders came out near-white. Hand the colour back to
+   the layers here, so the studio's border token and its border-* utilities apply again. */
+.oc-root *,
+.oc-root ::before,
+.oc-root ::after {
+  border-color: revert-layer;
+}
+
+/* The studio's backdrop: near-black with a faint amber light from the top right. */
+.studio-shell {
+  background:
+    radial-gradient(900px 420px at 82% -8%, hsl(38 92% 50% / 0.09), transparent 62%),
+    radial-gradient(700px 380px at 8% 108%, hsl(38 92% 50% / 0.04), transparent 60%),
+    hsl(0 0% 3.5%);
+}
+
+/* Every panel is a soft raised card instead of an outlined box. */
+.dark .panel {
+  border-radius: 1rem;
+  border-color: hsl(0 0% 100% / 0.07);
+  background-image: linear-gradient(180deg, hsl(0 0% 100% / 0.03), transparent 140px);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.04),
+    0 18px 40px -24px hsl(0 0% 0% / 0.9);
+}
+
+/* The AI column is the one panel with a glow: it is where the work starts. */
+.dark .panel.ai-panel {
+  border-color: hsl(38 92% 50% / 0.18);
+  background-image: linear-gradient(180deg, hsl(38 92% 50% / 0.07), transparent 180px);
+  box-shadow:
+    inset 0 1px 0 hsl(38 92% 60% / 0.12),
+    0 0 0 1px hsl(0 0% 0% / 0.4),
+    0 24px 60px -28px hsl(38 92% 50% / 0.35);
+}
+
+.ai-sheen {
+  background: linear-gradient(135deg, hsl(43 96% 58%), hsl(32 95% 48%));
+  color: hsl(0 0% 6%);
+}
+
+.ai-rise {
+  animation: ai-rise 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes ai-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-rise {
+    animation: none;
   }
 }

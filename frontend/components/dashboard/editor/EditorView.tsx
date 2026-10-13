@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowUp, Clapperboard, Loader2, Paperclip, Trash2, X } from 'lucide-react';
+import { ArrowUp, Clapperboard, Film, Loader2, Paperclip, Sparkles, Trash2, UploadCloud, X } from 'lucide-react';
 import {
   editorApi,
   editsApi,
@@ -20,6 +20,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 const ASPECTS: EditorAspect[] = ['9:16', '1:1', '4:5', '16:9'];
 const START_FILE_TYPES = 'video/mp4,video/quicktime,video/webm,image/*,audio/*';
 const TITLE_CHARS = 60;
+const START_IDEAS = ['A 45-second reel of the best moments', 'Cut the dead air and add captions', 'Three short clips for Instagram', 'A punchy trailer cut to the music'];
 const OPENABLE_REELS: EditSummary['status'][] = ['planned', 'done'];
 const ITEM_COLOURS: Record<Item['type'], string> = {
   clip: 'bg-sky-500/30 border-sky-400/70',
@@ -86,7 +87,18 @@ function EditorHome() {
 
   return (
     <div className="space-y-6">
-      <PageHeader eyebrow="New" title="Editor" description="Drop in your footage and say what you want. The AI edits it on a timeline you can change by hand." />
+      <header className="pt-4 text-center sm:pt-8">
+        <p className="mx-auto inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-amber-300">
+          <Sparkles className="h-3.5 w-3.5" aria-hidden />
+          AI editor
+        </p>
+        <h1 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-5xl">
+          What are we <span className="bg-gradient-to-r from-amber-300 to-amber-500 bg-clip-text text-transparent">making today?</span>
+        </h1>
+        <p className="mx-auto mt-3 max-w-xl text-sm text-neutral-400">
+          Drop in your footage and say what you want. The AI watches it, tells you what it found, and edits it on a timeline you can change by hand.
+        </p>
+      </header>
 
       <form
         onSubmit={(e) => {
@@ -104,10 +116,10 @@ function EditorHome() {
           setDragging(false);
           addFiles([...e.dataTransfer.files]);
         }}
-        className={`space-y-3 rounded-2xl border bg-neutral-900/80 p-4 ${dragging ? 'border-amber-400' : 'border-neutral-800'}`}
+        className={`relative mx-auto max-w-3xl space-y-3 rounded-3xl border bg-neutral-900/70 p-4 shadow-[0_30px_80px_-40px_rgba(245,158,11,0.45)] backdrop-blur transition-colors ${dragging ? 'border-amber-400 bg-amber-500/5' : 'border-neutral-800 focus-within:border-amber-400/50'}`}
       >
         <label className="block">
-          <span className="mb-1.5 block text-sm font-semibold text-white">What do you want to make?</span>
+          <span className="sr-only">What do you want to make?</span>
           <textarea
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
@@ -120,14 +132,29 @@ function EditorHome() {
             maxLength={2000}
             rows={3}
             placeholder="Drop your videos here and say what you want, e.g. “a 45-second reel of the best moments, with captions”"
-            className="w-full resize-none rounded-xl border border-neutral-800 bg-neutral-950 px-3 py-2.5 text-[13px] text-white placeholder:text-neutral-600 focus:border-amber-400 focus:outline-none"
+            className="w-full resize-none bg-transparent px-2 py-1.5 text-[15px] text-white placeholder:text-neutral-500 focus:outline-none focus-visible:outline-none"
           />
         </label>
+
+        {files.length === 0 && (
+          <button
+            type="button"
+            onClick={() => picker.current?.click()}
+            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-dashed border-neutral-700 px-4 py-5 text-left text-neutral-400 transition-colors hover:border-amber-400/60 hover:bg-amber-500/5 hover:text-neutral-200"
+          >
+            <UploadCloud className="h-6 w-6 shrink-0 text-amber-400" aria-hidden />
+            <span>
+              <span className="block text-sm font-semibold text-neutral-200">Drop videos, music or images here</span>
+              <span className="block text-xs">or click to choose · MP4, MOV, WebM, MP3, WAV, JPG, PNG</span>
+            </span>
+          </button>
+        )}
 
         {files.length > 0 && (
           <ul className="flex flex-wrap gap-1.5" aria-label="Files to start with">
             {files.map((file, index) => (
-              <li key={`${file.name}-${file.size}-${index}`} className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-800 px-2 py-1 text-xs text-neutral-200">
+              <li key={`${file.name}-${file.size}-${index}`} className="inline-flex items-center gap-1.5 rounded-full border border-neutral-700 bg-neutral-800/80 py-1 pl-2.5 pr-2 text-xs text-neutral-200">
+                <Film className="h-3.5 w-3.5 text-amber-400" aria-hidden />
                 <span className="max-w-[14rem] truncate">{file.name}</span>
                 <button type="button" aria-label={`Remove ${file.name}`} onClick={() => setFiles(files.filter((_, i) => i !== index))} className="text-neutral-500 hover:text-rose-400">
                   <X className="h-3.5 w-3.5" aria-hidden />
@@ -149,9 +176,9 @@ function EditorHome() {
               e.target.value = '';
             }}
           />
-          <button type="button" onClick={() => picker.current?.click()} className="inline-flex h-10 items-center gap-2 rounded-xl border border-neutral-800 px-3 text-xs font-bold text-neutral-300 hover:border-neutral-600 hover:text-white">
+          <button type="button" onClick={() => picker.current?.click()} className="inline-flex h-9 items-center gap-2 rounded-full border border-neutral-800 px-3 text-xs font-bold text-neutral-300 hover:border-neutral-600 hover:text-white">
             <Paperclip className="h-4 w-4" aria-hidden />
-            Add videos, music or images
+            Add files
           </button>
           <div role="radiogroup" aria-label="Shape" className="flex gap-1.5">
             {ASPECTS.map((a) => (
@@ -161,19 +188,26 @@ function EditorHome() {
                 role="radio"
                 aria-checked={aspect === a}
                 onClick={() => setAspect(a)}
-                className={`h-10 rounded-xl border px-3 text-xs font-bold ${aspect === a ? 'border-amber-400 bg-amber-500/10 text-amber-300' : 'border-neutral-800 text-neutral-400 hover:text-white'}`}
+                className={`h-9 rounded-full border px-3 text-xs font-bold ${aspect === a ? 'border-amber-400 bg-amber-500/10 text-amber-300' : 'border-neutral-800 text-neutral-400 hover:text-white'}`}
               >
                 {a}
               </button>
             ))}
           </div>
-          <button type="submit" disabled={busy} className="ml-auto inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 text-sm font-bold text-neutral-950 hover:bg-amber-400 disabled:opacity-60">
+          <button type="submit" disabled={busy} className="ml-auto inline-flex h-10 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 px-5 text-sm font-bold text-neutral-950 shadow-lg shadow-amber-500/20 hover:from-amber-300 hover:to-amber-400 disabled:opacity-60">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ArrowUp className="h-4 w-4" aria-hidden />}
             Start
           </button>
         </div>
-        <p className="text-xs text-neutral-500">The AI goes through your files first, tells you what it found, then edits as you ask.</p>
       </form>
+
+      <div className="mx-auto flex max-w-3xl flex-wrap justify-center gap-2">
+        {START_IDEAS.map((idea) => (
+          <button key={idea} type="button" onClick={() => setPrompt(idea)} className="rounded-full border border-neutral-800 bg-neutral-900/60 px-3 py-1.5 text-xs text-neutral-300 transition-colors hover:border-amber-400/50 hover:text-white">
+            {idea}
+          </button>
+        ))}
+      </div>
 
       {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
 
