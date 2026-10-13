@@ -34,6 +34,8 @@ export function AiPanel({ onCollapse }: { onCollapse?: () => void }) {
 	const projectId = sync?.getProjectId() ?? null;
 	const messages = useAiStore((state) => (projectId && state.byProject[projectId]) || NO_MESSAGES);
 	const busy = useAiStore((state) => state.busy);
+	const auto = useAiStore((state) => state.auto);
+	const setAuto = useAiStore((state) => state.setAuto);
 	const files = useFootageStore((state) => state.files);
 	const held = useFootageStore((state) => state.held);
 	const addFiles = useFootageStore((state) => state.add);
@@ -100,6 +102,13 @@ export function AiPanel({ onCollapse }: { onCollapse?: () => void }) {
 						{projectId ? status : "No project open"}
 					</p>
 				</div>
+				{projectId && (
+					<label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-[0.68rem]"
+						title="Auto: the AI edits on its own, with no questions and no approval step. Off: it shows a plan and waits for you.">
+						Auto
+						<Switch checked={auto} onCheckedChange={setAuto} aria-label="Auto mode" />
+					</label>
+				)}
 				{onCollapse && (
 					<Button variant="text" size="icon" aria-label="Hide the AI chat" onClick={onCollapse}>
 						<HugeiconsIcon icon={ArrowRight01Icon} />
@@ -129,7 +138,9 @@ export function AiPanel({ onCollapse }: { onCollapse?: () => void }) {
 									</button>
 								)}
 								<p className="text-muted-foreground px-0.5 text-xs">
-									Ask for a change, a whole edit, or a question. Select a clip or move the playhead to point at something.
+									{auto
+										? "Auto is on: once I've gone through your files I'll make a first edit myself. Or tell me what you want."
+										: "Ask for a change, a whole edit, or a question. Select a clip or move the playhead to point at something."}
 								</p>
 								<div className="flex flex-wrap gap-1.5">
 									{EXAMPLES.map((example) => (

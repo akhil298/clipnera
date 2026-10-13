@@ -24,6 +24,8 @@ class TurnRequest(BaseModel):
     # Questions the AI has asked in a row since it last did or answered something. After one it
     # must decide for itself (brain.turns.QUESTIONS_PER_REQUEST).
     questions_asked: int = Field(0, ge=0, le=20)
+    # Auto mode: never ask, and run the plan straight away instead of waiting for approval.
+    auto: bool = False
 
 
 class TurnChoice(BaseModel):

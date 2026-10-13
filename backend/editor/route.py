@@ -105,5 +105,5 @@ async def take_turn(project_id: str, data: TurnRequest, user: CurrentUserDep, se
     with llm_scope(user_id=user["user_id"], step="editor_turn"):
         result = await handle_turn(service, user["user_id"], project_id, data.prompt, selection=data.selection,
                                    playhead=data.playhead, recent_turns=data.recent_turns,
-                                   questions_asked=data.questions_asked)
+                                   questions_asked=data.questions_asked, auto=data.auto)
     return ok(result)

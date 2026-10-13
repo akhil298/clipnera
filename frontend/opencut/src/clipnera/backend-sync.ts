@@ -88,6 +88,11 @@ export class BackendSync {
 		return this.saved.fps;
 	}
 
+	/** Whether nothing has been placed on the saved timeline yet. */
+	isEmpty(): boolean {
+		return this.saved.tracks.every((track) => track.items.length === 0);
+	}
+
 	onLocalEdit(listener: () => void): () => void {
 		this.editListeners.add(listener);
 		return () => this.editListeners.delete(listener);

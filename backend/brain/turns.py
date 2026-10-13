@@ -41,9 +41,12 @@ _DELETE = re.compile(r"^\s*(delete|remove)\s+(this|that|it|these|those|the selec
 
 async def handle_turn(service: EditorService, user_id: str, project_id: str, prompt: str, *,
                       selection: Sequence[str] = (), playhead: int = 0,
-                      recent_turns: Sequence[str] = (), questions_asked: int = 0) -> TurnResult:
+                      recent_turns: Sequence[str] = (), questions_asked: int = 0, auto: bool = False) -> TurnResult:
     project = await service.get(user_id, project_id)
     timeline, version = project.timeline, project.version
+    if auto:
+        # Auto mode never asks: every question is already "used".
+        questions_asked = max(questions_asked, QUESTIONS_PER_REQUEST)
     may_ask = questions_asked < QUESTIONS_PER_REQUEST
 
     fast = await _deterministic(service, user_id, project_id, prompt, timeline, version, selection, playhead)
@@ -78,7 +81,7 @@ async def handle_turn(service: EditorService, user_id: str, project_id: str, pro
     if not_ready:
         return TurnResult(kind="answer", message=not_ready, route=decision)
     return await _plan(service, user_id, project_id, prompt, decision, selection, playhead, recent_turns,
-                       questions_asked)
+                       questions_asked, auto)
 
 
 def _name(timeline: Timeline, asset_id: str) -> str:
@@ -119,8 +122,9 @@ def _not_ready(timeline: Timeline, analyses: Sequence[MediaAnalysisResponse]) ->
 
 async def _plan(service: EditorService, user_id: str, project_id: str, prompt: str, decision: RouteDecision,
                 selection: Sequence[str], playhead: int, recent_turns: Sequence[str],
-                questions_asked: int = 0) -> TurnResult:
-    """The director plans it; the user sees a plan card to approve, edit or reject."""
+                questions_asked: int = 0, auto: bool = False) -> TurnResult:
+    """The director plans it; the user sees a plan card to approve, edit or reject. In auto mode
+    the plan starts running at once, and the card is where the user watches, pauses or undoes it."""
     ctx = await build_context(service, user_id, project_id, selection=list(selection), playhead=playhead,
                               session=service.session)
     # The user may let the AI change what they selected, never anything else they made.
@@ -134,8 +138,16 @@ async def _plan(service: EditorService, user_id: str, project_id: str, prompt: s
         # Not a question: nothing for the user to answer.
         return TurnResult(kind="answer", message=result.message, route=decision)
     plan = await plans.save(service.session, user_id, project_id, prompt, ctx.version, result)
+    message = None
+    if auto:
+        try:
+            plan = await plans.approve(service.session, user_id, plan.id)
+        except CustomException as exc:
+            # Short of credits: the plan stays proposed, for the user to approve after topping up.
+            message = f"{exc.message} The plan is ready to run when you are."
+            plan = await plans.get(service.session, user_id, plan.id)
     card = await plans.card(service.session, plan)
-    return TurnResult(kind="plan", message=card.summary, plan=card, route=decision)
+    return TurnResult(kind="plan", message=message or card.summary, plan=card, route=decision)
 
 
 async def _deterministic(service: EditorService, user_id: str, project_id: str, prompt: str, timeline: Timeline,

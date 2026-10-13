@@ -35,6 +35,9 @@ interface AiState {
 	byProject: Record<string, AiMessage[]>;
 	plans: Record<string, PlanCard>;
 	busy: boolean;
+	// Auto mode: the AI never asks and runs its plans without waiting for approval.
+	auto: boolean;
+	setAuto: (auto: boolean) => void;
 	/** ``shown``: the prompt is already in the chat (it waited for the files to be understood). */
 	send: (prompt: string, selection?: string[], shown?: boolean) => Promise<void>;
 	/** Put a message from the AI in the chat without a model call, after the user's line if given. */
@@ -49,6 +52,16 @@ interface AiState {
 }
 
 const RECENT_TURNS = 3;
+const AUTO_KEY = "clipnera-ai-auto";
+
+/** Auto mode is on unless this browser turned it off. */
+function savedAuto(): boolean {
+	try {
+		return localStorage.getItem(AUTO_KEY) !== "false";
+	} catch {
+		return true;
+	}
+}
 const ACTIVE = new Set(["approved", "running"]);
 let nextId = 0;
 const id = () => `m${++nextId}`;
@@ -140,6 +153,16 @@ export const useAiStore = create<AiState>((set, get) => {
 		byProject: {},
 		plans: {},
 		busy: false,
+		auto: savedAuto(),
+
+		setAuto(auto) {
+			set({ auto });
+			try {
+				localStorage.setItem(AUTO_KEY, String(auto));
+			} catch {
+				// Private windows may refuse storage; the switch still works for this visit.
+			}
+		},
 
 		note(projectId, userText, text, suggestions) {
 			if (userText) push(projectId, { id: id(), role: "user", text: userText });
@@ -163,9 +186,12 @@ export const useAiStore = create<AiState>((set, get) => {
 					playhead: Math.max(0, toFrame(editor.playback.getCurrentTime(), sync.getFps())),
 					recent_turns: earlier,
 					questions_asked: questionsInARow(messagesOf(projectId)),
+					auto: get().auto,
 				});
 				if (result.version !== null) await sync.refresh();
 				if (result.plan) showPlan(result.plan);
+				// Auto mode started the plan already: watch it run.
+				if (result.plan && ACTIVE.has(result.plan.status)) follow(result.plan.id);
 				push(projectId, {
 					id: id(), role: "ai", text: result.message, kind: result.kind, choices: result.choices,
 					options: result.options, planId: result.plan?.id, prompt: text, undoStepId: result.undo_step_id,

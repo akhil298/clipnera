@@ -2759,6 +2759,8 @@ export interface TurnRequest {
   recent_turns?: string[];
   /** Questions the AI has asked in a row since it last did or answered something; after one it decides itself. */
   questions_asked?: number;
+  /** Auto mode: never ask, and run the plan straight away instead of waiting for approval. */
+  auto?: boolean;
 }
 
 export type TurnKind = 'edit' | 'answer' | 'clarify' | 'choices' | 'plan' | 'plan_needed' | 'refused';

@@ -38,6 +38,8 @@ interface FootageState {
 }
 
 const POLL_MS = 2500;
+// What auto mode asks for when the user dropped files and said nothing.
+const AUTO_PROMPT = "Edit this into the best version of itself: keep the strongest moments, cut the pauses and filler words, and add captions.";
 // Opening a project with more ready files than this doesn't replay what was found in each.
 const REPLAY_FILES = 3;
 const STAGES: Record<string, string> = {
@@ -54,6 +56,8 @@ const UNSETTLED: ReadonlySet<FileState> = new Set(["uploading", "saving", "waiti
 let analyses = new Map<string, MediaAnalysisResponse>();
 // Files whose findings the chat has already shown, per project.
 const announced = new Map<string, Set<string>>();
+// Projects auto mode has already made a first edit for in this visit.
+const autoStarted = new Set<string>();
 
 export const useFootageStore = create<FootageState>((set, get) => ({
 	files: [],
@@ -106,12 +110,23 @@ export function watchFootage(sync: BackendSync): () => void {
 		if (!stopped) useFootageStore.setState({ files: describe(sync) });
 	};
 
-	/** Send the waiting prompt once nothing is uploading or being understood. */
+	/** Once nothing is uploading or being understood: send the waiting prompt, or in auto mode start the first edit. */
 	const release = () => {
 		const { files, held } = useFootageStore.getState();
-		if (!held || files.some((file) => UNSETTLED.has(file.state))) return;
-		useFootageStore.setState({ held: null });
-		void useAiStore.getState().send(held, undefined, true);
+		if (files.some((file) => UNSETTLED.has(file.state))) return;
+		const ai = useAiStore.getState();
+		if (held) {
+			useFootageStore.setState({ held: null });
+			void ai.send(held, undefined, true);
+			return;
+		}
+		// Only on an untouched project with something to cut, and only once.
+		const ready = files.some((file) => file.state === "ready");
+		if (!ai.auto || ai.busy || autoStarted.has(projectId) || !ready || !sync.isEmpty()) return;
+		if ((ai.byProject[projectId] ?? []).some((message) => message.role === "user")) return;
+		autoStarted.add(projectId);
+		ai.note(projectId, null, "Auto mode is on, so I'm making a first edit now. You can pause it, undo it, or tell me what to change.");
+		void ai.send(AUTO_PROMPT, undefined, true);
 	};
 
 	const poll = async () => {
