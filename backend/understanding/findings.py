@@ -17,7 +17,6 @@ QUOTE_CHARS = 120
 SUGGESTIONS_SHOWN = 3
 # Below this many words there is too little speech to cut or caption by.
 SPOKEN_WORDS = 30
-SHORT_FROM_SECONDS = 75
 TIGHTEN_FROM_SECONDS = 3.0
 QUALITY_FROM_SECONDS = 2.0
 QUALITY_STYLE_SHARE = 0.5
@@ -98,7 +97,7 @@ def _suggestions(found: AnalysisFindings) -> list[str]:
         (spoken, "Edit the full video"),
         (spoken and (found.dead_air >= TIGHTEN_FROM_SECONDS or found.fillers > 0), "Cut the dead air and filler words"),
         (spoken, "Add captions"),
-        (spoken and found.duration >= SHORT_FROM_SECONDS, "Also make a 45-second short from it"),
+        (spoken, "Make it more dynamic, with zooms and sound"),
         (not spoken, "Edit the full video to music"),
     ]
     return [text for wanted, text in options if wanted][:SUGGESTIONS_SHOWN]

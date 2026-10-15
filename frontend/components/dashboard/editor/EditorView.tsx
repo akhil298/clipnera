@@ -24,7 +24,7 @@ const SHAPES: Shape[] = ['auto', ...ASPECTS];
 const RATIOS: Record<EditorAspect, number> = { '9:16': 9 / 16, '1:1': 1, '4:5': 4 / 5, '16:9': 16 / 9 };
 const START_FILE_TYPES = 'video/mp4,video/quicktime,video/webm,image/*,audio/*';
 const TITLE_CHARS = 60;
-const START_IDEAS = ['Edit the full video', 'Cut the dead air and add captions', 'Make it more dynamic, with zooms and sound', 'Also make a 45-second short'];
+const START_IDEAS = ['Edit the full video', 'Cut the dead air and add captions', 'Make it more dynamic, with zooms and sound', 'Remove the mistakes and retakes'];
 const OPENABLE_REELS: EditSummary['status'][] = ['planned', 'done'];
 const ITEM_COLOURS: Record<Item['type'], string> = {
   clip: 'bg-sky-500/30 border-sky-400/70',
@@ -135,7 +135,7 @@ function EditorHome() {
             }}
             maxLength={2000}
             rows={3}
-            placeholder="Drop your videos here and say what you want, e.g. “a 45-second reel of the best moments, with captions”"
+            placeholder="Drop your video here and say how to edit it, e.g. “edit the full video, cut the mistakes, add captions”"
             className="w-full resize-none bg-transparent px-2 py-1.5 text-[15px] text-white placeholder:text-neutral-500 focus:outline-none focus-visible:outline-none"
           />
         </label>
