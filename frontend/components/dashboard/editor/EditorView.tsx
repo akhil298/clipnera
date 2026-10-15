@@ -18,9 +18,13 @@ import { formatRelativeTime } from '@/lib/utils/dates';
 import { PageHeader } from '@/components/ui/PageHeader';
 
 const ASPECTS: EditorAspect[] = ['9:16', '1:1', '4:5', '16:9'];
+// "Auto": the project takes the shape of the first video (a full edit keeps the footage as shot).
+type Shape = EditorAspect | 'auto';
+const SHAPES: Shape[] = ['auto', ...ASPECTS];
+const RATIOS: Record<EditorAspect, number> = { '9:16': 9 / 16, '1:1': 1, '4:5': 4 / 5, '16:9': 16 / 9 };
 const START_FILE_TYPES = 'video/mp4,video/quicktime,video/webm,image/*,audio/*';
 const TITLE_CHARS = 60;
-const START_IDEAS = ['A 45-second reel of the best moments', 'Cut the dead air and add captions', 'Three short clips for Instagram', 'A punchy trailer cut to the music'];
+const START_IDEAS = ['Edit the full video', 'Cut the dead air and add captions', 'Make it more dynamic, with zooms and sound', 'Also make a 45-second short'];
 const OPENABLE_REELS: EditSummary['status'][] = ['planned', 'done'];
 const ITEM_COLOURS: Record<Item['type'], string> = {
   clip: 'bg-sky-500/30 border-sky-400/70',
@@ -46,7 +50,7 @@ function EditorHome() {
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
-  const [aspect, setAspect] = useState<EditorAspect>('9:16');
+  const [aspect, setAspect] = useState<Shape>('auto');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +70,7 @@ function EditorHome() {
     const text = prompt.trim();
     const title = (files[0]?.name.replace(/\.[^.]+$/, '') || text || 'Untitled project').slice(0, TITLE_CHARS);
     void run(
-      () => editorApi.create({ title, aspect }),
+      async () => editorApi.create({ title, aspect: aspect === 'auto' ? await shapeOf(files) : aspect }),
       (id) => {
         setStudioHandoff({ projectId: id, files, prompt: text });
         openInStudio(id);
@@ -181,7 +185,7 @@ function EditorHome() {
             Add files
           </button>
           <div role="radiogroup" aria-label="Shape" className="flex gap-1.5">
-            {ASPECTS.map((a) => (
+            {SHAPES.map((a) => (
               <button
                 key={a}
                 type="button"
@@ -190,7 +194,7 @@ function EditorHome() {
                 onClick={() => setAspect(a)}
                 className={`h-9 rounded-full border px-3 text-xs font-bold ${aspect === a ? 'border-amber-400 bg-amber-500/10 text-amber-300' : 'border-neutral-800 text-neutral-400 hover:text-white'}`}
               >
-                {a}
+                {a === 'auto' ? 'Auto' : a}
               </button>
             ))}
           </div>
@@ -271,6 +275,25 @@ function EditorHome() {
       </section>
     </div>
   );
+}
+
+/** The shape nearest the first video's, read from the file in the browser; 9:16 without a video. */
+async function shapeOf(files: File[]): Promise<EditorAspect> {
+  const video = files.find((file) => file.type.startsWith('video/'));
+  if (!video) return '9:16';
+  const url = URL.createObjectURL(video);
+  try {
+    const ratio = await new Promise<number>((resolve) => {
+      const probe = document.createElement('video');
+      probe.preload = 'metadata';
+      probe.onloadedmetadata = () => resolve(probe.videoWidth && probe.videoHeight ? probe.videoWidth / probe.videoHeight : RATIOS['9:16']);
+      probe.onerror = () => resolve(RATIOS['9:16']);
+      probe.src = url;
+    });
+    return ASPECTS.reduce((best, a) => (Math.abs(RATIOS[a] - ratio) < Math.abs(RATIOS[best] - ratio) ? a : best), ASPECTS[0]);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 function EditorProject({ projectId }: { projectId: string }) {

@@ -17,7 +17,7 @@ from brain.context import EditContext
 from brain.intent import IntentFrame
 from brain.plan_ir import PlanIR, ref_errors
 from brain.score import ScoredPlan, judge, plan_score, select_best
-from editor.history import STEP_OP_BUDGET, TURN_OP_BUDGET
+from editor.history import PLAN_OP_BUDGET, PLAN_STEP_OP_BUDGET
 
 
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
@@ -95,15 +95,15 @@ async def evaluate_candidates(prompt: str, frame: IntentFrame, plans: Sequence[P
             result.invalid[index] = errors
             continue
         compiled = compile_plan(plan, ctx.timeline, ctx.muds, human_owned=ctx.human_owned, style=ctx.style)
-        too_big = [s.step_id for s in compiled.steps if len(s.ops) > STEP_OP_BUDGET]
+        too_big = [s.step_id for s in compiled.steps if len(s.ops) > PLAN_STEP_OP_BUDGET]
         touched_owned = sorted(compiled.touched_items() & (ctx.human_owned - set(plan.human_owned_ok)))
         problems = []
         if compiled.timeline.duration == 0:
             problems.append("The plan leaves the timeline empty. Start with a structure step that places the footage.")
         if too_big:
-            problems.append(f"Steps {too_big} need more than {STEP_OP_BUDGET} operations; split them.")
-        if compiled.op_count > TURN_OP_BUDGET:
-            problems.append(f"The plan needs {compiled.op_count} operations; the limit is {TURN_OP_BUDGET}.")
+            problems.append(f"Steps {too_big} need more than {PLAN_STEP_OP_BUDGET} operations; split them.")
+        if compiled.op_count > PLAN_OP_BUDGET:
+            problems.append(f"The plan needs {compiled.op_count} operations; the limit is {PLAN_OP_BUDGET}.")
         if touched_owned:
             problems.append(f"The plan changes items the user made: {touched_owned}.")
         if problems:

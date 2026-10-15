@@ -13,7 +13,7 @@ import { type AiMessage, useAiStore } from "./ai-store";
 import { type FootageFile, useFootageStore, watchFootage } from "./footage";
 import { useCurrentSync } from "./save-status";
 
-const EXAMPLES = ["Make the title bigger", "Music a bit quieter", "Make a 30s reel of the best moments", "What did I say about pricing?"];
+const EXAMPLES = ["Edit the full video", "Cut the dead air and filler words", "Make it more dynamic", "What did I say about pricing?"];
 const FILE_TYPES = "video/mp4,video/quicktime,video/webm,image/*,audio/*";
 const FILE_BAR: Record<FootageFile["state"], string> = {
 	uploading: "bg-primary",

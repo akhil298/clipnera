@@ -29,6 +29,10 @@ MAX_CLIP_DELETES = 20
 # A step that rebuilds the main cut removes every clip and adds the new ones: 40 shots is ~80 ops.
 STEP_OP_BUDGET = 150
 TURN_OP_BUDGET = 400
+# A step compiled from an approved plan is worked out by the solvers and shown on the plan card
+# before it runs, so its size follows the footage: a full edit of a half-hour talk is ~1,000 shots.
+PLAN_STEP_OP_BUDGET = 4000
+PLAN_OP_BUDGET = 12000
 
 
 @dataclass(frozen=True)
@@ -46,6 +50,8 @@ class Actor:
     # change the frame size (only a reframe step of an approved plan).
     allowed_text: frozenset[str] | None = None
     may_resize: bool = False
+    # Agent only: the ops are a plan step's compiled ones (the plan budgets apply), not a model's own.
+    compiled: bool = False
 
     @property
     def is_agent(self) -> bool:
@@ -181,11 +187,12 @@ def check_agent_guards(ops: Sequence[Any], before: Timeline, after: Timeline, ac
                 message=f"That deletes {deletes} clips at once; more than {MAX_CLIP_DELETES} needs a declared step.",
                 code="DESTRUCTIVE_EDIT", status_code=422,
             )
-    if actor.step_id and step_ops + len(ops) > STEP_OP_BUDGET:
-        raise CustomException(message=f"This step has used its {STEP_OP_BUDGET} operations.",
+    step_budget, turn_budget = (PLAN_STEP_OP_BUDGET, PLAN_OP_BUDGET) if actor.compiled else (STEP_OP_BUDGET, TURN_OP_BUDGET)
+    if actor.step_id and step_ops + len(ops) > step_budget:
+        raise CustomException(message=f"This step has used its {step_budget} operations.",
                               code="STEP_BUDGET", status_code=422)
-    if actor.turn_id and turn_ops + len(ops) > TURN_OP_BUDGET:
-        raise CustomException(message=f"This turn has used its {TURN_OP_BUDGET} operations.",
+    if actor.turn_id and turn_ops + len(ops) > turn_budget:
+        raise CustomException(message=f"This turn has used its {turn_budget} operations.",
                               code="TURN_BUDGET", status_code=422)
 
 

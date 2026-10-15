@@ -38,8 +38,8 @@ interface FootageState {
 }
 
 const POLL_MS = 2500;
-// What auto mode asks for when the user dropped files and said nothing.
-const AUTO_PROMPT = "Edit this into a polished, engaging short: keep the strongest moments, cut the pauses and filler words, and add captions.";
+// What auto mode asks for when the user dropped files and said nothing: the whole video, edited.
+const AUTO_PROMPT = "Edit the full video.";
 // Opening a project with more ready files than this doesn't replay what was found in each.
 const REPLAY_FILES = 3;
 const STAGES: Record<string, string> = {

@@ -19,13 +19,15 @@ from transcription.groq_whisper import GroqWhisperTranscriber
 from transcription.local_whisper import transcribe_local
 from transcription.word_timing import clean_word_timings
 from understanding import analyzers, reading
-from understanding.mud import MUD, Shot, Utterance, Word, check_mud
+from understanding.mud import MUD, Shot, Trim, Utterance, Word, check_mud
 
 log = get_logger(__name__)
 
 SUMMARY_CHARS = 240
 TOPIC_CHARS = 40
 WHY_CHARS = 80
+# The most of the speech the reading's cuts may remove.
+MAX_TRIMMED_SHARE = 0.35
 
 # The steps of a build, in order; the studio shows which one is running.
 STAGES = ("shots", "transcript", "music", "moments")
@@ -76,6 +78,8 @@ async def build_mud(path: str, asset_id: str, kind: str, *, is_pro: bool, workdi
     if read:
         mud.summary, mud.topics = _plain(read.summary, SUMMARY_CHARS), [_plain(t, TOPIC_CHARS) for t in read.topics[:reading.MAX_TOPICS]]
     mud.moments = analyzers.find_moments(mud.utterances, mud.shots, _picks(read, mud.utterances) if read else ())
+    mud.trims = _merge_trims([*(_trims(read, mud.utterances, duration) if read else []),
+                              *analyzers.find_retakes(mud.utterances)])
     check_mud(mud)
     return mud
 
@@ -94,6 +98,33 @@ def _picks(read: reading.Reading, utterances: list[Utterance]) -> list[tuple[flo
         if first and last and first.t0 < last.t1:
             picks.append((pick.score, first.t0, last.t1, _plain(pick.why, WHY_CHARS) or "spoken line"))
     return picks
+
+
+def _trims(read: reading.Reading, utterances: list[Utterance], duration: float) -> list[Trim]:
+    """The model's cuts as time ranges. They may never add up to most of the recording: a reading that
+    wants to throw away that much has misread it, and none of its cuts are trusted."""
+    by_id = {u.id: u for u in utterances}
+    trims = []
+    for cut in read.cuts[:reading.MAX_CUTS]:
+        first, last = by_id.get(cut.first), by_id.get(cut.last)
+        if first and last and first.t0 < last.t1:
+            trims.append(Trim(t0=first.t0, t1=last.t1, kind=cut.kind, why=_plain(cut.why, WHY_CHARS) or cut.kind))
+    spoken = sum(u.t1 - u.t0 for u in utterances) or duration
+    if sum(t.t1 - t.t0 for t in trims) > MAX_TRIMMED_SHARE * spoken:
+        log.warning("The reading cut too much of the speech; ignoring its cuts")
+        return []
+    return sorted(trims, key=lambda t: t.t0)
+
+
+def _merge_trims(trims: list[Trim]) -> list[Trim]:
+    """One trim per stretch: the model's reading and the retake rule may both mark the same line."""
+    merged: list[Trim] = []
+    for trim in sorted(trims, key=lambda t: (t.t0, -t.t1)):
+        if merged and trim.t0 < merged[-1].t1:
+            merged[-1].t1 = max(merged[-1].t1, trim.t1)
+            continue
+        merged.append(trim)
+    return merged
 
 
 async def _run(mud: MUD, name: str, work: Callable[[], Awaitable[Any]]) -> Any:

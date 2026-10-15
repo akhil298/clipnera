@@ -20,6 +20,7 @@ SPOKEN_WORDS = 30
 SHORT_FROM_SECONDS = 75
 TIGHTEN_FROM_SECONDS = 3.0
 QUALITY_FROM_SECONDS = 2.0
+QUALITY_STYLE_SHARE = 0.5
 ANALYZER_PROBLEMS = {
     "transcript": "I couldn't make out the speech, so I can't cut by what is said.",
     "reading": "I couldn't judge which lines are the strongest, so my pick of moments is rough.",
@@ -80,7 +81,8 @@ def _problems(mud: MUD) -> list[str]:
     problems = [text for name, text in ANALYZER_PROBLEMS.items() if mud.analyzers.get(name) == "failed"]
     for flag, name in QUALITY_NAMES.items():
         seconds = sum(q.t1 - q.t0 for q in mud.quality if q.flag == flag)
-        if seconds >= QUALITY_FROM_SECONDS:
+        # Over most of the recording it is how it was shot (handheld, a dim room), not a patch to warn about.
+        if QUALITY_FROM_SECONDS <= seconds < QUALITY_STYLE_SHARE * mud.duration:
             problems.append(f"About {round(seconds)}s is {name}.")
     return problems
 
@@ -91,11 +93,12 @@ def _suggestions(found: AnalysisFindings) -> list[str]:
     if found.kind == "audio":
         return ["Cut my clips to the beat of this song"] if found.tempo_bpm else []
     spoken = found.words >= SPOKEN_WORDS
+    # The whole video comes first: this is an editor, and a cut-down is one thing among several.
     options = [
-        (spoken and found.duration >= SHORT_FROM_SECONDS, "Make a 45-second short from the best moments"),
+        (spoken, "Edit the full video"),
         (spoken and (found.dead_air >= TIGHTEN_FROM_SECONDS or found.fillers > 0), "Cut the dead air and filler words"),
-        (spoken and len(found.moments) >= MOMENTS_SHOWN, "Pull the 3 best moments into separate clips"),
         (spoken, "Add captions"),
-        (not spoken, "Make a 30-second highlight reel"),
+        (spoken and found.duration >= SHORT_FROM_SECONDS, "Also make a 45-second short from it"),
+        (not spoken, "Edit the full video to music"),
     ]
     return [text for wanted, text in options if wanted][:SUGGESTIONS_SHOWN]

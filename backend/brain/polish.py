@@ -67,7 +67,7 @@ def _callouts(plan: PlanIR, muds: Mapping[str, MUD]) -> list[PlanText]:
     for ref in plan.moment_refs():
         mud = muds.get(ref.asset)
         words = _words_of(ref, mud) if mud else []
-        phrase = _number_phrase(words)
+        phrase = number_phrase(words)
         if phrase is None:
             continue
         text, first, last = phrase
@@ -85,7 +85,7 @@ def _words_of(ref: MomentRef, mud: MUD) -> list[Word]:
     return [w for w in mud.words if moment and w.t0 >= moment.t0 - 0.05 and w.t1 <= moment.t1 + 0.05]
 
 
-def _number_phrase(words: list[Word]) -> tuple[str, int, int] | None:
+def number_phrase(words: list[Word]) -> tuple[str, int, int] | None:
     """The last number said in ``words`` with the word it counts ("40,000 followers", "18%"), and its word range.
 
     The last one, because a line builds to its figure ("from 200 followers to 40,000").

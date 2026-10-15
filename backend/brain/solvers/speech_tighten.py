@@ -17,6 +17,9 @@ FILLER_CONFIDENCE = 0.7
 DEFAULT_CONFIDENCE = 0.8
 PAD_BEFORE = 0.09
 PAD_AFTER = 0.06
+# A kept piece shorter than this flickers past as its own shot; it joins its neighbour instead,
+# keeping the pause between them.
+MIN_PIECE_SECONDS = 1.2
 
 
 def keep_ranges(words: Sequence[Word], t0: float, t1: float, style: str = "natural") -> list[tuple[float, float]]:
@@ -38,7 +41,27 @@ def keep_ranges(words: Sequence[Word], t0: float, t1: float, style: str = "natur
                 # Pads never reach into a neighbour.
                 start = max(start, ranges[-1][1])
             ranges.append([start, end])
-    return [(round(a, 3), round(b, 3)) for a, b in ranges if b - a > 0.05]
+    return [(round(a, 3), round(b, 3)) for a, b in _join_short(ranges) if b - a > 0.05]
+
+
+def _join_short(ranges: list[list[float]]) -> list[list[float]]:
+    """Each piece under MIN_PIECE_SECONDS merged into the nearer of its neighbours."""
+    joined = [list(r) for r in ranges]
+    n = 0
+    while len(joined) > 1 and n < len(joined):
+        a, b = joined[n]
+        if b - a >= MIN_PIECE_SECONDS:
+            n += 1
+            continue
+        before = a - joined[n - 1][1] if n > 0 else float("inf")
+        after = joined[n + 1][0] - b if n + 1 < len(joined) else float("inf")
+        if before <= after:
+            joined[n - 1][1] = b
+            del joined[n]
+        else:
+            joined[n + 1][0] = a
+            del joined[n]
+    return joined
 
 
 def _drop(word: Word) -> bool:

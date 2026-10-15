@@ -12,14 +12,16 @@ import re
 from collections.abc import Sequence
 from uuid import uuid4
 
-from brain import micro, modifiers, plans
+from brain import full_edit, micro, modifiers, plans
 from brain.answer import answer
-from brain.context import build_context
-from brain.director import direct
+from brain.context import EditContext, build_context
+from brain.director import DirectorResult, direct
+from brain.evaluate import evaluate_candidates
 from brain.refs import resolve
 from brain.route import RouteDecision, route
 from brain.schema import TurnChoice, TurnResult
 from core.exceptions import CustomException
+from core.logging_config import get_logger
 from editor.agent_tools import EditorContext
 from editor.history import HUMAN, Actor
 from editor.ops import RemoveItem, SplitItem
@@ -27,6 +29,8 @@ from editor.schema import MediaAnalysisResponse
 from editor.service import EditorService
 from editor.timeline import ClipItem, Timeline
 from understanding.lcv import untrusted
+
+log = get_logger(__name__)
 
 MICRO_AUTHOR = "agent:micro"
 # The AI may ask once about a request; after that it decides and says what it assumed.
@@ -127,10 +131,19 @@ async def _plan(service: EditorService, user_id: str, project_id: str, prompt: s
     the plan starts running at once, and the card is where the user watches, pauses or undoes it."""
     ctx = await build_context(service, user_id, project_id, selection=list(selection), playhead=playhead,
                               session=service.session)
-    # The user may let the AI change what they selected, never anything else they made.
-    result = await direct(service, user_id, ctx, prompt, decision, allowed_owned=set(selection),
-                          recent_turns=list(recent_turns), asked_in_conversation=questions_asked,
-                          may_ask=questions_asked < QUESTIONS_PER_REQUEST)
+    # The user may let the AI change what they selected, never anything else they made. A new edit
+    # is the exception for the main cut: asking for one is asking for the cut there now to be replaced.
+    replaced = _main_clips(ctx.timeline) & ctx.human_owned if decision.intent == "new_edit" else set()
+    ctx.human_owned -= replaced
+    allowed = set(selection) | replaced
+    result = await _full_edit(prompt, decision, ctx, allowed) if full_edit.wanted(prompt, decision) else None
+    if result is None:
+        result = await direct(service, user_id, ctx, prompt, decision, allowed_owned=allowed,
+                              recent_turns=list(recent_turns), asked_in_conversation=questions_asked,
+                              may_ask=questions_asked < QUESTIONS_PER_REQUEST)
+    if result.best is not None and replaced:
+        result.best.plan.human_owned_ok = sorted(set(result.best.plan.human_owned_ok) | replaced)
+        result.best.warnings.append("Replaces the cut on the timeline now, including shots you changed. Undo brings it back.")
     if result.kind == "ask":
         return TurnResult(kind="clarify", message=result.question or "Which did you mean?", options=result.options,
                           route=decision)
@@ -148,6 +161,26 @@ async def _plan(service: EditorService, user_id: str, project_id: str, prompt: s
             plan = await plans.get(service.session, user_id, plan.id)
     card = await plans.card(service.session, plan)
     return TurnResult(kind="plan", message=message or card.summary, plan=card, route=decision)
+
+
+def _main_clips(timeline: Timeline) -> set[str]:
+    main = next((t for t in timeline.tracks if t.kind == "video" and t.extra.get("role") == "main"), None)
+    main = main or next((t for t in timeline.tracks if t.kind == "video"), None)
+    return {item.id for item in main.items if isinstance(item, ClipItem)} if main else set()
+
+
+async def _full_edit(prompt: str, decision: RouteDecision, ctx: EditContext, allowed: set[str]) -> DirectorResult | None:
+    """The whole video edited (brain.full_edit), or None to let the director plan it."""
+    built = full_edit.build(ctx)
+    if built is None:
+        return None
+    frame, plan = built
+    plan.human_owned_ok = sorted(allowed)
+    scored = (await evaluate_candidates(prompt, frame, [plan], ctx, allowed_owned=allowed, use_judge=False)).scored
+    if not scored or not scored[0].usable:
+        log.warning("The full edit didn't run cleanly; the director plans instead: %s", scored[0].summary() if scored else "invalid")
+        return None
+    return DirectorResult("plan", best=scored[0], frame=frame, reason="Full edit of the footage")
 
 
 async def _deterministic(service: EditorService, user_id: str, project_id: str, prompt: str, timeline: Timeline,

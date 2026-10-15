@@ -101,6 +101,16 @@ class QualityFlag(_Strict):
     t1: Sec
 
 
+class Trim(_Strict):
+    """A stretch an editor would take out of a full edit: a false start, an earlier take, talk not
+    meant for the audience. Always whole sentences."""
+
+    t0: Sec
+    t1: Sec
+    kind: Literal["false_start", "retake", "off_script"]
+    why: str
+
+
 class Moment(_Strict):
     id: str
     t0: Sec
@@ -136,6 +146,7 @@ class MUD(_Strict):
     music: Music | None = None
     quality: list[QualityFlag] = Field(default_factory=list)
     moments: list[Moment] = Field(default_factory=list)
+    trims: list[Trim] = Field(default_factory=list)
 
 
 class MudInvalid(CustomException):
@@ -159,7 +170,7 @@ def check_mud(mud: MUD) -> None:
     for a, b in zip(mud.words, mud.words[1:]):
         if b.i != a.i + 1 or b.t0 < a.t1 - TOLERANCE:
             raise MudInvalid(f"Words {a.i} and {b.i} are out of order or overlap.")
-    for row in (*mud.utterances, *mud.silences, *mud.scenes, *mud.moments, *mud.quality):
+    for row in (*mud.utterances, *mud.silences, *mud.scenes, *mud.moments, *mud.quality, *mud.trims):
         in_range(type(row).__name__.lower(), row.t0, row.t1)
     ids = [row.id for row in (*mud.shots, *mud.scenes, *mud.moments, *mud.utterances)]
     if len(ids) != len(set(ids)):

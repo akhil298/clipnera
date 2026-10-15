@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from difflib import SequenceMatcher
 from typing import Any
 
 import numpy as np
 
 from content_intelligence.scorer import ClipScorer
 from edit_engine.perception import BLUR_THRESHOLD, BRIGHT_THRESHOLD, DARK_THRESHOLD
-from understanding.mud import Beat, Drop, Filler, Moment, Music, QualityFlag, Scene, Shot, Silence, Utterance, Word
+from understanding.mud import Beat, Drop, Filler, Moment, Music, QualityFlag, Scene, Shot, Silence, Trim, Utterance, Word
 
 # A gap between words longer than this is a pause; longer than DEAD_AIR, dead air.
 PAUSE_SECONDS = 0.3
@@ -28,6 +29,10 @@ SCENE_MAX_SECONDS = 45.0
 MAX_MOMENTS = 40
 # Action peaks need this many usable shots to compare, and score 1.0 at this much motion.
 MIN_SHOTS_FOR_PEAKS = 4
+# A line is an earlier take when one of the next few lines says it again this closely.
+RETAKE_MIN_WORDS = 4
+RETAKE_LOOKAHEAD = 3
+RETAKE_SIMILARITY = 0.8
 # A line is a quote moment at this score, with at least this many words.
 QUOTE_SCORE = 0.2
 MIN_QUOTE_WORDS = 4
@@ -189,6 +194,24 @@ def _scored_quotes(utterances: Sequence[Utterance]) -> list[tuple[float, str, fl
         rated.append((min(1.0, sum(parts.values()) / 75.0), "quote", u.t0, u.t1, why))
     strong = [quote for quote in rated if quote[0] >= QUOTE_SCORE]
     return strong or sorted(rated, key=lambda quote: -quote[0])[:FALLBACK_QUOTES]
+
+
+def find_retakes(utterances: Sequence[Utterance]) -> list[Trim]:
+    """Earlier takes of a line said again almost word for word within the next few lines."""
+    trims = []
+    for n, line in enumerate(utterances):
+        words = _words(line.text)
+        if len(words) < RETAKE_MIN_WORDS:
+            continue
+        again = next((later for later in utterances[n + 1:n + 1 + RETAKE_LOOKAHEAD]
+                      if SequenceMatcher(None, words, _words(later.text)).ratio() >= RETAKE_SIMILARITY), None)
+        if again is not None:
+            trims.append(Trim(t0=line.t0, t1=line.t1, kind="retake", why="said again just after"))
+    return trims
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9']+", text.lower())
 
 
 def analyze_music(audio_path: str) -> tuple[list[Beat], Music]:

@@ -12,6 +12,7 @@ critic reviews (Phase 13), and the unused credit hold is released (Phase 14).
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
 from typing import Any
 
 from sqlalchemy import select
@@ -117,7 +118,8 @@ async def _run_step(plan_id: str, user_id: str, ir: PlanIR, step: PlanStep) -> b
         out = compiled.steps[0]
         actor = Actor(author=AUTHOR, step_id=log_step_id(plan_id, step.id), turn_id=plan_id,
                       human_owned_ok=frozenset(ir.human_owned_ok), destructive_ok=True,
-                      allowed_text=frozenset(t.content for t in ir.text), may_resize=step.kind == "reframe")
+                      allowed_text=frozenset(t.content for t in ir.text), may_resize=step.kind == "reframe",
+                      compiled=True)
         if out.error is None and out.ops:
             try:
                 result = await service.apply(user_id, project_id, ctx.version, out.ops, actor)
@@ -133,7 +135,9 @@ async def _run_step(plan_id: str, user_id: str, ir: PlanIR, step: PlanStep) -> b
             return True
 
         if step.kind in SPECIALIST_FOR:
-            outcome = await run_specialist(service, user_id, project_id, plan_id, step, actor, reason=out.error or "")
+            # A model working the step out itself gets the small budget of a free-running agent.
+            outcome = await run_specialist(service, user_id, project_id, plan_id, step, replace(actor, compiled=False),
+                                           reason=out.error or "")
             await _set_step(plan_id, step.id, status=StepStatus.DONE if outcome.ok else StepStatus.FAILED,
                             note=outcome.note[:500], ops=outcome.ops, version_after=outcome.version)
             return outcome.ok
