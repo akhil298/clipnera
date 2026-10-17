@@ -2761,6 +2761,19 @@ export interface TurnRequest {
   questions_asked?: number;
   /** Auto mode: never ask, and run the plan straight away instead of waiting for approval. */
   auto?: boolean;
+  /** One of AiModels.models; omitted for the default. */
+  model?: string | null;
+  /** One of AiModels.efforts; omitted for each step's own effort. */
+  effort?: AiEffort | null;
+}
+
+export type AiEffort = 'low' | 'medium' | 'high' | 'xhigh';
+
+/** What the studio's AI chat lets the user pick (GET /editor/models). */
+export interface AiModels {
+  models: string[];
+  default_model: string;
+  efforts: AiEffort[];
 }
 
 export type TurnKind = 'edit' | 'answer' | 'clarify' | 'choices' | 'plan' | 'plan_needed' | 'refused';
@@ -3013,6 +3026,8 @@ export const editorApi = {
   /** Undo everything one AI step changed, even with later edits on top. */
   undoStep: (projectId: string, stepId: string) =>
     envelopeRequest<EditorOpsResponse>(`/editor/projects/${projectId}/steps/${encodeURIComponent(stepId)}/undo`, post({})),
+  /** The models and reasoning efforts the AI chat offers. */
+  models: () => envelopeRequest<AiModels>('/editor/models'),
   /** One prompt from the studio's AI tab. */
   turn: (projectId: string, payload: TurnRequest) =>
     envelopeRequest<TurnResult>(`/editor/projects/${projectId}/turns`, post(payload)),

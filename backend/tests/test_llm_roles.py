@@ -54,6 +54,25 @@ class TestModelForRole:
             choice = model_for_role(role)
             assert (choice.provider, choice.model) == ("openai", "gpt-4.1-mini"), role
 
+    def test_the_studio_pick_moves_every_role_to_that_model_and_effort(self, settings):
+        settings.LLM_PROFILE = "mixed"
+        with roles.picked_model("gpt-5.6-sol-1", "xhigh"):
+            director = model_for_role("director")
+            router = model_for_role("router")
+        assert (director.provider, director.model, director.effort) == ("openai", "gpt-5.6-sol-1", "xhigh")
+        # Routing keeps its own effort: it classifies.
+        assert (router.model, router.effort) == ("gpt-5.6-sol-1", "minimal")
+        assert model_for_role("director").provider == "anthropic"
+
+    def test_picking_only_an_effort_keeps_the_configured_model(self, settings):
+        with roles.picked_model(None, "low"):
+            choice = model_for_role("critic")
+        assert (choice.model, choice.effort) == ("gpt-4.1-mini", "low")
+
+    def test_the_configured_model_is_offered_first(self, settings, monkeypatch):
+        monkeypatch.setattr(settings, "OPENAI_MODELS", ["gpt-5.6-sol-1", "gpt-4.1-mini"])
+        assert roles.selectable_models() == ["gpt-4.1-mini", "gpt-5.6-sol-1"]
+
     def test_anthropic_profile_sizes_the_model_to_the_role(self, settings):
         settings.LLM_PROFILE = "anthropic"
         assert model_for_role("router").model == "claude-haiku-4-5"

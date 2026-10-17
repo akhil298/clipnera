@@ -58,6 +58,9 @@ class EditPlan(Base):
     # Critic review rounds run (Phase 13) and the verifier's last findings.
     review_rounds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     review: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The model and effort picked in the chat when the plan was made; running it uses them too.
+    ai_model: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    ai_effort: Mapped[str | None] = mapped_column(String(10), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 

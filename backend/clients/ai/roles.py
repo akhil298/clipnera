@@ -10,8 +10,10 @@ configured model.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable
-from typing import Literal, TypeVar
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Literal, TypeVar, get_args
 
 import anthropic
 import httpx
@@ -71,6 +73,14 @@ _LEAST_EFFORT = {"anthropic": "low", "openai": "minimal"}
 
 _OPENAI = ModelChoice("openai")
 
+# Reasoning effort the user may pick in the studio. Routing and moderation keep theirs: they classify.
+Effort = Literal["low", "medium", "high", "xhigh"]
+EFFORTS: tuple[str, ...] = get_args(Effort)
+_OWN_EFFORT: frozenset[Role] = frozenset({"router", "moderation"})
+
+# The OpenAI deployment and effort picked for this turn or plan (``picked_model``).
+_picked: ContextVar[tuple[str | None, str | None]] = ContextVar("picked_model", default=(None, None))
+
 PROFILES: dict[str, dict[Role, ModelChoice]] = {
     "openai": {role: _OPENAI for role in ROLES},
     "anthropic": {
@@ -108,16 +118,39 @@ def _check_role(role: str) -> Role:
     return role  # type: ignore[return-value]
 
 
+def selectable_models() -> list[str]:
+    """OpenAI deployments the studio offers, the configured one first."""
+    settings = get_settings()
+    return list(dict.fromkeys([settings.OPENAI_MODEL, *settings.OPENAI_MODELS]))
+
+
+@contextmanager
+def picked_model(model: str | None, effort: str | None) -> Iterator[None]:
+    """Run every role on OpenAI deployment ``model`` at ``effort`` (either may be None) within the block."""
+    token = _picked.set((model, effort))
+    try:
+        yield
+    finally:
+        _picked.reset(token)
+
+
+def current_pick() -> tuple[str | None, str | None]:
+    """The (model, effort) picked for the running turn or plan."""
+    return _picked.get()
+
+
 def _with_role_effort(role: Role, choice: ModelChoice) -> ModelChoice:
-    effort = ROLE_EFFORT[role] or _LEAST_EFFORT.get(choice.provider)
+    picked = _picked.get()[1] if choice.provider == "openai" and role not in _OWN_EFFORT else None
+    effort = picked or ROLE_EFFORT[role] or _LEAST_EFFORT.get(choice.provider)
     return _configured(ModelChoice(choice.provider, choice.model, effort))
 
 
 def model_for_role(role: str, plan_override: str | None = None, request_override: str | None = None) -> ModelChoice:
-    """The model ``role`` runs on: request pin, then deployment pin, then plan pin, then the profile."""
+    """The model ``role`` runs on: request pin, then the studio's pick, deployment pin, plan pin, the profile."""
     role = _check_role(role)
     settings = get_settings()
-    pin = request_override or (settings.LLM_ROLE_MODELS or {}).get(role) or plan_override
+    picked = _picked.get()[0]
+    pin = request_override or (picked and f"openai:{picked}") or (settings.LLM_ROLE_MODELS or {}).get(role) or plan_override
     choice = parse_pin(pin) if pin else PROFILES[settings.LLM_PROFILE][role]
     return _with_role_effort(role, choice)
 
@@ -197,6 +230,7 @@ async def call_with_fallback(role: str, fn: Callable[[BaseAI], Awaitable[T]], *,
 
 
 __all__ = [
-    "Role", "ROLES", "PROFILES", "ROLE_EFFORT", "ROLE_TEMPERATURE",
+    "Role", "ROLES", "PROFILES", "ROLE_EFFORT", "ROLE_TEMPERATURE", "Effort", "EFFORTS",
+    "selectable_models", "picked_model", "current_pick",
     "model_for_role", "parse_pin", "get_role_client", "call_with_fallback", "is_transient",
 ]

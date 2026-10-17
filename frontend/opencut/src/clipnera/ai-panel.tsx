@@ -11,6 +11,7 @@ import type { PlanCard, PlanCardStep } from "@/lib/api";
 import { takeStudioHandoff } from "@/lib/editor/handoff";
 import { type AiMessage, useAiStore } from "./ai-store";
 import { type FootageFile, useFootageStore, watchFootage } from "./footage";
+import { ModelPicker } from "./model-picker";
 import { useCurrentSync } from "./save-status";
 
 const EXAMPLES = ["Edit the full video", "Cut the dead air and filler words", "Make it more dynamic", "What did I say about pricing?"];
@@ -201,6 +202,7 @@ export function AiPanel({ onCollapse }: { onCollapse?: () => void }) {
 									<HugeiconsIcon icon={Attachment01Icon} />
 									Attach
 								</Button>
+								<ModelPicker disabled={busy} />
 								<button
 									type="button"
 									aria-label="Send"

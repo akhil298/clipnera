@@ -21,7 +21,9 @@ from editor.schema import (
 from editor.service import EditorService
 from feature_flags.dependencies import require_user_flag
 from usage.context import llm_scope
-from brain.schema import TurnRequest, TurnResult
+from brain.schema import AiModels, TurnRequest, TurnResult
+from clients.ai.roles import EFFORTS, picked_model, selectable_models
+from core.exceptions import CustomException
 from brain.turns import handle_turn
 from feature_flags.registry import AGENT_EDITOR
 import understanding.jobs  # noqa: F401 -- registers the media understanding job handler
@@ -98,11 +100,20 @@ async def retry_analysis(project_id: str, asset_id: str, user: CurrentUserDep, s
     return ok(await service.retry_analysis(user["user_id"], project_id, asset_id))
 
 
+@editor.get("/models", response_model=ApiResponse[AiModels])
+async def list_models(_: CurrentUserDep):
+    """The models and reasoning efforts the AI chat offers."""
+    models = selectable_models()
+    return ok(AiModels(models=models, default_model=models[0], efforts=list(EFFORTS)))
+
+
 @editor.post("/projects/{project_id}/turns", response_model=ApiResponse[TurnResult])
 async def take_turn(project_id: str, data: TurnRequest, user: CurrentUserDep, service: EditorServiceDep):
     """One prompt from the studio's AI chat: an edit, an answer, a question back, or a plan."""
+    if data.model and data.model not in selectable_models():
+        raise CustomException(message=f"The AI can't use {data.model}.", code="UNKNOWN_MODEL", status_code=422)
     # Not charged to a pipeline project: llm_usage.project_id points at video projects.
-    with llm_scope(user_id=user["user_id"], step="editor_turn"):
+    with llm_scope(user_id=user["user_id"], step="editor_turn"), picked_model(data.model, data.effort):
         result = await handle_turn(service, user["user_id"], project_id, data.prompt, selection=data.selection,
                                    playhead=data.playhead, recent_turns=data.recent_turns,
                                    questions_asked=data.questions_asked, auto=data.auto)

@@ -18,6 +18,7 @@ from brain.model import EditPlan, PlanStatus, PlanStepRow, StepStatus
 from brain.plan_ir import PlanIR
 from brain.schema import GhostClip, PlanCard, PlanCardStep, PlanPatch
 from brain.score import STEP_CREDITS, ScoredPlan
+from clients.ai.roles import current_pick
 from core.exceptions import CustomException
 from editor.timeline import ClipItem
 from jobs.queue import Job, get_queue
@@ -58,8 +59,9 @@ async def save(session: AsyncSession, user_id: str, project_id: str, prompt: str
     assert best is not None
     scores = {**best.summary(), "result_line": _result_line(best),
               "ghost": [g.model_dump() for g in _ghost(best)], "fps": best.compiled.timeline.fps}
+    ai_model, ai_effort = current_pick()
     plan = EditPlan(
-        project_id=project_id, user_id=user_id, prompt=prompt, status=PlanStatus.PROPOSED, base_version=base_version,
+        ai_model=ai_model, ai_effort=ai_effort, project_id=project_id, user_id=user_id, prompt=prompt, status=PlanStatus.PROPOSED, base_version=base_version,
         plan=best.plan.model_dump_json(), frame=(result.frame.model_dump_json() if result.frame else "{}"),
         scores=json.dumps(scores), credits=best.credits, reason=result.reason[:1000],
         runner_up=result.runner_up.plan.model_dump_json() if result.runner_up else None,

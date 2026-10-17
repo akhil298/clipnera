@@ -29,8 +29,8 @@ CONTEXT_TOKENS = 128_000
 DEFAULT_MAX_TOKENS = 4096
 
 
-# Model families that take ``reasoning_effort``; their "-chat" variants do not.
-_REASONING_MODEL = re.compile(r"^(o\d|gpt-5)(?!.*chat)")
+# Model families that take ``reasoning_effort`` (o-series, gpt-5 and later); their "-chat" variants do not.
+_REASONING_MODEL = re.compile(r"^(o\d|gpt-([5-9]|\d{2,}))(?!.*chat)")
 # Output tokens added on top of the reply a caller asked for, so a reasoning
 # model can think at its effort and still answer instead of returning nothing.
 REASONING_ALLOWANCE = {"minimal": 1024, "low": 2048, "medium": 8192, "high": 16384, "xhigh": 32768}

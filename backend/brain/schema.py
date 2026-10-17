@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from brain.route import RouteDecision
+from clients.ai.roles import Effort
 
 TurnKind = Literal["edit", "answer", "clarify", "choices", "plan", "plan_needed", "refused"]
 PlanStatusName = Literal["proposed", "approved", "running", "paused", "done", "failed", "rejected", "stopped"]
@@ -26,6 +27,17 @@ class TurnRequest(BaseModel):
     questions_asked: int = Field(0, ge=0, le=20)
     # Auto mode: never ask, and run the plan straight away instead of waiting for approval.
     auto: bool = False
+    # The OpenAI deployment and reasoning effort picked in the chat; None for the defaults.
+    model: str | None = Field(None, min_length=1, max_length=80)
+    effort: Effort | None = None
+
+
+class AiModels(BaseModel):
+    """What the studio's AI chat lets the user pick."""
+
+    models: list[str]
+    default_model: str
+    efforts: list[str]
 
 
 class TurnChoice(BaseModel):

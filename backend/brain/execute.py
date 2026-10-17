@@ -29,6 +29,7 @@ from core.logging_config import get_logger
 from editor.history import Actor
 from editor.service import EditorService
 from jobs.queue import Job, handler
+from clients.ai.roles import picked_model
 from usage.context import llm_scope
 
 log = get_logger(__name__)
@@ -57,11 +58,18 @@ def waves(steps: Sequence[PlanStep]) -> list[list[PlanStep]]:
 async def execute_plan(job: Job) -> None:
     plan_id, user_id = job.payload["plan_id"], job.payload["user_id"]
     try:
-        with llm_scope(user_id=user_id, step="editor_plan"):
+        with llm_scope(user_id=user_id, step="editor_plan"), picked_model(*await _pick(plan_id)):
             await _execute(plan_id, user_id)
     except Exception as exc:
         log.exception("Plan execution failed: plan=%s", plan_id)
         await _finish(plan_id, user_id, PlanStatus.FAILED, error=f"The plan stopped: {exc}"[:500])
+
+
+async def _pick(plan_id: str) -> tuple[str | None, str | None]:
+    """The model and effort picked in the chat when the plan was made."""
+    async with AsyncSessionLocal() as session:
+        plan = await session.get(EditPlan, plan_id)
+        return (plan.ai_model, plan.ai_effort) if plan else (None, None)
 
 
 async def _execute(plan_id: str, user_id: str) -> None:

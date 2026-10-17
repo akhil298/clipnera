@@ -60,6 +60,8 @@ class BaseConfig(BaseSettings):
     # Reasoning effort for OpenAI reasoning models (gpt-5, o-series); models
     # without reasoning (gpt-4.1-mini, gpt-4o-mini) never receive it.
     OPENAI_REASONING_EFFORT: str = "high"
+    # More deployments on OPENAI_ENDPOINT the studio's AI chat may pick, besides OPENAI_MODEL.
+    OPENAI_MODELS: list[str] = ["gpt-5.6-sol-1", "gpt-6.1-sol-1", "gpt-6-astra-1"]
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-opus-5-5"
     # Thinking depth for steps without their own setting: low | medium | high | xhigh | max.

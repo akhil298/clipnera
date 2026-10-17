@@ -399,5 +399,8 @@ class TestOpenAIReasoningEffort:
         assert "temperature" not in payload
         assert payload["max_completion_tokens"] > 500
 
+    def test_later_families_are_reasoning_models_too(self):
+        assert self._payload("gpt-6.1-sol-1")["reasoning_effort"] == "high"
+
     def test_chat_variant_gets_no_effort(self):
         assert "reasoning_effort" not in self._payload("gpt-5-chat-latest")
