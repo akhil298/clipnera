@@ -290,7 +290,7 @@ class EditService:
         plan, analysis = json.loads(edit.plan), json.loads(edit.analysis)
         prompt = self._chat_context(plan, analysis, request.message)
         picked = ModelChoice("openai", edit.ai_model, edit.ai_effort) if edit.ai_model else None
-        with llm_scope(user_id=user_id, project_id=edit.id, step="reel_chat"):
+        with llm_scope(user_id=user_id, step="reel_chat"):
             reply = await get_text_client(is_pro=entitlements.pro_ai_provider, step="reel_chat", choice=picked).chat(
                 [{"role": "system", "content": CHAT_SYSTEM.replace("LOOKS", ", ".join(LOOKS)).replace("MOODS", ", ".join(MOODS))},
                  {"role": "user", "content": prompt}], temperature=0.2, max_tokens=400, json_mode=True,

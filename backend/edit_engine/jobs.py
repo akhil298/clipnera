@@ -75,7 +75,7 @@ async def progress(edit_id: str, message: str) -> None:
 async def analyze_edit(job: Job) -> None:
     edit_id, user_id = job.payload["edit_id"], job.payload["user_id"]
     try:
-        with llm_scope(user_id=user_id, project_id=edit_id, step="reel_analysis"):
+        with llm_scope(user_id=user_id, step="reel_analysis"):
             await _analyze(edit_id, user_id)
     except Exception as exc:
         log.exception("Footage analysis failed: edit=%s", edit_id)
@@ -248,7 +248,7 @@ async def _voice_words(edit: EditProject, sources: list[dict[str, Any]], local: 
 async def plan_edit(job: Job) -> None:
     edit_id, user_id = job.payload["edit_id"], job.payload["user_id"]
     try:
-        with llm_scope(user_id=user_id, project_id=edit_id, step="reel_director"):
+        with llm_scope(user_id=user_id, step="reel_director"):
             await _plan(edit_id, user_id)
     except Exception as exc:
         log.exception("Footage planning failed: edit=%s", edit_id)

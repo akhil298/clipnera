@@ -41,6 +41,8 @@ TOKEN_PRICES: dict[tuple[str, str], TokenPrice] = {
     ("openai", "gpt-4o-mini"): TokenPrice(0.15, 0.60),
     ("groq", "openai/gpt-oss-20b"): TokenPrice(0.075, 0.30),
     ("groq", "openai/gpt-oss-120b"): TokenPrice(0.15, 0.60),
+    # The vision model for photos and contact sheets (reels/vision.FREE_MODEL); console.groq.com/docs/models.
+    ("groq", "qwen/qwen3.8-27b"): TokenPrice(0.80, 4.00),
     # Gemini paid-tier rates for text, image and video input (ai.google.dev/gemini-api/docs/pricing).
     ("gemini", "gemini-3.1-flash-lite"): TokenPrice(0.25, 1.50),
     ("gemini", "gemini-3.5-flash-lite"): TokenPrice(0.30, 2.50),
