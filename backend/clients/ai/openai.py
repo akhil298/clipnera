@@ -50,6 +50,69 @@ def reasoning_effort(model: str, requested: str | None = None) -> str | None:
     return None
 
 
+# Deployments that take tools with reasoning only on the Responses API (newer GPT models on
+# Azure refuse them on chat completions); their tool calls go there from the first refusal on.
+_TOOLS_ON_RESPONSES: set[str] = set()
+
+
+def _refuses_tool_reasoning(exc: httpx.HTTPStatusError) -> bool:
+    if exc.response.status_code != 400:
+        return False
+    try:
+        return exc.response.json().get("error", {}).get("param") == "reasoning_effort"
+    except ValueError:
+        return False
+
+
+def _input_part(part: dict[str, Any]) -> dict[str, Any]:
+    """A chat content part (text or image) as a Responses input part."""
+    if part.get("type") == "image_url":
+        return {"type": "input_image", "image_url": part["image_url"]["url"]}
+    return {"type": "input_text", "text": part.get("text", "")}
+
+
+def _responses_input(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Chat-format messages (with tool calls and results) as Responses input items."""
+    items: list[dict[str, Any]] = []
+    for message in messages:
+        role, content = message["role"], message.get("content")
+        if role == "tool":
+            items.append({"type": "function_call_output", "call_id": message["tool_call_id"], "output": content or ""})
+            continue
+        if content:
+            parts = content if isinstance(content, str) or role == "assistant" else [_input_part(p) for p in content]
+            items.append({"type": "message", "role": role, "content": parts})
+        items += [{"type": "function_call", "call_id": c["id"], "name": c["function"]["name"],
+                   "arguments": c["function"]["arguments"]} for c in message.get("tool_calls") or []]
+    return items
+
+
+def _responses_reply(data: dict[str, Any]) -> ToolReply:
+    """A Responses result as a ToolReply whose ``message`` is in chat format, like the chat path's."""
+    texts: list[str] = []
+    refusal = ""
+    raw_calls: list[dict[str, Any]] = []
+    for item in data.get("output") or []:
+        if item.get("type") == "function_call":
+            raw_calls.append({"id": item["call_id"], "type": "function",
+                              "function": {"name": item["name"], "arguments": item.get("arguments") or "{}"}})
+        elif item.get("type") == "message":
+            for part in item.get("content") or []:
+                if part.get("type") == "output_text":
+                    texts.append(part.get("text") or "")
+                elif part.get("type") == "refusal":
+                    refusal = part.get("refusal") or ""
+    text = "".join(texts)
+    return ToolReply(
+        text=text or refusal,
+        calls=[ToolCall(id=c["id"], name=c["function"]["name"], arguments=_arguments(c["function"]["arguments"]))
+               for c in raw_calls],
+        message={"role": "assistant", "content": text, **({"tool_calls": raw_calls} if raw_calls else {})},
+        truncated=(data.get("incomplete_details") or {}).get("reason") == "max_output_tokens",
+        refused=bool(refusal),
+    )
+
+
 def input_token_budget(max_output_tokens: int) -> int:
     """Largest prompt we may send, given the reply we have asked for."""
     return CONTEXT_TOKENS - max_output_tokens - TOKEN_ESTIMATE_SAFETY_MARGIN
@@ -177,11 +240,20 @@ class OpenAI(BaseAI):
     async def chat_with_tools(self, messages: list[dict[str, Any]], tools: list[ToolSpec], *,
                               max_tokens: int = DEFAULT_MAX_TOKENS) -> ToolReply:
         check_budget()
-        response = await self._create(
-            messages, mode="tools", max_tokens=max_tokens,
-            tools=[{"type": "function", "function": _function(t)} for t in tools],
-            tool_choice="auto",
-        )
+        if self.model in _TOOLS_ON_RESPONSES:
+            return await self._tools_on_responses(messages, tools, max_tokens)
+        try:
+            response = await self._create(
+                messages, mode="tools", max_tokens=max_tokens,
+                tools=[{"type": "function", "function": _function(t)} for t in tools],
+                tool_choice="auto",
+            )
+        except httpx.HTTPStatusError as exc:
+            if not _refuses_tool_reasoning(exc):
+                raise
+            log.warning("OpenAI model %s takes tools with reasoning only on the Responses API; using it", self.model)
+            _TOOLS_ON_RESPONSES.add(self.model)
+            return await self._tools_on_responses(messages, tools, max_tokens)
         choice = response["choices"][0]
         message = choice["message"]
         raw_calls = message.get("tool_calls") or []
@@ -194,6 +266,23 @@ class OpenAI(BaseAI):
             truncated=choice.get("finish_reason") == "length",
             refused=bool(message.get("refusal")),
         )
+
+    async def _tools_on_responses(self, messages: list[dict[str, Any]], tools: list[ToolSpec],
+                                  max_tokens: int) -> ToolReply:
+        """One tool-loop step on the Responses API, statelessly: the history is sent every time."""
+        effort = reasoning_effort(self.model, self.effort)
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "input": _responses_input(messages),
+            "tools": [{"type": "function", **_function(t)} for t in tools],
+            "tool_choice": "auto",
+            "max_output_tokens": max_tokens + REASONING_ALLOWANCE.get(effort or "", 0),
+            "store": False,
+        }
+        if effort:
+            payload["reasoning"] = {"effort": effort}
+        data = await self._send("responses", payload, mode="tools")
+        return _responses_reply(data)
 
     def tool_results(self, results: list[ToolResult]) -> list[dict[str, Any]]:
         return [{"role": "tool", "tool_call_id": r.call_id,
@@ -233,6 +322,10 @@ class OpenAI(BaseAI):
             "OpenAI API call started: mode=%s, model=%s, messages=%d, max_output_tokens=%d",
             mode, self.model, len(messages), payload["max_completion_tokens"],
         )
+        return await self._send("chat/completions", payload, mode=mode)
+
+    async def _send(self, path: str, payload: dict[str, Any], *, mode: str) -> dict[str, Any]:
+        """POST ``payload`` to chat completions or responses, with retries and usage recording."""
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(3),
             wait=wait_exponential(multiplier=1, min=1, max=10),
@@ -241,7 +334,7 @@ class OpenAI(BaseAI):
         ):
             with attempt:
                 started = time.monotonic()
-                response = await self._client.post("chat/completions", json=payload)
+                response = await self._client.post(path, json=payload)
                 if response.is_error:
                     log.error(
                         "OpenAI API call failed: mode=%s, model=%s, status=%d, body=%s",
@@ -252,16 +345,14 @@ class OpenAI(BaseAI):
                 usage = data.get("usage") or {}
                 await record_llm_call(
                     "openai", _priced_model(data.get("model"), self.model),
-                    input_tokens=int(usage.get("prompt_tokens") or 0),
-                    output_tokens=int(usage.get("completion_tokens") or 0),
+                    # Chat completions name them prompt/completion; the Responses API input/output.
+                    input_tokens=int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0),
+                    output_tokens=int(usage.get("completion_tokens") or usage.get("output_tokens") or 0),
                     latency_ms=int((time.monotonic() - started) * 1000),
-                    response=reply_text(data),
+                    response=reply_text(data) if "choices" in data else _responses_reply(data).text,
                     role=self.role,
                 )
-                log.debug(
-                    "OpenAI API call succeeded: mode=%s, model=%s, finish_reason=%s",
-                    mode, self.model, data["choices"][0].get("finish_reason"),
-                )
+                log.debug("OpenAI API call succeeded: mode=%s, model=%s, path=%s", mode, self.model, path)
                 return data
         raise RuntimeError("Unreachable")  # pragma: no cover
 

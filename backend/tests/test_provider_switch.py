@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from clients.ai import TEXT_PROVIDERS, get_text_client
@@ -404,3 +406,64 @@ class TestOpenAIReasoningEffort:
 
     def test_chat_variant_gets_no_effort(self):
         assert "reasoning_effort" not in self._payload("gpt-5-chat-latest")
+
+
+class TestOpenAIToolsOnResponses:
+    """Deployments that refuse tools with reasoning on chat completions get them on the Responses API."""
+
+    REFUSAL = {"error": {"message": "Function tools with reasoning_effort are not supported", "param": "reasoning_effort"}}
+    TOOL = ToolSpec(name="clip_length", description="Length of a clip.",
+                    schema={"type": "object", "additionalProperties": False, "required": ["item"],
+                            "properties": {"item": {"type": "string"}}})
+
+    @pytest.fixture
+    def client(self, monkeypatch):
+        import httpx
+
+        import clients.ai.openai as openai_module
+
+        async def no_record(*args, **kwargs):
+            return None
+
+        monkeypatch.setattr(openai_module, "record_llm_call", no_record)
+        monkeypatch.setattr(openai_module, "_TOOLS_ON_RESPONSES", set())
+        self.requests: list[tuple[str, dict]] = []
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            body = json.loads(request.content)
+            self.requests.append((request.url.path.rsplit("/", 1)[-1], body))
+            if request.url.path.endswith("chat/completions"):
+                return httpx.Response(400, json=self.REFUSAL)
+            return httpx.Response(200, json={
+                "output": [
+                    {"type": "reasoning", "summary": []},
+                    {"type": "function_call", "call_id": "call_1", "name": "clip_length", "arguments": '{"item": "c1"}'},
+                ],
+                "usage": {"input_tokens": 10, "output_tokens": 5},
+            })
+
+        client = OpenAI(api_key="test", model="gpt-6-astra-1", effort="high")
+        client._client = httpx.AsyncClient(base_url="https://example.test/", transport=httpx.MockTransport(handle))
+        return client
+
+    @pytest.mark.asyncio
+    async def test_a_refused_tool_call_moves_to_responses_and_stays_there(self, client):
+        history = [
+            {"role": "system", "content": "Edit."},
+            {"role": "user", "content": "How long is c1?"},
+            {"role": "assistant", "content": "", "tool_calls": [
+                {"id": "call_0", "type": "function", "function": {"name": "clip_length", "arguments": '{"item": "c0"}'}}]},
+            *client.tool_results([ToolResult(call_id="call_0", content="120 frames")]),
+        ]
+        reply = await client.chat_with_tools(history, [self.TOOL])
+        await client.chat_with_tools(history, [self.TOOL])
+
+        assert [path for path, _ in self.requests] == ["completions", "responses", "responses"]
+        sent = self.requests[1][1]
+        assert sent["reasoning"] == {"effort": "high"}
+        assert [item.get("type") for item in sent["input"]] == [
+            "message", "message", "function_call", "function_call_output"]
+        assert sent["input"][3] == {"type": "function_call_output", "call_id": "call_0", "output": "120 frames"}
+        assert [(c.name, c.arguments) for c in reply.calls] == [("clip_length", {"item": "c1"})]
+        # The history stays in chat format, so the loop needs no changes.
+        assert reply.message["tool_calls"][0]["function"]["name"] == "clip_length"

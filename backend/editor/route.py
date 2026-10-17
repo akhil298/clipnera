@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -113,8 +114,14 @@ async def take_turn(project_id: str, data: TurnRequest, user: CurrentUserDep, se
     if data.model and data.model not in selectable_models():
         raise CustomException(message=f"The AI can't use {data.model}.", code="UNKNOWN_MODEL", status_code=422)
     # Not charged to a pipeline project: llm_usage.project_id points at video projects.
-    with llm_scope(user_id=user["user_id"], step="editor_turn"), picked_model(data.model, data.effort):
-        result = await handle_turn(service, user["user_id"], project_id, data.prompt, selection=data.selection,
-                                   playhead=data.playhead, recent_turns=data.recent_turns,
-                                   questions_asked=data.questions_asked, auto=data.auto)
+    try:
+        with llm_scope(user_id=user["user_id"], step="editor_turn"), picked_model(data.model, data.effort):
+            result = await handle_turn(service, user["user_id"], project_id, data.prompt, selection=data.selection,
+                                       playhead=data.playhead, recent_turns=data.recent_turns,
+                                       questions_asked=data.questions_asked, auto=data.auto)
+    except httpx.HTTPError as exc:
+        # As a handled error, so the browser can read it (an unhandled one comes back without CORS headers).
+        model = data.model or "the default model"
+        raise CustomException(message=f"The AI model ({model}) didn't answer. Try again, or pick another model.",
+                              code="AI_UNAVAILABLE", status_code=502) from exc
     return ok(result)
