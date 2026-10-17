@@ -1,36 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@opencut/components/ui/select";
-import { type AiEffort, type AiModels, editorApi } from "@/lib/api";
-import { useAiStore } from "./ai-store";
+import type { AiEffort } from "@/lib/api";
+import { EFFORT_LABEL, useAiModels, useAiPick } from "@/lib/editor/aiPick";
 
 // Radix Select can't hold an empty value: this stands for "the default".
 const DEFAULT = "default";
-const EFFORT_LABEL: Record<AiEffort, string> = { low: "Low", medium: "Medium", high: "High", xhigh: "Extra high" };
 const TRIGGER = "text-muted-foreground h-7 w-auto gap-1 rounded-full border-0 bg-transparent px-2 text-xs shadow-none";
-
-let offered: Promise<AiModels> | null = null;
 
 /** The model and reasoning effort the AI chat's next prompts run on. */
 export function ModelPicker({ disabled }: { disabled?: boolean }) {
-	const model = useAiStore((state) => state.model);
-	const effort = useAiStore((state) => state.effort);
-	const setModel = useAiStore((state) => state.setModel);
-	const setEffort = useAiStore((state) => state.setEffort);
-	const [choices, setChoices] = useState<AiModels | null>(null);
-
-	useEffect(() => {
-		offered ??= editorApi.models();
-		offered.then(setChoices, () => {
-			offered = null;
-		});
-	}, []);
-
-	// A model this browser saved that the server no longer offers.
-	useEffect(() => {
-		if (choices && model && !choices.models.includes(model)) setModel(null);
-	}, [choices, model, setModel]);
+	const { model, effort, setModel, setEffort } = useAiPick();
+	const choices = useAiModels();
 
 	if (!choices) return null;
 	return (

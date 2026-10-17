@@ -10,7 +10,8 @@
 
 import { create } from "zustand";
 import { EditorCore } from "@opencut/core";
-import { type AiEffort, editorApi, type PlanCard, type PlanPatch, plansApi, type TurnChoice, type TurnKind } from "@/lib/api";
+import { editorApi, type PlanCard, type PlanPatch, plansApi, type TurnChoice, type TurnKind } from "@/lib/api";
+import { useAiPick } from "@/lib/editor/aiPick";
 import { toFrame } from "./bridge";
 import { clearAiMarkers, showCursor, showGhost } from "./ghost";
 import { getCurrentSync } from "./save-status";
@@ -38,11 +39,6 @@ interface AiState {
 	// Auto mode: the AI never asks and runs its plans without waiting for approval.
 	auto: boolean;
 	setAuto: (auto: boolean) => void;
-	// The model and reasoning effort picked in the chat; null for the defaults.
-	model: string | null;
-	effort: AiEffort | null;
-	setModel: (model: string | null) => void;
-	setEffort: (effort: AiEffort | null) => void;
 	/** ``shown``: the prompt is already in the chat (it waited for the files to be understood). */
 	send: (prompt: string, selection?: string[], shown?: boolean) => Promise<void>;
 	/** Put a message from the AI in the chat without a model call, after the user's line if given. */
@@ -58,24 +54,13 @@ interface AiState {
 
 const RECENT_TURNS = 3;
 const AUTO_KEY = "clipnera-ai-auto";
-const MODEL_KEY = "clipnera-ai-model";
-const EFFORT_KEY = "clipnera-ai-effort";
 
-// Private windows may refuse storage; choices then last for this visit.
-function load(key: string): string | null {
+/** Auto mode is on unless this browser turned it off. */
+function savedAuto(): boolean {
 	try {
-		return localStorage.getItem(key);
+		return localStorage.getItem(AUTO_KEY) !== "false";
 	} catch {
-		return null;
-	}
-}
-
-function save(key: string, value: string | null): void {
-	try {
-		if (value === null) localStorage.removeItem(key);
-		else localStorage.setItem(key, value);
-	} catch {
-		// See load().
+		return true;
 	}
 }
 const ACTIVE = new Set(["approved", "running"]);
@@ -169,24 +154,15 @@ export const useAiStore = create<AiState>((set, get) => {
 		byProject: {},
 		plans: {},
 		busy: false,
-		// Auto mode is on unless this browser turned it off.
-		auto: load(AUTO_KEY) !== "false",
-		model: load(MODEL_KEY),
-		effort: load(EFFORT_KEY) as AiEffort | null,
+		auto: savedAuto(),
 
 		setAuto(auto) {
 			set({ auto });
-			save(AUTO_KEY, String(auto));
-		},
-
-		setModel(model) {
-			set({ model });
-			save(MODEL_KEY, model);
-		},
-
-		setEffort(effort) {
-			set({ effort });
-			save(EFFORT_KEY, effort);
+			try {
+				localStorage.setItem(AUTO_KEY, String(auto));
+			} catch {
+				// Private windows may refuse storage; the switch still works for this visit.
+			}
 		},
 
 		note(projectId, userText, text, suggestions) {
@@ -212,8 +188,8 @@ export const useAiStore = create<AiState>((set, get) => {
 					recent_turns: earlier,
 					questions_asked: questionsInARow(messagesOf(projectId)),
 					auto: get().auto,
-					model: get().model,
-					effort: get().effort,
+					model: useAiPick.getState().model,
+					effort: useAiPick.getState().effort,
 				});
 				if (result.version !== null) await sync.refresh();
 				if (result.plan) showPlan(result.plan);

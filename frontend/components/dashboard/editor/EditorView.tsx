@@ -16,6 +16,7 @@ import { setStudioHandoff } from '@/lib/editor/handoff';
 import { applyOps, duration, itemEnd, normalise, TimelineError, type Item, type Timeline, type TimelineOp } from '@/lib/editor/timeline';
 import { formatRelativeTime } from '@/lib/utils/dates';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { AiModelSelect } from './AiModelSelect';
 
 const ASPECTS: EditorAspect[] = ['9:16', '1:1', '4:5', '16:9'];
 // "Auto": the project takes the shape of the first video (a full edit keeps the footage as shot).
@@ -198,6 +199,7 @@ function EditorHome() {
               </button>
             ))}
           </div>
+          <AiModelSelect />
           <button type="submit" disabled={busy} className="ml-auto inline-flex h-10 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 px-5 text-sm font-bold text-neutral-950 shadow-lg shadow-amber-500/20 hover:from-amber-300 hover:to-amber-400 disabled:opacity-60">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <ArrowUp className="h-4 w-4" aria-hidden />}
             Start
