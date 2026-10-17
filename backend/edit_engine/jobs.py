@@ -20,7 +20,7 @@ from clients.services.s3 import S3
 from core.config import get_settings
 from core.database import AsyncSessionLocal
 from core.logging_config import get_logger
-from edit_engine import director, perception, render, story, vision
+from edit_engine import director, perception, reference, render, story, vision
 from edit_engine.compiler import compile_timeline, layout_for
 from edit_engine.limits import limits_for
 from edit_engine.model import EditProject, EditStatus, MusicStatus, MusicTrack
@@ -122,10 +122,14 @@ async def _analyze(edit_id: str, user_id: str) -> None:
         shot_frames = []
         photos: list[dict[str, Any]] = []
         voice_index: int | None = None
+        reference_index: int | None = None
         for index, source in enumerate(sources):
             path = str(local[index])
             if source["kind"] == "voice":
                 voice_index = index
+                continue
+            if source["kind"] == "reference":
+                reference_index = index
                 continue
             if source["kind"] == "image":
                 if not source.get("description"):
@@ -166,6 +170,10 @@ async def _analyze(edit_id: str, user_id: str) -> None:
         for i, caption in zip(captioned, captions):
             shots[i]["caption"] = caption
 
+        if reference_index is not None or edit.reference_url:
+            await progress(edit_id, "Studying your reference reel")
+        style, style_error = await _reference(edit, local.get(reference_index), work)
+
     sentences = story.sentences_from_words(words)
     groups = story.retake_groups(sentences)
     speech_seconds = sum(s["end"] - s["start"] for s in sentences)
@@ -173,6 +181,7 @@ async def _analyze(edit_id: str, user_id: str) -> None:
         "version": ANALYSIS_VERSION, "language": edit.language, "words": words, "sentences": sentences,
         "retakes": groups, "dropped": sorted(story.dropped_takes(sentences, groups)), "shots": shots, "photos": photos,
         "content_type": story.classify(speech_seconds, raw_seconds, shots, voice_words is not None),
+        "reference": style, "reference_error": style_error,
     }
     if voice_words is not None:
         analysis["voice_words"] = voice_words["words"]
@@ -182,6 +191,18 @@ async def _analyze(edit_id: str, user_id: str) -> None:
     await save(edit_id, sources=json.dumps(voice_words["sources"] if voice_words else sources, ensure_ascii=False),
                analysis=json.dumps(analysis, ensure_ascii=False), raw_seconds=round(raw_seconds, 3))
     await _plan(edit_id, user_id)
+
+
+async def _reference(edit: EditProject, path: Path | None, work: Path) -> tuple[dict[str, Any] | None, str | None]:
+    """The reference reel's style, or why it couldn't be used: a bad reference is skipped, never fatal."""
+    if path is None and not edit.reference_url:
+        return None, None
+    try:
+        return await reference.study(str(path or await reference.download(edit.reference_url, work))), None
+    except Exception as exc:
+        log.warning("Reference reel skipped: edit=%s (%s)", edit.id, exc)
+        reason = str(exc) if isinstance(exc, ValueError) else "we couldn't open it"
+        return None, f"We couldn't use your reference reel ({reason}), so the plan follows your brief alone."
 
 
 async def _romanized(words: list[dict[str, Any]], is_pro: bool) -> list[dict[str, Any]]:
@@ -258,7 +279,9 @@ async def _plan(edit_id: str, user_id: str) -> None:
             mode = "onscreen"
     fixed = [i for line in aligned for i in line["sentences"]] if mode == "spoken" else None
 
-    client = director.director_client(is_pro, opus)
+    client = director.director_client(is_pro, opus, edit.ai_model, edit.ai_effort)
+    # A picked model replaces the Opus director, and its price.
+    opus = opus and not edit.ai_model
     log_text = director.footage_log(analysis, mode, script, edit.intent, edit.target_seconds, limits.max_output_seconds, fixed)
     plan = director.validate(await director.direct(client, log_text), analysis, mode)
     plan.update(

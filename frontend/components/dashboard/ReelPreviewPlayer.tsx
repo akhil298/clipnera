@@ -27,8 +27,12 @@ const voiceLength = (piece: EditVoicePiece) => piece.source_end - piece.source_s
  * watched and changed without the server rendering anything. One muted video shows
  * the picture, a second element plays the voice, and the music runs underneath.
  */
-export function ReelPreviewPlayer({ timeline, sources, musicUrl }: {
+export function ReelPreviewPlayer({ timeline, sources, musicUrl, seek, onTime }: {
   timeline: EditTimelineResponse; sources: EditSourceResponse[]; musicUrl: string | null;
+  /** Jump here; a new ``n`` asks again for the same time. */
+  seek?: { to: number; n: number };
+  /** The preview position as it plays or is moved. */
+  onTime?: (t: number) => void;
 }) {
   const picture = useRef<HTMLVideoElement>(null);
   const voice = useRef<HTMLVideoElement>(null);
@@ -117,6 +121,19 @@ export function ReelPreviewPlayer({ timeline, sources, musicUrl }: {
     sync(0, true);
   }, [timeline, sync, pause]);
 
+  // Only a new request jumps, so a recompiled plan still starts over from 0.
+  const sought = useRef(seek?.n);
+  useEffect(() => {
+    if (!seek || seek.n === sought.current) return;
+    sought.current = seek.n;
+    pause();
+    const to = Math.min(Math.max(0, seek.to), timeline.duration);
+    setT(to);
+    sync(to, true);
+  }, [seek, timeline.duration, sync, pause]);
+
+  useEffect(() => onTime?.(t), [t, onTime]);
+
   const current = activeAt(timeline.picture, t, (p) => p.dur) ?? timeline.picture[0];
   const wordIndex = timeline.words.findIndex((w) => w.start <= t && t < w.end + 0.25);
   const lineStart = wordIndex >= 0 ? wordIndex - (wordIndex % WORDS_PER_LINE) : -1;
@@ -125,8 +142,8 @@ export function ReelPreviewPlayer({ timeline, sources, musicUrl }: {
   const voiceoverUrl = url(timeline.voiceover_src);
 
   return (
-    <div className="w-full max-w-[300px] space-y-2">
-      <div className="relative aspect-[9/16] rounded-2xl overflow-hidden bg-black border border-neutral-800"
+    <div className="w-full max-w-[400px] space-y-3">
+      <div className="relative aspect-[9/16] rounded-[28px] overflow-hidden bg-black border border-neutral-800"
         style={{ filter: LOOK_FILTERS[timeline.look] ?? LOOK_FILTERS.natural }}>
         <video ref={picture} muted playsInline preload="auto" aria-hidden="true"
           className={`absolute inset-0 w-full h-full object-cover ${current?.kind === 'video' ? '' : 'invisible'}`}
@@ -168,12 +185,14 @@ export function ReelPreviewPlayer({ timeline, sources, musicUrl }: {
           )}
         </button>
       </div>
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={() => (playing ? pause() : play(t))} className="p-1.5 rounded-lg text-neutral-300 hover:text-white hover:bg-neutral-800"
+      <div className="flex items-center gap-3">
+        <button type="button" onClick={() => (playing ? pause() : play(t))}
+          className="w-12 h-12 shrink-0 rounded-full bg-neutral-100 hover:bg-white text-neutral-950 flex items-center justify-center"
           aria-label={playing ? 'Pause preview' : 'Play preview'}>
-          {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+          {playing ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 translate-x-0.5" />}
         </button>
-        <button type="button" onClick={() => { pause(); setT(0); sync(0, true); }} className="p-1.5 rounded-lg text-neutral-300 hover:text-white hover:bg-neutral-800"
+        <button type="button" onClick={() => { pause(); setT(0); sync(0, true); }}
+          className="w-11 h-11 shrink-0 rounded-xl border border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-800 flex items-center justify-center"
           aria-label="Back to the start">
           <RotateCcw className="w-4 h-4" />
         </button>
@@ -185,9 +204,9 @@ export function ReelPreviewPlayer({ timeline, sources, musicUrl }: {
             else sync(to, true);
           }}
           className="flex-1 accent-amber-400" />
-        <span className="font-mono text-[11px] text-neutral-400 tabular-nums">{formatSeconds(t)} / {formatSeconds(timeline.duration)}</span>
+        <span className="font-mono text-xs text-neutral-400 tabular-nums">{formatSeconds(t)} / {formatSeconds(timeline.duration)}</span>
       </div>
-      <p className="text-[11px] text-neutral-500">Preview plays in your browser and is close to the final; the render is sharper and fully mixed.</p>
+      <p className="text-xs text-neutral-500">Preview plays in your browser and is close to the final; the render is sharper and fully mixed.</p>
       <video ref={voice} playsInline preload="auto" className="hidden" />
       {voiceoverUrl && <audio ref={voiceover} src={voiceoverUrl} preload="auto" className="hidden" />}
       {musicUrl && <audio ref={music} src={musicUrl} preload="auto" className="hidden" />}

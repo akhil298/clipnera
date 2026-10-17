@@ -52,7 +52,12 @@ class EditProject(Base):
     # 0 lets the director choose.
     target_seconds: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     autopilot: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    # [{key, kind: video|image|voice, name, content_type, duration, width, height, has_audio, proxy_key}]
+    # The OpenAI deployment and reasoning effort picked for the director and chat; None is the plan's own.
+    ai_model: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    ai_effort: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    # A reel whose editing style to copy, by link; an uploaded one is a "reference" source instead.
+    reference_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # [{key, kind: video|image|voice|reference, name, content_type, duration, width, height, has_audio, proxy_key}]
     sources: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     # Perception and transcript: words, sentences, shots, photos, retakes, content type.
     analysis: Mapped[str] = mapped_column(Text, default="{}", nullable=False)

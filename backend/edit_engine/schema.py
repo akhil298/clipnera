@@ -10,6 +10,8 @@ from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+from clients.ai.roles import Effort
 from subtitle_styling.templates import DEFAULT_STYLE
 
 ScriptMode = Literal["auto", "spoken", "voiceover", "onscreen", "direction"]
@@ -35,6 +37,11 @@ class EditCreateRequest(BaseModel):
     caption_style: str = Field(DEFAULT_STYLE, min_length=1, max_length=60)
     target_seconds: TargetSeconds = 0
     autopilot: bool = False
+    # The OpenAI deployment (one of /edits/models) and effort for the director and chat; None for the defaults.
+    ai_model: str | None = Field(None, min_length=1, max_length=80)
+    ai_effort: Effort | None = None
+    # A reel whose editing style to copy (pacing, captions, energy), by link.
+    reference_url: str | None = Field(None, max_length=1000, pattern=r"^https?://\S+$")
 
 
 class EditSourceFile(BaseModel):
@@ -43,6 +50,8 @@ class EditSourceFile(BaseModel):
     size_bytes: int = Field(..., gt=0, le=2 * 1024 * 1024 * 1024)
     # Read by the browser before upload so over-limit footage is refused early; checked again on analysis.
     duration_s: float | None = Field(None, ge=0)
+    # A video whose editing style to copy rather than footage to edit; one per reel.
+    reference: bool = False
 
 
 class EditSourcesInitRequest(BaseModel):
@@ -74,15 +83,29 @@ class EditChangesRequest(BaseModel):
 
 class EditChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=300)
+    # A new model pick for this and later chats and re-plans; None keeps the reel's.
+    ai_model: str | None = Field(None, min_length=1, max_length=80)
+    ai_effort: Effort | None = None
 
 
 class EditSourceResponse(BaseModel):
     key: str
-    kind: Literal["video", "image", "voice"]
+    kind: Literal["video", "image", "voice", "reference"]
     name: str
     duration_s: float
     # A playable URL for the browser preview: the small proxy for videos.
     url: str | None
+
+
+class EditReferenceResponse(BaseModel):
+    """What the analysis took from the reference reel."""
+
+    duration_s: float
+    shots: int
+    seconds_per_shot: float
+    energy: Literal["low", "medium", "high"]
+    # The look in a sentence: captions, colour, on-screen text, transitions.
+    style: str
 
 
 class EditLine(BaseModel):
@@ -189,6 +212,12 @@ class EditResponse(BaseModel):
     caption_style: str
     target_seconds: int
     autopilot: bool
+    ai_model: str | None
+    ai_effort: str | None
+    reference_url: str | None
+    reference: EditReferenceResponse | None
+    # Why the reference reel was skipped, when it was.
+    reference_error: str | None
     sources: list[EditSourceResponse]
     raw_seconds: float
     duration_s: float

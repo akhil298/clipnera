@@ -322,6 +322,26 @@ class YouTubeService:
             "audio": audio_formats,
         }
 
+    async def download_short(self, url: str, folder: Path, max_seconds: int) -> Path:
+        """A video of at most ``max_seconds`` at up to 720p into ``folder``, to study, not to republish."""
+        import yt_dlp
+
+        def _download() -> Path:
+            options = {
+                **self._yt_dlp_base_options(),
+                "format": "b[height<=720][ext=mp4]/b[height<=720]/b",
+                "outtmpl": str(folder / "reference.%(ext)s"),
+                "noprogress": True,
+                "match_filter": yt_dlp.utils.match_filter_func(f"duration <= {max_seconds}"),
+            }
+            with yt_dlp.YoutubeDL(options) as ydl:
+                path = Path(ydl.prepare_filename(ydl.extract_info(url, download=True)))
+            if not path.exists():
+                raise ValueError(f"the reference link is longer than {max_seconds // 60} minutes")
+            return path
+
+        return await asyncio.to_thread(_download)
+
     async def download_and_store(self, url: str, user_id: str, project_id: str, format_id: str | None = None) -> Dict[str, Any]:
         """Download YouTube video to local folder and store in S3."""
         try:

@@ -26,6 +26,8 @@ from edit_engine.service import EditService, MusicLibraryService
 from feature_flags.dependencies import require_flag
 from feature_flags.registry import REEL_EDITOR
 from auth.model import User
+from brain.schema import AiModels
+from clients.ai.roles import EFFORTS, selectable_models
 
 edits = APIRouter(prefix="/edits", tags=["edits"], dependencies=[Depends(require_flag(REEL_EDITOR))])
 # The library stays open to admins while the feature is off, so it can be filled before launch.
@@ -48,6 +50,13 @@ MusicServiceDep = Annotated[MusicLibraryService, Depends(get_music_service)]
 async def edit_limits(user: CurrentUserDep, service: EditServiceDep):
     """What the caller's plan allows: footage minutes, files, reel length, output size."""
     return ok(await service.limits(user["user_id"]))
+
+
+@edits.get("/models", response_model=ApiResponse[AiModels])
+async def edit_models(_: CurrentUserDep):
+    """The AI models and reasoning efforts a reel's director and chat can run on (picking one is Pro)."""
+    models = selectable_models()
+    return ok(AiModels(models=models, default_model=models[0], efforts=list(EFFORTS)))
 
 
 @edits.post("", response_model=ApiResponse[EditResponse])
@@ -97,7 +106,7 @@ async def change_edit(edit_id: str, data: EditChangesRequest, user: CurrentUserD
 @edits.post("/{edit_id}/chat", response_model=ApiResponse[EditResponse])
 async def chat_edit(edit_id: str, data: EditChatRequest, user: CurrentUserDep, service: EditServiceDep):
     """Change the plan by describing the change, e.g. "make the hook punchier"."""
-    return ok(await service.chat(user["user_id"], edit_id, data.message))
+    return ok(await service.chat(user["user_id"], edit_id, data))
 
 
 @edits.post("/{edit_id}/render", response_model=ApiResponse[EditResponse])

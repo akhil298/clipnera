@@ -2441,6 +2441,11 @@ export interface EditCreateRequest {
   caption_style?: string;
   target_seconds?: EditTargetSeconds;
   autopilot?: boolean;
+  /** One of AiModels.models (from editsApi.models); omitted for the plan's default. Pro only. */
+  ai_model?: string | null;
+  ai_effort?: AiEffort | null;
+  /** A YouTube or Shorts link to a reel whose editing style to copy. */
+  reference_url?: string | null;
 }
 
 export interface EditSourceFile {
@@ -2448,6 +2453,8 @@ export interface EditSourceFile {
   content_type: EditSourceType;
   size_bytes: number;
   duration_s?: number | null;
+  /** A video whose editing style to copy rather than footage to edit; one per reel. */
+  reference?: boolean;
 }
 
 export interface EditUpload {
@@ -2463,10 +2470,19 @@ export interface EditChange {
 
 export interface EditSourceResponse {
   key: string;
-  kind: 'video' | 'image' | 'voice';
+  kind: 'video' | 'image' | 'voice' | 'reference';
   name: string;
   duration_s: number;
   url: string | null;
+}
+
+/** What the analysis took from the reference reel. */
+export interface EditReferenceResponse {
+  duration_s: number;
+  shots: number;
+  seconds_per_shot: number;
+  energy: 'low' | 'medium' | 'high';
+  style: string;
 }
 
 export interface EditLine {
@@ -2570,6 +2586,12 @@ export interface EditResponse {
   caption_style: string;
   target_seconds: number;
   autopilot: boolean;
+  ai_model: string | null;
+  ai_effort: AiEffort | null;
+  reference_url: string | null;
+  reference: EditReferenceResponse | null;
+  /** Why the reference reel was skipped, when it was. */
+  reference_error: string | null;
   sources: EditSourceResponse[];
   raw_seconds: number;
   duration_s: number;
@@ -2631,8 +2653,16 @@ export const EDIT_LOOKS: Record<string, string> = {
 /** Mirrors MOODS in backend/edit_engine/music.py. */
 export const EDIT_MOODS = ['upbeat', 'chill', 'lofi', 'inspiring', 'cinematic', 'dramatic', 'emotional', 'funny', 'energetic', 'corporate'] as const;
 
+export interface EditChatRequest {
+  message: string;
+  /** A new model pick for this and later chats and re-plans; omitted keeps the reel's. */
+  ai_model?: string | null;
+  ai_effort?: AiEffort | null;
+}
+
 export const editsApi = {
   limits: () => envelopeRequest<EditLimitsResponse>('/edits/limits'),
+  models: () => envelopeRequest<AiModels>('/edits/models'),
   create: (payload: EditCreateRequest) => envelopeRequest<EditResponse>('/edits', post(payload)),
   list: () => envelopeRequest<EditSummary[]>('/edits'),
   get: (editId: string) => envelopeRequest<EditResponse>(`/edits/${editId}`),
@@ -2644,19 +2674,20 @@ export const editsApi = {
   replan: (editId: string) => envelopeRequest<EditResponse>(`/edits/${editId}/plan`, post({})),
   change: (editId: string, changes: EditChange[]) =>
     envelopeRequest<EditResponse>(`/edits/${editId}/changes`, post({ changes })),
-  chat: (editId: string, message: string) => envelopeRequest<EditResponse>(`/edits/${editId}/chat`, post({ message })),
+  chat: (editId: string, request: EditChatRequest) => envelopeRequest<EditResponse>(`/edits/${editId}/chat`, post(request)),
   render: (editId: string) => envelopeRequest<EditResponse>(`/edits/${editId}/render`, post({})),
 
   /** Uploads footage, photos and a voiceover straight to S3 (with per-file progress), then attaches them. */
   async uploadSources(
     editId: string,
-    files: { file: File; durationS: number | null }[],
+    files: { file: File; durationS: number | null; reference?: boolean }[],
     onProgress?: (index: number, fraction: number) => void,
   ): Promise<EditResponse> {
     const { uploads } = await editsApi.initSources(
       editId,
-      files.map(({ file, durationS }) => ({
+      files.map(({ file, durationS, reference }) => ({
         filename: file.name, content_type: file.type as EditSourceType, size_bytes: file.size, duration_s: durationS,
+        reference: Boolean(reference),
       })),
     );
     await Promise.all(uploads.map((upload, i) => putWithProgress(upload, files[i].file, (f) => onProgress?.(i, f))));

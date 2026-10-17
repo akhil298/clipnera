@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from clients.ai import REEL_DIRECTOR_OPUS, get_text_client, openai_only
+from clients.ai import REEL_DIRECTOR_OPUS, ModelChoice, get_text_client, openai_only
 from core.logging_config import get_logger
 from skills import HOOKS, TITLES, skill_block
 from edit_engine.looks import DEFAULT_LOOK, LOOKS
@@ -24,7 +24,7 @@ from edit_engine.story import CONTENT_TYPES
 
 log = get_logger(__name__)
 
-DIRECTOR_VERSION = "2026-09-28.1"
+DIRECTOR_VERSION = "2026-10-17.1"
 MAX_LOG_SENTENCES = 220
 MAX_LOG_SHOTS = 120
 OUTPUT_TOKENS = 2500
@@ -41,7 +41,8 @@ How great reels are edited:
 - For footage without speech, "montage" lists the best shots and photos in viewing order: strongest first, varied, no near-duplicates.
 - Pick the music mood and energy that fit the content, and a colour look that fits the setting.
 - Write the Instagram caption in the creator's language: 1-2 short lines, no hashtags inside; hashtags separately, at most 8.
-Follow the creator's intent when given. When the script is marked FIXED, keep every script line in order and only choose visuals, pop-ups, punch-ins, music and look."""
+Follow the creator's intent when given. When a REFERENCE REEL is described, edit in its style: cut, punch in or add B-roll about as often as it cuts, match its energy with the music and the look, and keep its kind of on-screen text. Copy its style, never its content.
+When the script is marked FIXED, keep every script line in order and only choose visuals, pop-ups, punch-ins, music and look."""
 
 # The reel director reads the editing skills before it plans (backend/skills).
 SYSTEM = f"{SYSTEM}\n\n{skill_block(HOOKS, TITLES)}"
@@ -81,6 +82,10 @@ def footage_log(analysis: dict[str, Any], mode: str, script: str | None, intent:
     ]
     if intent:
         lines.append(f"CREATOR'S INTENT: {intent}")
+    if reference := analysis.get("reference"):
+        lines.append(f"REFERENCE REEL: {reference['duration_s']:.0f} s, {reference['shots']} shots "
+                     f"(a cut every {reference['seconds_per_shot']:.1f} s), {reference['energy']} energy. "
+                     f"Style: {reference['style'] or 'unknown'}")
     if mode == "spoken" and fixed:
         lines.append("SCRIPT: FIXED. The kept sentences are, in order: " + " ".join(fixed))
     elif mode in ("direction", "onscreen") and script:
@@ -105,7 +110,10 @@ def footage_log(analysis: dict[str, Any], mode: str, script: str | None, intent:
     return "\n".join(lines)
 
 
-def director_client(is_pro: bool, opus: bool) -> Any:
+def director_client(is_pro: bool, opus: bool, model: str | None = None, effort: str | None = None) -> Any:
+    """The creator's picked OpenAI deployment when there is one, else the plan's director."""
+    if model:
+        return get_text_client(choice=ModelChoice("openai", model, effort), step="reel_director")
     # The Opus flag yields to LLM_ROUTING=openai, which sends every step to OpenAI.
     if is_pro and opus and not openai_only():
         return get_text_client(choice=REEL_DIRECTOR_OPUS, step="reel_director")

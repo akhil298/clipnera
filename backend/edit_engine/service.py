@@ -15,12 +15,13 @@ import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from clients.ai import get_text_client
+from clients.ai import ModelChoice, get_text_client
+from clients.ai.roles import selectable_models
 from clients.services.s3 import S3
 from core.config import get_settings
 from core.exceptions import CustomException
 from core.logging_config import get_logger
-from edit_engine import jobs
+from edit_engine import jobs, reference
 from edit_engine.compiler import compile_timeline, summary
 from edit_engine.director import parse
 from edit_engine.limits import limits_for
@@ -30,8 +31,8 @@ from edit_engine.music import ALLOWED_LICENCES, MOODS, SOURCES, credit_line, pic
 from edit_engine.perception import probe_media
 from edit_engine.schema import (
     EditChange, EditCreateRequest, EditLimitsResponse, EditLine, EditMusicResponse, EditPicture, EditPlanResponse,
-    EditResponse, EditSourceResponse, EditSourcesCompleteRequest, EditSourcesInitRequest, EditSourcesInitResponse,
-    EditSummary, EditText, EditTimelineMusic, EditTimelineResponse, EditUpload, EditVoicePiece, EditWord,
+    EditReferenceResponse, EditResponse, EditSourceResponse, EditSourcesCompleteRequest, EditSourcesInitRequest, EditSourcesInitResponse,
+    EditChatRequest, EditSourceFile, EditSummary, EditText, EditTimelineMusic, EditTimelineResponse, EditUpload, EditVoicePiece, EditWord,
     MusicTrackResponse,
 )
 from edit_engine.script import SCRIPT_MODES
@@ -96,10 +97,16 @@ class EditService:
         if request.target_seconds > limits_for(entitlements).max_output_seconds:
             raise CustomException(message="Your plan makes reels up to "
                                   f"{limits_for(entitlements).max_output_seconds} seconds long.", code="PRO_REQUIRED", status_code=403)
+        self._check_model(entitlements, request.ai_model)
+        if request.reference_url and not reference.is_supported_link(request.reference_url):
+            raise CustomException(message="Paste a YouTube or Shorts link, or upload the reference reel instead.",
+                                  code="INVALID_BODY", status_code=400)
         edit = EditProject(
             user_id=user_id, title=request.title.strip(), script=(request.script or "").strip() or None,
             script_mode=request.script_mode, intent=(request.intent or "").strip() or None, language=request.language.lower(),
             caption_style=request.caption_style, target_seconds=request.target_seconds, autopilot=request.autopilot,
+            ai_model=request.ai_model, ai_effort=request.ai_effort if request.ai_model else None,
+            reference_url=request.reference_url,
         )
         self._session.add(edit)
         await self._session.commit()
@@ -119,10 +126,12 @@ class EditService:
         edit = await self._edit(user_id, edit_id, statuses=(EditStatus.DRAFT, EditStatus.FAILED))
         limits = limits_for(await self._subscriptions.get_entitlements(user_id))
         sources = json.loads(edit.sources)
-        if len(sources) + len(request.files) > limits.max_files:
+        footage = [f for f in request.files if not f.reference]
+        self._check_reference(sources, [f for f in request.files if f.reference])
+        if sum(1 for s in sources if s["kind"] != "reference") + len(footage) > limits.max_files:
             raise CustomException(message=f"Your plan allows up to {limits.max_files} files per reel.", code="FILE_LIMIT", status_code=403)
         declared = sum(s.get("duration") or 0 for s in sources if s["kind"] == "video")
-        declared += sum(f.duration_s or 0 for f in request.files if f.content_type.startswith("video/"))
+        declared += sum(f.duration_s or 0 for f in footage if f.content_type.startswith("video/"))
         if declared > limits.max_raw_seconds:
             raise CustomException(message=f"Your plan edits up to {limits.max_raw_seconds // 60} minutes of footage per reel.",
                                   code="FOOTAGE_LIMIT", status_code=403)
@@ -136,7 +145,8 @@ class EditService:
             key = f"edits/{user_id}/{edit.id}/{uuid4().hex}{_EXTENSIONS[file.content_type]}"
             url = self._s3.presign_put(self._settings.S3_BUCKET_NAME, key, file.content_type, URL_TTL_SECONDS)
             uploads.append(EditUpload(key=key, url=url, content_type=file.content_type))
-            sources.append({"key": key, "kind": _KINDS[file.content_type.split("/")[0]], "name": file.filename[:255],
+            kind = "reference" if file.reference else _KINDS[file.content_type.split("/")[0]]
+            sources.append({"key": key, "kind": kind, "name": file.filename[:255],
                             "content_type": file.content_type, "duration": file.duration_s or 0.0, "uploaded": False})
         edit.sources = json.dumps(sources, ensure_ascii=False)
         await self._session.commit()
@@ -267,17 +277,21 @@ class EditService:
             raise CustomException(message="That track isn't available", code="NOT_FOUND", status_code=404)
         return jobs.track_choice(track)
 
-    async def chat(self, user_id: str, edit_id: str, message: str) -> EditResponse:
-        """A request in the creator's words, turned into plan changes by a small model."""
+    async def chat(self, user_id: str, edit_id: str, request: EditChatRequest) -> EditResponse:
+        """A request in the creator's words, turned into plan changes by a small model, or the one they picked."""
         edit = await self._edit(user_id, edit_id, statuses=(EditStatus.PLANNED, EditStatus.DONE))
         entitlements = await self._subscriptions.get_entitlements(user_id)
         if edit.chat_edits >= limits_for(entitlements).max_chat_edits:
             raise CustomException(message="You've used this reel's chat edits. You can still change the plan directly.",
                                   code="CHAT_LIMIT", status_code=429)
+        if request.ai_model:
+            self._check_model(entitlements, request.ai_model)
+            edit.ai_model, edit.ai_effort = request.ai_model, request.ai_effort
         plan, analysis = json.loads(edit.plan), json.loads(edit.analysis)
-        prompt = self._chat_context(plan, analysis, message)
+        prompt = self._chat_context(plan, analysis, request.message)
+        picked = ModelChoice("openai", edit.ai_model, edit.ai_effort) if edit.ai_model else None
         with llm_scope(user_id=user_id, project_id=edit.id, step="reel_chat"):
-            reply = await get_text_client(is_pro=entitlements.pro_ai_provider, step="reel_chat").chat(
+            reply = await get_text_client(is_pro=entitlements.pro_ai_provider, step="reel_chat", choice=picked).chat(
                 [{"role": "system", "content": CHAT_SYSTEM.replace("LOOKS", ", ".join(LOOKS)).replace("MOODS", ", ".join(MOODS))},
                  {"role": "user", "content": prompt}], temperature=0.2, max_tokens=400, json_mode=True,
             )
@@ -304,6 +318,29 @@ class EditService:
         return "\n".join(lines) + f"\n\nREQUEST: {message}"
 
     # --- helpers ----------------------------------------------------------------
+
+    @staticmethod
+    def _check_model(entitlements: Entitlements, model: str | None) -> None:
+        if model is None:
+            return
+        if model not in selectable_models():
+            raise CustomException(message=f"The AI can't use {model}.", code="UNKNOWN_MODEL", status_code=422)
+        if not entitlements.pro_ai_provider:
+            raise CustomException(message="Picking the AI model is on Pro.", code="PRO_REQUIRED", status_code=403,
+                                  extra={"feature": "ai_model"})
+
+    @staticmethod
+    def _check_reference(sources: list[dict[str, Any]], files: list[EditSourceFile]) -> None:
+        """One reference reel per reel: a video short enough to study."""
+        if not files:
+            return
+        if len(files) + sum(1 for s in sources if s["kind"] == "reference") > 1:
+            raise CustomException(message="Add one reference reel", code="INVALID_BODY", status_code=400)
+        if not files[0].content_type.startswith("video/"):
+            raise CustomException(message="The reference reel must be a video", code="INVALID_BODY", status_code=400)
+        if (files[0].duration_s or 0) > reference.MAX_SECONDS:
+            raise CustomException(message=f"Use a reference reel under {reference.MAX_SECONDS // 60} minutes",
+                                  code="INVALID_BODY", status_code=400)
 
     @staticmethod
     def _check_caption_style(entitlements: Entitlements, style: str) -> None:
@@ -337,6 +374,9 @@ class EditService:
             progress=PROGRESS.get(edit.status) or (analysis.get("progress") if edit.status == EditStatus.ANALYZING else None),
             script=edit.script, script_mode=edit.script_mode, intent=edit.intent, language=edit.language,
             caption_style=edit.caption_style, target_seconds=edit.target_seconds, autopilot=edit.autopilot,
+            ai_model=edit.ai_model, ai_effort=edit.ai_effort, reference_url=edit.reference_url,
+            reference=EditReferenceResponse(**analysis["reference"]) if analysis.get("reference") else None,
+            reference_error=analysis.get("reference_error"),
             sources=[self._source_response(s) for s in sources if s.get("uploaded")],
             raw_seconds=edit.raw_seconds, duration_s=edit.duration_s,
             plan=await self._plan_response(plan, analysis, timeline) if has_plan else None,

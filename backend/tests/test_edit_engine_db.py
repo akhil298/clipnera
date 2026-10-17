@@ -70,9 +70,11 @@ class FakeS3:
 
 class FakeDirector:
     model = "fake-director"
+    # The last footage log the director was given.
+    seen = ""
 
     async def chat(self, messages, **kwargs):
-        text = messages[-1]["content"]
+        text = FakeDirector.seen = messages[-1]["content"]
         # Keep every sentence the log offers, put a pop-up on the last and B-roll on the second.
         ids = [line.split(" | ")[0] for line in text.splitlines() if line.startswith("s") and " | " in line]
         return json.dumps({
@@ -124,7 +126,7 @@ def world(db, monkeypatch, tmp_path):  # noqa: F811
     monkeypatch.setattr(jobs.GroqWhisperTranscriber, "transcribe", transcribe)
     monkeypatch.setattr(vision, "caption_sheet", caption_sheet)
     monkeypatch.setattr(jobs, "describe_image", describe_image)
-    monkeypatch.setattr(jobs.director, "director_client", lambda is_pro, opus: FakeDirector())
+    monkeypatch.setattr(jobs.director, "director_client", lambda is_pro, opus, model=None, effort=None: FakeDirector())
     return {"db": db, "queued": queued, "tmp": tmp_path}
 
 
@@ -143,18 +145,23 @@ async def _run(world) -> None:
         await {jobs.ANALYZE_JOB: jobs.analyze_edit, jobs.PLAN_JOB: jobs.plan_edit, jobs.RENDER_JOB: jobs.render_edit}[job.kind](job)
 
 
-async def _uploaded_edit(world, script: str | None) -> tuple[str, str]:
+async def _uploaded_edit(world, script: str | None, reference: bool = False, **request) -> tuple[str, str]:
+    """A reel with a talking video and a photo (and the same video again as a reference reel), analysed and planned."""
     maker = world["db"]
     user_id = await _user(maker)
     video, photo = _media(world["tmp"])
+    files = [
+        EditSourceFile(filename="talk.mp4", content_type="video/mp4", size_bytes=video.stat().st_size, duration_s=9),
+        EditSourceFile(filename="shoes.jpg", content_type="image/jpeg", size_bytes=photo.stat().st_size),
+    ]
+    if reference:
+        files.append(EditSourceFile(filename="style.mp4", content_type="video/mp4", size_bytes=video.stat().st_size,
+                                    duration_s=9, reference=True))
     async with maker() as session:
         service = EditService(session, FakeS3())
-        edit = await service.create(user_id, EditCreateRequest(title="Untitled reel", script=script))
-        uploads = await service.init_sources(user_id, edit.id, EditSourcesInitRequest(files=[
-            EditSourceFile(filename="talk.mp4", content_type="video/mp4", size_bytes=video.stat().st_size, duration_s=9),
-            EditSourceFile(filename="shoes.jpg", content_type="image/jpeg", size_bytes=photo.stat().st_size),
-        ]))
-        for upload, local in zip(uploads.uploads, (video, photo)):
+        edit = await service.create(user_id, EditCreateRequest(title="Untitled reel", script=script, **request))
+        uploads = await service.init_sources(user_id, edit.id, EditSourcesInitRequest(files=files))
+        for upload, local in zip(uploads.uploads, (video, photo, video)):
             shutil.copy(local, upload.url.removeprefix("file://"))
         await service.complete_sources(user_id, edit.id, EditSourcesCompleteRequest(keys=[u.key for u in uploads.uploads]))
         await service.analyze(user_id, edit.id)
@@ -322,3 +329,56 @@ async def test_retrying_a_failed_analysis_is_free(world, monkeypatch):
     await _run(world)
     async with maker() as session:
         assert (await session.get(EditProject, edit_id)).status == EditStatus.PLANNED
+
+
+async def test_reference_reel_guides_the_director_and_is_not_footage(world, monkeypatch):
+    async def ask_sheet(sheet, prompt, max_tokens=700):
+        return '{"style": "Big yellow captions, fast punch-ins.", "energy": "high"}'
+
+    monkeypatch.setattr(vision, "ask_sheet", ask_sheet)
+    user_id, edit_id = await _uploaded_edit(world, script=None, reference=True)
+    async with world["db"]() as session:
+        edit = await EditService(session, FakeS3()).get(user_id, edit_id)
+    assert edit.status == "planned", edit.error
+    assert edit.reference and edit.reference.style == "Big yellow captions, fast punch-ins." and edit.reference.energy == "high"
+    assert edit.reference_error is None
+    assert [s.kind for s in edit.sources] == ["video", "image", "reference"]
+    assert edit.raw_seconds < 10  # the reference is studied, not counted as footage
+    assert "REFERENCE REEL: 9 s" in FakeDirector.seen and "Big yellow captions" in FakeDirector.seen
+
+
+async def test_a_reference_link_that_fails_is_skipped_not_fatal(world, monkeypatch):
+    async def download(url, folder):
+        raise ValueError("the reference link is longer than 3 minutes")
+
+    monkeypatch.setattr(jobs.reference, "download", download)
+    user_id, edit_id = await _uploaded_edit(world, script=None, reference_url="https://youtu.be/abcdefghijk")
+    async with world["db"]() as session:
+        edit = await EditService(session, FakeS3()).get(user_id, edit_id)
+    assert edit.status == "planned" and edit.reference is None
+    assert edit.reference_url == "https://youtu.be/abcdefghijk"
+    assert "longer than 3 minutes" in edit.reference_error
+
+
+async def test_reference_and_model_rules(world, monkeypatch):
+    maker = world["db"]
+    user_id = await _user(maker)
+    monkeypatch.setattr(service_module, "selectable_models", lambda: ["gpt-6-astra-1"])
+    async with maker() as session:
+        service = EditService(session, FakeS3())
+        with pytest.raises(CustomException) as unknown:
+            await service.create(user_id, EditCreateRequest(ai_model="gpt-0"))
+        assert unknown.value.code == "UNKNOWN_MODEL"
+        with pytest.raises(CustomException) as free:
+            await service.create(user_id, EditCreateRequest(ai_model="gpt-6-astra-1", ai_effort="high"))
+        assert free.value.code == "PRO_REQUIRED"
+        with pytest.raises(CustomException):
+            await service.create(user_id, EditCreateRequest(reference_url="https://www.instagram.com/reel/abc/"))
+        edit = await service.create(user_id, EditCreateRequest())
+        style = dict(content_type="video/mp4", size_bytes=10, duration_s=20, reference=True)
+        with pytest.raises(CustomException):
+            await service.init_sources(user_id, edit.id, EditSourcesInitRequest(files=[
+                EditSourceFile(filename="a.mp4", **style), EditSourceFile(filename="b.mp4", **style)]))
+        with pytest.raises(CustomException):
+            await service.init_sources(user_id, edit.id, EditSourcesInitRequest(files=[
+                EditSourceFile(filename="long.mp4", **{**style, "duration_s": 600})]))

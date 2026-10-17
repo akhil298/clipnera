@@ -75,14 +75,14 @@ def parse_tiles(text: str) -> dict[int, str]:
     return out
 
 
-async def caption_sheet(sheet: bytes) -> dict[int, str]:
-    """Tile number -> caption; an empty dict if the call fails."""
+async def ask_sheet(sheet: bytes, prompt: str, max_tokens: int = 700) -> str:
+    """A small vision model's reply about one contact sheet; empty when every model fails."""
     settings = get_settings()
     started = time.monotonic()
     try:
         response = await AsyncGroq(api_key=settings.GROQ_API_KEY).chat.completions.create(
-            model=FREE_MODEL, max_tokens=700, temperature=0.2, messages=[{"role": "user", "content": [
-                {"type": "text", "text": PROMPT},
+            model=FREE_MODEL, max_tokens=max_tokens, temperature=0.2, messages=[{"role": "user", "content": [
+                {"type": "text", "text": prompt},
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64.b64encode(sheet).decode()}"}},
             ]}],
         )
@@ -91,26 +91,31 @@ async def caption_sheet(sheet: bytes) -> dict[int, str]:
                               output_tokens=getattr(usage, "completion_tokens", 0),
                               latency_ms=int((time.monotonic() - started) * 1000),
                               response=reply_text(response))
-        return parse_tiles(response.choices[0].message.content or "")
+        return response.choices[0].message.content or ""
     except Exception as exc:
-        log.warning("Contact sheet captioning on Groq failed (%s); using the captioner role", exc)
-    return await _caption_with_role(sheet)
+        log.warning("Contact sheet call on Groq failed (%s); using the captioner role", exc)
+    return await _ask_with_role(sheet, prompt, max_tokens)
 
 
-async def _caption_with_role(sheet: bytes) -> dict[int, str]:
-    """The same captions from the configured captioner model, for when Groq is down or its key is dead."""
+async def _ask_with_role(sheet: bytes, prompt: str, max_tokens: int) -> str:
+    """The same call on the configured captioner model, for when Groq is down or its key is dead."""
     try:
         client = get_role_client("captioner")
     except Exception as exc:
         log.warning("No captioner model is available: %s", exc)
-        return {}
+        return ""
     try:
-        return parse_tiles(await client.chat([client.image_message(PROMPT, [sheet])], max_tokens=700))
+        return await client.chat([client.image_message(prompt, [sheet])], max_tokens=max_tokens)
     except Exception as exc:
-        log.warning("Contact sheet captioning failed: %s", exc)
-        return {}
+        log.warning("Contact sheet call failed: %s", exc)
+        return ""
     finally:
         await client.close()
+
+
+async def caption_sheet(sheet: bytes) -> dict[int, str]:
+    """Tile number -> caption; an empty dict if the call fails."""
+    return parse_tiles(await ask_sheet(sheet, PROMPT))
 
 
 def shots_to_caption(shots: list[dict[str, Any]], is_pro: bool) -> list[int]:

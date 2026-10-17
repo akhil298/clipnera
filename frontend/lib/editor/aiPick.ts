@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { type AiEffort, type AiModels, editorApi } from '@/lib/api';
+import { type AiEffort, type AiModels, editorApi, editsApi } from '@/lib/api';
 
 export const EFFORT_LABEL: Record<AiEffort, string> = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high' };
 
@@ -31,25 +31,31 @@ export const useAiPick = create<AiPickState>()(
   ),
 );
 
-let offered: Promise<AiModels> | null = null;
-
-/** What the server lets the user pick, fetched once per visit (again after a failure). */
-export function loadAiModels(): Promise<AiModels> {
-  offered ??= editorApi.models().catch((error: unknown) => {
-    offered = null;
-    throw error;
-  });
-  return offered;
+/** ``fetch`` made once per visit (again after a failure). */
+function once(fetch: () => Promise<AiModels>): () => Promise<AiModels> {
+  let offered: Promise<AiModels> | null = null;
+  return () => {
+    offered ??= fetch().catch((error: unknown) => {
+      offered = null;
+      throw error;
+    });
+    return offered;
+  };
 }
 
+/** What the studio's AI chat lets the user pick. */
+export const loadAiModels = once(() => editorApi.models());
+/** What a footage reel's director and chat let the user pick (open without the editor flag). */
+export const loadReelModels = once(() => editsApi.models());
+
 /** The server's choices once loaded; a saved model it no longer offers goes back to the default. */
-export function useAiModels(): AiModels | null {
+export function useAiModels(load: () => Promise<AiModels> = loadAiModels): AiModels | null {
   const [choices, setChoices] = useState<AiModels | null>(null);
   const model = useAiPick((state) => state.model);
 
   useEffect(() => {
-    loadAiModels().then(setChoices, () => setChoices(null));
-  }, []);
+    load().then(setChoices, () => setChoices(null));
+  }, [load]);
 
   useEffect(() => {
     if (choices && model && !choices.models.includes(model)) useAiPick.getState().setModel(null);

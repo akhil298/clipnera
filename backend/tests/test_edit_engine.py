@@ -5,7 +5,8 @@ from types import SimpleNamespace
 import pytest
 
 from core.exceptions import CustomException
-from edit_engine import compiler, director, music, pricing, script, story
+from edit_engine import compiler, director, music, pricing, reference, script, story
+from edit_engine.schema import EditCreateRequest
 
 
 def words_for(text: str, src: int = 0, start: float = 0.0, gap: float = 0.4) -> list[dict]:
@@ -206,6 +207,24 @@ class TestDirector:
         a = {**analysis_for(("Sorry let me start again.", 0, 0.0), ("Shoes matter.", 0, 3.0)), "content_type": "talking_head"}
         text = director.footage_log(a, "spoken", "Shoes matter.", "funny", 30, 45, fixed=["s1"])
         assert "SCRIPT: FIXED" in text and "[weaker take or restart]" in text and "CREATOR'S INTENT: funny" in text
+
+    def test_footage_log_describes_the_reference_reel(self):
+        style = {"duration_s": 28.0, "shots": 14, "seconds_per_shot": 2.0, "energy": "high", "style": "Yellow word-by-word captions."}
+        a = {**analysis_for(("Shoes matter.", 0, 0.0)), "reference": style}
+        text = director.footage_log(a, "none", None, None, 0, 45)
+        assert "REFERENCE REEL: 28 s, 14 shots (a cut every 2.0 s), high energy. Style: Yellow word-by-word captions." in text
+        assert "REFERENCE REEL" not in director.footage_log(analysis_for(("Shoes matter.", 0, 0.0)), "none", None, None, 0, 45)
+
+
+class TestReference:
+    def test_energy_follows_the_cut_rate(self):
+        assert [reference._energy(s) for s in (0.8, 2.5, 5.0)] == ["high", "medium", "low"]
+
+    def test_only_youtube_links_and_web_urls(self):
+        assert reference.is_supported_link("https://youtube.com/shorts/abcdefghijk")
+        assert not reference.is_supported_link("https://www.instagram.com/reel/abc/")
+        with pytest.raises(ValueError):
+            EditCreateRequest(reference_url="javascript:alert(1)")
 
 
 class TestPricing:
