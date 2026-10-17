@@ -1,3 +1,4 @@
+import { CaptionStyles } from "@opencut/clipnera/caption-styles";
 import { DraggableItem } from "@opencut/components/editor/panels/assets/draggable-item";
 import { PanelView } from "@opencut/components/editor/panels/assets/views/base-panel";
 import { useEditor } from "@opencut/editor/use-editor";
@@ -42,6 +43,7 @@ export function TextView() {
 				onAddToTimeline={handleAddToTimeline}
 				shouldShowLabel={false}
 			/>
+			<CaptionStyles />
 		</PanelView>
 	);
 }

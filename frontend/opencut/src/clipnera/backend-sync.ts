@@ -10,7 +10,7 @@ import type { EditorCore } from "@opencut/core";
 import type { MediaAsset } from "@opencut/media/types";
 import { ApiError, editorApi, type EditorAssetType } from "@/lib/api";
 import {
-	type Asset, applyOps, type Extra, normalise, type Timeline, type TimelineOp, TimelineError,
+	type Asset, applyOps, type Captions, type Extra, normalise, type Timeline, type TimelineOp, TimelineError,
 } from "@/lib/editor/timeline";
 import { assetFor, sceneToTimeline, timelineToScene } from "./bridge";
 import { diffTimelines, sameJson } from "./diff";
@@ -99,6 +99,32 @@ export class BackendSync {
 	/** Whether nothing has been placed on the saved timeline yet. */
 	isEmpty(): boolean {
 		return this.saved.tracks.every((track) => track.items.length === 0);
+	}
+
+	/** The project's captions as saved; the server burns them in on export. */
+	getCaptions(): Captions | null {
+		return this.saved.captions;
+	}
+
+	/** Caption the video in a style, or turn captions off (`null`). */
+	async setCaptionStyle(style: string | null): Promise<void> {
+		await this.flush();
+		const captions = this.saved.captions;
+		if (!style && !captions?.enabled) return;
+		const follow = captions?.follow ?? this.speechTrackId();
+		if (!follow) throw new Error("Add a video or audio clip first, so the captions have speech to follow.");
+		this.setStatus("saving");
+		try {
+			await this.send([{ op: "set_captions", enabled: Boolean(style), ...(style && { style }), ...(!captions && { follow }) }]);
+		} finally {
+			this.setStatus(this.uploading.size ? "saving" : "saved");
+		}
+	}
+
+	/** The first track with speech on it: a video track, else an audio one. */
+	private speechTrackId(): string | undefined {
+		const filled = this.saved.tracks.filter((track) => track.items.length);
+		return (filled.find((track) => track.kind === "video") ?? filled.find((track) => track.kind === "audio"))?.id;
 	}
 
 	onLocalEdit(listener: () => void): () => void {

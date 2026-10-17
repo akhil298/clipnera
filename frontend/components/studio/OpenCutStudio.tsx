@@ -4,6 +4,8 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { EntitlementsProvider } from '@/components/dashboard/EntitlementsProvider';
 import { useFeatureFlags } from '@/hooks/useFeatureFlags';
 
 // The vendored OpenCut editor (frontend/opencut, MIT) needs the browser: WebCodecs, WebGPU,
@@ -56,8 +58,18 @@ export function OpenCutStudio({ projectId }: { projectId: string }) {
     );
   }
   if (!stylesReady) return <Splash label="Loading the editor…" />;
-  return <OpenCutEditor projectId={projectId} />;
+  return (
+    <EntitlementsProvider isAuthed onPromptUpgrade={promptUpgrade}>
+      <OpenCutEditor projectId={projectId} />
+    </EntitlementsProvider>
+  );
 }
+
+/** The studio has no plan dialog of its own; point to the dashboard's. */
+const promptUpgrade = (reason?: string) =>
+  toast(`${reason ?? 'This'} needs a paid plan`, {
+    action: { label: 'See plans', onClick: () => window.open('/dashboard', '_blank') },
+  });
 
 function Splash({ label }: { label: string }) {
   return (
