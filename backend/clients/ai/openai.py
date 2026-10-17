@@ -33,7 +33,38 @@ DEFAULT_MAX_TOKENS = 4096
 _REASONING_MODEL = re.compile(r"^(o\d|gpt-([5-9]|\d{2,}))(?!.*chat)")
 # Output tokens added on top of the reply a caller asked for, so a reasoning
 # model can think at its effort and still answer instead of returning nothing.
-REASONING_ALLOWANCE = {"minimal": 1024, "low": 2048, "medium": 8192, "high": 16384, "xhigh": 32768}
+REASONING_ALLOWANCE = {"none": 0, "minimal": 1024, "low": 2048, "medium": 8192, "high": 16384, "xhigh": 32768}
+
+
+# Every effort an OpenAI model may take, lightest first, and what each deployment said it takes
+# when it refused one (newer models drop "minimal"; some add "none").
+EFFORT_ORDER = ("none", "minimal", "low", "medium", "high", "xhigh")
+_SUPPORTED_EFFORTS: dict[str, tuple[str, ...]] = {}
+_SUPPORTED_VALUES = re.compile(r"Supported values are: (.+?)\.?$")
+
+
+def _nearest_effort(effort: str, supported: tuple[str, ...]) -> str:
+    """``effort`` if supported, else the lightest supported one above it, else the heaviest."""
+    if effort in supported:
+        return effort
+    above = [e for e in EFFORT_ORDER[EFFORT_ORDER.index(effort) + 1:] if e in supported]
+    return above[0] if above else max(supported, key=EFFORT_ORDER.index)
+
+
+def _learn_efforts(model: str, exc: httpx.HTTPStatusError) -> bool:
+    """Remember the efforts a 400 says ``model`` takes; False when the 400 is about something else."""
+    if exc.response.status_code != 400:
+        return False
+    try:
+        message = exc.response.json().get("error", {}).get("message") or ""
+    except ValueError:
+        return False
+    found = _SUPPORTED_VALUES.search(message)
+    supported = tuple(e for e in EFFORT_ORDER if found and f"'{e}'" in found.group(1))
+    if "reasoning_effort" not in message or not supported:
+        return False
+    _SUPPORTED_EFFORTS[model] = supported
+    return True
 
 
 def reasoning_effort(model: str, requested: str | None = None) -> str | None:
@@ -46,7 +77,8 @@ def reasoning_effort(model: str, requested: str | None = None) -> str | None:
     for effort in (requested, getattr(settings, "OPENAI_REASONING_EFFORT", "")):
         effort = (effort or "").strip().lower()
         if effort in REASONING_ALLOWANCE:
-            return effort
+            supported = _SUPPORTED_EFFORTS.get(model)
+            return _nearest_effort(effort, supported) if supported else effort
     return None
 
 
@@ -325,7 +357,25 @@ class OpenAI(BaseAI):
         return await self._send("chat/completions", payload, mode=mode)
 
     async def _send(self, path: str, payload: dict[str, Any], *, mode: str) -> dict[str, Any]:
-        """POST ``payload`` to chat completions or responses, with retries and usage recording."""
+        """POST ``payload`` to chat completions or responses, with retries and usage recording.
+
+        An effort the model refuses is swapped once for the nearest one it says it takes.
+        """
+        try:
+            return await self._post(path, payload, mode=mode)
+        except httpx.HTTPStatusError as exc:
+            effort = payload.get("reasoning_effort") or (payload.get("reasoning") or {}).get("effort")
+            if not effort or not _learn_efforts(self.model, exc):
+                raise
+            nearest = _nearest_effort(effort, _SUPPORTED_EFFORTS[self.model])
+            log.warning("OpenAI model %s doesn't take effort %s; using %s", self.model, effort, nearest)
+            if "reasoning" in payload:
+                payload = {**payload, "reasoning": {"effort": nearest}}
+            else:
+                payload = {**payload, "reasoning_effort": nearest}
+            return await self._post(path, payload, mode=mode)
+
+    async def _post(self, path: str, payload: dict[str, Any], *, mode: str) -> dict[str, Any]:
         async for attempt in AsyncRetrying(
             stop=stop_after_attempt(3),
             wait=wait_exponential(multiplier=1, min=1, max=10),

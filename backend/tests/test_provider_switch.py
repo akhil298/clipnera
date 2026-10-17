@@ -467,3 +467,30 @@ class TestOpenAIToolsOnResponses:
         assert [(c.name, c.arguments) for c in reply.calls] == [("clip_length", {"item": "c1"})]
         # The history stays in chat format, so the loop needs no changes.
         assert reply.message["tool_calls"][0]["function"]["name"] == "clip_length"
+
+
+class TestOpenAIEffortFallback:
+    """An effort a deployment refuses moves to the nearest one it takes."""
+
+    def test_nearest_effort_goes_up_to_the_lightest_supported(self):
+        from clients.ai.openai import _nearest_effort
+
+        assert _nearest_effort("minimal", ("low", "medium", "high", "xhigh")) == "low"
+        assert _nearest_effort("minimal", ("none", "low", "medium")) == "low"
+        assert _nearest_effort("high", ("low", "high")) == "high"
+        assert _nearest_effort("xhigh", ("low", "medium", "high")) == "high"
+
+    def test_a_refusal_teaches_the_model_its_efforts(self, monkeypatch):
+        import httpx
+
+        import clients.ai.openai as openai_module
+        from clients.ai.openai import _learn_efforts, reasoning_effort
+
+        monkeypatch.setattr(openai_module, "_SUPPORTED_EFFORTS", {})
+        refusal = httpx.Response(400, json={"error": {"param": "reasoning_effort", "message": (
+            "Unsupported value: 'reasoning_effort' does not support 'minimal' with this model. "
+            "Supported values are: 'low', 'medium', 'high', and 'xhigh'.")}},
+            request=httpx.Request("POST", "https://example.test/chat/completions"))
+        assert _learn_efforts("gpt-6-astra-1", httpx.HTTPStatusError("400", request=refusal.request, response=refusal))
+        assert reasoning_effort("gpt-6-astra-1", "minimal") == "low"
+        assert reasoning_effort("gpt-6-astra-1", "xhigh") == "xhigh"
