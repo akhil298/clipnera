@@ -8,7 +8,7 @@ from anthropic.types import Message
 from pydantic import BaseModel, Field
 
 from agent_runtime.loop import TurnLimits, run_turn
-from agent_runtime.tools import AgentTool, ToolBox
+from agent_runtime.tools import AgentTool, Seen, ToolBox
 from clients.ai.anthropic import Anthropic
 from clients.ai.base import BaseAI, ToolCall, ToolReply, ToolResult, ToolSpec
 from clients.ai.groq import Groq
@@ -133,8 +133,36 @@ class TestRunTurn:
         events, _ = await collect(model, {"c1": 90}, limits=TurnLimits(max_steps=3, seconds=30, usd=0.10))
         assert events[-1].data["reason"] == "budget" and len(model.seen) == 1
 
+    async def test_pictures_a_tool_saw_follow_its_result(self) -> None:
+        async def look(_: dict, __: NoArgs) -> Seen:
+            return Seen(text="0:01.00: clip c1", jpegs=[b"jpeg-1"])
+
+        model = ScriptedModel(calls(("look", {})), answer("Looks fine."))
+        tools = ToolBox([AgentTool("look", "See a frame.", NoArgs, look)])
+        messages = [{"role": "user", "content": "check it"}]
+        events = [event async for event in run_turn(model, messages, tools, {}, LIMITS)]
+        assert [e.type for e in events] == ["tool_call", "tool_result", "text", "done"]
+        assert events[1].data["content"] == "0:01.00: clip c1"
+        # The second step saw the result, then the picture as a user message.
+        tool_message, picture = model.seen[1][-2:]
+        assert tool_message["content"] == "0:01.00: clip c1"
+        assert picture["role"] == "user" and picture["content"][1]["type"] == "image_url"
+
+
+class NoArgs(BaseModel):
+    pass
+
 
 class TestAnthropicTools:
+    def test_tool_results_and_pictures_go_as_one_user_turn(self) -> None:
+        client = Anthropic(api_key="test", model="claude-sonnet-5", effort="low")
+        messages = [{"role": "system", "content": "Edit."}, {"role": "user", "content": "check it"},
+                    {"role": "assistant", "content": [{"type": "tool_use", "id": "t0", "name": "look", "input": {}}]},
+                    *client.tool_results([ToolResult("t0", "clip c1")]), client.image_message("Frames.", [b"jpeg"])]
+        system, conversation = client._split_system(messages)
+        assert system == "Edit." and [m["role"] for m in conversation] == ["user", "assistant", "user"]
+        assert [block["type"] for block in conversation[-1]["content"]] == ["tool_result", "image", "text"]
+
     async def test_tool_use_and_thinking_blocks_round_trip(self, monkeypatch) -> None:
         client = Anthropic(api_key="test", model="claude-sonnet-5", effort="low")
         sent: dict = {}

@@ -92,6 +92,11 @@ _PRE_EFFORT_MODELS = ("claude-haiku-4",)
 _SAMPLING_CONTROLS = ("temperature", "top_p", "top_k")
 
 
+def _blocks(content: Any) -> list[dict[str, Any]]:
+    """A message's content as a list of content blocks."""
+    return [{"type": "text", "text": content}] if isinstance(content, str) else list(content)
+
+
 def takes_effort(model: str) -> bool:
     return not model.startswith(_PRE_EFFORT_MODELS)
 
@@ -183,6 +188,10 @@ class Anthropic(BaseAI):
         for message in messages:
             if message.get("role") == "system":
                 system_parts.append(str(message.get("content", "")))
+            elif conversation and conversation[-1]["role"] == message["role"]:
+                # Tool results followed by the pictures a tool looked at: one turn of blocks.
+                conversation[-1] = {"role": message["role"],
+                                    "content": _blocks(conversation[-1]["content"]) + _blocks(message["content"])}
             else:
                 conversation.append({"role": message["role"], "content": message["content"]})
         return ("\n\n".join(p for p in system_parts if p) or None, conversation)

@@ -18,10 +18,19 @@ from pydantic import BaseModel, ValidationError
 from clients.ai.base import ToolCall, ToolResult, ToolSpec
 from core.exceptions import CustomException
 
-ToolOutput = str | dict[str, Any] | list[Any]
-
 # The names both OpenAI and Anthropic accept: no dots, at most 64 characters.
 _TOOL_NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+@dataclass(frozen=True)
+class Seen:
+    """A tool's answer with pictures: ``text`` is the result, and the model sees ``jpegs`` right after it."""
+
+    text: str
+    jpegs: list[bytes]
+
+
+ToolOutput = str | dict[str, Any] | list[Any] | Seen
 
 
 @dataclass(frozen=True)
@@ -63,6 +72,8 @@ class ToolBox:
             detail = {key: value for key, value in exc.extra.items() if key != "message"}
             suffix = f" ({json.dumps(detail)})" if detail else ""
             return ToolResult(call.id, f"{exc.code}: {exc.message}{suffix}", is_error=True)
+        if isinstance(output, Seen):
+            return ToolResult(call.id, output.text, images=tuple(output.jpegs))
         return ToolResult(call.id, output if isinstance(output, str) else json.dumps(output))
 
 

@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import CurrentUserDep
-from core.database import get_db
-from core.responses import ApiResponse, ok
+from brain import studio
+from core.database import AsyncSessionLocal, get_db
+from core.logging_config import get_logger
+from core.responses import ApiResponse, ok, sse
 from editor.schema import (
     EditorAssetInitRequest,
     EditorAssetUpload,
@@ -22,12 +26,14 @@ from editor.schema import (
 from editor.service import EditorService
 from feature_flags.dependencies import require_user_flag
 from usage.context import llm_scope
-from brain.schema import AiModels, TurnRequest, TurnResult
+from brain.schema import AgentError, AgentRequest, AiModels, TurnRequest, TurnResult
 from clients.ai.roles import EFFORTS, picked_model, selectable_models
 from core.exceptions import CustomException
 from brain.turns import handle_turn
 from feature_flags.registry import AGENT_EDITOR
 import understanding.jobs  # noqa: F401 -- registers the media understanding job handler
+
+log = get_logger(__name__)
 
 editor = APIRouter(prefix="/editor", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
 
@@ -111,8 +117,7 @@ async def list_models(_: CurrentUserDep):
 @editor.post("/projects/{project_id}/turns", response_model=ApiResponse[TurnResult])
 async def take_turn(project_id: str, data: TurnRequest, user: CurrentUserDep, service: EditorServiceDep):
     """One prompt from the studio's AI chat: an edit, an answer, a question back, or a plan."""
-    if data.model and data.model not in selectable_models():
-        raise CustomException(message=f"The AI can't use {data.model}.", code="UNKNOWN_MODEL", status_code=422)
+    _check_model(data.model)
     # Not charged to a pipeline project: llm_usage.project_id points at video projects.
     try:
         with llm_scope(user_id=user["user_id"], step="editor_turn"), picked_model(data.model, data.effort):
@@ -121,7 +126,40 @@ async def take_turn(project_id: str, data: TurnRequest, user: CurrentUserDep, se
                                        questions_asked=data.questions_asked, auto=data.auto)
     except httpx.HTTPError as exc:
         # As a handled error, so the browser can read it (an unhandled one comes back without CORS headers).
-        model = data.model or "the default model"
-        raise CustomException(message=f"The AI model ({model}) didn't answer. Try again, or pick another model.",
-                              code="AI_UNAVAILABLE", status_code=502) from exc
+        raise CustomException(message=_unavailable(data.model), code="AI_UNAVAILABLE", status_code=502) from exc
     return ok(result)
+
+
+@editor.post("/projects/{project_id}/agent")
+async def agent_turn(project_id: str, data: AgentRequest, user: CurrentUserDep, service: EditorServiceDep):
+    """One prompt for the studio agent (brain/studio.py), answered as server-sent events while it
+    works: text, tool, tool_done, edit, undone, ui, todos, ask, plan, render, result, then done or error."""
+    _check_model(data.model)
+    await service.get(user["user_id"], project_id)  # A missing project is a 404, not a broken stream.
+    return StreamingResponse(_agent_events(user["user_id"], project_id, data), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+async def _agent_events(user_id: str, project_id: str, data: AgentRequest) -> AsyncIterator[str]:
+    # Its own session: the request's closes before a streamed body is sent.
+    async with AsyncSessionLocal() as session:
+        with llm_scope(user_id=user_id, step="editor_turn"), picked_model(data.model, data.effort):
+            try:
+                async for name, payload in studio.stream(EditorService(session), user_id, project_id, data):
+                    yield sse(name, payload.model_dump(mode="json"))
+            except httpx.HTTPError:
+                yield sse("error", AgentError(message=_unavailable(data.model)).model_dump())
+            except CustomException as exc:
+                yield sse("error", AgentError(message=exc.message).model_dump())
+            except Exception:
+                log.exception("Studio agent turn failed: project=%s", project_id)
+                yield sse("error", AgentError(message="Something went wrong. Try again.").model_dump())
+
+
+def _check_model(model: str | None) -> None:
+    if model and model not in selectable_models():
+        raise CustomException(message=f"The AI can't use {model}.", code="UNKNOWN_MODEL", status_code=422)
+
+
+def _unavailable(model: str | None) -> str:
+    return f"The AI model ({model or 'the default model'}) didn't answer. Try again, or pick another model."

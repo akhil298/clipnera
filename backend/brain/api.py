@@ -23,7 +23,7 @@ from auth.dependencies import get_current_admin
 from brain.metrics import rollout_metrics
 from brain.schema import LibrarySound, PlanCard, PlanPatch, RenderStatus, RolloutMetrics, SoundSearchResponse, StylePreference
 from core.database import AsyncSessionLocal, get_db
-from core.responses import ApiResponse, ok
+from core.responses import ApiResponse, ok, sse
 from editor.model import EditorOp, EditorProject
 from feature_flags.dependencies import require_user_flag
 from feature_flags.registry import AGENT_EDITOR
@@ -90,10 +90,6 @@ async def stream(plan_id: str, user: CurrentUserDep, session: SessionDep):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-def _event(name: str, data: object) -> str:
-    return f"event: {name}\ndata: {json.dumps(data, default=str)}\n\n"
-
-
 async def _events(plan_id: str, project_id: str) -> AsyncIterator[str]:
     """Polls the database, so it works whether the plan runs in this process or in a worker."""
     started, last_card, steps_seen, version_seen = time.monotonic(), None, {}, None
@@ -114,15 +110,15 @@ async def _events(plan_id: str, project_id: str) -> AsyncIterator[str]:
             state = (row.status, row.note)
             if steps_seen.get(row.step_id) != state:
                 steps_seen[row.step_id] = state
-                yield _event("agent.step", {"step_id": row.step_id, "status": row.status, "note": row.note})
+                yield sse("agent.step", {"step_id": row.step_id, "status": row.status, "note": row.note})
         if version_seen is not None and version != version_seen:
-            yield _event("op.applied", {"version": version, "cursor": cursor})
+            yield sse("op.applied", {"version": version, "cursor": cursor})
         version_seen = version
         if card != last_card:
             last_card = card
-            yield _event("plan.updated", card)
+            yield sse("plan.updated", card)
         if plan.status in plans.FINAL:
-            yield _event("done", {"status": plan.status})
+            yield sse("done", {"status": plan.status})
             return
         await asyncio.sleep(STREAM_POLL_SECONDS)
 
@@ -169,20 +165,15 @@ async def search_sounds(_: CurrentUserDep, q: str = "", page: int = 1, page_size
                                   has_more=start + page_size < len(found)))
 
 
-def _render_status(render) -> RenderStatus:
-    return RenderStatus(id=render.id, status=render.status, stage=render.stage, version=render.version,
-                        download_url=server_render.download_url(render), error=render.error)
-
-
 @renders_router.post("/{project_id}/renders", response_model=ApiResponse[RenderStatus])
 async def start_render(project_id: str, user: CurrentUserDep, session: SessionDep):
     """17.2: render the saved project at full size on the server."""
-    return ok(_render_status(await server_render.start(session, user["user_id"], project_id)))
+    return ok(server_render.status(await server_render.start(session, user["user_id"], project_id)))
 
 
 @renders_router.get("/{project_id}/renders/{render_id}", response_model=ApiResponse[RenderStatus])
 async def render_status(project_id: str, render_id: str, user: CurrentUserDep, session: SessionDep):
-    return ok(_render_status(await server_render.get(session, user["user_id"], render_id)))
+    return ok(server_render.status(await server_render.get(session, user["user_id"], render_id)))
 
 
 @admin_router.get("/metrics", response_model=ApiResponse[RolloutMetrics])

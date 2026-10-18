@@ -53,7 +53,7 @@ async def handle_turn(service: EditorService, user_id: str, project_id: str, pro
         questions_asked = max(questions_asked, QUESTIONS_PER_REQUEST)
     may_ask = questions_asked < QUESTIONS_PER_REQUEST
 
-    fast = await _deterministic(service, user_id, project_id, prompt, timeline, version, selection, playhead)
+    fast = await deterministic(service, user_id, project_id, prompt, timeline, version, selection, playhead)
     if fast is not None:
         return fast
 
@@ -73,7 +73,7 @@ async def handle_turn(service: EditorService, user_id: str, project_id: str, pro
     if decision.path == "deterministic":
         if decision.intent in ("undo", "redo"):
             return await _undo_redo(service, user_id, project_id, decision.intent)
-        fast = await _deterministic(service, user_id, project_id, prompt, timeline, version, selection,
+        fast = await deterministic(service, user_id, project_id, prompt, timeline, version, selection,
                                     playhead, forced=True)
         if fast is not None:
             return fast
@@ -84,6 +84,26 @@ async def handle_turn(service: EditorService, user_id: str, project_id: str, pro
     not_ready = _not_ready(timeline, analyses)
     if not_ready:
         return TurnResult(kind="answer", message=not_ready, route=decision)
+    return await _plan(service, user_id, project_id, prompt, decision, selection, playhead, recent_turns,
+                       questions_asked, auto)
+
+
+async def plan_request(service: EditorService, user_id: str, project_id: str, prompt: str, *,
+                       selection: Sequence[str] = (), playhead: int = 0, recent_turns: Sequence[str] = (),
+                       questions_asked: int = 0, auto: bool = False) -> TurnResult:
+    """A whole edit planned by the director (or brain.full_edit), for a caller that already knows
+    the prompt wants one: the studio agent's plan_edit tool."""
+    project = await service.get(user_id, project_id)
+    analyses = await service.analyses(user_id, project_id)
+    decision = await route(prompt, project.timeline, selection, playhead, recent_turns,
+                           footage=_footage(project.timeline, analyses))
+    if decision.path == "refuse" or decision.safety == "block":
+        return TurnResult(kind="refused", message="I can't help with that request.", route=decision)
+    not_ready = _not_ready(project.timeline, analyses)
+    if not_ready:
+        return TurnResult(kind="answer", message=not_ready, route=decision)
+    if auto:
+        questions_asked = max(questions_asked, QUESTIONS_PER_REQUEST)
     return await _plan(service, user_id, project_id, prompt, decision, selection, playhead, recent_turns,
                        questions_asked, auto)
 
@@ -183,7 +203,7 @@ async def _full_edit(prompt: str, decision: RouteDecision, ctx: EditContext, all
     return DirectorResult("plan", best=scored[0], frame=frame, reason="Full edit of the footage")
 
 
-async def _deterministic(service: EditorService, user_id: str, project_id: str, prompt: str, timeline: Timeline,
+async def deterministic(service: EditorService, user_id: str, project_id: str, prompt: str, timeline: Timeline,
                          version: int, selection: Sequence[str], playhead: int,
                          forced: bool = False) -> TurnResult | None:
     """Commands that need no model: the selection and the playhead say what to change."""
@@ -192,7 +212,7 @@ async def _deterministic(service: EditorService, user_id: str, project_id: str, 
     if _REDO.search(prompt):
         return await _undo_redo(service, user_id, project_id, "redo")
     if _SPLIT.search(prompt):
-        target = _clip_at(timeline, playhead, selection)
+        target = clip_at(timeline, playhead, selection)
         if target is None:
             return TurnResult(kind="clarify", message="Move the playhead over a clip to split it there.")
         if not target.at < playhead < target.end:
@@ -217,7 +237,7 @@ async def _command(service: EditorService, user_id: str, project_id: str, versio
         return TurnResult(kind="clarify", message=exc.message)
 
 
-def _clip_at(timeline: Timeline, playhead: int, selection: Sequence[str]) -> ClipItem | None:
+def clip_at(timeline: Timeline, playhead: int, selection: Sequence[str]) -> ClipItem | None:
     """The selected clip under the playhead, else the top visible clip there."""
     under = [
         (index, item) for index, track in enumerate(timeline.tracks) if track.kind in ("video", "overlay")

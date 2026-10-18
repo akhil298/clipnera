@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from agent_runtime.loop import TurnLimits, run_turn
 from agent_runtime.tools import AgentTool, ToolBox
+from brain.frames import stamp, timecode
 from brain.intent import IntentFrame
 from brain.model import EditPlan
 from brain.plan_ir import PlanIR
@@ -84,10 +85,7 @@ def contact_sheets(video: Path, times: list[float]) -> list[bytes]:
         capture.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
         ok, frame = capture.read()
         tile = cv2.resize(frame, TILE) if ok else np.zeros((TILE[1], TILE[0], 3), np.uint8)
-        label = f"{int(t // 60)}:{t % 60:05.2f}"
-        cv2.rectangle(tile, (0, 0), (110, 26), (0, 0, 0), -1)
-        cv2.putText(tile, label, (6, 19), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
-        tiles.append(tile)
+        tiles.append(stamp(tile, timecode(t)))
     capture.release()
     sheets = []
     for first in range(0, len(tiles), GRID * GRID):

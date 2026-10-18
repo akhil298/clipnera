@@ -7,12 +7,13 @@ import { Button } from "@opencut/components/ui/button";
 import { Switch } from "@opencut/components/ui/switch";
 import { Textarea } from "@opencut/components/ui/textarea";
 import { cn } from "@opencut/utils/ui";
-import type { PlanCard, PlanCardStep } from "@/lib/api";
+import type { AgentTodo, PlanCard, PlanCardStep, RenderStatus } from "@/lib/api";
 import { takeStudioHandoff } from "@/lib/editor/handoff";
-import { type AiMessage, useAiStore } from "./ai-store";
+import { type AgentStep, type AiMessage, useAiStore } from "./ai-store";
 import { type FootageFile, useFootageStore, watchFootage } from "./footage";
 import { ModelPicker } from "./model-picker";
-import { useCurrentSync } from "./save-status";
+import { getCurrentSync, useCurrentSync } from "./save-status";
+import { useRenderProgress } from "./server-render";
 
 const EXAMPLES = ["Edit the full video", "Cut the dead air and filler words", "Make it more dynamic", "What did I say about pricing?"];
 const FILE_TYPES = "video/mp4,video/quicktime,video/webm,image/*,audio/*";
@@ -28,6 +29,10 @@ const FILE_BAR: Record<FootageFile["state"], string> = {
 // One list for "no messages yet": a new array each render would re-render the chat forever.
 const NO_MESSAGES: AiMessage[] = [];
 const STEP_ICON: Record<PlanCardStep["status"], string> = { pending: "○", running: "◐", done: "✓", failed: "✕", skipped: "–" };
+const TODO_ICON: Record<AgentTodo["status"], string> = { pending: "○", active: "◐", done: "✓" };
+const AGENT_STEP_ICON: Record<AgentStep["state"], string> = { running: "◐", done: "✓", failed: "✕" };
+// While the agent works the chat shows its latest steps; the rest fold away.
+const LIVE_STEPS = 4;
 
 /** The studio's AI chat: drop files in, ask for an edit, or ask about the project. */
 export function AiPanel({ onCollapse }: { onCollapse?: () => void }) {
@@ -37,6 +42,8 @@ export function AiPanel({ onCollapse }: { onCollapse?: () => void }) {
 	const busy = useAiStore((state) => state.busy);
 	const auto = useAiStore((state) => state.auto);
 	const setAuto = useAiStore((state) => state.setAuto);
+	const stop = useAiStore((state) => state.stop);
+	const agentWorking = messages.some((message) => message.working);
 	const files = useFootageStore((state) => state.files);
 	const held = useFootageStore((state) => state.held);
 	const addFiles = useFootageStore((state) => state.add);
@@ -203,15 +210,27 @@ export function AiPanel({ onCollapse }: { onCollapse?: () => void }) {
 									Attach
 								</Button>
 								<ModelPicker disabled={busy} />
-								<button
-									type="button"
-									aria-label="Send"
-									onClick={submit}
-									disabled={busy || Boolean(held) || !draft.trim()}
-									className="ai-sheen flex size-8 items-center justify-center rounded-full shadow-md transition-opacity disabled:opacity-35"
-								>
-									<HugeiconsIcon icon={ArrowUp02Icon} className="size-4" />
-								</button>
+								{agentWorking ? (
+									<button
+										type="button"
+										aria-label="Stop"
+										title="Stop the AI. What it already changed stays."
+										onClick={stop}
+										className="bg-foreground flex size-8 items-center justify-center rounded-full shadow-md"
+									>
+										<span className="bg-background size-2.5 rounded-[2px]" aria-hidden />
+									</button>
+								) : (
+									<button
+										type="button"
+										aria-label="Send"
+										onClick={submit}
+										disabled={busy || Boolean(held) || !draft.trim()}
+										className="ai-sheen flex size-8 items-center justify-center rounded-full shadow-md transition-opacity disabled:opacity-35"
+									>
+										<HugeiconsIcon icon={ArrowUp02Icon} className="size-4" />
+									</button>
+								)}
 							</div>
 						</div>
 					</div>
@@ -252,13 +271,25 @@ function Files({ files }: { files: FootageFile[] }) {
 }
 
 function Message({ message }: { message: AiMessage }) {
+	const card = useAiStore((state) => (message.planId ? state.plans[message.planId] : undefined));
+	if (card) return <PlanCardView card={card} />;
+	const showBubble = Boolean(message.text) || !message.steps;
+	return (
+		<div className="space-y-1.5">
+			{((message.steps?.length ?? 0) > 0 || (message.todos?.length ?? 0) > 0) && <AgentWork message={message} />}
+			{showBubble && <Bubble message={message} />}
+			{(message.edits?.length ?? 0) > 0 && <AgentEdits message={message} />}
+			{message.render && <RenderLine initial={message.render} />}
+		</div>
+	);
+}
+
+function Bubble({ message }: { message: AiMessage }) {
 	const send = useAiStore((state) => state.send);
 	const undo = useAiStore((state) => state.undo);
 	const busy = useAiStore((state) => state.busy);
 	const ask = useFootageStore((state) => state.ask);
-	const card = useAiStore((state) => (message.planId ? state.plans[message.planId] : undefined));
 	const mine = message.role === "user";
-	if (card) return <PlanCardView card={card} />;
 	return (
 		<div className={cn("ai-rise flex", mine ? "justify-end" : "justify-start")}>
 			<div
@@ -306,6 +337,104 @@ function Message({ message }: { message: AiMessage }) {
 					</Button>
 				)}
 			</div>
+		</div>
+	);
+}
+
+/** What the agent is doing: its steps (folded once it's done) and its to-do list. */
+function AgentWork({ message }: { message: AiMessage }) {
+	const [open, setOpen] = useState(false);
+	const steps = message.steps ?? [];
+	const todos = message.todos ?? [];
+	const folded = !message.working && !open;
+	const shown = message.working ? steps.slice(-LIVE_STEPS) : folded ? [] : steps;
+	const hidden = steps.length - shown.length;
+	const failed = steps.filter((step) => step.state === "failed").length;
+	return (
+		<div className="ai-rise bg-accent/40 space-y-1 rounded-xl border px-2.5 py-2 text-xs">
+			{steps.length > 0 && (message.working ? (
+				hidden > 0 && <p className="text-muted-foreground text-[11px]">{hidden} earlier step{hidden === 1 ? "" : "s"}</p>
+			) : (
+				<button type="button" className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1 text-left text-[11px]"
+					aria-expanded={!folded} onClick={() => setOpen(!open)}>
+					<span aria-hidden>{folded ? "▸" : "▾"}</span>
+					Worked through {steps.length} step{steps.length === 1 ? "" : "s"}
+					{failed > 0 && <span className="text-caution">· {failed} didn&apos;t work</span>}
+				</button>
+			))}
+			{shown.length > 0 && (
+				<ol className="space-y-0.5" aria-live="polite">
+					{shown.map((step) => (
+						<li key={step.id} className="flex gap-2" title={step.error ?? undefined}>
+							<span className={cn("w-3 shrink-0", step.state === "running" && "text-primary animate-pulse",
+								step.state === "failed" && "text-destructive")} aria-hidden>
+								{AGENT_STEP_ICON[step.state]}
+							</span>
+							<span className="min-w-0 flex-1">
+								<span className={cn("block truncate", step.state === "done" && "text-muted-foreground")}>{step.label}</span>
+								{step.error && <span className="text-muted-foreground block truncate text-[11px]">{step.error}</span>}
+							</span>
+						</li>
+					))}
+				</ol>
+			)}
+			{todos.length > 0 && (
+				<ul className={cn("space-y-0.5", steps.length > 0 && "border-t pt-1.5")} aria-label="To do">
+					{todos.map((todo) => (
+						<li key={todo.text} className={cn("flex gap-2", todo.status === "done" && "text-muted-foreground line-through")}>
+							<span className={cn("w-3 shrink-0", todo.status === "active" && "text-primary")} aria-hidden>{TODO_ICON[todo.status]}</span>
+							{todo.text}
+						</li>
+					))}
+				</ul>
+			)}
+		</div>
+	);
+}
+
+/** The changes an agent turn made, each with its own Undo, and Undo all. */
+function AgentEdits({ message }: { message: AiMessage }) {
+	const undoEdits = useAiStore((state) => state.undoEdits);
+	const busy = useAiStore((state) => state.busy);
+	const edits = message.edits ?? [];
+	const live = edits.filter((edit) => !edit.undone).length;
+	return (
+		<div className="ai-rise space-y-0.5 px-1 text-xs">
+			{edits.map((edit) => (
+				<div key={edit.undoStepId} className="flex items-baseline gap-2">
+					<span className={cn("min-w-0 flex-1 truncate", edit.undone && "text-muted-foreground line-through")}>✓ {edit.label}</span>
+					<Button variant="text" size="sm" className="h-4 shrink-0 px-0 text-[11px] underline" disabled={busy || edit.undone}
+						onClick={() => void undoEdits(message.id, [edit.undoStepId])}>
+						{edit.undone ? "Undone" : "Undo"}
+					</Button>
+				</div>
+			))}
+			{live > 1 && !message.working && (
+				<Button variant="outline" size="sm" className="mt-1 h-6 rounded-full px-3 text-[11px]" disabled={busy}
+					onClick={() => void undoEdits(message.id)}>
+					Undo all {live} changes
+				</Button>
+			)}
+		</div>
+	);
+}
+
+/** An export the agent started, until its download link is ready. */
+function RenderLine({ initial }: { initial: RenderStatus }) {
+	const { render, error } = useRenderProgress(getCurrentSync()?.getProjectId(), initial);
+	if (!render) return null;
+	return (
+		<div className="ai-rise bg-accent/40 rounded-xl border px-2.5 py-2 text-xs">
+			{render.status === "done" && render.download_url ? (
+				<Button asChild size="sm" className="h-7">
+					<a href={render.download_url}>Download the video</a>
+				</Button>
+			) : (
+				<p className={cn(render.status === "failed" ? "text-destructive" : "text-muted-foreground animate-pulse")}>
+					{render.status === "failed" ? `The export failed: ${render.error ?? "try again"}` : `Exporting · ${render.stage}…`}
+				</p>
+			)}
+			{error && <p className="text-destructive mt-1">{error}</p>}
 		</div>
 	);
 }

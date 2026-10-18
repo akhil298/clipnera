@@ -30,7 +30,7 @@ T = TypeVar("T")
 
 Role = Literal[
     "router", "director", "director_delta", "specialist", "critic",
-    "judge", "answer", "moderation", "captioner", "summarizer",
+    "judge", "answer", "moderation", "captioner", "summarizer", "studio",
 ]
 
 ROLES: dict[Role, str] = {
@@ -44,6 +44,7 @@ ROLES: dict[Role, str] = {
     "moderation": "Flags prompts and uploaded text that must not be acted on.",
     "captioner": "Describes shots and frames in a line each.",
     "summarizer": "Condenses transcripts and long context for the other roles.",
+    "studio": "Works the open project from the chat with every tool: reads, edits, looks at frames, drives the studio.",
 }
 
 HAIKU = "claude-haiku-4-5"
@@ -59,6 +60,7 @@ ROLE_EFFORT: dict[Role, str | None] = {
     "captioner": "low",
     "summarizer": "low",
     "specialist": "medium",
+    "studio": "medium",
     "director_delta": "medium",
     "director": "high",
     "critic": "high",
@@ -93,6 +95,7 @@ PROFILES: dict[str, dict[Role, ModelChoice]] = {
         "judge": ModelChoice("anthropic", OPUS),
         "director_delta": ModelChoice("anthropic", SONNET),
         "specialist": ModelChoice("anthropic", SONNET),
+        "studio": ModelChoice("anthropic", SONNET),
         "summarizer": ModelChoice("anthropic", SONNET),
     },
 }

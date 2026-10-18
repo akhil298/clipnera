@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from brain.model import EditorRender
+from brain.schema import RenderStatus
 from brain.render_adapter import main_clips, render_timeline
 from clients.services.s3 import S3
 from core.config import get_settings
@@ -47,6 +48,11 @@ async def get(session: AsyncSession, user_id: str, render_id: str) -> EditorRend
     if render is None:
         raise CustomException(message="Render not found.", code="NOT_FOUND", status_code=404)
     return render
+
+
+def status(render: EditorRender) -> RenderStatus:
+    return RenderStatus(id=render.id, status=render.status, stage=render.stage, version=render.version,
+                        download_url=download_url(render), error=render.error)
 
 
 def download_url(render: EditorRender, s3: S3 | None = None) -> str | None:

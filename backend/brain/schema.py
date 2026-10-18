@@ -176,3 +176,121 @@ class RolloutMetrics(BaseModel):
     cost_per_turn_usd: float
     # By step: editor_turn, editor_plan, media_understanding.
     spend: dict[str, StepSpend]
+
+
+# ---------------------------------------------------------------------------- the studio agent (brain/studio.py)
+
+# The studio's asset panel tabs (frontend opencut assets-panel-store TAB_KEYS).
+StudioPanel = Literal["media", "sounds", "text", "stickers", "effects", "transitions", "captions", "adjustment",
+                      "settings"]
+TodoStatus = Literal["pending", "active", "done"]
+AgentStopReason = Literal["answered", "steps", "time", "budget", "refused", "handed_over", "failed"]
+
+
+class AgentExchange(BaseModel):
+    """One earlier prompt and what the agent said back, so the conversation carries on."""
+
+    prompt: str = Field(..., min_length=1, max_length=2000)
+    reply: str = Field("", max_length=4000)
+
+
+class AgentRequest(BaseModel):
+    """POST /editor/projects/{id}/agent: one prompt for the studio agent, answered as server-sent events."""
+
+    prompt: str = Field(..., min_length=1, max_length=2000)
+    # Ids of the items selected in the studio.
+    selection: list[str] = Field(default_factory=list, max_length=200)
+    # The playhead, in timeline frames.
+    playhead: int = Field(0, ge=0)
+    # The conversation so far, oldest first.
+    history: list[AgentExchange] = Field(default_factory=list, max_length=6)
+    # Questions the AI has asked in a row (brain.turns.QUESTIONS_PER_REQUEST).
+    questions_asked: int = Field(0, ge=0, le=20)
+    # Auto mode: never ask, and run whole-edit plans without waiting for approval.
+    auto: bool = False
+    model: str | None = Field(None, min_length=1, max_length=80)
+    effort: Effort | None = None
+
+
+class AgentText(BaseModel):
+    """event: text. What the agent says, between tool calls or as its answer."""
+
+    text: str
+
+
+class AgentToolCall(BaseModel):
+    """event: tool. A tool call starting, with a line the user reads."""
+
+    id: str
+    name: str
+    label: str
+
+
+class AgentToolDone(BaseModel):
+    """event: tool_done. A tool call finished; ``error`` says why it didn't work."""
+
+    id: str
+    ok: bool
+    error: str | None = None
+
+
+class AgentEdit(BaseModel):
+    """event: edit. The agent changed the project: one undoable step."""
+
+    label: str
+    version: int
+    # For POST /editor/projects/{id}/steps/{step_id}/undo.
+    undo_step_id: str
+
+
+class AgentUndone(BaseModel):
+    """event: undone. The agent took back one of its own edits."""
+
+    undo_step_id: str
+    version: int
+
+
+class AgentUi(BaseModel):
+    """event: ui. Something for the studio to do: move the playhead, select, play a range, open a panel."""
+
+    action: Literal["seek", "select", "play", "panel"]
+    # seek and play: where, in seconds; play stops at ``end``.
+    seconds: float | None = None
+    end: float | None = None
+    item_ids: list[str] = Field(default_factory=list)
+    panel: StudioPanel | None = None
+
+
+class AgentTodo(BaseModel):
+    text: str = Field(..., min_length=1, max_length=100)
+    status: TodoStatus
+
+
+class AgentTodos(BaseModel):
+    """event: todos. The agent's to-do list for a longer job, replaced whole each time."""
+
+    items: list[AgentTodo]
+
+
+class AgentAsk(BaseModel):
+    """event: ask. A question for the user; picking an option sends it as the next prompt."""
+
+    question: str
+    options: list[str] = Field(default_factory=list)
+
+
+class AgentDone(BaseModel):
+    """event: done. The turn is over; ``message`` explains a stop that wasn't an answer."""
+
+    reason: AgentStopReason
+    message: str | None = None
+
+
+class AgentError(BaseModel):
+    """event: error. The turn broke off; what to tell the user."""
+
+    message: str
+
+
+# Also streamed: event "plan" (PlanCard), "render" (RenderStatus), "result" (TurnResult, for
+# undo, redo, split and delete, which need no model).

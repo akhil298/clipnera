@@ -7,12 +7,10 @@ import { getCurrentSync } from "./save-status";
 
 const POLL_MS = 2000;
 
-/** "Render on server", under the studio's own Export: renders the saved project at full size. */
-export function ServerRender() {
-	const sync = getCurrentSync();
-	const [render, setRender] = useState<RenderStatus | null>(null);
+/** A server render of ``projectId``, polled until it is done or failed. */
+export function useRenderProgress(projectId: string | undefined, initial: RenderStatus | null = null) {
+	const [render, setRender] = useState<RenderStatus | null>(initial);
 	const [error, setError] = useState<string | null>(null);
-	const projectId = sync?.getProjectId();
 
 	useEffect(() => {
 		if (!projectId || !render || render.status === "done" || render.status === "failed") return;
@@ -21,6 +19,15 @@ export function ServerRender() {
 		}, POLL_MS);
 		return () => clearTimeout(timer);
 	}, [projectId, render]);
+
+	return { render, setRender, error, setError };
+}
+
+/** "Render on server", under the studio's own Export: renders the saved project at full size. */
+export function ServerRender() {
+	const sync = getCurrentSync();
+	const projectId = sync?.getProjectId();
+	const { render, setRender, error, setError } = useRenderProgress(projectId);
 
 	if (!sync || !projectId) return null;
 

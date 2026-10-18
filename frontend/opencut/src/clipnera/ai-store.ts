@@ -1,6 +1,8 @@
 /**
- * The studio's AI conversation: prompts go to /editor/projects/{id}/turns with the selection and
- * playhead, and any change the AI makes is pulled straight onto the timeline.
+ * The studio's AI conversation: prompts go to the studio agent (/editor/projects/{id}/agent) with
+ * the selection, the playhead and the conversation so far. It streams what it does: each tool call
+ * shows as a step, each edit is pulled straight onto the timeline (with its own Undo), and it moves
+ * the playhead, selects and plays ranges in the studio (agent-ui.ts). Stop ends the turn at once.
  *
  * Plans come back as cards. Approving one follows its live event stream: every applied op is
  * pulled onto the timeline at once, with a marker where the agent is working; any edit made by
@@ -10,11 +12,39 @@
 
 import { create } from "zustand";
 import { EditorCore } from "@opencut/core";
-import { editorApi, type PlanCard, type PlanPatch, plansApi, type TurnChoice, type TurnKind } from "@/lib/api";
+import {
+	type AgentEvent,
+	type AgentExchange,
+	agentApi,
+	type AgentTodo,
+	editorApi,
+	type PlanCard,
+	type PlanPatch,
+	plansApi,
+	type RenderStatus,
+	type TurnChoice,
+	type TurnKind,
+} from "@/lib/api";
 import { useAiPick } from "@/lib/editor/aiPick";
+import { actOn } from "./agent-ui";
 import { toFrame } from "./bridge";
 import { clearAiMarkers, showCursor, showGhost } from "./ghost";
 import { getCurrentSync } from "./save-status";
+
+/** One tool call of an agent turn, as the chat shows it. */
+export interface AgentStep {
+	id: string;
+	label: string;
+	state: "running" | "done" | "failed";
+	error?: string | null;
+}
+
+/** One change the agent made: an undoable step of its own. */
+export interface AgentEditRow {
+	label: string;
+	undoStepId: string;
+	undone: boolean;
+}
 
 export interface AiMessage {
 	id: string;
@@ -30,6 +60,12 @@ export interface AiMessage {
 	prompt?: string;
 	undoStepId?: string | null;
 	undone?: boolean;
+	// An agent turn: its steps, edits and to-do list, live while ``working``.
+	steps?: AgentStep[];
+	edits?: AgentEditRow[];
+	todos?: AgentTodo[];
+	render?: RenderStatus;
+	working?: boolean;
 }
 
 interface AiState {
@@ -44,6 +80,10 @@ interface AiState {
 	/** Put a message from the AI in the chat without a model call, after the user's line if given. */
 	note: (projectId: string, userText: string | null, text: string, suggestions?: string[]) => void;
 	undo: (messageId: string) => Promise<void>;
+	/** Undo some of an agent turn's edits (all of them when ``undoStepIds`` is left out), newest first. */
+	undoEdits: (messageId: string, undoStepIds?: string[]) => Promise<void>;
+	/** Stop the agent's turn now; what it already changed stays. */
+	stop: () => void;
 	approve: (planId: string) => Promise<void>;
 	reject: (planId: string) => Promise<void>;
 	editPlan: (planId: string, patch: PlanPatch) => Promise<void>;
@@ -52,7 +92,10 @@ interface AiState {
 	undoStep: (planId: string, undoStepId: string) => Promise<void>;
 }
 
-const RECENT_TURNS = 3;
+// Earlier exchanges sent with a prompt (backend AgentRequest.history), and how long each part may be.
+const HISTORY = 6;
+const PROMPT_CHARS = 2000;
+const REPLY_CHARS = 4000;
 const AUTO_KEY = "clipnera-ai-auto";
 
 /** Auto mode is on unless this browser turned it off. */
@@ -81,6 +124,25 @@ function questionsInARow(messages: AiMessage[]): number {
 	}
 	return count;
 }
+
+/** The conversation as prompt/reply pairs: each user line with what the AI said after it. */
+function exchanges(messages: AiMessage[]): AgentExchange[] {
+	const pairs: AgentExchange[] = [];
+	for (const message of messages) {
+		if (message.role === "user") pairs.push({ prompt: message.text, reply: "" });
+		else if (pairs.length && message.text && message.kind !== "error") {
+			const last = pairs[pairs.length - 1];
+			last.reply = last.reply ? `${last.reply}\n${message.text}` : message.text;
+		}
+	}
+	return pairs.slice(-HISTORY).map((pair) => ({
+		prompt: pair.prompt.slice(0, PROMPT_CHARS),
+		reply: pair.reply.slice(0, REPLY_CHARS),
+	}));
+}
+
+// The agent turn in progress, to stop it.
+let running: AbortController | null = null;
 
 // The plan being followed, its stream, and the hook that pauses it on a manual edit.
 let following: { planId: string; abort: AbortController; stopListening: () => void } | null = null;
@@ -175,30 +237,111 @@ export const useAiStore = create<AiState>((set, get) => {
 			if (!text) return;
 			await guarded("Something went wrong. Try again.", async (projectId) => {
 				const sync = getCurrentSync()!;
-				const said = messagesOf(projectId).filter((m) => m.role === "user").map((m) => m.text);
-				const earlier = (shown ? said.slice(0, -1) : said).slice(-RECENT_TURNS);
+				const earlier = exchanges(messagesOf(projectId));
+				// A prompt already in the chat is the last exchange: it is this one, not history.
+				const history = shown && earlier.at(-1)?.prompt === text.slice(0, PROMPT_CHARS) ? earlier.slice(0, -1) : earlier;
 				if (!shown) push(projectId, { id: id(), role: "user", text });
 				// The AI must see every edit made by hand so far.
 				await sync.flush();
 				const editor = EditorCore.getInstance();
-				const result = await editorApi.turn(projectId, {
-					prompt: text,
-					selection: selection ?? editor.selection.getSelectedElements().map((ref) => ref.elementId),
-					playhead: Math.max(0, toFrame(editor.playback.getCurrentTime(), sync.getFps())),
-					recent_turns: earlier,
-					questions_asked: questionsInARow(messagesOf(projectId)),
-					auto: get().auto,
-					model: useAiPick.getState().model,
-					effort: useAiPick.getState().effort,
-				});
-				if (result.version !== null) await sync.refresh();
-				if (result.plan) showPlan(result.plan);
-				// Auto mode started the plan already: watch it run.
-				if (result.plan && ACTIVE.has(result.plan.status)) follow(result.plan.id);
-				push(projectId, {
-					id: id(), role: "ai", text: result.message, kind: result.kind, choices: result.choices,
-					options: result.options, planId: result.plan?.id, prompt: text, undoStepId: result.undo_step_id,
-				});
+				const turnId = id();
+				push(projectId, { id: turnId, role: "ai", text: "", kind: "answer", prompt: text, steps: [], edits: [], working: true });
+				const turn = () => messagesOf(projectId).find((m) => m.id === turnId)!;
+				const patch = (change: Partial<AiMessage>) => patchMessage(projectId, turnId, change);
+				const texts: string[] = [];
+				const say = (line: string) => {
+					texts.push(line.trim());
+					patch({ text: texts.filter(Boolean).join("\n\n") });
+				};
+				// Edits arrive faster than a refresh: pull them onto the timeline one after another.
+				let pulled = Promise.resolve();
+				const pull = () => {
+					pulled = pulled.then(() => sync.refresh()).catch(() => undefined);
+				};
+
+				const onEvent = ({ event, data }: AgentEvent) => {
+					if (event === "text") say(data.text);
+					if (event === "tool") patch({ steps: [...(turn().steps ?? []), { id: data.id, label: data.label, state: "running" }] });
+					if (event === "tool_done") {
+						patch({ steps: turn().steps?.map((step) => step.id === data.id && step.state === "running"
+							? { ...step, state: data.ok ? "done" : "failed", error: data.error } : step) });
+					}
+					if (event === "edit") {
+						patch({ edits: [...(turn().edits ?? []), { label: data.label, undoStepId: data.undo_step_id, undone: false }] });
+						pull();
+					}
+					if (event === "undone") {
+						patch({ edits: turn().edits?.map((edit) => (edit.undoStepId === data.undo_step_id ? { ...edit, undone: true } : edit)) });
+						pull();
+					}
+					if (event === "ui") actOn(data, sync.getFps());
+					if (event === "todos") patch({ todos: data.items });
+					if (event === "render") patch({ render: data });
+					if (event === "ask") {
+						push(projectId, { id: id(), role: "ai", kind: "clarify", text: data.question, options: data.options, prompt: text });
+					}
+					if (event === "plan") {
+						showPlan(data);
+						// Auto mode started the plan already: watch it run.
+						if (ACTIVE.has(data.status)) follow(data.id);
+						push(projectId, { id: id(), role: "ai", kind: "plan", text: data.summary, planId: data.id, prompt: text });
+					}
+					if (event === "result") {
+						// Undo, redo, split and delete: done without a model.
+						if (data.version !== null) pull();
+						patch({ text: data.message, kind: data.kind, choices: data.choices, options: data.options, undoStepId: data.undo_step_id });
+					}
+					if (event === "done" && data.message) say(data.message);
+					if (event === "error") patch({ kind: "error", text: data.message });
+				};
+
+				const abort = new AbortController();
+				running = abort;
+				try {
+					await agentApi.run(projectId, {
+						prompt: text,
+						selection: selection ?? editor.selection.getSelectedElements().map((ref) => ref.elementId),
+						playhead: Math.max(0, toFrame(editor.playback.getCurrentTime(), sync.getFps())),
+						history,
+						questions_asked: questionsInARow(messagesOf(projectId)),
+						auto: get().auto,
+						model: useAiPick.getState().model,
+						effort: useAiPick.getState().effort,
+					}, onEvent, abort.signal);
+				} catch (error) {
+					if (!abort.signal.aborted) throw error;
+					say("Stopped. What I'd already changed is still there.");
+				} finally {
+					running = null;
+					await pulled;
+					patch({ working: false, steps: turn().steps?.map((step) => (step.state === "running" ? { ...step, state: "failed" } : step)) });
+				}
+			});
+		},
+
+		stop() {
+			running?.abort();
+		},
+
+		async undoEdits(messageId, undoStepIds) {
+			await guarded("Couldn't undo that.", async (projectId) => {
+				const sync = getCurrentSync()!;
+				const edits = messagesOf(projectId).find((m) => m.id === messageId)?.edits ?? [];
+				const chosen = edits.filter((edit) => !edit.undone && (!undoStepIds || undoStepIds.includes(edit.undoStepId)));
+				if (!chosen.length) return;
+				await sync.flush();
+				const undone = new Set<string>();
+				try {
+					for (const edit of [...chosen].reverse()) {
+						await editorApi.undoStep(projectId, edit.undoStepId);
+						undone.add(edit.undoStepId);
+					}
+				} finally {
+					await sync.refresh();
+					patchMessage(projectId, messageId, {
+						edits: edits.map((edit) => (undone.has(edit.undoStepId) ? { ...edit, undone: true } : edit)),
+					});
+				}
 			});
 		},
 

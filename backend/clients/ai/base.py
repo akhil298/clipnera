@@ -58,6 +58,8 @@ class ToolResult:
     call_id: str
     content: str
     is_error: bool = False
+    # JPEGs the tool looked at; the loop sends them to the model right after the results.
+    images: tuple[bytes, ...] = ()
 
 
 @dataclass(frozen=True)

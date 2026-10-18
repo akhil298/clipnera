@@ -88,7 +88,7 @@ backend/.env      Environment secrets (IGNORED)
 - A new edit request replaces the main cut even where the user changed shots (the plan card says so; Undo restores it).
 - Opening a project must not save anything: `BackendSync` remembers what the studio's defaults add (`shownExtra`), or every AI item would be logged as changed by the user and become off-limits to the AI.
 - Rebuild the studio's stylesheet after changing classes under `frontend/opencut/src`: `cd frontend/opencut/tools && npm run build`.
-- Prompts: `POST /api/v1/editor/projects/{id}/turns` → `brain/turns.py`; plans: `/api/v1/editor/plans/*` (`brain/api.py`).
+- Studio chat prompts: `POST /api/v1/editor/projects/{id}/agent` (SSE) → `brain/studio.py`, one model (role `studio`) with every tool: read, `apply_edits` (each call its own undo step), `look_at_frames`, studio actions (playhead, select, play, panel; run by `clipnera/agent-ui.ts`), `plan_edit` (hands whole edits to `brain/turns.plan_request` → director), `start_export`, to-dos, `ask_user`. Undo/redo/split/delete still skip the model. The old one-shot `POST .../turns` → `brain/turns.py` is still served; plans: `/api/v1/editor/plans/*` (`brain/api.py`).
 - The AI never writes frame times: the director names moments by id (PlanIR); `brain/solvers/` place frames.
 - Agent edits go through `EditorService.apply` with an `Actor`: human ownership, op budgets and the never-do list (`brain/invariants.py`) apply there.
 - Feature flag `agent_editor` gates it all; it can be on for named test users only (`/admin/features`).

@@ -74,6 +74,10 @@ async def run_turn(client: BaseAI, messages: list[dict[str, Any]], toolbox: Tool
             results.append(result)
             yield AgentEvent("tool_result", {"id": call.id, "name": call.name, "ok": not result.is_error, "content": result.content})
         messages.extend(client.tool_results(results))
+        # Tool results are text everywhere; pictures a tool looked at follow them as one user message.
+        images = [jpeg for result in results for jpeg in result.images]
+        if images:
+            messages.append(client.image_message("The pictures from your last tool calls, in order.", images))
     yield _done("steps", limits.max_steps, budget)
 
 

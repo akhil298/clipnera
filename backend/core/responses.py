@@ -6,6 +6,7 @@ Errors keep flowing through CustomException, whose handler already returns
 
 from __future__ import annotations
 
+import json
 from typing import Generic, Optional, TypeVar
 
 from pydantic import BaseModel
@@ -21,3 +22,8 @@ class ApiResponse(BaseModel, Generic[T]):
 
 def ok(data: T, message: str | None = None) -> ApiResponse[T]:
     return ApiResponse(data=data, message=message)
+
+
+def sse(name: str, data: object) -> str:
+    """One server-sent event; streams send these instead of the envelope."""
+    return f"event: {name}\ndata: {json.dumps(data, default=str)}\n\n"

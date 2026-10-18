@@ -3024,22 +3024,111 @@ export const plansApi = {
       signal,
     });
     if (!res.ok || !res.body) throw new ApiError(`Couldn't follow the plan (${res.status})`, res.status, null);
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) return;
-      buffer += decoder.decode(value, { stream: true });
-      let split: number;
-      while ((split = buffer.indexOf('\n\n')) >= 0) {
-        const block = buffer.slice(0, split);
-        buffer = buffer.slice(split + 2);
-        const name = /^event: (.+)$/m.exec(block)?.[1];
-        const data = /^data: (.+)$/m.exec(block)?.[1];
-        if (name && data) onEvent({ event: name, data: JSON.parse(data) } as PlanEvent);
-      }
+    await readNamedEvents(res.body, onEvent);
+  },
+};
+
+/** Reads named server-sent events (`event:` and `data:` lines) from a stream until it ends. */
+async function readNamedEvents<E extends { event: string; data: unknown }>(
+  body: ReadableStream<Uint8Array>,
+  onEvent: (event: E) => void,
+): Promise<void> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return;
+    buffer += decoder.decode(value, { stream: true });
+    let split: number;
+    while ((split = buffer.indexOf('\n\n')) >= 0) {
+      const block = buffer.slice(0, split);
+      buffer = buffer.slice(split + 2);
+      const name = /^event: (.+)$/m.exec(block)?.[1];
+      const data = /^data: (.+)$/m.exec(block)?.[1];
+      if (name && data) onEvent({ event: name, data: JSON.parse(data) } as E);
     }
+  }
+}
+
+/** The studio's asset panel tabs (backend brain/schema.py StudioPanel). */
+export type StudioPanel =
+  | 'media' | 'sounds' | 'text' | 'stickers' | 'effects' | 'transitions' | 'captions' | 'adjustment' | 'settings';
+export type AgentStopReason = 'answered' | 'steps' | 'time' | 'budget' | 'refused' | 'handed_over' | 'failed';
+
+/** One earlier prompt and what the agent said back (backend brain/schema.py AgentExchange). */
+export interface AgentExchange {
+  prompt: string;
+  reply: string;
+}
+
+/** POST /editor/projects/{id}/agent (backend brain/schema.py AgentRequest). */
+export interface AgentRequest {
+  prompt: string;
+  /** Ids of the items selected in the studio. */
+  selection?: string[];
+  /** The playhead, in timeline frames. */
+  playhead?: number;
+  /** The conversation so far, oldest first (at most 6). */
+  history?: AgentExchange[];
+  questions_asked?: number;
+  /** Auto mode: never ask, and run whole-edit plans without waiting for approval. */
+  auto?: boolean;
+  model?: string | null;
+  effort?: AiEffort | null;
+}
+
+export interface AgentTodo {
+  text: string;
+  status: 'pending' | 'active' | 'done';
+}
+
+/** What the studio agent streams while it works (backend brain/schema.py Agent*; editor/route.py agent_turn). */
+export type AgentEvent =
+  | { event: 'text'; data: { text: string } }
+  | { event: 'tool'; data: { id: string; name: string; label: string } }
+  | { event: 'tool_done'; data: { id: string; ok: boolean; error: string | null } }
+  | { event: 'edit'; data: { label: string; version: number; undo_step_id: string } }
+  | { event: 'undone'; data: { undo_step_id: string; version: number } }
+  | {
+      event: 'ui';
+      data: {
+        action: 'seek' | 'select' | 'play' | 'panel';
+        /** seek and play: timeline seconds; play stops at `end`. */
+        seconds: number | null;
+        end: number | null;
+        item_ids: string[];
+        panel: StudioPanel | null;
+      };
+    }
+  | { event: 'todos'; data: { items: AgentTodo[] } }
+  | { event: 'ask'; data: { question: string; options: string[] } }
+  | { event: 'plan'; data: PlanCard }
+  | { event: 'render'; data: RenderStatus }
+  | { event: 'result'; data: TurnResult }
+  | { event: 'done'; data: { reason: AgentStopReason; message: string | null } }
+  | { event: 'error'; data: { message: string } };
+
+export const agentApi = {
+  /** One prompt for the studio agent; calls onEvent per event until the turn ends or ``signal`` aborts. */
+  async run(projectId: string, payload: AgentRequest, onEvent: (event: AgentEvent) => void, signal?: AbortSignal): Promise<void> {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/api/v1/editor/projects/${projectId}/agent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+      signal,
+    });
+    if (res.status === 401) handleUnauthorized();
+    if (!res.ok || !res.body) {
+      const { message = `The AI couldn't start (${res.status})`, error } = (await res.json().catch(() => ({}))) as ApiErrorBody;
+      throw new ApiError(message, res.status, error ?? null);
+    }
+    await readNamedEvents(res.body, onEvent);
   },
 };
 
