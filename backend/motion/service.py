@@ -88,14 +88,21 @@ def motion_source(clip: Any, ratio: str = "9:16") -> MotionSource | None:
     """The stored plan and the cut's layout stretches at ``ratio``, for an export.
 
     The stretches come even without a plan: the title card is placed from them.
+    A clip with graphic beats draws those in its finish pass instead of these
+    cues, and its captions step aside where a beat holds the frame.
     ``None`` when the clip has neither (cut before layouts were recorded).
     """
-    plan = load_plan(_loads(clip.analysis_json).get("motion"))
+    from beats.compose import caption_quiet
+    from clip_generation.hook import Hook
+
+    analysis = _loads(clip.analysis_json)
+    quiet = tuple(caption_quiet(clip, Hook.from_values(clip.hook_start, clip.hook_end))) if analysis.get("beats") else ()
+    plan = None if analysis.get("beats") else load_plan(analysis.get("motion"))
     formats = _loads(clip.output_formats)
     frames = (formats.get(ratio) or {}).get("frames") if isinstance(formats.get(ratio), dict) else None
-    if not frames and (plan is None or not plan.cues):
+    if not frames and not quiet and (plan is None or not plan.cues):
         return None
-    return MotionSource(plan, frames or [])
+    return MotionSource(plan, frames or [], quiet)
 
 
 def _loads(value: Any) -> dict[str, Any]:

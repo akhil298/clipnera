@@ -34,11 +34,16 @@ TAIL_PAD = 0.15
 # Short-form pacing: a half-second of dead air already reads as a stall.
 JUMP_CUT_MIN_PAUSE = 0.5
 JUMP_CUT_KEEP = 0.12
+# Fillers cut out of the body besides hesitations (see understanding.analyzers.tag_fillers).
+DROPPED_FILLERS = frozenset({"repeat", "you_know", "i_mean"})
+# The longest pause after a line for the line said again next to count as a retake of it.
+RETAKE_MAX_GAP = 2.0
 # No piece of a stitched clip may be shorter than this, or the cut reads as a glitch.
 MIN_PIECE_SECONDS = 0.5
 # Rubric weights for the overall 0-1 score: the hook decides whether anyone sees the rest.
 # Punctuation that ends a clause; a shortened teaser stops after one.
 CLAUSE_MARKS = (",", ".", "!", "?", ";", ":", "।")
+SENTENCE_MARKS = (".", "!", "?", "।")
 RUBRIC_WEIGHTS = {"hook": 0.3, "payoff": 0.25, "standalone": 0.2, "emotion": 0.15, "pacing": 0.1}
 # Two clips overlapping more than this share of the shorter one are the same clip.
 DUPLICATE_OVERLAP = 0.4
@@ -474,13 +479,14 @@ def _span(first: int, last: int, by_id: dict[int, Sentence], duration: float) ->
 
 
 def _tighten(spans: list[tuple[float, float]], words: list[dict[str, Any]]) -> list[tuple[float, float]]:
-    """Cut long pauses and every hesitation sound ("um", "हम्म") out of each span.
+    """Cut long pauses, hesitations, stutters, filler phrases and earlier takes out of each span.
 
-    A hesitation is cut however short the gap around it; the cut stops at its
+    A dropped word is cut however short the gap around it; the cut stops at its
     edges so none of it survives in the breath kept either side.
     """
-    speech = [(w["start"], w["end"]) for w in words if not is_hesitation(w["word"])]
-    hesitations = [(w["start"], w["end"]) for w in words if is_hesitation(w["word"])]
+    dropped = _dropped(words)
+    speech = [(w["start"], w["end"]) for i, w in enumerate(words) if i not in dropped]
+    hesitations = [(w["start"], w["end"]) for i, w in enumerate(words) if i in dropped]
     tightened: list[tuple[float, float]] = []
     for span_start, span_end in spans:
         inside = [(s, e) for s, e in speech if e > span_start and s < span_end]
@@ -500,6 +506,41 @@ def _tighten(spans: list[tuple[float, float]], words: list[dict[str, Any]]) -> l
         pieces[-1][1] = span_end
         tightened.extend((a, b) for a, b in pieces)
     return tightened
+
+
+def _dropped(words: list[dict[str, Any]]) -> set[int]:
+    """Indices of words a premium edit cuts: hesitations, the first of a stutter, "you know," / "I mean,",
+    and every word of a line the speaker says again just after (the earlier take).
+
+    "like," and "so," are left in: cut mid-sentence they make the audio jump.
+    """
+    from understanding.analyzers import find_retakes, tag_fillers
+    from understanding.mud import Utterance, Word
+
+    marked = [Word(i=i, t0=float(w["start"]), t1=max(float(w["end"]), float(w["start"])), text=str(w["word"]))
+              for i, w in enumerate(words)]
+    dropped = {i for i, w in enumerate(words) if is_hesitation(w["word"])}
+    bare = [re.sub(r"[^\w']", "", w.text.lower()) for w in marked]
+    for w in tag_fillers(marked):
+        # A stutter is one doubled word; "no no no" or "very very" is said on purpose and stays.
+        run = w.filler == "repeat" and (w.i + 2 < len(bare) and bare[w.i + 2] == bare[w.i] or w.i and bare[w.i - 1] == bare[w.i])
+        if w.filler in DROPPED_FILLERS and not run:
+            dropped.add(w.i)
+    lines: list[Utterance] = []
+    first = 0
+    for i, w in enumerate(marked):
+        if w.text.rstrip().endswith(SENTENCE_MARKS) or i == len(marked) - 1:
+            text = " ".join(m.text for m in marked[first:i + 1])
+            lines.append(Utterance(id=f"u{len(lines)}", t0=marked[first].t0, t1=w.t1, w0=first, w1=i, text=text))
+            first = i + 1
+    starts = [line.t0 for line in lines]
+    for trim in find_retakes(lines):
+        # A retake is said again straight away; a line repeated after a pause is a refrain, and stays.
+        following = next((t for t in starts if t > trim.t1), None)
+        if following is not None and following - trim.t1 <= RETAKE_MAX_GAP:
+            dropped |= {w.i for w in marked if trim.t0 <= w.t0 and w.t1 <= trim.t1}
+    # Never cut the whole clip away: a clip that is all retakes keeps its words.
+    return dropped if len(dropped) < len(words) else {i for i, w in enumerate(words) if is_hesitation(w["word"])}
 
 
 def _merge_close(spans: list[tuple[float, float]]) -> list[tuple[float, float]]:

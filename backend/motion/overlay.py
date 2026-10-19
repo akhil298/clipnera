@@ -24,6 +24,8 @@ class MotionSource:
 
     plan: MotionPlan | None
     frames: list[dict[str, Any]] | None = None
+    # (start, end) seconds of the cut where a graphic beat holds the frame and captions step aside.
+    quiet: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass
@@ -45,11 +47,17 @@ def build_overlay(
     width: int,
     height: int,
     title_seconds: float,
+    quiet: tuple[tuple[float, float], ...] = (),
 ) -> Overlay | None:
-    """The overlay for one render, or ``None`` when the plan draws nothing there."""
-    if plan is None or not plan.cues:
-        return None
+    """The overlay for one render, or ``None`` when it neither draws nor quiets anything.
+
+    ``quiet`` (seconds of the cut) moves onto the output past the bridge; with
+    no cues the overlay carries only those, and no graphics script.
+    """
     shift = gap if hook else 0.0
+    beat_quiet = [_on_output(start, end, hook, shift) for start, end in quiet]
+    if plan is None or not plan.cues:
+        return Overlay(ass="", quiet=beat_quiet) if beat_quiet else None
     placed: list[Placed] = []
     for cue in plan.cues:
         start = source_to_cut(cue.start, clip_start, clip_end, hook, spans)
@@ -59,17 +67,23 @@ def build_overlay(
             continue  # Part of it was cut out of the clip: a half-shown graphic is worse than none.
         placed.append(Placed(cue.kind, start + shift, end + shift, cue.data, [beat + shift for beat in beats]))
     if not placed:
-        return None
+        return Overlay(ass="", quiet=beat_quiet) if beat_quiet else None
     layouts = [_shifted(LayoutSpan.from_stored(item), hook, shift) for item in frames or [] if _readable(item)]
     drawn: list[Placed] = []
     ass = graphics_ass(placed, layouts, width, height, title_seconds, drawn=drawn)
     if ass is None:
-        return None
+        return Overlay(ass="", quiet=beat_quiet) if beat_quiet else None
     return Overlay(
         ass=ass,
         sounds=sounds_for(drawn),
-        quiet=[(cue.start, cue.end) for cue in drawn if cue.kind in QUIETS_CAPTIONS],
+        quiet=[(cue.start, cue.end) for cue in drawn if cue.kind in QUIETS_CAPTIONS] + beat_quiet,
     )
+
+
+def _on_output(start: float, end: float, hook: Hook | None, shift: float) -> tuple[float, float]:
+    """A cut window on the output: after the teaser it moves past the bridge."""
+    moved = shift if hook and start >= hook.duration - 1e-3 else 0.0
+    return start + moved, end + moved
 
 
 def _body_end(clip_start: float, clip_end: float, spans: list[Span] | None) -> float:

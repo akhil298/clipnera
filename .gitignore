@@ -94,3 +94,9 @@ backend/static/motion/previews/
 # Local cleanup report for the gitignored library
 backend/static/motion/cleanup_report.json
 AI Editor/
+# Before/After reference reels (local only)
+before_after_reels/
+
+# Clean motion kit: built by backend/scripts/build_motion_kit.py, synced through S3 (--push/--pull)
+backend/static/motion/kit/*
+!backend/static/motion/kit/README.md

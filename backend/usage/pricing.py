@@ -39,6 +39,8 @@ TOKEN_PRICES: dict[tuple[str, str], TokenPrice] = {
     ("openai", "gpt-4.1"): TokenPrice(2.00, 8.00),
     ("openai", "gpt-5"): TokenPrice(1.25, 10.00),
     ("openai", "gpt-4o-mini"): TokenPrice(0.15, 0.60),
+    # Azure Global Standard rate; Data Zone and long-context deployments bill more.
+    ("openai", "gpt-6-astra"): TokenPrice(10.00, 50.00),
     ("groq", "openai/gpt-oss-20b"): TokenPrice(0.075, 0.30),
     ("groq", "openai/gpt-oss-120b"): TokenPrice(0.15, 0.60),
     # The vision model for photos and contact sheets (reels/vision.FREE_MODEL); console.groq.com/docs/models.

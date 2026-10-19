@@ -53,6 +53,15 @@ class BaseConfig(BaseSettings):
     # the per-step policy in clients.ai.STEP_MODELS, Groq for free and
     # OpenAI for Pro. Switch back to "tiered" when OpenAI credits run out.
     LLM_ROUTING: Literal["openai", "tiered"] = "openai"
+    # Exact models for single steps of Pro runs, "provider:model[:effort]", over the
+    # routing above: the judgement steps run on GPT-6 Astra, the rest stay on OPENAI_MODEL.
+    # {} puts every step back on the routing.
+    LLM_PRO_STEP_MODELS: dict[str, str] = {
+        "highlight_detection": "openai:gpt-6-astra-1:medium",
+        "director": "openai:gpt-6-astra-1:medium",
+        "motion_planning": "openai:gpt-6-astra-1:medium",
+        "beat_planning": "openai:gpt-6-astra-1:medium",
+    }
 
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
@@ -85,7 +94,17 @@ class BaseConfig(BaseSettings):
     # the remaining calls drop to low effort; at 100% they stop and the
     # heuristic fallbacks take over, so a video never ends up without clips.
     # 0 disables the cap.
-    AI_BUDGET_PER_SOURCE_MINUTE_PRO: float = 0.015
+    # Graphic beats for Pro clips (backend/beats): planned after clip generation,
+    # rendered with headless Chrome at export. CHROME_PATH names the browser
+    # binary (the renderer also looks in the usual places); MOTION_KIT_DIR the
+    # clean asset kit (default backend/static/motion/kit).
+    BEATS_ENABLED: bool = True
+    CHROME_PATH: str = ""
+    MOTION_KIT_DIR: str = ""
+    # Image deployment at OPENAI_ENDPOINT that scripts/generate_kit_images.py makes the kit's own images with.
+    IMAGE_MODEL: str = ""
+    # Pro is sized for GPT-6 Astra ($10/$50 per Mtok) on the judgement steps.
+    AI_BUDGET_PER_SOURCE_MINUTE_PRO: float = 0.06
     AI_BUDGET_PER_SOURCE_MINUTE_FREE: float = 0.002
     # Credits charged per minute of source video, rounded up per video with a
     # minimum of one credit.

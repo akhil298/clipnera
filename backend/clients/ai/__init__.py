@@ -81,6 +81,8 @@ STEP_MODELS: dict[str, tuple[ModelChoice, ModelChoice]] = {
     "broll_planning": (GROQ_LARGE, OPENAI_PRO),
     # Which spoken moments get a motion graphic, and its exact words: what the viewer reads.
     "motion_planning": (GROQ_LARGE, OPENAI_PRO),
+    # The Pro clip's graphic beats (backend/beats): which word gets which graphic.
+    "beat_planning": (GROQ_LARGE, OPENAI_PRO),
     # Footage reels: one call decides the whole edit. The reel editor's Opus
     # flag swaps in REEL_DIRECTOR_OPUS (see edit_engine.director).
     "reel_director": (GROQ_LARGE, OPENAI_PRO),
@@ -139,13 +141,32 @@ def model_for_step(is_pro: bool, step: str | None = None) -> ModelChoice:
     ``AI_PROVIDER`` set to a real provider pins every step to it -- for local
     work and A/B runs, so a pinned run really is single-provider. Left at
     ``auto`` it means "decide per user and per step", which production wants.
+    A Pro run takes ``LLM_PRO_STEP_MODELS``' exact model for a step when one is
+    set and its provider agrees with that pin.
     """
     free, pro = _step_choices(step)
     choice = pro if is_pro else free
     pinned = _pinned_provider()
+    exact = _pro_step_model(step) if is_pro else None
+    if exact is not None and pinned in (None, exact.provider) and _has_key(exact.provider):
+        return exact
     if pinned is not None and pinned != choice.provider:
         choice = _on_provider(pinned, step)
     return _configured(choice)
+
+
+def _pro_step_model(step: str | None) -> ModelChoice | None:
+    """``LLM_PRO_STEP_MODELS[step]`` ("provider:model[:effort]") as a choice; None when unset or malformed."""
+    raw = str((getattr(get_settings(), "LLM_PRO_STEP_MODELS", None) or {}).get(step or "") or "").strip()
+    if not raw:
+        return None
+    provider, _, rest = raw.partition(":")
+    model, _, effort = rest.partition(":")
+    provider, model = provider.strip().lower(), model.strip()
+    if provider not in TEXT_PROVIDERS or not model:
+        log.warning("LLM_PRO_STEP_MODELS[%s]=%r is not provider:model[:effort]; using the default", step, raw)
+        return None
+    return ModelChoice(provider, model, effort.strip().lower() or None)
 
 
 def provider_for_tier(is_pro: bool, step: str | None = None) -> str:

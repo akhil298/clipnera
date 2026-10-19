@@ -84,6 +84,23 @@ class TestStepPolicy:
             assert provider_for_tier(True, step) == "openai"
             assert provider_for_tier(False, step) == "openai"
 
+    def test_pro_step_pin_names_an_exact_model(self, auto_settings):
+        auto_settings.LLM_PRO_STEP_MODELS = {"director": "openai:gpt-6-astra-1:medium"}
+        choice = model_for_step(True, "director")
+        assert (choice.provider, choice.model, choice.effort) == ("openai", "gpt-6-astra-1", "medium")
+        # Free runs and unpinned steps keep the policy.
+        assert model_for_step(False, "director").provider == "groq"
+        assert model_for_step(True, "titles").model == "gpt-4.1-mini"
+
+    def test_pinned_provider_outranks_a_pro_step_pin(self, auto_settings):
+        auto_settings.LLM_PRO_STEP_MODELS = {"director": "openai:gpt-6-astra-1"}
+        auto_settings.AI_PROVIDER = "groq"
+        assert model_for_step(True, "director").provider == "groq"
+
+    def test_malformed_pro_step_pin_is_ignored(self, auto_settings):
+        auto_settings.LLM_PRO_STEP_MODELS = {"director": "gpt-6-astra-1"}
+        assert model_for_step(True, "director").model == "gpt-4.1-mini"
+
     def test_pinned_claude_step_uses_the_configured_effort(self, auto_settings):
         auto_settings.AI_PROVIDER = "anthropic"
         choice = model_for_step(True, "titles")

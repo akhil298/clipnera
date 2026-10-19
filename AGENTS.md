@@ -33,6 +33,8 @@ backend/          FastAPI app — routes, services, schemas, DB models
   brain/          AI editor: router, refs, modifiers, director, PlanIR, solvers/, compile, rulebook/,
                   score, plans + execution, verify/repair, critic, credits, style memory, metrics
   understanding/  Per-asset Media Understanding Documents (MUD), LCV text view, media tools
+  beats/          Pro clips' graphic beats: planner (word ids -> proven beats), kit (clean assets), compose
+                  (grade, zoom rhythm, Chrome-rendered beats, mattes, SFX), renderer/ (no-npm Chrome driver)
   agent_runtime/  Provider-neutral tool loop and typed tool boxes
   clients/ai/     AI clients; roles.py picks a model per role (LLM_PROFILE), cassette.py for evals
   evals/          Golden set + injection cases (python -m evals.runner)
@@ -93,6 +95,12 @@ backend/.env      Environment secrets (IGNORED)
 - Agent edits go through `EditorService.apply` with an `Actor`: human ownership, op budgets and the never-do list (`brain/invariants.py`) apply there.
 - Feature flag `agent_editor` gates it all; it can be on for named test users only (`/admin/features`).
 - Design docs: `AI Editor/BLUEPRINT.md`, build list `AI Editor/TODO.md`.
+
+## Graphic beats (YouTube-link clips, Pro)
+- After clip generation, `beats/service.plan_project_beats` asks one model (step `beat_planning`) which word gets which graphic; `beats/planner.prove` keeps only beats whose words were said (figures digit for digit). Stored in `analysis_json["beats"]`; a clip with beats does not draw its old `motion` cues.
+- Exports run `beats.compose.with_finish` after `with_broll` and before captions: theme LUT (`beats/grade.py`), punch-in every other sentence on follow layouts, each beat rendered by `beats/renderer/render.mjs` (headless Chrome, `CHROME_PATH`) to a transparent MOV, text behind the speaker via a MODNet matte, SFX from `static/motion/sfx`. Captions step aside under cards (`MotionSource.quiet`).
+- Assets only from `static/motion/kit/manifest.json` (built by `scripts/build_motion_kit.py`, made images by `scripts/generate_kit_images.py`, synced through S3); never from `static/motion/library/`. Brief: `docs/motion_kit/ASSET_KIT.md`; reel study: `before_after_reels/ANALYSIS.md`; benchmark: `scripts/beats_benchmark.py`.
+- Pro judgement steps run on GPT-6 Astra through `LLM_PRO_STEP_MODELS`.
 
 ## Notes
 - `.vscode/` is fully gitignored — do not commit VSCode files
