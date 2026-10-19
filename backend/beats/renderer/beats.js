@@ -208,14 +208,22 @@
       lead.style.color = behind ? 'var(--ink)' : '#fff';
       lead.style.fontSize = `${s.box[3] * (behind ? 0.1 : 0.2)}px`;
     }
-    const word = el('div', `figure ${behind ? '' : 'accent glow'}`, g);
-    // The gradient fill goes on each letter: background-clip:text does not reach inline-block children.
-    const chars = [...(behind ? s.data.text.toUpperCase() : s.data.text)].map(c => {
-      const ch = el('span', behind ? 'behind-text' : '', word, c);
-      ch.style.display = 'inline-block';
-      return ch;
+    // A narrow band (beside the speaker) stacks the words, one per line, so each stays big.
+    const text = behind ? s.data.text.toUpperCase() : s.data.text;
+    const stacked = s.box[2] < s.W * 0.5 && text.includes(' ');
+    const lines = stacked ? text.split(/\s+/) : [text];
+    const room = s.box[3] * (behind ? 0.9 : 0.8) / lines.length;
+    const chars = [];
+    lines.forEach(line => {
+      const word = el('div', `figure ${behind ? '' : 'accent glow'}`, g);
+      // The gradient fill goes on each letter: background-clip:text does not reach inline-block children.
+      [...line].forEach(c => {
+        const ch = el('span', behind ? 'behind-text' : '', word, c === ' ' ? '\u00a0' : c);
+        ch.style.display = 'inline-block';
+        chars.push(ch);
+      });
+      fitText(word, s.box[2] * 0.98, room);
     });
-    fitText(word, s.box[2] * 0.98, s.box[3] * (behind ? 0.62 : 0.6));
     return {
       seek(t) {
         envelope(g, t, s.dur, { from: behind ? 1.12 : 0.7, blur: behind ? 0 : 10, rise: 0 });

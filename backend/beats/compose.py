@@ -57,6 +57,17 @@ BOX_HEIGHT = {
 # Where full-frame beats keep their text: a card's middle, the band behind the head.
 CARD_BOX = (0.08, 0.2, 0.84, 0.6)
 BEHIND_BOX = (0.03, 0.1, 0.94, 0.3)
+# Tops (share of the height) a band behind the speaker may take, and the most of its letter line
+# the speaker may cover: a little reads as depth, a lot hides the word.
+BEHIND_TOPS = (0.04, 0.08, 0.12, 0.16, 0.22, 0.28, 0.36, 0.44, 0.52)
+BEHIND_COVER_FULL = 0.12
+BEHIND_COVER_SIDE = 0.06
+# A side band's share of the frame's width: the outer third, beside the speaker.
+SIDE_SHARE = 0.34
+# A side band is taller than a full-width one: its words stack.
+SIDE_HEIGHT = 1.6
+# Kinds that must be read whole: never set behind the speaker.
+NEVER_BEHIND = frozenset({COUNT_UP})
 IMAGE_CAPTION_BOX = (0.08, 0.58, 0.84, 0.2)
 MONEY = ("$", "₹", "€", "£", "¥")
 
@@ -106,8 +117,11 @@ async def finish(video_path: str, clip: Any, hook: Hook | None, plan: BeatPlan, 
     for index, item in enumerate(placed):
         if item.behind:
             matte = str(workdir / f"matte{index}.mkv")
+            band = None
             if await cutout.matte_video(graded, item.start, item.end, info.width, info.height, RENDER_FPS, matte):
-                item.matte = matte
+                band = await _behind_band(matte, item.end - item.start, item.box, info)
+            if band is not None:
+                item.matte, item.box = matte, band
             else:
                 item.behind = False
                 item.place, item.box = _fit(item.beat.kind, BESIDE, layouts, item.start, info)
@@ -154,7 +168,7 @@ def _place(beat: Beat, clip: Any, hook: Hook | None, spans: list | None, layouts
     if start is None or end is None or end - start < 0.5 or any(t is None for t in steps):
         return None  # Part of it was cut out: a half-shown graphic is worse than none.
     place = CARD if beat.kind in (STATEMENT, IMAGE) else beat.place
-    if place == BEHIND and not cutout.available():
+    if place == BEHIND and (beat.kind in NEVER_BEHIND or not cutout.available()):
         place = BESIDE
     place, box = _fit(beat.kind, place, layouts, start, info)
     return Placed(beat, start, end, [t - start for t in steps], place, box, behind=place == BEHIND)
@@ -228,6 +242,50 @@ def _grade_cmd(src: str, out: str, theme: str, zooms: list[tuple[float, float]],
         "-vf", ",".join(chain), "-map", "0:v", "-map", "0:a?",
         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "14", "-pix_fmt", "yuv420p", "-c:a", "copy", out,
     ]
+
+
+async def _behind_band(matte: str, seconds: float, box: tuple[int, int, int, int], info: Probe) -> tuple[int, int, int, int] | None:
+    """A band behind the speaker where the word stays readable, or ``None`` (draw it in front).
+
+    The matte is sampled at a few moments of the beat and each candidate is scored on the
+    middle of its height, where the letters are: a full-width band may lose a little to the
+    speaker (it reads as depth), a band in the free side of the frame almost nothing.
+    Full width wins over a side band; then the top nearest the preferred one.
+    """
+    import numpy as np
+
+    W, H, small = info.width, info.height, 96
+    sh = max(1, round(small * H / W))
+    frames = []
+    for share in (0.15, 0.5, 0.85):
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-v", "error", "-nostdin", "-ss", f"{seconds * share:.3f}", "-i", matte, "-frames:v", "1",
+            "-vf", f"scale={small}:{sh}", "-f", "rawvideo", "-pix_fmt", "gray", "-",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+        )
+        raw, _ = await proc.communicate()
+        if len(raw) == small * sh:
+            frames.append(np.frombuffer(raw, np.uint8).reshape(sh, small) / 255.0)
+    if not frames:
+        return None
+    _, _, w, h = box
+    side_w, side_h = round(w * SIDE_SHARE), round(h * SIDE_HEIGHT)
+    candidates = [(0, box[0], w, h, BEHIND_COVER_FULL),
+                  (1, box[0], side_w, side_h, BEHIND_COVER_SIDE), (1, box[0] + w - side_w, side_w, side_h, BEHIND_COVER_SIDE)]
+    best = None
+    for rank, x, cw, h, limit in candidates:
+        x0, x1 = round(x / W * small), max(round(x / W * small) + 1, round((x + cw) / W * small))
+        for top in BEHIND_TOPS:
+            if top + h / H > 0.9:
+                continue
+            y0 = round((top + 0.25 * h / H) * sh)
+            y1 = max(y0 + 1, round((top + 0.75 * h / H) * sh))
+            cover = max(float((f[y0:y1, x0:x1] > 0.5).mean()) for f in frames)
+            if cover <= limit:
+                key = (rank, abs(top - BEHIND_BOX[1]))
+                if best is None or key < best[0]:
+                    best = (key, (x, round(top * H), cw, h))
+    return best[1] if best else None
 
 
 async def _has_audio(path: str) -> bool:
