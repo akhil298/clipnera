@@ -1,0 +1,67 @@
+[
+  {
+    "level": "beginner",
+    "prompt": "Edit this video for me.",
+    "expect": "a plan for the whole video, then the edit; no second set of captions over the burned-in ones"
+  },
+  {
+    "level": "beginner",
+    "prompt": "Make the colours brighter and cleaner.",
+    "expect": "a bright look"
+  },
+  {
+    "level": "beginner",
+    "prompt": "Remove the long pauses.",
+    "expect": "shorter, or already tight after the edit"
+  },
+  {
+    "level": "intermediate",
+    "prompt": "Add a pop sound every time she shows a new food.",
+    "expect": "pop sounds"
+  },
+  {
+    "level": "intermediate",
+    "prompt": "Put a big title at the start that says What I Eat In a Day.",
+    "expect": "a title at 0:00"
+  },
+  {
+    "level": "intermediate",
+    "prompt": "Zoom in when she tastes the food.",
+    "expect": "zooms on the tasting moments"
+  },
+  {
+    "level": "intermediate",
+    "prompt": "Add a whoosh between each meal: breakfast, lunch and dinner.",
+    "expect": "whooshes at the meal changes"
+  },
+  {
+    "level": "advanced",
+    "prompt": "Make it more fun: a snap zoom with a hit sound on her funniest line, a light leak on breakfast and confetti at the very end.",
+    "expect": "a to-do list, then all three"
+  },
+  {
+    "level": "advanced",
+    "prompt": "Slow down the moment she cracks the egg and add a soft sound there.",
+    "expect": "slow motion and a sound"
+  },
+  {
+    "level": "advanced",
+    "prompt": "Make the first 5 seconds a hook with her most exciting line.",
+    "expect": "a hook at the front, the rest of the edit kept"
+  },
+  {
+    "level": "advanced",
+    "prompt": "EXPORT",
+    "expect": "the full-length edit as an MP4"
+  },
+  {
+    "level": "advanced",
+    "prompt": "Now cut it down to a 60 second reel for Instagram.",
+    "expect": "a 9:16 cut-down plan, about 60 s"
+  },
+  {
+    "level": "advanced",
+    "prompt": "EXPORT",
+    "expect": "the reel as an MP4"
+  }
+]

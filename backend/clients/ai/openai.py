@@ -11,7 +11,7 @@ import time
 from typing import Any, AsyncIterator
 
 import httpx
-from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait_exponential
+from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt
 
 from core.config import get_settings
 from core.logging_config import get_logger
@@ -39,7 +39,9 @@ REASONING_ALLOWANCE = {"none": 0, "minimal": 1024, "low": 2048, "medium": 8192, 
 # Every effort an OpenAI model may take, lightest first, and what each deployment said it takes
 # when it refused one (newer models drop "minimal"; some add "none").
 EFFORT_ORDER = ("none", "minimal", "low", "medium", "high", "xhigh")
-_SUPPORTED_EFFORTS: dict[str, tuple[str, ...]] = {}
+_SUPPORTED_EFFORTS: dict[str, tuple[str, ...]] = {
+    model: tuple(e for e in EFFORT_ORDER if e in efforts) for model, efforts in settings.OPENAI_MODEL_EFFORTS.items()
+}
 _SUPPORTED_VALUES = re.compile(r"Supported values are: (.+?)\.?$")
 
 
@@ -83,8 +85,8 @@ def reasoning_effort(model: str, requested: str | None = None) -> str | None:
 
 
 # Deployments that take tools with reasoning only on the Responses API (newer GPT models on
-# Azure refuse them on chat completions); their tool calls go there from the first refusal on.
-_TOOLS_ON_RESPONSES: set[str] = set()
+# Azure refuse them on chat completions): the known ones from the start, others from their first refusal on.
+_TOOLS_ON_RESPONSES: set[str] = set(settings.OPENAI_TOOLS_ON_RESPONSES)
 
 
 def _refuses_tool_reasoning(exc: httpx.HTTPStatusError) -> bool:
@@ -209,6 +211,23 @@ def _is_retryable_openai_error(exc: BaseException) -> bool:
     return isinstance(exc, httpx.TransportError)
 
 
+# A rate-limited call waits as long as the API asks (Retry-After), up to this; other failures back off quickly.
+MAX_RETRY_AFTER_SECONDS = 60.0
+
+
+def _retry_wait(state: Any) -> float:
+    """Seconds before the next attempt: the API's Retry-After on a 429, else 1, 2, 4… up to 10."""
+    exc = state.outcome.exception() if state.outcome else None
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+        headers = exc.response.headers
+        try:
+            seconds = float(headers["retry-after-ms"]) / 1000 if "retry-after-ms" in headers else float(headers["retry-after"])
+        except (KeyError, ValueError):
+            seconds = 10.0 * state.attempt_number
+        return min(MAX_RETRY_AFTER_SECONDS, max(1.0, seconds))
+    return min(10.0, 2.0 ** (state.attempt_number - 1))
+
+
 class OpenAI(BaseAI):
     """OpenAI chat completion client with retries, usage recording and tool calling."""
 
@@ -230,6 +249,10 @@ class OpenAI(BaseAI):
             http2=True,
         )
         log.debug("OpenAI client initialized: model=%s api_key_configured=%s", self.model, bool(self.api_key))
+
+    def set_timeout(self, seconds: float) -> None:
+        """How long one attempt may take before it is retried (a stalled request otherwise waits it out)."""
+        self._client.timeout = httpx.Timeout(seconds, connect=10.0)
 
     @property
     def _headers(self) -> dict[str, str]:
@@ -377,10 +400,12 @@ class OpenAI(BaseAI):
 
     async def _post(self, path: str, payload: dict[str, Any], *, mode: str) -> dict[str, Any]:
         async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=1, min=1, max=10),
+            stop=stop_after_attempt(4),
+            wait=_retry_wait,
             retry=retry_if_exception(_is_retryable_openai_error),
             reraise=True,
+            before_sleep=lambda state: log.warning("OpenAI %s call to %s failed (%s); retrying", mode, self.model,
+                                                   type(state.outcome.exception()).__name__),
         ):
             with attempt:
                 started = time.monotonic()

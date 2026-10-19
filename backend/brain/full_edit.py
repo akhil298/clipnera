@@ -13,6 +13,7 @@ model's part (what to cut, what is strong) was done reading the transcript.
 from __future__ import annotations
 
 import re
+from difflib import SequenceMatcher
 
 from brain.context import EditContext
 from brain.intent import IntentFrame
@@ -31,6 +32,8 @@ SECONDS_PER_CALLOUT = 30
 CALLOUTS = (2, 12)
 # Numbers on screen at least this far apart, so they don't crowd.
 CALLOUT_GAP_SECONDS = 8.0
+# Two videos whose words match this closely are the same footage (imported twice, or a copy).
+SAME_SPEECH = 0.9
 
 
 def wanted(prompt: str, decision: RouteDecision) -> bool:
@@ -42,10 +45,11 @@ def wanted(prompt: str, decision: RouteDecision) -> bool:
     return decision.intent == "new_edit" and not _CUT_DOWN.search(prompt)
 
 
-def build(ctx: EditContext) -> tuple[IntentFrame, PlanIR] | None:
-    """The full edit of the project's spoken videos, or None when none has analysed speech."""
-    videos = [(asset.id, ctx.muds[asset.id]) for asset in ctx.timeline.assets.values()
-              if asset.kind == "video" and asset.id in ctx.muds and ctx.muds[asset.id].utterances]
+def build(ctx: EditContext, *, subtitled: frozenset[str] = frozenset()) -> tuple[IntentFrame, PlanIR] | None:
+    """The full edit of the project's spoken videos, or None when none has analysed speech. Footage in
+    ``subtitled`` already has subtitles burned in, so it gets no captions over them."""
+    videos = _distinct([(asset.id, ctx.muds[asset.id]) for asset in ctx.timeline.assets.values()
+                        if asset.kind == "video" and asset.id in ctx.muds and ctx.muds[asset.id].utterances])
     if not videos:
         return None
     refs = [ref for asset_id, mud in videos for ref in _kept_runs(asset_id, mud)]
@@ -73,7 +77,9 @@ def build(ctx: EditContext) -> tuple[IntentFrame, PlanIR] | None:
     if callouts:
         steps.append(PlanStep(id="s5", kind="callouts", depends_on=[last],
                               intent=f"Put {len(callouts)} key number{'' if len(callouts) == 1 else 's'} on screen as they are said"))
-    steps.append(PlanStep(id="s6", kind="captions", intent="Add captions", depends_on=[last]))
+    captioned = not all(asset_id in subtitled for asset_id, _ in videos)
+    if captioned:
+        steps.append(PlanStep(id="s6", kind="captions", intent="Add captions", depends_on=[last]))
     if callouts:
         steps.append(PlanStep(id="s7", kind="sfx", intent="A pop on each number", depends_on=["s5"],
                               params={"on": "callouts"}))
@@ -81,15 +87,27 @@ def build(ctx: EditContext) -> tuple[IntentFrame, PlanIR] | None:
     minutes = sum(mud.duration for _, mud in videos) / 60
     summary = (f"Full edit of {minutes:.1f} min: everything said stays; cuts {dead_air:.0f}s of dead air, "
                f"{fillers} filler words" + (f" and {len(trims)} false starts or retakes" if trims else "")
-               + "; adds movement, captions" + (" and key numbers on screen" if callouts else "") + ".")
+               + "; adds movement" + (", captions" if captioned else "") + (" and key numbers on screen" if callouts else "")
+               + ("" if captioned else "; no captions, as the footage has its own subtitles") + ".")
     plan = PlanIR(strategy="chronological", title="Full edit", summary=summary[:240], aspect=aspect,
-                  structure=sections, style={"pace": "medium", "captions": True, "tighten": "natural"},
+                  structure=sections, style={"pace": "medium", "captions": captioned, "tighten": "natural"},
                   text=callouts, steps=steps)
     frame = IntentFrame(scope="whole", aspect=aspect, assumptions=[
         "Everything said stays, in the order it was said",
         *([f"Keeps the footage's {aspect} shape"] if aspect else []),
     ])
     return frame, plan
+
+
+def _distinct(videos: list[tuple[str, MUD]]) -> list[tuple[str, MUD]]:
+    """The videos with the same footage brought in twice kept once (the first), so nothing is said twice."""
+    kept: list[tuple[str, MUD, list[str]]] = []
+    for asset_id, mud in videos:
+        words = [w.text.lower().strip(".,!?") for w in mud.words]
+        if not any(SequenceMatcher(None, words, other, autojunk=False).quick_ratio() >= SAME_SPEECH
+                   and SequenceMatcher(None, words, other, autojunk=False).ratio() >= SAME_SPEECH for _, _, other in kept):
+            kept.append((asset_id, mud, words))
+    return [(asset_id, mud) for asset_id, mud, _ in kept]
 
 
 def _nearest(ratio: float) -> Aspect:

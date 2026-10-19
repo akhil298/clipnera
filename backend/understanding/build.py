@@ -162,7 +162,7 @@ def _shot(n: int, raw: dict[str, Any], duration: float, count: int) -> Shot:
 
 
 async def _transcribe(audio: str, duration: float) -> tuple[list[Word], str | None]:
-    segments, language = await _speech(audio, duration)
+    segments, language = await speech(audio, duration)
     timed = clean_word_timings([w for s in segments for w in s.get("words") or []])
     words = [
         Word(i=i, t0=min(w["start"], duration), t1=min(w["end"], duration), text=str(w["word"]).strip(),
@@ -172,7 +172,7 @@ async def _transcribe(audio: str, duration: float) -> tuple[list[Word], str | No
     return words, language or None
 
 
-async def _speech(audio: str, duration: float) -> tuple[list[dict[str, Any]], str]:
+async def speech(audio: str, duration: float) -> tuple[list[dict[str, Any]], str]:
     """The hosted transcription, or this machine's when the hosted one has no key, fails or hears nothing."""
     if GroqWhisperTranscriber.available():
         try:

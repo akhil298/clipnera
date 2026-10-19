@@ -85,21 +85,31 @@ async def handle_turn(service: EditorService, user_id: str, project_id: str, pro
     if not_ready:
         return TurnResult(kind="answer", message=not_ready, route=decision)
     return await _plan(service, user_id, project_id, prompt, decision, selection, playhead, recent_turns,
-                       questions_asked, auto)
+                       questions_asked, auto, subtitled)
+
+
+async def route_request(service: EditorService, user_id: str, project_id: str, prompt: str, *,
+                        selection: Sequence[str] = (), playhead: int = 0,
+                        recent_turns: Sequence[str] = ()) -> RouteDecision:
+    """The router's reading of a prompt, with the project and what is in its footage."""
+    project = await service.get(user_id, project_id)
+    analyses = await service.analyses(user_id, project_id)
+    return await route(prompt, project.timeline, selection, playhead, recent_turns,
+                       footage=_footage(project.timeline, analyses))
 
 
 async def plan_request(service: EditorService, user_id: str, project_id: str, prompt: str, *,
                        selection: Sequence[str] = (), playhead: int = 0, recent_turns: Sequence[str] = (),
-                       questions_asked: int = 0, auto: bool = False) -> TurnResult:
+                       questions_asked: int = 0, auto: bool = False,
+                       decision: RouteDecision | None = None, subtitled: frozenset[str] = frozenset()) -> TurnResult:
     """A whole edit planned by the director (or brain.full_edit), for a caller that already knows
-    the prompt wants one: the studio agent's plan_edit tool."""
-    project = await service.get(user_id, project_id)
-    analyses = await service.analyses(user_id, project_id)
-    decision = await route(prompt, project.timeline, selection, playhead, recent_turns,
-                           footage=_footage(project.timeline, analyses))
+    the prompt wants one: the studio agent. ``decision`` is the router's, when already made."""
+    decision = decision or await route_request(service, user_id, project_id, prompt, selection=selection,
+                                               playhead=playhead, recent_turns=recent_turns)
     if decision.path == "refuse" or decision.safety == "block":
         return TurnResult(kind="refused", message="I can't help with that request.", route=decision)
-    not_ready = _not_ready(project.timeline, analyses)
+    project = await service.get(user_id, project_id)
+    not_ready = _not_ready(project.timeline, await service.analyses(user_id, project_id))
     if not_ready:
         return TurnResult(kind="answer", message=not_ready, route=decision)
     if auto:
@@ -146,7 +156,7 @@ def _not_ready(timeline: Timeline, analyses: Sequence[MediaAnalysisResponse]) ->
 
 async def _plan(service: EditorService, user_id: str, project_id: str, prompt: str, decision: RouteDecision,
                 selection: Sequence[str], playhead: int, recent_turns: Sequence[str],
-                questions_asked: int = 0, auto: bool = False) -> TurnResult:
+                questions_asked: int = 0, auto: bool = False, subtitled: frozenset[str] = frozenset()) -> TurnResult:
     """The director plans it; the user sees a plan card to approve, edit or reject. In auto mode
     the plan starts running at once, and the card is where the user watches, pauses or undoes it."""
     ctx = await build_context(service, user_id, project_id, selection=list(selection), playhead=playhead,
@@ -156,7 +166,7 @@ async def _plan(service: EditorService, user_id: str, project_id: str, prompt: s
     replaced = _main_clips(ctx.timeline) & ctx.human_owned if decision.intent == "new_edit" else set()
     ctx.human_owned -= replaced
     allowed = set(selection) | replaced
-    result = await _full_edit(prompt, decision, ctx, allowed) if full_edit.wanted(prompt, decision) else None
+    result = await _full_edit(prompt, decision, ctx, allowed, subtitled) if full_edit.wanted(prompt, decision) else None
     if result is None:
         result = await direct(service, user_id, ctx, prompt, decision, allowed_owned=allowed,
                               recent_turns=list(recent_turns), asked_in_conversation=questions_asked,
@@ -170,7 +180,7 @@ async def _plan(service: EditorService, user_id: str, project_id: str, prompt: s
     if result.kind == "failed":
         # Not a question: nothing for the user to answer.
         return TurnResult(kind="answer", message=result.message, route=decision)
-    plan = await plans.save(service.session, user_id, project_id, prompt, ctx.version, result)
+    plan = await plans.save(service.session, user_id, project_id, prompt, ctx.version, result, ctx.muds)
     message = None
     if auto:
         try:
@@ -189,9 +199,10 @@ def _main_clips(timeline: Timeline) -> set[str]:
     return {item.id for item in main.items if isinstance(item, ClipItem)} if main else set()
 
 
-async def _full_edit(prompt: str, decision: RouteDecision, ctx: EditContext, allowed: set[str]) -> DirectorResult | None:
+async def _full_edit(prompt: str, decision: RouteDecision, ctx: EditContext, allowed: set[str],
+                     subtitled: frozenset[str] = frozenset()) -> DirectorResult | None:
     """The whole video edited (brain.full_edit), or None to let the director plan it."""
-    built = full_edit.build(ctx)
+    built = full_edit.build(ctx, subtitled=subtitled)
     if built is None:
         return None
     frame, plan = built

@@ -78,7 +78,7 @@ class TestModelForRole:
         assert model_for_role("router").model == "claude-haiku-4-5"
         assert model_for_role("specialist").model == "claude-sonnet-5-5"
         director = model_for_role("director")
-        assert (director.model, director.effort) == ("claude-opus-5-5", "high")
+        assert (director.model, director.effort) == ("claude-opus-5-5", "medium")
 
     def test_mixed_profile_puts_only_judgement_on_opus(self, settings):
         settings.LLM_PROFILE = "mixed"

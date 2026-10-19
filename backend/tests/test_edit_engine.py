@@ -251,3 +251,36 @@ class TestMusic:
         assert music.pick_track(tracks, "chill", "high", "x").id == "b"
         assert music.pick_track(tracks, "funny", "high", "x").id in {"b", "c"}
         assert music.pick_track([], "chill", "low", "x") is None
+
+
+class TestFraming:
+    def test_a_reel_crops_a_vertical_frame_and_a_wide_project_a_wide_one(self):
+        from edit_engine.render import crop_filter
+
+        assert "ih*9/16" in crop_filter(1.0, None) and "iw*16/9" in crop_filter(1.0, None)
+        wide = crop_filter(1.14, 0.5, (1920, 1080))
+        assert "ih*1920/1080)/1.140" in wide and "iw*1080/1920)/1.140" in wide
+
+    def test_a_cut_on_low_colour_footage_is_still_a_cut(self):
+        import numpy as np
+
+        from edit_engine.perception import detect_shots
+
+        # A white studio wall, then a grey jumper filling the frame: nearly the same colours, a different shot.
+        wall = np.full((144, 256, 3), 235, np.uint8)
+        jumper = np.full((144, 256, 3), 90, np.uint8)
+        jumper[:, :40] = 235
+        frames = [(float(t), wall) for t in range(4)] + [(float(t), jumper) for t in range(4, 8)]
+        assert [(shot.start, shot.end) for shot in detect_shots(frames, 8.0)] == [(0.0, 4.0), (4.0, 8.0)]
+
+    def test_someone_talking_is_one_shot(self):
+        import numpy as np
+
+        from edit_engine.perception import detect_shots
+
+        rng = np.random.default_rng(0)
+        base = np.full((144, 256, 3), 200, np.uint8)
+        base[40:120, 100:160] = 80
+        frames = [(float(t), np.clip(base.astype(int) + rng.integers(-8, 8, base.shape), 0, 255).astype(np.uint8))
+                  for t in range(8)]
+        assert len(detect_shots(frames, 8.0)) == 1

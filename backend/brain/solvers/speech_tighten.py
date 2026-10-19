@@ -27,13 +27,15 @@ def keep_ranges(words: Sequence[Word], t0: float, t1: float, style: str = "natur
     if style not in GAP_SECONDS:
         return [(t0, t1)]
     gap = GAP_SECONDS[style]
-    kept = [w for w in words if w.t0 >= t0 - 1e-6 and w.t1 <= t1 + 1e-6 and not _drop(w)]
+    inside = [(n, w) for n, w in enumerate(words) if w.t0 >= t0 - 1e-6 and w.t1 <= t1 + 1e-6]
+    kept = [(n, w) for n, w in inside if not _drop(w)]
     if not kept:
         return [(t0, t1)]
     ranges: list[list[float]] = []
-    for word in kept:
-        start = max(t0, word.t0 - PAD_BEFORE)
-        end = min(t1, word.t1 + PAD_AFTER)
+    for n, word in kept:
+        # The pads stop at the neighbouring words, the cut ones too: an edge never lands inside a word.
+        start = max(t0, word.t0 - PAD_BEFORE, words[n - 1].t1 if n > 0 else t0)
+        end = min(t1, word.t1 + PAD_AFTER, words[n + 1].t0 if n + 1 < len(words) else t1)
         if ranges and word.t0 - (ranges[-1][1] - PAD_AFTER) <= gap:
             ranges[-1][1] = end
         else:

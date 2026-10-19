@@ -103,7 +103,8 @@ async def _submit(state: dict[str, Any], review: ReviewInput) -> str:
     return "Recorded."
 
 
-async def review(plan_id: str, user_id: str) -> ReviewInput | None:
+async def review(plan_id: str, user_id: str, video: Path | None = None) -> ReviewInput | None:
+    """The critic's review of the cut as it stands: from ``video`` (the verifier's check render of it), or a fresh render."""
     async with AsyncSessionLocal() as session:
         service = EditorService(session)
         plan = await session.get(EditPlan, plan_id)
@@ -117,7 +118,7 @@ async def review(plan_id: str, user_id: str) -> ReviewInput | None:
         return None
     with tempfile.TemporaryDirectory(prefix="clipnera-critic-") as work:
         try:
-            video = await render_timeline(project.timeline, muds, Path(work), preview=True)
+            video = video or await render_timeline(project.timeline, muds, Path(work), preview=True)
         except Exception:
             log.exception("Critic render failed: plan=%s", plan_id)
             return None
@@ -186,7 +187,7 @@ async def _replan(plan_id: str, user_id: str, verdict: ReviewInput) -> None:
                                  clarify=None, safety="ok", preference=None)
         result = await direct(service, user_id, ctx, prompt, decision, allowed_owned=set(), recent_turns=[plan.prompt])
         if result.kind == "plan":
-            revised = await save(session, user_id, plan.project_id, plan.prompt, ctx.version, result)
+            revised = await save(session, user_id, plan.project_id, plan.prompt, ctx.version, result, ctx.muds)
             stored["replanned"] = revised.id
         else:
             stored["replanned"] = "failed"

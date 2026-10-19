@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from brain.route import RouteDecision
 from clients.ai.roles import Effort
@@ -71,6 +71,15 @@ class GhostClip(BaseModel):
     label: str
 
 
+class PlanOutlinePart(BaseModel):
+    """A part of the planned edit (seconds on the edit): what is said as it starts and what happens in it."""
+
+    start: float
+    end: float
+    said: str
+    actions: list[str]
+
+
 class PlanCard(BaseModel):
     id: str
     status: PlanStatusName
@@ -87,6 +96,8 @@ class PlanCard(BaseModel):
     # Premium assets the plan uses, each with a free swap (none until premium assets exist).
     premium: list[str]
     ghost: list[GhostClip]
+    # The edit part by part, as an editor would read the plan (empty on plans made before it existed).
+    outline: list[PlanOutlinePart] = Field(default_factory=list)
     fps: int
     # "Try the other version" is offered while this is set.
     runner_up_title: str | None
@@ -139,6 +150,19 @@ class LibrarySound(BaseModel):
     licence: str
     # What kind of sound it is: transition, impact, pop, ui, money…
     category: str
+
+
+class LibraryGraphic(BaseModel):
+    """An animated graphic from Clipnera's own shelf (static/motion/hook_graphics), drawn in code.
+
+    The file is packed alpha: colour on the left half, its matte (as grey) on the right."""
+
+    id: str
+    name: str
+    seconds: float
+    moods: list[str]
+    # Path under the API host, e.g. /static/graphics/light_leak.mp4.
+    url: str
 
 
 class SoundSearchResponse(BaseModel):
@@ -194,6 +218,27 @@ class AgentExchange(BaseModel):
     reply: str = Field("", max_length=4000)
 
 
+class FrameRange(BaseModel):
+    """A stretch of the timeline the user selected to ask about (Select & ask), in timeline frames."""
+
+    start: int = Field(..., ge=0)
+    # Exclusive.
+    end: int = Field(..., gt=0)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "FrameRange":
+        if self.end <= self.start:
+            raise ValueError("A range must end after it starts")
+        return self
+
+
+class FramePoint(BaseModel):
+    """A spot the user pointed at in the picture (Point & ask): shares of the frame's width and height."""
+
+    x: float = Field(..., ge=0, le=1)
+    y: float = Field(..., ge=0, le=1)
+
+
 class AgentRequest(BaseModel):
     """POST /editor/projects/{id}/agent: one prompt for the studio agent, answered as server-sent events."""
 
@@ -202,6 +247,14 @@ class AgentRequest(BaseModel):
     selection: list[str] = Field(default_factory=list, max_length=200)
     # The playhead, in timeline frames.
     playhead: int = Field(0, ge=0)
+    # The part of the timeline the request is about, when the user selected one.
+    range: FrameRange | None = None
+    # A spot in the picture the request is about, at the playhead.
+    point: FramePoint | None = None
+    # The user's standing rules for this project ("Never cut the guest mid-sentence").
+    rules: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(default_factory=list, max_length=20)
+    # Assets whose picture already has subtitles burned in (the Mac app's text scan): no captions over them.
+    subtitled: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(default_factory=list, max_length=50)
     # The conversation so far, oldest first.
     history: list[AgentExchange] = Field(default_factory=list, max_length=6)
     # Questions the AI has asked in a row (brain.turns.QUESTIONS_PER_REQUEST).
@@ -294,3 +347,83 @@ class AgentError(BaseModel):
 
 # Also streamed: event "plan" (PlanCard), "render" (RenderStatus), "result" (TurnResult, for
 # undo, redo, split and delete, which need no model).
+
+
+# ---------------------------------------------------------------------------- the desktop preview (brain/preview.py)
+
+class PreviewWord(BaseModel):
+    """A caption word, in timeline seconds."""
+
+    word: str
+    start: float
+    end: float
+
+
+class PreviewText(BaseModel):
+    """A title as the server render draws it: one of its three kinds (edit_engine.render.TEXT_STYLES)."""
+
+    kind: Literal["hook", "pop", "line"]
+    text: str
+    at: float
+    dur: float
+
+
+class PreviewSound(BaseModel):
+    """A sound effect the export plays: the Timeline's sound name, where it starts (seconds) and its level."""
+
+    name: str
+    at: float
+    gain_db: float = 0.0
+
+
+class CaptionLook(BaseModel):
+    """The parts of a caption template (subtitle_styling/templates.py) a preview draws."""
+
+    name: str
+    font_family: str
+    font_size: int
+    font_color: str
+    highlight_color: str
+    emphasis_color: str | None
+    stroke_color: str | None
+    stroke_width: float
+    uppercase: bool
+    background: bool
+    background_color: str | None
+    max_words_per_line: int
+    position_y: float
+    animation: str
+
+
+class ProjectPreview(BaseModel):
+    """GET /editor/projects/{id}/preview: what the server render draws over the picture, for the studio to match."""
+
+    version: int
+    look: str
+    caption_style: str | None
+    caption_look: CaptionLook | None
+    words: list[PreviewWord]
+    texts: list[PreviewText]
+    sounds: list[PreviewSound]
+
+
+class CaptionStyleOption(BaseModel):
+    """GET /editor/caption-styles: one style the studio can pick for its captions."""
+
+    id: str
+    name: str
+    description: str
+    look: CaptionLook
+
+
+class LookOption(BaseModel):
+    """GET /editor/looks: a colour look the project can use (edit_engine/looks.py)."""
+
+    id: str
+    label: str
+
+
+class VoiceText(BaseModel):
+    """POST /editor/voice: what was said in a voice note."""
+
+    text: str

@@ -65,7 +65,26 @@ class OAuthLoginRequest(BaseModel):
     accept_terms: bool = False
 
 
+class DesktopStartRequest(BaseModel):
+    """The Mac app starts a sign-in: its PKCE challenge and the 127.0.0.1 port it listens on."""
+
+    # S256 challenge: base64url(sha256(verifier)), 43 characters.
+    code_challenge: str = Field(min_length=43, max_length=43, pattern=r"^[A-Za-z0-9_-]+$")
+    redirect_port: int = Field(ge=1024, le=65535)
+    accept_terms: bool = False
+
+
+class DesktopExchangeRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=2048)
+    code_verifier: str = Field(min_length=43, max_length=128, pattern=r"^[A-Za-z0-9._~-]+$")
+
+
 # ── Response Schemas ──
+
+class DesktopStartResponse(BaseModel):
+    authorize_url: str
+
+
 
 class TokenResponse(BaseModel):
     access_token: str

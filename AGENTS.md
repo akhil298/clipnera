@@ -37,6 +37,7 @@ backend/          FastAPI app — routes, services, schemas, DB models
   clients/ai/     AI clients; roles.py picks a model per role (LLM_PROFILE), cassette.py for evals
   evals/          Golden set + injection cases (python -m evals.runner)
   tests/          pytest tests
+desktop/          Clipnera Studio for Mac (Electron + React + TS); build phases in desktop/PHASES.md
 frontend/         Next.js app (app router)
   opencut/        Vendored OpenCut studio (MIT); src/clipnera/ = bridge to Timeline v1, sync, AI chat
   app/            Pages (dashboard, auth, landing)

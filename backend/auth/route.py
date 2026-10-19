@@ -1,12 +1,20 @@
+from html import escape
+
 from fastapi import APIRouter, Path, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from auth.dependencies import AuthServiceDep, CurrentUserDep
 from auth.service import LoginClient
+from core.exceptions import CustomException
+from core.responses import ApiResponse, ok
 from auth.schema import (
     RegisterRequest,
     LoginRequest,
     ResetPasswordRequest,
     ForgotPasswordRequest,
+    DesktopExchangeRequest,
+    DesktopStartRequest,
+    DesktopStartResponse,
     OAuthLoginRequest,
     OAuthProvider,
     TokenResponse,
@@ -51,6 +59,30 @@ async def oauth_login(
     return await auth_service.oauth_login(
         provider.value, data.code, data.redirect_uri, _login_client(request), accept_terms=data.accept_terms
     )
+
+
+@auth.post("/desktop/start", response_model=ApiResponse[DesktopStartResponse])
+async def desktop_start(data: DesktopStartRequest, auth_service: AuthServiceDep):
+    """Clipnera Studio for Mac: the Google sign-in link to open in the system browser."""
+    return ok(await auth_service.desktop_start(data))
+
+
+@auth.get("/desktop/callback", include_in_schema=False)
+async def desktop_callback(
+    auth_service: AuthServiceDep, state: str = "", code: str | None = None, error: str | None = None
+):
+    """Google returns here; the browser is sent on to the Mac app's 127.0.0.1 port."""
+    try:
+        return RedirectResponse(await auth_service.desktop_callback(state, code, error), status_code=302)
+    except CustomException as exc:
+        page = f"<!doctype html><title>Clipnera Studio</title><p>{escape(exc.message)}</p>"
+        return HTMLResponse(page, status_code=exc.status_code)
+
+
+@auth.post("/desktop/exchange", response_model=ApiResponse[TokenResponse])
+async def desktop_exchange(request: Request, data: DesktopExchangeRequest, auth_service: AuthServiceDep):
+    """Trade the one-time code from the callback, plus the app's PKCE verifier, for a session."""
+    return ok(await auth_service.desktop_exchange(data.code, data.code_verifier, _login_client(request)))
 
 
 @auth.post("/forgot-password", response_model=MessageResponse)

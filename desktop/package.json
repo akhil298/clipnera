@@ -1,0 +1,35 @@
+{
+  "name": "clipnera-studio",
+  "productName": "Clipnera Studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Clipnera Studio for Mac",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "npm run engine:build && env -u ELECTRON_RUN_AS_NODE electron-vite dev --watch",
+    "dev:preview": "npm run engine:build && env -u ELECTRON_RUN_AS_NODE CLIPNERA_PREVIEW=1 electron-vite dev --watch",
+    "build": "npm run engine:build && electron-vite build",
+    "start": "env -u ELECTRON_RUN_AS_NODE electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "test": "npm run engine:build && vitest run",
+    "test:e2e": "npm run build && playwright test",
+    "engine:build": "bash engine/build.sh",
+    "test:real": "npm run build && playwright test -c e2e-real/playwright.config.ts"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "electron": "44.9.0",
+    "electron-vite": "6.0.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}

@@ -55,8 +55,11 @@ class RouteDecision(_Closed):
     preference: str | None
 
 
-def digest(timeline: Timeline, selection: Sequence[str], playhead: int) -> str:
-    """The project in one paragraph: what the router needs to tell a tweak from a new edit."""
+def digest(timeline: Timeline, selection: Sequence[str], playhead: int, span: tuple[int, int] | None = None) -> str:
+    """The project in one paragraph: what the router needs to tell a tweak from a new edit.
+
+    ``span`` is a selected stretch of the timeline (start and end frame) the request is about.
+    """
     kinds: dict[str, int] = {}
     for track in timeline.tracks:
         kinds[track.kind] = kinds.get(track.kind, 0) + 1
@@ -75,6 +78,9 @@ def digest(timeline: Timeline, selection: Sequence[str], playhead: int) -> str:
         f"Playhead: {playhead / timeline.fps:.1f}s.",
         "Selection: " + (", ".join(_describe(item) for item in selected) or "nothing") + ".",
     ]
+    if span:
+        lines.append(f"Selected range: {span[0] / timeline.fps:.1f}s to {span[1] / timeline.fps:.1f}s "
+                     f"(frames {span[0]} to {span[1]}); \"this\" and \"here\" mean this range.")
     if titles:
         lines.append("Titles: <untrusted>" + " | ".join(t.text for t in titles[:8]) + "</untrusted>")
     return "\n".join(lines)

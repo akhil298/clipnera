@@ -62,12 +62,18 @@ ROLE_EFFORT: dict[Role, str | None] = {
     "specialist": "medium",
     "studio": "medium",
     "director_delta": "medium",
-    "director": "high",
-    "critic": "high",
+    # Medium, not high: on the editor's models high roughly doubles a plan's and a review's wait
+    # (a 40 s director call, a 55 s review) for plans the checks and the critic pass either way.
+    "director": "medium",
+    "critic": "medium",
     "judge": "high",
 }
 
 # Sampling temperature per role, for the models that still accept one.
+# How long one attempt of a role's call may take before it is retried. The chat's roles answer in
+# seconds; a request that stalls (it happens now and then) shouldn't hold the user for the default 120 s.
+ROLE_TIMEOUT: dict[Role, float] = {"router": 30.0, "studio": 40.0, "answer": 40.0, "critic": 60.0}
+
 ROLE_TEMPERATURE: dict[Role, float] = {"router": 0.0, "moderation": 0.0}
 
 # The lowest effort each provider takes: Claude 5.x cannot turn thinking off.
@@ -178,6 +184,8 @@ def _client(role: Role, choice: ModelChoice) -> BaseAI:
     client = _build(choice)
     client.role = role
     client.temperature = ROLE_TEMPERATURE.get(role)
+    if (seconds := ROLE_TIMEOUT.get(role)) and hasattr(client, "set_timeout"):
+        client.set_timeout(seconds)
     settings = get_settings()
     if settings.LLM_MODE != "live":
         # Evals: record every reply, or replay them without calling the API (clients.ai.cassette).

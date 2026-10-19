@@ -28,7 +28,7 @@ from reels.route import reels_router
 from creator_intro.route import creator_intro_router
 from edit_engine.route import edits as edits_router, admin_music as admin_music_router
 from editor.route import editor as editor_router
-from brain.api import admin_router as ai_editor_admin_router, renders_router, router as plans_router, sounds_router, style_router
+from brain.api import admin_router as ai_editor_admin_router, captions_router, looks_router, voice_router, renders_router, router as plans_router, sounds_router, graphics_router, style_router
 from onboarding.route import onboarding as onboarding_router
 from referral.route import admin_referrals as admin_referrals_router, referrals as referrals_router
 from referral.worker import running_in_background as referral_worker
@@ -84,6 +84,8 @@ Path(settings.CLIP_OUTPUT_DIR).mkdir(parents=True, exist_ok=True)
 app.mount("/static/clips", StaticFiles(directory=settings.CLIP_OUTPUT_DIR), name="clips")
 # The studio plays and places library sound effects straight from here (no login on an <audio> tag).
 app.mount("/static/sfx", StaticFiles(directory=str(Path(__file__).parent / "static" / "motion" / "sfx")), name="sfx")
+# Likewise the animated graphics, so the studio's viewer draws what the export will.
+app.mount("/static/graphics", StaticFiles(directory=str(Path(__file__).parent / "static" / "motion" / "hook_graphics")), name="graphics")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(notification_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")
@@ -122,6 +124,10 @@ app.include_router(editor_router, prefix="/api/v1")
 app.include_router(plans_router, prefix="/api/v1")
 app.include_router(style_router, prefix="/api/v1")
 app.include_router(sounds_router, prefix="/api/v1")
+app.include_router(graphics_router, prefix="/api/v1")
+app.include_router(captions_router, prefix="/api/v1")
+app.include_router(looks_router, prefix="/api/v1")
+app.include_router(voice_router, prefix="/api/v1")
 app.include_router(renders_router, prefix="/api/v1")
 app.include_router(ai_editor_admin_router, prefix="/api/v1")
 app.include_router(onboarding_router, prefix="/api/v1")

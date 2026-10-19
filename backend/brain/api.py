@@ -8,7 +8,7 @@ import time
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,13 +18,18 @@ from auth.dependencies import CurrentUserDep
 from brain import library, plans
 from brain.model import EditPlan, PlanStepRow
 from brain import style
-from brain import server_render
+from brain import preview, server_render, voice
 from auth.dependencies import get_current_admin
 from brain.metrics import rollout_metrics
-from brain.schema import LibrarySound, PlanCard, PlanPatch, RenderStatus, RolloutMetrics, SoundSearchResponse, StylePreference
+from brain.schema import (
+    CaptionStyleOption, LibraryGraphic, LibrarySound, LookOption, PlanCard, PlanPatch, ProjectPreview, RenderStatus, RolloutMetrics,
+    SoundSearchResponse, StylePreference, VoiceText,
+)
 from core.database import AsyncSessionLocal, get_db
 from core.responses import ApiResponse, ok, sse
 from editor.model import EditorOp, EditorProject
+from editor.service import EditorService
+from edit_engine.looks import LOOK_LABELS, LOOKS
 from feature_flags.dependencies import require_user_flag
 from feature_flags.registry import AGENT_EDITOR
 
@@ -32,6 +37,10 @@ router = APIRouter(prefix="/editor/plans", tags=["editor"], dependencies=[Depend
 style_router = APIRouter(prefix="/editor/style", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
 renders_router = APIRouter(prefix="/editor/projects", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
 admin_router = APIRouter(prefix="/admin/ai-editor", tags=["admin"], dependencies=[Depends(get_current_admin)])
+voice_router = APIRouter(prefix="/editor/voice", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
+looks_router = APIRouter(prefix="/editor/looks", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
+captions_router = APIRouter(prefix="/editor/caption-styles", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
+graphics_router = APIRouter(prefix="/editor/graphics", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
 sounds_router = APIRouter(prefix="/editor/sounds", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
 SessionDep = Annotated[AsyncSession, Depends(get_db)]
 STREAM_POLL_SECONDS = 1.0
@@ -163,6 +172,42 @@ async def search_sounds(_: CurrentUserDep, q: str = "", page: int = 1, page_size
     start = (page - 1) * page_size
     return ok(SoundSearchResponse(results=found[start:start + page_size], count=len(found),
                                   has_more=start + page_size < len(found)))
+
+
+@graphics_router.get("", response_model=ApiResponse[list[LibraryGraphic]])
+async def list_graphics(_: CurrentUserDep):
+    """The studio's graphics shelf, the same one the AI picks from and the export draws."""
+    return ok([LibraryGraphic(id=g.id, name=g.name, seconds=g.duration, moods=list(g.moods),
+                              url=f"{library.GRAPHICS_URL}/{g.video.name}")
+               for g in library.graphics().values()])
+
+
+@voice_router.post("", response_model=ApiResponse[VoiceText])
+async def voice_note(_: CurrentUserDep, audio: UploadFile = File(...), seconds: float = Form(..., gt=0)):
+    """Transcribes a short voice note from the studio chat."""
+    data = await audio.read(voice.MAX_BYTES + 1)
+    return ok(VoiceText(text=await voice.transcribe(data, audio.content_type or "", seconds)))
+
+
+@looks_router.get("", response_model=ApiResponse[list[LookOption]])
+async def list_looks(_: CurrentUserDep):
+    """The colour looks the server render can give a project."""
+    return ok([LookOption(id=look, label=LOOK_LABELS.get(look, look)) for look in LOOKS])
+
+
+@captions_router.get("", response_model=ApiResponse[list[CaptionStyleOption]])
+async def list_caption_styles(_: CurrentUserDep):
+    """The caption styles the studio can pick, with what each looks like."""
+    return ok(preview.caption_styles())
+
+
+@renders_router.get("/{project_id}/preview", response_model=ApiResponse[ProjectPreview])
+async def project_preview(project_id: str, user: CurrentUserDep, session: SessionDep):
+    """What the server render will draw over the picture: captions, titles, sound cues and the look."""
+    service = EditorService(session)
+    project = await service.get(user["user_id"], project_id)
+    muds = (await service.media(user["user_id"], project_id)).muds
+    return ok(preview.preview(project.timeline, muds, project.version))
 
 
 @renders_router.post("/{project_id}/renders", response_model=ApiResponse[RenderStatus])

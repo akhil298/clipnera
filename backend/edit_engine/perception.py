@@ -25,6 +25,11 @@ SAMPLE_WIDTH = 256
 # A shot shorter than this is merged into the one before it: flashes and
 # camera bumps are not shots.
 MIN_SHOT_SECONDS = 1.0
+# Mean grey-level change (0-255) between small thumbnails of neighbouring frames above which they are
+# different shots. Colour alone misses cuts on low-colour footage (a white studio, grey clothes): there a
+# person talking changes a thumbnail by 6-11 and a cut by 60-100.
+SHOT_CUT_GREY_DIFF = 40.0
+CUT_THUMB = (64, 36)
 # Laplacian variance of a 256 px frame below which it reads as blurred.
 BLUR_THRESHOLD = 40.0
 DARK_THRESHOLD = 35.0
@@ -130,13 +135,15 @@ def frame_stats(frame: np.ndarray) -> tuple[float, float, np.ndarray, np.ndarray
 
 
 def detect_shots(frames: list[tuple[float, np.ndarray]], duration: float) -> list[Shot]:
-    """Shots from colour-histogram changes between sampled frames, with per-shot quality."""
+    """Shots from colour-histogram or grey-level changes between sampled frames, with per-shot quality."""
     if not frames:
         return [Shot(0.0, duration, blur=0.0, brightness=0.0, motion=0.0)] if duration > 0 else []
     stats = [frame_stats(frame) for _, frame in frames]
+    thumbs = [cv2.resize(grey, CUT_THUMB, interpolation=cv2.INTER_AREA).astype(np.float32) for *_, grey in stats]
     starts = [0]
     for i in range(1, len(frames)):
-        if cv2.compareHist(stats[i - 1][2], stats[i][2], cv2.HISTCMP_CORREL) < SHOT_CUT_CORRELATION:
+        colour_changed = cv2.compareHist(stats[i - 1][2], stats[i][2], cv2.HISTCMP_CORREL) < SHOT_CUT_CORRELATION
+        if colour_changed or float(np.abs(thumbs[i] - thumbs[i - 1]).mean()) > SHOT_CUT_GREY_DIFF:
             starts.append(i)
     bounds = [frames[i][0] for i in starts] + [max(duration, frames[-1][0] + 1.0)]
     shots: list[Shot] = []

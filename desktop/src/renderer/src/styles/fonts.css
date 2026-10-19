@@ -1,0 +1,9 @@
+/* The caption and title fonts the server render uses (backend/static/motion/fonts), so the preview matches the export.
+   Licences sit beside the files in assets/fonts. */
+@font-face { font-family: 'Anton'; src: url('../assets/fonts/Anton-Regular.ttf') format('truetype'); font-display: block; }
+@font-face { font-family: 'Courier Prime'; src: url('../assets/fonts/CourierPrime-Bold.ttf') format('truetype'); font-weight: 700; font-display: block; }
+@font-face { font-family: 'DM Serif Display'; src: url('../assets/fonts/DMSerifDisplay-Regular.ttf') format('truetype'); font-display: block; }
+@font-face { font-family: 'Luckiest Guy'; src: url('../assets/fonts/LuckiestGuy-Regular.ttf') format('truetype'); font-display: block; }
+@font-face { font-family: 'Montserrat ExtraBold'; src: url('../assets/fonts/Montserrat-ExtraBold.ttf') format('truetype'); font-display: block; }
+@font-face { font-family: 'Poppins Black'; src: url('../assets/fonts/Poppins-Black.ttf') format('truetype'); font-display: block; }
+@font-face { font-family: 'Roboto'; src: url('../assets/fonts/Roboto-Bold.ttf') format('truetype'); font-weight: 700; font-display: block; }

@@ -7,6 +7,7 @@ runner-up is kept for a day so "try the other version" needs no new planning.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
@@ -15,14 +16,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from brain import credits
 from brain.director import DirectorResult
 from brain.model import EditPlan, PlanStatus, PlanStepRow, StepStatus
+from brain.outline import outline
 from brain.plan_ir import PlanIR
-from brain.schema import GhostClip, PlanCard, PlanCardStep, PlanPatch
+from brain.schema import GhostClip, PlanCard, PlanCardStep, PlanOutlinePart, PlanPatch
 from brain.score import STEP_CREDITS, ScoredPlan
 from clients.ai.roles import current_pick
 from core.exceptions import CustomException
 from editor.timeline import ClipItem
 from jobs.queue import Job, get_queue
 from subscription.service import InsufficientCreditsError, SubscriptionService
+from understanding.mud import MUD
 
 EXECUTE_JOB = "brain.execute"
 
@@ -54,11 +57,12 @@ def _result_line(scored: ScoredPlan) -> str:
 
 
 async def save(session: AsyncSession, user_id: str, project_id: str, prompt: str, base_version: int,
-               result: DirectorResult) -> EditPlan:
+               result: DirectorResult, muds: Mapping[str, MUD]) -> EditPlan:
     best = result.best
     assert best is not None
     scores = {**best.summary(), "result_line": _result_line(best),
-              "ghost": [g.model_dump() for g in _ghost(best)], "fps": best.compiled.timeline.fps}
+              "ghost": [g.model_dump() for g in _ghost(best)], "fps": best.compiled.timeline.fps,
+              "outline": [part.model_dump() for part in outline(best.compiled.timeline, muds)]}
     ai_model, ai_effort = current_pick()
     plan = EditPlan(
         ai_model=ai_model, ai_effort=ai_effort, project_id=project_id, user_id=user_id, prompt=prompt, status=PlanStatus.PROPOSED, base_version=base_version,
@@ -99,6 +103,7 @@ async def card(session: AsyncSession, plan: EditPlan) -> PlanCard:
                for s in steps],
         assumptions=frame.get("assumptions", []), warnings=scores.get("warnings", []), premium=[],
         ghost=[GhostClip(**g) for g in scores.get("ghost", [])], fps=int(scores.get("fps", 30)),
+        outline=[PlanOutlinePart(**part) for part in scores.get("outline", [])],
         runner_up_title=runner_up, error=plan.error,
     )
 
@@ -227,4 +232,4 @@ async def alternative(session: AsyncSession, user_id: str, plan_id: str) -> Edit
     scored = plan_score(0, ir, compiled, frame, ctx.muds, credits_left=ctx.credits_left, style=ctx.style)
     plan.runner_up = None
     result = DirectorResult("plan", best=scored, frame=frame, reason="The other version.")
-    return await save(session, user_id, plan.project_id, plan.prompt, ctx.version, result)
+    return await save(session, user_id, plan.project_id, plan.prompt, ctx.version, result, ctx.muds)

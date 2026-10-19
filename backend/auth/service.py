@@ -6,11 +6,12 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth import desktop
 from auth.model import AuthProvider, User, UserAccount
 from auth.repository import UserRepository
 from auth.oauth_service import OAuthService
 from auth.provider import OAuthProvider
-from auth.schema import RegisterRequest, TokenResponse, UserResponse
+from auth.schema import DesktopStartRequest, DesktopStartResponse, RegisterRequest, TokenResponse, UserResponse
 from core.config import get_settings
 from core.exceptions import CustomException
 from core.logging_config import get_logger
@@ -116,6 +117,46 @@ class AuthService:
         client: LoginClient | None = None,
         accept_terms: bool = False,
     ) -> TokenResponse:
+        user_id, provider_enum = await self._resolve_oauth_user(provider, code, redirect_uri, accept_terms)
+        return await self._start_session(user_id, provider_enum, client)
+
+    async def desktop_start(self, data: DesktopStartRequest) -> DesktopStartResponse:
+        state = desktop.DesktopState(data.code_challenge, data.redirect_port, data.accept_terms)
+        return DesktopStartResponse(authorize_url=desktop.authorize_url(state))
+
+    async def desktop_callback(self, state_token: str, code: str | None, error: str | None) -> str:
+        """Finish Google's side of a Mac app sign-in; returns where to send the browser."""
+        state = desktop.read_state(state_token)
+        if not state:
+            raise CustomException(
+                message="This sign-in link has expired. Start again from Clipnera Studio.",
+                code="DESKTOP_STATE_INVALID",
+                status_code=400,
+            )
+        if error or not code:
+            return desktop.app_redirect(state.redirect_port, error="Google sign-in was cancelled.")
+        try:
+            user_id, _ = await self._resolve_oauth_user("google", code, desktop.callback_url(), state.accept_terms)
+        except CustomException as exc:
+            return desktop.app_redirect(state.redirect_port, error=exc.message, error_code=exc.code)
+        return desktop.app_redirect(state.redirect_port, code=desktop.issue_code(user_id, state.code_challenge))
+
+    async def desktop_exchange(self, code: str, verifier: str, client: LoginClient | None = None) -> TokenResponse:
+        user_id = desktop.redeem_code(code, verifier)
+        user = await self._repo.get_user_by_id(user_id) if user_id else None
+        if not user or not user.is_active:
+            raise CustomException(
+                message="Sign-in could not be completed. Please try again.",
+                code="DESKTOP_CODE_INVALID",
+                status_code=400,
+            )
+        log.info(f"Desktop sign-in: user_id={user.id}")
+        return await self._start_session(user.id, AuthProvider.GOOGLE, client)
+
+    async def _resolve_oauth_user(
+        self, provider: str, code: str, redirect_uri: str, accept_terms: bool
+    ) -> tuple[str, AuthProvider]:
+        """Verify the provider's code and find, link or create the user it belongs to."""
         provider_enum = OAuthProvider.get_provider_enum(provider)
 
         if provider == "google":
@@ -147,7 +188,7 @@ class AuthService:
         # Case 1: OAuth account exists → login
         if account:
             log.info(f"OAuth login: existing account user_id={account.user_id}")
-            return await self._start_session(account.user_id, provider_enum, client)
+            return account.user_id, provider_enum
 
         # Case 2: User with same email exists → link OAuth
         if user:
@@ -157,7 +198,7 @@ class AuthService:
                 provider_user_id=provider_user_id,
             )
             log.info(f"OAuth login: linked to existing user user_id={user.id}")
-            return await self._start_session(user.id, provider_enum, client)
+            return user.id, provider_enum
 
         # Case 3: New user → create
         _require_terms(accept_terms)
@@ -173,7 +214,7 @@ class AuthService:
         )
         log.info(f"OAuth login: new user created user_id={user.id}")
         asyncio.create_task(self._activate_free_plan(user.id))
-        return await self._start_session(user.id, provider_enum, client)
+        return user.id, provider_enum
 
     async def forgot_password(self, email: str) -> None:
         user = await self._repo.get_user_by_email(email)

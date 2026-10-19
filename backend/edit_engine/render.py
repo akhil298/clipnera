@@ -1,13 +1,14 @@
 """A compiled timeline, rendered on CPU with FFmpeg.
 
-1. Every picture item becomes a segment in one shared format (cropped to the
-   reel's shape, exposure-corrected, graded with the look), so the segments
-   join by stream copy.
+1. Every picture item becomes a segment in one shared format (played at its
+   speed, cropped to the output's shape, held or moving through its keyframes,
+   exposure-corrected, graded with the look), so the segments join by stream copy.
 2. The audio is mixed in one filter graph: the voice pieces (with 15 ms fades
    so cuts never click) through a cleanup chain, the music ducked under the
    voice, the sound effects placed so their peak lands on the cut, and the
    lot mastered to -14 LUFS, Instagram's loudness.
-3. Captions, the hook, pop-ups and script lines are burned in one last pass;
+3. Layers (B-roll, images, flashes, graphics: edit_engine.compose) are drawn over the joined picture.
+4. Captions, the hook, pop-ups and script lines are burned in one last pass;
    on Free the Clipnera intro, watermark and end card are added on top.
 
 Every function takes local paths; nothing here touches the database or S3.
@@ -23,6 +24,8 @@ from typing import Any
 from branding.service import added_seconds
 from broll.renditions import run
 from core.logging_config import get_logger
+from edit_engine.compose import compose_cmd
+from edit_engine.framing import crop_filter, framing_filters, timing_filters  # noqa: F401  crop_filter is part of this module's API
 from edit_engine.looks import exposure_filter, look_filter
 from edit_engine.perception import probe_media
 from hook_transitions.graph import SAMPLE_RATE, SOUND_BUILDERS
@@ -50,20 +53,15 @@ SFX: dict[str, tuple[str, float, float]] = {
 SFX_GAIN_DB = -12.0
 # Instagram plays reels at about -14 LUFS; mastering there keeps ours from sounding quiet.
 LOUDNESS_TARGET = "I=-14:TP=-1:LRA=11"
+# Linear loudness correction raises speech peaks with the level; this holds them under -1.5 dBFS
+# (the verifier's V-PEAK allows -1 dBTP), at 4x oversampling so the peaks between samples count too.
+PEAK_LIMITER = "aresample=192000,alimiter=limit=0.841:attack=1:release=50:level=false"
 VOICE_CHAIN = "highpass=f=80,afftdn=nf=-25,acompressor=threshold=-18dB:ratio=3:attack=5:release=80"
 STEREO = f"aresample={SAMPLE_RATE},aformat=sample_fmts=fltp:channel_layouts=stereo"
 
 
-def crop_filter(zoom: float, crop_x: float | None) -> str:
-    """Cut the reel's 9:16 frame out of any source shape, centred on the face (or the middle)."""
-    centre = 0.5 if crop_x is None else min(1.0, max(0.0, crop_x))
-    w = f"min(iw\\,ih*9/16)/{zoom:.3f}"
-    h = f"min(ih\\,iw*16/9)/{zoom:.3f}"
-    return f"crop=w='{w}':h='{h}':x='max(0\\,min(iw-ow\\,{centre:.3f}*iw-ow/2))':y='(ih-oh)*0.45'"
-
-
 def video_segment_cmd(src: Path, item: dict[str, Any], look: str, size: tuple[int, int], out: Path) -> list[str]:
-    filters = [crop_filter(item.get("zoom") or 1.0, item.get("crop_x")), f"scale={size[0]}:{size[1]}", "setsar=1"]
+    filters = [*timing_filters(item.get("speed") or 1.0), *framing_filters(item, size), "setsar=1"]
     exposure = exposure_filter(item.get("brightness"))
     filters += [f for f in (exposure, look_filter(look)) if f]
     filters += ["fps=30", "scale=out_range=tv:out_color_matrix=bt709", "format=yuv420p"]
@@ -93,6 +91,18 @@ async def render_segments(timeline: dict[str, Any], sources: dict[int, Path], wo
     return list(await asyncio.gather(*(segment(i, item) for i, item in enumerate(timeline["picture"]))))
 
 
+def tempo(speed: float) -> str:
+    """Filters that play audio at ``speed`` with its pitch kept (each atempo takes 0.5–2), or nothing at 1×."""
+    steps = []
+    while speed < 0.5 or speed > 2:
+        step = 0.5 if speed < 0.5 else 2.0
+        steps.append(step)
+        speed /= step
+    if abs(speed - 1) > 1e-4:
+        steps.append(speed)
+    return "".join(f"atempo={step:.4f}," for step in steps)
+
+
 def _voice_graph(pieces: list[dict[str, Any]], inputs: dict[int, int], duration: float) -> tuple[list[str], str]:
     """Voice pieces laid end to end, with silence where the picture has a card."""
     parts, chains, cursor = [], [], 0.0
@@ -101,10 +111,11 @@ def _voice_graph(pieces: list[dict[str, Any]], inputs: dict[int, int], duration:
         if gap > 0.005:
             chains.append(f"anullsrc=r={SAMPLE_RATE}:cl=stereo,atrim=duration={gap:.3f}[gap{n}]")
             parts.append(f"[gap{n}]")
-        length = piece["out"] - piece["in"]
+        speed = piece.get("speed") or 1.0
+        length = (piece["out"] - piece["in"]) / speed
         chains.append(
-            f"[{inputs[piece['src']]}:a]atrim=start={piece['in']:.3f}:end={piece['out']:.3f},asetpts=PTS-STARTPTS,{STEREO},"
-            f"afade=t=in:d={FADE},afade=t=out:st={max(0.0, length - FADE):.3f}:d={FADE}[vp{n}]"
+            f"[{inputs[piece['src']]}:a]atrim=start={piece['in']:.3f}:end={piece['out']:.3f},asetpts=PTS-STARTPTS,"
+            f"{tempo(speed)}{STEREO},afade=t=in:d={FADE},afade=t=out:st={max(0.0, length - FADE):.3f}:d={FADE}[vp{n}]"
         )
         parts.append(f"[vp{n}]")
         cursor = piece["at"] + length
@@ -160,8 +171,14 @@ def audio_mix_cmd(timeline: dict[str, Any], sources: dict[int, Path], music: Pat
     elif voice_label:
         stems.append(voice_label)
 
-    for n, cue in enumerate(c for c in timeline.get("sfx") or [] if c["sound"] in SFX):
-        chains.append(_sfx_chain(cue, n))
+    for n, cue in enumerate(c for c in timeline.get("sfx") or [] if c.get("path") or c.get("sound") in SFX):
+        if cue.get("path"):
+            # A library sound file, starting at ``at``, at its own level on top of the effects' level.
+            delay = max(0, round(cue["at"] * 1000))
+            chains.append(f"[{add_input(cue['path'])}:a]{STEREO},volume={SFX_GAIN_DB + cue.get('gain_db', 0.0)}dB,"
+                          f"adelay={delay}|{delay}[sfx{n}]")
+        else:
+            chains.append(_sfx_chain(cue, n))
         stems.append(f"[sfx{n}]")
     if not stems:
         return None
@@ -241,6 +258,11 @@ async def render(timeline: dict[str, Any], sources: dict[int, Path], music: Path
         await master(raw_mix, mix)
     joined = work / "joined.mp4"
     await reel_render.join(parts, mix if command else None, joined)
+    if timeline.get("layers"):
+        layered = work / "layered.mp4"
+        await run(compose_cmd(joined, timeline["layers"], sources, timeline["look"], (timeline["width"], timeline["height"]),
+                              [arg for arg in ENCODE if arg != "-an"], layered))
+        joined = layered
     ass_text = captions_ass(timeline)
     ass_file = None
     if ass_text:
@@ -265,7 +287,7 @@ async def master(src: Path, out: Path) -> None:
         second = (f":measured_I={measured['input_i']}:measured_TP={measured['input_tp']}:measured_LRA={measured['input_lra']}"
                   f":measured_thresh={measured['input_thresh']}:offset={measured['target_offset']}:linear=true")
     await run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", str(src),
-               "-af", f"loudnorm={LOUDNESS_TARGET}{second},{STEREO}", "-ar", str(SAMPLE_RATE), str(out)])
+               "-af", f"loudnorm={LOUDNESS_TARGET}{second},{PEAK_LIMITER},{STEREO}", "-ar", str(SAMPLE_RATE), str(out)])
 
 
 async def check(path: Path, duration: float) -> None:

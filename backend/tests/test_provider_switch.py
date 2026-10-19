@@ -494,3 +494,70 @@ class TestOpenAIEffortFallback:
         assert _learn_efforts("gpt-6-astra-1", httpx.HTTPStatusError("400", request=refusal.request, response=refusal))
         assert reasoning_effort("gpt-6-astra-1", "minimal") == "low"
         assert reasoning_effort("gpt-6-astra-1", "xhigh") == "xhigh"
+
+
+class TestOpenAIKnownLimits:
+    """Deployments listed in settings are handled right from their first call, with no refusal to learn from."""
+
+    def test_astra_is_known_from_the_start(self):
+        import clients.ai.openai as openai_module
+
+        assert "gpt-6-astra-1" in openai_module._TOOLS_ON_RESPONSES
+        assert openai_module._SUPPORTED_EFFORTS["gpt-6-astra-1"] == ("low", "medium", "high", "xhigh")
+
+    def test_a_listed_model_never_asks_for_an_effort_it_refuses(self):
+        from clients.ai.openai import reasoning_effort
+
+        assert reasoning_effort("gpt-6-astra-1", "minimal") == "low"
+        assert reasoning_effort("gpt-6-astra-1", "high") == "high"
+
+    @pytest.mark.asyncio
+    async def test_a_listed_model_sends_its_first_tool_call_to_responses(self, monkeypatch):
+        import httpx
+
+        import clients.ai.openai as openai_module
+
+        async def no_record(*args, **kwargs):
+            return None
+
+        monkeypatch.setattr(openai_module, "record_llm_call", no_record)
+        paths: list[str] = []
+
+        def handle(request: httpx.Request) -> httpx.Response:
+            paths.append(request.url.path.rsplit("/", 1)[-1])
+            body = json.loads(request.content)
+            assert body["reasoning"] == {"effort": "low"}
+            return httpx.Response(200, json={"output": [{"type": "message", "content": [{"type": "output_text", "text": "Done."}]}],
+                                             "usage": {"input_tokens": 3, "output_tokens": 1}})
+
+        client = OpenAI(api_key="test", model="gpt-6-astra-1", effort="minimal")
+        client._client = httpx.AsyncClient(base_url="https://example.test/", transport=httpx.MockTransport(handle))
+        reply = await client.chat_with_tools([{"role": "user", "content": "Hi"}], [TestOpenAIToolsOnResponses.TOOL])
+
+        assert paths == ["responses"]
+        assert reply.text == "Done."
+
+    def test_unlisted_models_still_learn_from_a_refusal(self):
+        import clients.ai.openai as openai_module
+
+        assert "gpt-6.1-sol-1" not in openai_module._TOOLS_ON_RESPONSES
+        assert openai_module.reasoning_effort("gpt-6.1-sol-1", "minimal") == "minimal"
+
+
+def test_a_rate_limited_call_waits_as_long_as_the_api_asks():
+    from types import SimpleNamespace
+
+    import httpx
+
+    from clients.ai.openai import MAX_RETRY_AFTER_SECONDS, _retry_wait
+
+    def state(status: int, headers: dict[str, str], attempt: int = 1):
+        response = httpx.Response(status, headers=headers, request=httpx.Request("POST", "https://x"))
+        exc = httpx.HTTPStatusError("busy", request=response.request, response=response)
+        return SimpleNamespace(attempt_number=attempt, outcome=SimpleNamespace(exception=lambda: exc))
+
+    assert _retry_wait(state(429, {"retry-after": "23"})) == 23
+    assert _retry_wait(state(429, {"retry-after-ms": "1500"})) == 1.5
+    assert _retry_wait(state(429, {"retry-after": "600"})) == MAX_RETRY_AFTER_SECONDS
+    assert _retry_wait(state(429, {}, attempt=2)) == 20
+    assert _retry_wait(state(503, {}, attempt=3)) == 4

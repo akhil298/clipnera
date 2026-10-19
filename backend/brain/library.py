@@ -1,6 +1,7 @@
 """Clipnera's own assets as one shelf, for the studio's tabs and for the AI to pick from.
 
-Sounds are the curated set and the synthesised pack under static/motion/sfx: every one is
+Graphics are the animated ones under static/motion/hook_graphics, drawn in code
+(hook_transitions.graphics). Sounds are the curated set and the synthesised pack under static/motion/sfx: every one is
 cleared for commercial use, and both lists say what each sound is for. The AI names a sound
 by id; nothing here is ever invented.
 """
@@ -11,6 +12,8 @@ import json
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+
+from hook_transitions import graphics as shelf_graphics
 
 SFX_DIR = Path(__file__).resolve().parent.parent / "static" / "motion" / "sfx"
 SFX_URL = "/static/sfx"
@@ -75,3 +78,11 @@ def search_sounds(query: str = "", category: str = "") -> list[Sound]:
         if all(word in haystack for word in words):
             found.append(sound)
     return found
+
+
+GRAPHICS_URL = "/static/graphics"
+
+
+def graphics() -> dict[str, shelf_graphics.Graphic]:
+    """Every animated graphic on the shelf, by id."""
+    return shelf_graphics.library()

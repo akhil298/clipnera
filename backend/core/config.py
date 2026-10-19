@@ -62,6 +62,12 @@ class BaseConfig(BaseSettings):
     OPENAI_REASONING_EFFORT: str = "high"
     # More deployments on OPENAI_ENDPOINT the studio's AI chat may pick, besides OPENAI_MODEL.
     OPENAI_MODELS: list[str] = ["gpt-5.6-sol-1", "gpt-6.1-sol-1", "gpt-6-astra-1"]
+    # What deployments are known to refuse, so their first calls aren't refused and logged as
+    # errors after every restart. The client still learns from a refusal for anything not listed.
+    # Deployments that take tool calls with reasoning only on the Responses API:
+    OPENAI_TOOLS_ON_RESPONSES: list[str] = ["gpt-6-astra-1"]
+    # Reasoning efforts a deployment takes, for those that don't take them all ("minimal" most often):
+    OPENAI_MODEL_EFFORTS: dict[str, list[str]] = {"gpt-6-astra-1": ["low", "medium", "high", "xhigh"]}
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = "claude-opus-5-5"
     # Thinking depth for steps without their own setting: low | medium | high | xhigh | max.

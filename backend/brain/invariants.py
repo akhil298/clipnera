@@ -10,7 +10,8 @@ ND-04 never empties the timeline or deletes source media — checked here (no op
 ND-05/07/10 no new hard-rule failure (word cuts, mid-sentence ending, text outside safe area) — here.
 ND-06 no unshown charge — brain.credits holds only the ceiling shown on the plan card.
 ND-08 no side-effect changes to size the user set — here: only a plan's reframe step may resize.
-ND-09 no invented text — here: an agent may add only text the plan (or the user) gave.
+ND-09 no invented text — here: an agent may add only text the plan (or the user) gave: its words must
+      appear, in order, in one of the allowed sources (case and punctuation aside).
 ND-11 no stale ops over human edits — editor.history.check_rebase (CONFLICT).
 ND-12 bounded loops — brain.verify (MAX_ROUNDS) and the agent runtime's step limits.
 ND-13 no hidden failures — every failed or skipped step keeps its reason on the plan card.
@@ -18,6 +19,7 @@ ND-13 no hidden failures — every failed or skipped step keeps its reason on th
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -28,6 +30,16 @@ from editor.timeline import TextItem, Timeline
 from understanding.mud import MUD
 
 MAX_REPAIR_ROUNDS = 3
+
+
+def _words(text: str) -> str:
+    return " ".join(re.findall(r"[\w']+", text.lower()))
+
+
+def given(text: str, sources: frozenset[str]) -> bool:
+    """Whether ``text`` comes from one of ``sources``: its words, in order, inside one of them."""
+    words = _words(text)
+    return bool(words) and any(f" {words} " in f" {_words(source)} " for source in sources)
 
 
 class NeverDo(CustomException):
@@ -49,5 +61,5 @@ def check_agent_tx(before: Timeline, after: Timeline, ops: Sequence[Any], muds: 
         for op in ops:
             text = op.item.text if isinstance(op, AddItem) and isinstance(op.item, TextItem) else \
                 op.patch.text if isinstance(op, UpdateItem) else None
-            if text and text not in allowed_text:
+            if text and not given(text, allowed_text):
                 raise NeverDo("ND-09", f"“{text[:40]}” isn't text the user gave or approved.")

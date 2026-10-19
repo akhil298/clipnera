@@ -634,6 +634,13 @@ def _repair_word_edges(pieces: list[Piece], muds: Mapping[str, MUD], fps: int) -
             after = words[end_word.i + 1].t0 if end_word.i + 1 < len(words) else mud.duration
             t1 = min(after, end_word.t1 + WORD_END_PAD)
         fixed.append(Piece(piece.asset, round(t0 * fps), max(round(t0 * fps) + 1, round(t1 * fps)), piece.ref, piece.section))
+    # Edges either side of a cut word (a filler, a retake) both move into it and cross, which would
+    # play it twice: those two edges stay where the cut put them.
+    for n in range(1, len(fixed)):
+        before, after = fixed[n - 1], fixed[n]
+        if before.asset == after.asset and pieces[n - 1].src_out <= pieces[n].src_in < before.src_out:
+            fixed[n - 1] = Piece(before.asset, before.src_in, pieces[n - 1].src_out, before.ref, before.section)
+            fixed[n] = Piece(after.asset, pieces[n].src_in, after.src_out, after.ref, after.section)
     return fixed
 
 

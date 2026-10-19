@@ -273,40 +273,48 @@ async def verify_and_repair(plan_id: str, user_id: str, *, render: bool = True) 
         rounds = min(MAX_REPAIR_ROUNDS, max(0, entitlements.ai_critic_max_rounds))
 
     findings: list[Finding] = []
-    for attempt in range(rounds + 1):
-        findings = await _check(plan_id, user_id, ir, frame, render=render)
+    # The last check render is the one the critic looks at: the cut it shows is the one that stays.
+    with tempfile.TemporaryDirectory(prefix="clipnera-verify-") as work:
+        video = None
+        for attempt in range(rounds + 1):
+            findings, video = await _check(plan_id, user_id, ir, frame, work=Path(work) / str(attempt) if render else None)
+            failing = [f for f in findings if not f.passed]
+            if not failing or attempt == rounds:
+                break
+            fixed = await _repair(plan_id, user_id, failing, frame, attempt)
+            if not fixed:
+                break
         failing = [f for f in findings if not f.passed]
-        if not failing or attempt == rounds:
-            break
-        fixed = await _repair(plan_id, user_id, failing, frame, attempt)
-        if not fixed:
-            break
-    failing = [f for f in findings if not f.passed]
-    rolled = await _roll_back(plan_id, user_id, ir, failing)
-    await _save_review(plan_id, findings, rolled)
-    if not failing:
-        from brain.critic import review  # Phase 13: only once the deterministic checks pass.
+        rolled = await _roll_back(plan_id, user_id, ir, failing)
+        await _save_review(plan_id, findings, rolled)
+        log.info("Verified plan %s: %d checks, failing %s, rolled back %s, %s", plan_id, len(findings),
+                 [f.check for f in failing], rolled, "critic next" if not failing else "no critic")
+        if not failing:
+            from brain.critic import review  # Phase 13: only once the deterministic checks pass.
 
-        await review(plan_id, user_id)
+            await review(plan_id, user_id, video=video)
     return findings
 
 
-async def _check(plan_id: str, user_id: str, ir: PlanIR, frame: IntentFrame, *, render: bool) -> list[Finding]:
+async def _check(plan_id: str, user_id: str, ir: PlanIR, frame: IntentFrame, *,
+                 work: Path | None) -> tuple[list[Finding], Path | None]:
+    """The checks, and the check render (into ``work``; none without it)."""
     async with AsyncSessionLocal() as session:
         service = EditorService(session)
         plan = await session.get(EditPlan, plan_id)
         project = await service.get(user_id, plan.project_id)
         muds = (await service.media(user_id, plan.project_id)).muds
-    findings = timeline_checks(project.timeline, muds, ir, frame)
-    if render and main_clips(project.timeline):
-        with tempfile.TemporaryDirectory(prefix="clipnera-verify-") as work:
-            try:
-                video = await render_timeline(project.timeline, muds, Path(work), preview=True)
-                findings += await render_checks(video, project.timeline, muds)
-            except Exception as exc:  # A render failure is reported, never silently ignored (ND-13).
-                log.exception("Verify render failed: plan=%s", plan_id)
-                findings.append(Finding("V-RENDER", False, f"The check render failed: {exc}"[:300]))
-    return findings
+    findings, video = timeline_checks(project.timeline, muds, ir, frame), None
+    if work is not None and main_clips(project.timeline):
+        work.mkdir(parents=True, exist_ok=True)
+        try:
+            video = await render_timeline(project.timeline, muds, work, preview=True)
+            findings += await render_checks(video, project.timeline, muds)
+        except Exception as exc:  # A render failure is reported, never silently ignored (ND-13).
+            log.exception("Verify render failed: plan=%s", plan_id)
+            findings.append(Finding("V-RENDER", False, f"The check render failed: {exc}"[:300]))
+            video = None
+    return findings, video
 
 
 async def _repair(plan_id: str, user_id: str, failing: list[Finding], frame: IntentFrame, attempt: int) -> bool:

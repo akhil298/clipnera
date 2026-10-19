@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -17,6 +18,11 @@ from pydantic import BaseModel, ValidationError
 
 from clients.ai.base import ToolCall, ToolResult, ToolSpec
 from core.exceptions import CustomException
+from core.logging_config import get_logger
+
+log = get_logger(__name__)
+# A tool call slower than this is logged: a slow tool is the agent's wait the user sees.
+SLOW_TOOL_SECONDS = 3.0
 
 # The names both OpenAI and Anthropic accept: no dots, at most 64 characters.
 _TOOL_NAME = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -66,12 +72,16 @@ class ToolBox:
             arguments = tool.input.model_validate(call.arguments)
         except ValidationError as exc:
             return ToolResult(call.id, f"Invalid input: {_describe(exc)}", is_error=True)
+        started = time.monotonic()
         try:
             output = await tool.run(context, arguments)
         except CustomException as exc:
             detail = {key: value for key, value in exc.extra.items() if key != "message"}
             suffix = f" ({json.dumps(detail)})" if detail else ""
             return ToolResult(call.id, f"{exc.code}: {exc.message}{suffix}", is_error=True)
+        finally:
+            if (seconds := time.monotonic() - started) > SLOW_TOOL_SECONDS:
+                log.info("Tool %s took %.1fs", call.name, seconds)
         if isinstance(output, Seen):
             return ToolResult(call.id, output.text, images=tuple(output.jpegs))
         return ToolResult(call.id, output if isinstance(output, str) else json.dumps(output))
