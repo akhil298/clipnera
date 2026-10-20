@@ -36,6 +36,8 @@ JUMP_CUT_MIN_PAUSE = 0.5
 JUMP_CUT_KEEP = 0.12
 # Fillers cut out of the body besides hesitations (see understanding.analyzers.tag_fillers).
 DROPPED_FILLERS = frozenset({"repeat", "you_know", "i_mean"})
+# Categories whose pauses are timing, not dead air: a song keeps its breaths.
+NO_JUMP_CUT_CATEGORIES = frozenset({"music"})
 # The longest pause after a line for the line said again next to count as a retake of it.
 RETAKE_MAX_GAP = 2.0
 # No piece of a stitched clip may be shorter than this, or the cut reads as a glitch.
@@ -243,7 +245,7 @@ def _assemble(
     """
     ids = [i for first, last in ranges for i in range(first, last + 1)]
     spans = [_span(first, last, by_id, duration) for first, last in ranges]
-    if jump_cuts:
+    if jump_cuts and category not in NO_JUMP_CUT_CATEGORIES:
         spans = _tighten(spans, [w for i in ids for w in by_id[i].words])
     spans = _merge_close(spans)
     body = sum(end - start for start, end in spans)
