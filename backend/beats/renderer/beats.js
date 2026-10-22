@@ -53,6 +53,8 @@
 
   /* ---------- templates: each returns { seek(t) } ---------- */
   const T = {};
+  // Extra template files (footage.js) add their templates through these hooks.
+  window.BeatsKit = { T, el, boxed, fitText, envelope, reveal, ease, span, clamp, EXIT };
 
   T.count_up = (s, root) => {
     const { prefix = '', number = '0', suffix = '', label = '' } = s.data;

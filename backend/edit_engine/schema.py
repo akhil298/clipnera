@@ -37,6 +37,8 @@ class EditCreateRequest(BaseModel):
     caption_style: str = Field(DEFAULT_STYLE, min_length=1, max_length=60)
     target_seconds: TargetSeconds = 0
     autopilot: bool = False
+    # "premium": the reel engine edits end to end (Pro); "classic": plan, review, then render.
+    engine: Literal["classic", "premium"] = "classic"
     # The OpenAI deployment (one of /edits/models) and effort for the director and chat; None for the defaults.
     ai_model: str | None = Field(None, min_length=1, max_length=80)
     ai_effort: Effort | None = None
@@ -200,6 +202,47 @@ class EditTimelineResponse(BaseModel):
     music: EditTimelineMusic | None
 
 
+class PremiumStage(BaseModel):
+    stage: str
+    note: str
+    at: float
+
+
+class PremiumLayer(BaseModel):
+    layer: str
+    score: int
+    note: str
+
+
+class PremiumAsset(BaseModel):
+    kind: str
+    source: str
+    made: bool
+
+
+class PremiumResponse(BaseModel):
+    """What the reel engine did, for the reels board: where it is, what it decided, how the review scored it."""
+
+    stage: str
+    stages: list[PremiumStage]
+    path: str | None
+    recipe: str | None
+    audio_kind: str | None
+    audio_why: str | None
+    title: str | None
+    hooks: list[str]
+    sections: list[str]
+    shots: int
+    graphics: int
+    captions: int
+    scores: list[PremiumLayer]
+    overall: float
+    fixes: list[str]
+    passes: int
+    assets: list[PremiumAsset]
+    ai_calls: int
+
+
 class EditResponse(BaseModel):
     id: str
     title: str
@@ -218,6 +261,8 @@ class EditResponse(BaseModel):
     reference: EditReferenceResponse | None
     # Why the reference reel was skipped, when it was.
     reference_error: str | None
+    engine: Literal["classic", "premium"]
+    premium: PremiumResponse | None
     sources: list[EditSourceResponse]
     raw_seconds: float
     duration_s: float

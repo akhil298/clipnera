@@ -54,6 +54,38 @@ export const analysisSteps = (withReference: boolean): string[] => [
   'Planning the edit',
 ];
 
+/** The reel engine's stages (backend reel_engine/pipeline.py STAGES), as the progress list shows them. */
+export const PREMIUM_STEPS: [string, string][] = [
+  ['ingest', 'Reading your files'],
+  ['listen', 'Listening for voice, music and words'],
+  ['watch', 'Watching every shot'],
+  ['direct', 'Directing the story'],
+  ['verify', 'Checking hooks and labels against the footage'],
+  ['compile', 'Building the timeline'],
+  ['assets', 'Finding and making assets'],
+  ['picture', 'Cutting, framing and grading'],
+  ['layout', 'Placing graphics off faces and the action'],
+  ['graphics', 'Animating graphics and captions'],
+  ['sound', 'Mixing voice, music and effects'],
+  ['compose', 'Final encode'],
+  ['review', 'Head-editor review'],
+];
+
+/** The ten premium layers the review scores (backend reel_engine/plan.py LAYERS). */
+export const PREMIUM_LAYERS: Record<string, string> = {
+  selection: 'Selection', hook: 'Hook', story: 'Story', picture: 'Picture', rhythm: 'Rhythm',
+  captions: 'Captions', graphics: 'Motion graphics', depth: 'Depth', sound: 'Sound', finish: 'Finish',
+};
+
+export const RECIPE_NAMES: Record<string, string> = {
+  creator_advice: 'Creator advice', interview: 'Interview', voice_food: 'Talking while cooking', vlog: 'Vlog',
+  recipe_process: 'Recipe / process', local_ad: 'Local business ad', explainer: 'Explainer', product_demo: 'Product demo',
+};
+
+export const AUDIO_NAMES: Record<string, string> = {
+  voice: 'Your voice', song: 'A song (replaced with our own score)', voice_song: 'Your voice over music (music replaced)', silent: 'No audio',
+};
+
 /** Mirrors MAX_SECONDS in backend/edit_engine/reference.py. */
 export const REFERENCE_MAX_SECONDS = 180;
 

@@ -33,9 +33,10 @@ from edit_engine.schema import (
     EditChange, EditCreateRequest, EditLimitsResponse, EditLine, EditMusicResponse, EditPicture, EditPlanResponse,
     EditReferenceResponse, EditResponse, EditSourceResponse, EditSourcesCompleteRequest, EditSourcesInitRequest, EditSourcesInitResponse,
     EditChatRequest, EditSourceFile, EditSummary, EditText, EditTimelineMusic, EditTimelineResponse, EditUpload, EditVoicePiece, EditWord,
-    MusicTrackResponse,
+    MusicTrackResponse, PremiumResponse,
 )
 from edit_engine.script import SCRIPT_MODES
+from reel_engine import jobs as premium_jobs
 from feature_flags.registry import REEL_EDITOR_OPUS
 from feature_flags.service import FeatureFlagService
 from jobs.queue import Job, get_queue
@@ -98,6 +99,9 @@ class EditService:
             raise CustomException(message="Your plan makes reels up to "
                                   f"{limits_for(entitlements).max_output_seconds} seconds long.", code="PRO_REQUIRED", status_code=403)
         self._check_model(entitlements, request.ai_model)
+        if request.engine == "premium" and not entitlements.pro_ai_provider:
+            raise CustomException(message="The premium AI edit is on Pro.", code="PRO_REQUIRED", status_code=403,
+                                  extra={"feature": "premium_edit"})
         if request.reference_url and not reference.is_supported_link(request.reference_url):
             raise CustomException(message="Paste a YouTube or Shorts link, or upload the reference reel instead.",
                                   code="INVALID_BODY", status_code=400)
@@ -106,7 +110,7 @@ class EditService:
             script_mode=request.script_mode, intent=(request.intent or "").strip() or None, language=request.language.lower(),
             caption_style=request.caption_style, target_seconds=request.target_seconds, autopilot=request.autopilot,
             ai_model=request.ai_model, ai_effort=request.ai_effort if request.ai_model else None,
-            reference_url=request.reference_url,
+            reference_url=request.reference_url, engine=request.engine,
         )
         self._session.add(edit)
         await self._session.commit()
@@ -175,9 +179,26 @@ class EditService:
         if edit.status == EditStatus.DRAFT:
             await self._subscriptions.consume_daily_quota(user_id, "auto_edits")
         edit.sources = json.dumps(sources, ensure_ascii=False)
+        if edit.engine == "premium":
+            return await self._start_premium(edit, user_id)
         edit.status, edit.error, edit.analysis = EditStatus.ANALYZING, None, json.dumps({"progress": "Waiting to start"})
         await self._session.commit()
         await get_queue().enqueue(Job(jobs.ANALYZE_JOB, {"edit_id": edit.id, "user_id": user_id}))
+        return await self.response(edit)
+
+    async def _start_premium(self, edit: EditProject, user_id: str) -> EditResponse:
+        """The reel engine edits end to end in one job, so its credits are taken now and refunded if it fails."""
+        credits = premium_jobs.price(edit)
+        try:
+            await self._subscriptions.deduct_credits(user_id=user_id, amount=credits, reason=f"Premium reel: {edit.title}"[:200],
+                                                     reference_id=edit.id, reference_type="edit_render")
+        except InsufficientCreditsError:
+            raise CustomException(message=f"A premium edit needs {credits} credits. Top up, or come back when your credits renew.",
+                                  code="INSUFFICIENT_CREDITS", status_code=402, extra={"required": credits})
+        edit.status, edit.error, edit.credits_charged = EditStatus.ANALYZING, None, edit.credits_charged + credits
+        edit.premium = json.dumps({"progress": [{"stage": "queued", "note": "Waiting to start", "at": 0.0}]})
+        await self._session.commit()
+        await get_queue().enqueue(Job(premium_jobs.PREMIUM_JOB, {"edit_id": edit.id, "user_id": user_id, "credits": credits}))
         return await self.response(edit)
 
     async def replan(self, user_id: str, edit_id: str) -> EditResponse:
@@ -369,6 +390,11 @@ class EditService:
         entitlements = await self._subscriptions.get_entitlements(edit.user_id)
         limits = limits_for(entitlements)
         has_plan = bool(plan) and bool(timeline)
+        premium = edit.engine == "premium"
+        if premium:
+            estimate = premium_jobs.price(edit) if edit.status == EditStatus.DRAFT else 0
+        else:
+            estimate = jobs.price(edit) if has_plan else 0
         return EditResponse(
             id=edit.id, title=edit.title, status=edit.status.value,
             progress=PROGRESS.get(edit.status) or (analysis.get("progress") if edit.status == EditStatus.ANALYZING else None),
@@ -376,12 +402,13 @@ class EditService:
             caption_style=edit.caption_style, target_seconds=edit.target_seconds, autopilot=edit.autopilot,
             ai_model=edit.ai_model, ai_effort=edit.ai_effort, reference_url=edit.reference_url,
             reference=EditReferenceResponse(**analysis["reference"]) if analysis.get("reference") else None,
-            reference_error=analysis.get("reference_error"),
+            reference_error=analysis.get("reference_error"), engine=edit.engine,
+            premium=PremiumResponse(**premium_jobs.summary(json.loads(edit.premium or "{}"))) if premium else None,
             sources=[self._source_response(s) for s in sources if s.get("uploaded")],
             raw_seconds=edit.raw_seconds, duration_s=edit.duration_s,
             plan=await self._plan_response(plan, analysis, timeline) if has_plan else None,
             timeline=self._timeline_response(timeline) if has_plan else None,
-            credits_estimate=jobs.price(edit) if has_plan else 0, credits_charged=edit.credits_charged, renders=edit.renders,
+            credits_estimate=estimate, credits_charged=edit.credits_charged, renders=edit.renders,
             replans_left=max(0, self._settings.EDIT_MAX_REPLANS - edit.replans),
             chat_edits_left=max(0, limits.max_chat_edits - edit.chat_edits),
             output_url=self._url(edit.output_key), music_credit=_credit_text(edit.music_credit), error=edit.error,

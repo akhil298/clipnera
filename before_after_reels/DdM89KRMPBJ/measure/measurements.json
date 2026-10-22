@@ -1,0 +1,795 @@
+{
+ "id": "DdM89KRMPBJ",
+ "duration_s": 23.765,
+ "fps": 30.0,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  4.0,
+  6.467,
+  7.467,
+  14.167
+ ],
+ "shot_count": 5,
+ "median_shot_s": 4.0,
+ "shortest_shot_s": 1.0,
+ "cuts_in_hook": 0,
+ "cuts_on_beat": 1.0,
+ "flashes": [],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.09,
+  0.05,
+  0.02,
+  0.02,
+  0.02,
+  0.02,
+  0.04,
+  0.02,
+  0.14,
+  0.04,
+  0.02,
+  0.02,
+  0.07,
+  0.03,
+  0.09,
+  0.09,
+  0.03,
+  0.04,
+  0.02,
+  0.02,
+  0.01,
+  0.01,
+  0.01,
+  0.02,
+  0.02,
+  0.04,
+  0.02,
+  0.02,
+  0.1,
+  0.03,
+  0.03,
+  0.03,
+  0.02,
+  0.02,
+  0.02,
+  0.02,
+  0.04,
+  0.02,
+  0.11,
+  0.19,
+  0.02,
+  0.03,
+  0.04,
+  0.04,
+  0.03,
+  0.04,
+  0.03,
+  0.01
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 123.0,
+  "beats_s": [
+   0.07,
+   0.534,
+   0.998,
+   1.44,
+   1.927,
+   2.438,
+   2.879,
+   3.413,
+   3.924,
+   4.412,
+   4.853,
+   5.271,
+   5.712,
+   6.177,
+   6.618,
+   7.059,
+   7.546,
+   8.057,
+   8.591,
+   9.125,
+   9.613,
+   10.17,
+   10.704,
+   11.169,
+   11.68,
+   12.121,
+   12.562,
+   13.026,
+   13.468,
+   13.932,
+   14.42,
+   14.907,
+   15.395,
+   15.836,
+   16.324,
+   16.788,
+   17.252,
+   17.717,
+   18.251,
+   18.715,
+   19.203,
+   19.667,
+   20.155,
+   20.643,
+   21.107,
+   21.571,
+   22.129,
+   22.709
+  ],
+  "hits_s": [
+   0.07,
+   0.325,
+   0.372,
+   0.464,
+   0.604,
+   0.836,
+   0.998,
+   1.184,
+   1.416,
+   1.556,
+   1.695,
+   1.834,
+   1.927,
+   2.043,
+   2.229,
+   2.322,
+   2.438,
+   2.717,
+   2.856,
+   3.065,
+   3.204,
+   3.32,
+   3.413,
+   3.529,
+   3.715,
+   3.924,
+   4.087,
+   4.226,
+   4.412,
+   4.621,
+   4.76,
+   5.271,
+   5.457,
+   5.689,
+   5.944,
+   6.06,
+   6.177,
+   6.502,
+   6.78,
+   6.896,
+   7.059,
+   7.198,
+   7.268,
+   7.523,
+   7.709,
+   7.802,
+   8.591,
+   8.707,
+   8.916,
+   9.102,
+   9.311,
+   9.59,
+   9.776,
+   9.915,
+   10.147,
+   10.449,
+   10.565,
+   10.704,
+   10.937,
+   11.122,
+   11.169,
+   11.68,
+   11.889,
+   12.121,
+   12.307,
+   12.446,
+   12.562,
+   12.864,
+   12.934,
+   13.166,
+   13.305,
+   13.444,
+   13.653,
+   13.932,
+   14.095,
+   14.373,
+   14.42,
+   14.536,
+   14.675,
+   14.768,
+   14.907,
+   15.093,
+   15.256,
+   15.511,
+   15.72,
+   15.836,
+   15.906,
+   16.022,
+   16.463,
+   16.672,
+   16.858,
+   17.09,
+   17.252,
+   17.369,
+   17.717,
+   17.926,
+   17.995,
+   18.112,
+   18.251,
+   18.46,
+   18.646,
+   18.855,
+   18.994,
+   19.11,
+   19.203,
+   19.319,
+   19.482,
+   19.667,
+   19.714,
+   19.876,
+   20.317,
+   20.503,
+   20.643,
+   21.084,
+   21.316,
+   21.478,
+   21.571,
+   21.873,
+   22.105,
+   22.291,
+   22.5,
+   22.709,
+   22.872,
+   23.011,
+   23.197,
+   23.475,
+   23.615
+  ],
+  "drop_s": 19.45,
+  "loudness_half_seconds": [
+   0.61,
+   0.58,
+   0.57,
+   0.5,
+   0.44,
+   0.32,
+   0.6,
+   0.43,
+   0.68,
+   0.58,
+   0.53,
+   0.46,
+   0.58,
+   0.46,
+   0.52,
+   0.46,
+   0.76,
+   0.69,
+   0.45,
+   0.47,
+   0.5,
+   0.33,
+   0.47,
+   0.55,
+   0.44,
+   0.63,
+   0.52,
+   0.6,
+   0.42,
+   0.45,
+   0.49,
+   0.33,
+   0.45,
+   0.49,
+   0.39,
+   0.23,
+   0.52,
+   0.22,
+   0.41,
+   0.43,
+   0.66,
+   0.46,
+   0.51,
+   0.44,
+   0.39,
+   0.39,
+   0.41,
+   0.17
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "We work on videos probably three or four months in advance. But before that, like, they're set in ideation where we brainstorm what they are for a month or two. So from the start to when they get uploaded, it's probably like one to two months. Coming up with the idea, three to four months working on the idea then a couple weeks filming and then like three weeks editing. So probably five months from start to finish. Two years ago, we were spending grand a video. Now we're spending probably 1 .5 million a video.",
+  "words": [
+   {
+    "word": "We",
+    "start_s": 0.0,
+    "end_s": 0.18
+   },
+   {
+    "word": "work",
+    "start_s": 0.18,
+    "end_s": 0.4
+   },
+   {
+    "word": "on",
+    "start_s": 0.4,
+    "end_s": 0.54
+   },
+   {
+    "word": "videos",
+    "start_s": 0.54,
+    "end_s": 0.74
+   },
+   {
+    "word": "probably",
+    "start_s": 0.74,
+    "end_s": 1.14
+   },
+   {
+    "word": "three",
+    "start_s": 1.14,
+    "end_s": 1.48
+   },
+   {
+    "word": "or",
+    "start_s": 1.48,
+    "end_s": 1.56
+   },
+   {
+    "word": "four",
+    "start_s": 1.56,
+    "end_s": 1.74
+   },
+   {
+    "word": "months",
+    "start_s": 1.74,
+    "end_s": 1.9
+   },
+   {
+    "word": "in",
+    "start_s": 1.9,
+    "end_s": 2.06
+   },
+   {
+    "word": "advance.",
+    "start_s": 2.06,
+    "end_s": 2.38
+   },
+   {
+    "word": "But",
+    "start_s": 2.9,
+    "end_s": 2.92
+   },
+   {
+    "word": "before",
+    "start_s": 2.92,
+    "end_s": 3.26
+   },
+   {
+    "word": "that,",
+    "start_s": 3.26,
+    "end_s": 3.54
+   },
+   {
+    "word": "like,",
+    "start_s": 3.82,
+    "end_s": 3.84
+   },
+   {
+    "word": "they're",
+    "start_s": 4.08,
+    "end_s": 4.54
+   },
+   {
+    "word": "set",
+    "start_s": 4.54,
+    "end_s": 4.64
+   },
+   {
+    "word": "in",
+    "start_s": 4.64,
+    "end_s": 4.76
+   },
+   {
+    "word": "ideation",
+    "start_s": 4.76,
+    "end_s": 5.26
+   },
+   {
+    "word": "where",
+    "start_s": 5.26,
+    "end_s": 5.48
+   },
+   {
+    "word": "we",
+    "start_s": 5.48,
+    "end_s": 5.6
+   },
+   {
+    "word": "brainstorm",
+    "start_s": 5.6,
+    "end_s": 5.88
+   },
+   {
+    "word": "what",
+    "start_s": 5.88,
+    "end_s": 6.1
+   },
+   {
+    "word": "they",
+    "start_s": 6.1,
+    "end_s": 6.24
+   },
+   {
+    "word": "are",
+    "start_s": 6.24,
+    "end_s": 6.42
+   },
+   {
+    "word": "for",
+    "start_s": 6.42,
+    "end_s": 6.58
+   },
+   {
+    "word": "a",
+    "start_s": 6.58,
+    "end_s": 6.8
+   },
+   {
+    "word": "month",
+    "start_s": 6.8,
+    "end_s": 6.94
+   },
+   {
+    "word": "or",
+    "start_s": 6.94,
+    "end_s": 7.1
+   },
+   {
+    "word": "two.",
+    "start_s": 7.1,
+    "end_s": 7.32
+   },
+   {
+    "word": "So",
+    "start_s": 7.8,
+    "end_s": 7.88
+   },
+   {
+    "word": "from",
+    "start_s": 7.88,
+    "end_s": 8.06
+   },
+   {
+    "word": "the",
+    "start_s": 8.06,
+    "end_s": 8.18
+   },
+   {
+    "word": "start",
+    "start_s": 8.18,
+    "end_s": 8.42
+   },
+   {
+    "word": "to",
+    "start_s": 8.42,
+    "end_s": 8.64
+   },
+   {
+    "word": "when",
+    "start_s": 8.64,
+    "end_s": 8.72
+   },
+   {
+    "word": "they",
+    "start_s": 8.72,
+    "end_s": 8.82
+   },
+   {
+    "word": "get",
+    "start_s": 8.82,
+    "end_s": 8.94
+   },
+   {
+    "word": "uploaded,",
+    "start_s": 8.94,
+    "end_s": 9.24
+   },
+   {
+    "word": "it's",
+    "start_s": 9.54,
+    "end_s": 9.68
+   },
+   {
+    "word": "probably",
+    "start_s": 9.68,
+    "end_s": 9.88
+   },
+   {
+    "word": "like",
+    "start_s": 9.88,
+    "end_s": 10.02
+   },
+   {
+    "word": "one",
+    "start_s": 10.02,
+    "end_s": 10.2
+   },
+   {
+    "word": "to",
+    "start_s": 10.2,
+    "end_s": 10.3
+   },
+   {
+    "word": "two",
+    "start_s": 10.3,
+    "end_s": 10.44
+   },
+   {
+    "word": "months.",
+    "start_s": 10.44,
+    "end_s": 10.66
+   },
+   {
+    "word": "Coming",
+    "start_s": 11.18,
+    "end_s": 11.42
+   },
+   {
+    "word": "up",
+    "start_s": 11.42,
+    "end_s": 11.56
+   },
+   {
+    "word": "with",
+    "start_s": 11.56,
+    "end_s": 11.64
+   },
+   {
+    "word": "the",
+    "start_s": 11.64,
+    "end_s": 11.72
+   },
+   {
+    "word": "idea,",
+    "start_s": 11.72,
+    "end_s": 12.0
+   },
+   {
+    "word": "three",
+    "start_s": 12.26,
+    "end_s": 12.62
+   },
+   {
+    "word": "to",
+    "start_s": 12.62,
+    "end_s": 12.74
+   },
+   {
+    "word": "four",
+    "start_s": 12.74,
+    "end_s": 12.92
+   },
+   {
+    "word": "months",
+    "start_s": 12.92,
+    "end_s": 13.12
+   },
+   {
+    "word": "working",
+    "start_s": 13.12,
+    "end_s": 13.36
+   },
+   {
+    "word": "on",
+    "start_s": 13.36,
+    "end_s": 13.56
+   },
+   {
+    "word": "the",
+    "start_s": 13.56,
+    "end_s": 13.7
+   },
+   {
+    "word": "idea",
+    "start_s": 13.7,
+    "end_s": 14.06
+   },
+   {
+    "word": "then",
+    "start_s": 14.46,
+    "end_s": 14.58
+   },
+   {
+    "word": "a",
+    "start_s": 14.58,
+    "end_s": 14.72
+   },
+   {
+    "word": "couple",
+    "start_s": 14.72,
+    "end_s": 14.88
+   },
+   {
+    "word": "weeks",
+    "start_s": 14.88,
+    "end_s": 15.06
+   },
+   {
+    "word": "filming",
+    "start_s": 15.06,
+    "end_s": 15.4
+   },
+   {
+    "word": "and",
+    "start_s": 15.4,
+    "end_s": 15.96
+   },
+   {
+    "word": "then",
+    "start_s": 15.96,
+    "end_s": 16.08
+   },
+   {
+    "word": "like",
+    "start_s": 16.08,
+    "end_s": 16.3
+   },
+   {
+    "word": "three",
+    "start_s": 16.3,
+    "end_s": 16.54
+   },
+   {
+    "word": "weeks",
+    "start_s": 16.54,
+    "end_s": 16.74
+   },
+   {
+    "word": "editing.",
+    "start_s": 16.74,
+    "end_s": 17.02
+   },
+   {
+    "word": "So",
+    "start_s": 17.38,
+    "end_s": 17.42
+   },
+   {
+    "word": "probably",
+    "start_s": 17.42,
+    "end_s": 18.1
+   },
+   {
+    "word": "five",
+    "start_s": 18.1,
+    "end_s": 18.32
+   },
+   {
+    "word": "months",
+    "start_s": 18.32,
+    "end_s": 18.62
+   },
+   {
+    "word": "from",
+    "start_s": 18.62,
+    "end_s": 19.02
+   },
+   {
+    "word": "start",
+    "start_s": 19.02,
+    "end_s": 19.24
+   },
+   {
+    "word": "to",
+    "start_s": 19.24,
+    "end_s": 19.38
+   },
+   {
+    "word": "finish.",
+    "start_s": 19.38,
+    "end_s": 19.58
+   },
+   {
+    "word": "Two",
+    "start_s": 19.84,
+    "end_s": 19.96
+   },
+   {
+    "word": "years",
+    "start_s": 19.96,
+    "end_s": 20.14
+   },
+   {
+    "word": "ago,",
+    "start_s": 20.14,
+    "end_s": 20.36
+   },
+   {
+    "word": "we",
+    "start_s": 20.38,
+    "end_s": 20.44
+   },
+   {
+    "word": "were",
+    "start_s": 20.44,
+    "end_s": 20.48
+   },
+   {
+    "word": "spending",
+    "start_s": 20.48,
+    "end_s": 20.66
+   },
+   {
+    "word": "grand",
+    "start_s": 20.94,
+    "end_s": 21.16
+   },
+   {
+    "word": "a",
+    "start_s": 21.16,
+    "end_s": 21.22
+   },
+   {
+    "word": "video.",
+    "start_s": 21.22,
+    "end_s": 21.4
+   },
+   {
+    "word": "Now",
+    "start_s": 21.52,
+    "end_s": 21.58
+   },
+   {
+    "word": "we're",
+    "start_s": 21.58,
+    "end_s": 21.72
+   },
+   {
+    "word": "spending",
+    "start_s": 21.72,
+    "end_s": 21.92
+   },
+   {
+    "word": "probably",
+    "start_s": 21.92,
+    "end_s": 22.26
+   },
+   {
+    "word": "1",
+    "start_s": 22.26,
+    "end_s": 22.74
+   },
+   {
+    "word": ".5",
+    "start_s": 22.74,
+    "end_s": 23.08
+   },
+   {
+    "word": "million",
+    "start_s": 23.08,
+    "end_s": 23.28
+   },
+   {
+    "word": "a",
+    "start_s": 23.28,
+    "end_s": 23.4
+   },
+   {
+    "word": "video.",
+    "start_s": 23.4,
+    "end_s": 23.58
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

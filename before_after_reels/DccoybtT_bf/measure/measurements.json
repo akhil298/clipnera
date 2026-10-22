@@ -1,0 +1,582 @@
+{
+ "id": "DccoybtT_bf",
+ "duration_s": 17.283,
+ "fps": 60.0,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  1.733,
+  1.867,
+  4.55,
+  7.333,
+  8.483,
+  9.217,
+  10.333,
+  13.283,
+  14.767
+ ],
+ "shot_count": 10,
+ "median_shot_s": 1.61,
+ "shortest_shot_s": 0.13,
+ "cuts_in_hook": 2,
+ "cuts_on_beat": 0.78,
+ "flashes": [],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.18,
+  0.06,
+  0.03,
+  0.16,
+  0.1,
+  0.02,
+  0.01,
+  0.06,
+  0.03,
+  0.08,
+  0.02,
+  0.01,
+  0.01,
+  0.04,
+  0.07,
+  0.02,
+  0.04,
+  0.04,
+  0.07,
+  0.04,
+  0.09,
+  0.03,
+  0.02,
+  0.03,
+  0.01,
+  0.02,
+  0.09,
+  0.07,
+  0.02,
+  0.05,
+  0.03,
+  0.04,
+  0.04,
+  0.05,
+  0.03
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 112.3,
+  "beats_s": [
+   0.209,
+   0.789,
+   1.324,
+   1.834,
+   2.415,
+   2.902,
+   3.367,
+   3.878,
+   4.412,
+   4.946,
+   5.503,
+   6.06,
+   6.594,
+   7.105,
+   7.616,
+   8.127,
+   8.638,
+   9.149,
+   9.729,
+   10.217,
+   10.704,
+   11.238,
+   11.726,
+   12.214,
+   12.748,
+   13.351,
+   13.839,
+   14.28,
+   14.791,
+   15.325,
+   15.79,
+   16.254,
+   16.742,
+   17.206
+  ],
+  "hits_s": [
+   0.07,
+   0.186,
+   0.395,
+   0.511,
+   0.789,
+   0.906,
+   1.045,
+   1.161,
+   1.347,
+   1.509,
+   1.811,
+   1.997,
+   2.229,
+   2.322,
+   2.415,
+   2.577,
+   2.879,
+   3.019,
+   3.158,
+   3.204,
+   3.32,
+   3.553,
+   3.599,
+   3.738,
+   3.878,
+   4.017,
+   4.063,
+   4.203,
+   4.412,
+   4.598,
+   4.737,
+   5.108,
+   5.503,
+   5.689,
+   5.851,
+   6.037,
+   6.223,
+   6.571,
+   6.827,
+   7.059,
+   7.454,
+   7.593,
+   7.732,
+   7.872,
+   8.034,
+   8.127,
+   8.475,
+   8.615,
+   8.8,
+   9.009,
+   9.125,
+   9.311,
+   9.543,
+   9.729,
+   10.101,
+   10.217,
+   10.635,
+   10.96,
+   11.053,
+   11.238,
+   11.494,
+   11.935,
+   12.074,
+   12.214,
+   12.376,
+   12.539,
+   12.678,
+   12.748,
+   12.91,
+   13.026,
+   13.142,
+   13.328,
+   13.537,
+   13.677,
+   13.862,
+   14.002,
+   14.118,
+   14.257,
+   14.466,
+   14.791,
+   14.884,
+   15.139,
+   15.209,
+   15.325,
+   15.534,
+   15.673,
+   15.79,
+   16.022,
+   16.254,
+   16.742,
+   16.881,
+   17.02,
+   17.136,
+   17.183
+  ],
+  "drop_s": 7.35,
+  "loudness_half_seconds": [
+   0.46,
+   0.3,
+   0.47,
+   0.22,
+   0.4,
+   0.32,
+   0.47,
+   0.23,
+   0.25,
+   0.36,
+   0.13,
+   0.21,
+   0.22,
+   0.29,
+   0.22,
+   0.52,
+   0.31,
+   0.44,
+   0.43,
+   0.56,
+   0.49,
+   0.51,
+   0.39,
+   0.31,
+   0.36,
+   0.42,
+   0.26,
+   0.51,
+   0.24,
+   0.19,
+   0.34,
+   0.29,
+   0.48,
+   0.28,
+   0.31
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "your car is a mess, we can handle it. Life gets busy and your car ends up taking the hit. Crumbs, dust, dirt, that's where we come in. We come straight to you, taking care of the inside and the out, leaving your car looking brand new. No stress, no hassle. You don't even have to be there for it. Packages started at $140, book your details.",
+  "words": [
+   {
+    "word": "your",
+    "start_s": 0.0,
+    "end_s": 0.08
+   },
+   {
+    "word": "car",
+    "start_s": 0.08,
+    "end_s": 0.26
+   },
+   {
+    "word": "is",
+    "start_s": 0.26,
+    "end_s": 0.36
+   },
+   {
+    "word": "a",
+    "start_s": 0.36,
+    "end_s": 0.42
+   },
+   {
+    "word": "mess,",
+    "start_s": 0.42,
+    "end_s": 0.64
+   },
+   {
+    "word": "we",
+    "start_s": 0.88,
+    "end_s": 1.04
+   },
+   {
+    "word": "can",
+    "start_s": 1.04,
+    "end_s": 1.24
+   },
+   {
+    "word": "handle",
+    "start_s": 1.24,
+    "end_s": 1.48
+   },
+   {
+    "word": "it.",
+    "start_s": 1.48,
+    "end_s": 1.66
+   },
+   {
+    "word": "Life",
+    "start_s": 1.94,
+    "end_s": 2.04
+   },
+   {
+    "word": "gets",
+    "start_s": 2.04,
+    "end_s": 2.26
+   },
+   {
+    "word": "busy",
+    "start_s": 2.26,
+    "end_s": 2.58
+   },
+   {
+    "word": "and",
+    "start_s": 2.58,
+    "end_s": 2.94
+   },
+   {
+    "word": "your",
+    "start_s": 2.94,
+    "end_s": 3.04
+   },
+   {
+    "word": "car",
+    "start_s": 3.04,
+    "end_s": 3.32
+   },
+   {
+    "word": "ends",
+    "start_s": 3.32,
+    "end_s": 3.82
+   },
+   {
+    "word": "up",
+    "start_s": 3.82,
+    "end_s": 3.96
+   },
+   {
+    "word": "taking",
+    "start_s": 3.96,
+    "end_s": 4.16
+   },
+   {
+    "word": "the",
+    "start_s": 4.16,
+    "end_s": 4.34
+   },
+   {
+    "word": "hit.",
+    "start_s": 4.34,
+    "end_s": 4.46
+   },
+   {
+    "word": "Crumbs,",
+    "start_s": 4.7,
+    "end_s": 5.06
+   },
+   {
+    "word": "dust,",
+    "start_s": 5.42,
+    "end_s": 5.66
+   },
+   {
+    "word": "dirt,",
+    "start_s": 5.94,
+    "end_s": 6.16
+   },
+   {
+    "word": "that's",
+    "start_s": 6.46,
+    "end_s": 6.74
+   },
+   {
+    "word": "where",
+    "start_s": 6.74,
+    "end_s": 6.84
+   },
+   {
+    "word": "we",
+    "start_s": 6.84,
+    "end_s": 6.96
+   },
+   {
+    "word": "come",
+    "start_s": 6.96,
+    "end_s": 7.16
+   },
+   {
+    "word": "in.",
+    "start_s": 7.16,
+    "end_s": 7.24
+   },
+   {
+    "word": "We",
+    "start_s": 7.36,
+    "end_s": 7.48
+   },
+   {
+    "word": "come",
+    "start_s": 7.48,
+    "end_s": 7.66
+   },
+   {
+    "word": "straight",
+    "start_s": 7.66,
+    "end_s": 7.9
+   },
+   {
+    "word": "to",
+    "start_s": 7.9,
+    "end_s": 8.14
+   },
+   {
+    "word": "you,",
+    "start_s": 8.14,
+    "end_s": 8.32
+   },
+   {
+    "word": "taking",
+    "start_s": 8.54,
+    "end_s": 8.68
+   },
+   {
+    "word": "care",
+    "start_s": 8.68,
+    "end_s": 8.88
+   },
+   {
+    "word": "of",
+    "start_s": 8.88,
+    "end_s": 8.96
+   },
+   {
+    "word": "the",
+    "start_s": 8.96,
+    "end_s": 9.02
+   },
+   {
+    "word": "inside",
+    "start_s": 9.02,
+    "end_s": 9.34
+   },
+   {
+    "word": "and",
+    "start_s": 9.34,
+    "end_s": 9.66
+   },
+   {
+    "word": "the",
+    "start_s": 9.66,
+    "end_s": 9.78
+   },
+   {
+    "word": "out,",
+    "start_s": 9.78,
+    "end_s": 9.94
+   },
+   {
+    "word": "leaving",
+    "start_s": 10.04,
+    "end_s": 10.18
+   },
+   {
+    "word": "your",
+    "start_s": 10.18,
+    "end_s": 10.48
+   },
+   {
+    "word": "car",
+    "start_s": 10.48,
+    "end_s": 10.76
+   },
+   {
+    "word": "looking",
+    "start_s": 10.76,
+    "end_s": 11.04
+   },
+   {
+    "word": "brand",
+    "start_s": 11.04,
+    "end_s": 11.34
+   },
+   {
+    "word": "new.",
+    "start_s": 11.34,
+    "end_s": 11.6
+   },
+   {
+    "word": "No",
+    "start_s": 11.88,
+    "end_s": 11.98
+   },
+   {
+    "word": "stress,",
+    "start_s": 11.98,
+    "end_s": 12.3
+   },
+   {
+    "word": "no",
+    "start_s": 12.68,
+    "end_s": 12.78
+   },
+   {
+    "word": "hassle.",
+    "start_s": 12.78,
+    "end_s": 13.14
+   },
+   {
+    "word": "You",
+    "start_s": 13.46,
+    "end_s": 13.52
+   },
+   {
+    "word": "don't",
+    "start_s": 13.52,
+    "end_s": 13.64
+   },
+   {
+    "word": "even",
+    "start_s": 13.64,
+    "end_s": 13.74
+   },
+   {
+    "word": "have",
+    "start_s": 13.74,
+    "end_s": 13.9
+   },
+   {
+    "word": "to",
+    "start_s": 13.9,
+    "end_s": 14.02
+   },
+   {
+    "word": "be",
+    "start_s": 14.02,
+    "end_s": 14.16
+   },
+   {
+    "word": "there",
+    "start_s": 14.16,
+    "end_s": 14.32
+   },
+   {
+    "word": "for",
+    "start_s": 14.32,
+    "end_s": 14.52
+   },
+   {
+    "word": "it.",
+    "start_s": 14.52,
+    "end_s": 14.64
+   },
+   {
+    "word": "Packages",
+    "start_s": 14.78,
+    "end_s": 15.12
+   },
+   {
+    "word": "started",
+    "start_s": 15.12,
+    "end_s": 15.38
+   },
+   {
+    "word": "at",
+    "start_s": 15.38,
+    "end_s": 15.52
+   },
+   {
+    "word": "$140,",
+    "start_s": 15.52,
+    "end_s": 16.1
+   },
+   {
+    "word": "book",
+    "start_s": 16.58,
+    "end_s": 16.78
+   },
+   {
+    "word": "your",
+    "start_s": 16.78,
+    "end_s": 16.94
+   },
+   {
+    "word": "details.",
+    "start_s": 16.94,
+    "end_s": 17.14
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

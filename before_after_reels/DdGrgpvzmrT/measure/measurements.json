@@ -1,0 +1,462 @@
+{
+ "id": "DdGrgpvzmrT",
+ "duration_s": 15.033,
+ "fps": 30.0,
+ "width": 720,
+ "height": 1280,
+ "orientation": "portrait",
+ "cuts_s": [
+  1.967,
+  7.067,
+  8.233,
+  12.5
+ ],
+ "shot_count": 5,
+ "median_shot_s": 2.53,
+ "shortest_shot_s": 1.17,
+ "cuts_in_hook": 1,
+ "cuts_on_beat": 1.0,
+ "flashes": [],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.08,
+  0.03,
+  0.02,
+  0.07,
+  0.03,
+  0.02,
+  0.01,
+  0.01,
+  0.03,
+  0.12,
+  0.07,
+  0.01,
+  0.01,
+  0.01,
+  0.07,
+  0.01,
+  0.08,
+  0.01,
+  0.01,
+  0.01,
+  0.01,
+  0.01,
+  0.03,
+  0.02,
+  0.07,
+  0.03,
+  0.03,
+  0.02,
+  0.01,
+  0.01
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 123.0,
+  "beats_s": [
+   0.139,
+   0.604,
+   1.022,
+   1.44,
+   1.927,
+   2.438,
+   2.926,
+   3.413,
+   3.901,
+   4.365,
+   4.807,
+   5.294,
+   5.805,
+   6.339,
+   6.92,
+   7.407,
+   7.918,
+   8.313,
+   8.777,
+   9.265,
+   9.729,
+   10.217,
+   10.704,
+   11.192,
+   11.703,
+   12.167,
+   12.655,
+   13.073,
+   13.584,
+   14.071,
+   14.559
+  ],
+  "hits_s": [
+   0.139,
+   0.232,
+   0.395,
+   0.557,
+   0.604,
+   0.813,
+   0.906,
+   1.022,
+   1.161,
+   1.254,
+   1.393,
+   1.579,
+   1.904,
+   2.043,
+   2.183,
+   2.438,
+   2.74,
+   3.088,
+   3.251,
+   3.413,
+   3.483,
+   3.715,
+   3.901,
+   4.156,
+   4.365,
+   4.621,
+   4.807,
+   5.062,
+   5.271,
+   5.41,
+   5.55,
+   5.805,
+   5.898,
+   6.084,
+   6.153,
+   6.2,
+   6.316,
+   6.502,
+   6.664,
+   6.78,
+   6.92,
+   7.105,
+   7.268,
+   7.639,
+   7.918,
+   8.266,
+   8.429,
+   8.545,
+   8.777,
+   8.893,
+   9.172,
+   9.242,
+   9.404,
+   9.59,
+   9.729,
+   9.915,
+   10.077,
+   10.379,
+   10.635,
+   10.681,
+   10.913,
+   11.029,
+   11.192,
+   11.68,
+   11.912,
+   12.144,
+   12.399,
+   12.469,
+   12.655,
+   12.864,
+   13.05,
+   13.212,
+   13.305,
+   13.56,
+   13.769,
+   13.909,
+   14.048,
+   14.396,
+   14.652,
+   14.721,
+   14.814
+  ],
+  "drop_s": 4.0,
+  "loudness_half_seconds": [
+   0.4,
+   0.45,
+   0.23,
+   0.14,
+   0.5,
+   0.27,
+   0.22,
+   0.15,
+   0.48,
+   0.33,
+   0.28,
+   0.25,
+   0.15,
+   0.13,
+   0.18,
+   0.2,
+   0.29,
+   0.33,
+   0.29,
+   0.24,
+   0.24,
+   0.21,
+   0.58,
+   0.28,
+   0.26,
+   0.39,
+   0.4,
+   0.39,
+   0.18,
+   0.31,
+   0.1
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "Here's a problem you don't see coming, I've got advisors in our community literally begging their retired clients to spend more money and they just won't. Everybody assumes the risk of financial and retirement income planning is running out of money there's a quieter problem on the other side.",
+  "words": [
+   {
+    "word": "Here's",
+    "start_s": 0.0,
+    "end_s": 0.4
+   },
+   {
+    "word": "a",
+    "start_s": 0.4,
+    "end_s": 0.5
+   },
+   {
+    "word": "problem",
+    "start_s": 0.5,
+    "end_s": 0.78
+   },
+   {
+    "word": "you",
+    "start_s": 0.78,
+    "end_s": 0.94
+   },
+   {
+    "word": "don't",
+    "start_s": 0.94,
+    "end_s": 1.16
+   },
+   {
+    "word": "see",
+    "start_s": 1.16,
+    "end_s": 1.26
+   },
+   {
+    "word": "coming,",
+    "start_s": 1.26,
+    "end_s": 1.56
+   },
+   {
+    "word": "I've",
+    "start_s": 2.02,
+    "end_s": 2.14
+   },
+   {
+    "word": "got",
+    "start_s": 2.14,
+    "end_s": 2.22
+   },
+   {
+    "word": "advisors",
+    "start_s": 2.22,
+    "end_s": 2.68
+   },
+   {
+    "word": "in",
+    "start_s": 2.68,
+    "end_s": 2.86
+   },
+   {
+    "word": "our",
+    "start_s": 2.86,
+    "end_s": 2.96
+   },
+   {
+    "word": "community",
+    "start_s": 2.96,
+    "end_s": 3.46
+   },
+   {
+    "word": "literally",
+    "start_s": 3.46,
+    "end_s": 4.28
+   },
+   {
+    "word": "begging",
+    "start_s": 4.28,
+    "end_s": 5.02
+   },
+   {
+    "word": "their",
+    "start_s": 5.02,
+    "end_s": 5.34
+   },
+   {
+    "word": "retired",
+    "start_s": 5.34,
+    "end_s": 5.62
+   },
+   {
+    "word": "clients",
+    "start_s": 5.62,
+    "end_s": 6.04
+   },
+   {
+    "word": "to",
+    "start_s": 6.04,
+    "end_s": 6.2
+   },
+   {
+    "word": "spend",
+    "start_s": 6.2,
+    "end_s": 6.34
+   },
+   {
+    "word": "more",
+    "start_s": 6.34,
+    "end_s": 6.54
+   },
+   {
+    "word": "money",
+    "start_s": 6.54,
+    "end_s": 6.78
+   },
+   {
+    "word": "and",
+    "start_s": 6.78,
+    "end_s": 7.02
+   },
+   {
+    "word": "they",
+    "start_s": 7.02,
+    "end_s": 7.14
+   },
+   {
+    "word": "just",
+    "start_s": 7.14,
+    "end_s": 7.44
+   },
+   {
+    "word": "won't.",
+    "start_s": 7.44,
+    "end_s": 8.1
+   },
+   {
+    "word": "Everybody",
+    "start_s": 8.18,
+    "end_s": 8.5
+   },
+   {
+    "word": "assumes",
+    "start_s": 8.5,
+    "end_s": 8.98
+   },
+   {
+    "word": "the",
+    "start_s": 8.98,
+    "end_s": 9.26
+   },
+   {
+    "word": "risk",
+    "start_s": 9.26,
+    "end_s": 9.58
+   },
+   {
+    "word": "of",
+    "start_s": 9.58,
+    "end_s": 9.86
+   },
+   {
+    "word": "financial",
+    "start_s": 9.86,
+    "end_s": 10.32
+   },
+   {
+    "word": "and",
+    "start_s": 10.32,
+    "end_s": 10.5
+   },
+   {
+    "word": "retirement",
+    "start_s": 10.5,
+    "end_s": 10.72
+   },
+   {
+    "word": "income",
+    "start_s": 10.72,
+    "end_s": 10.98
+   },
+   {
+    "word": "planning",
+    "start_s": 10.98,
+    "end_s": 11.28
+   },
+   {
+    "word": "is",
+    "start_s": 11.28,
+    "end_s": 11.48
+   },
+   {
+    "word": "running",
+    "start_s": 11.48,
+    "end_s": 11.78
+   },
+   {
+    "word": "out",
+    "start_s": 11.78,
+    "end_s": 12.0
+   },
+   {
+    "word": "of",
+    "start_s": 12.0,
+    "end_s": 12.04
+   },
+   {
+    "word": "money",
+    "start_s": 12.04,
+    "end_s": 12.22
+   },
+   {
+    "word": "there's",
+    "start_s": 12.5,
+    "end_s": 12.94
+   },
+   {
+    "word": "a",
+    "start_s": 12.94,
+    "end_s": 13.12
+   },
+   {
+    "word": "quieter",
+    "start_s": 13.12,
+    "end_s": 13.44
+   },
+   {
+    "word": "problem",
+    "start_s": 13.44,
+    "end_s": 14.06
+   },
+   {
+    "word": "on",
+    "start_s": 14.06,
+    "end_s": 14.44
+   },
+   {
+    "word": "the",
+    "start_s": 14.44,
+    "end_s": 14.54
+   },
+   {
+    "word": "other",
+    "start_s": 14.54,
+    "end_s": 14.66
+   },
+   {
+    "word": "side.",
+    "start_s": 14.66,
+    "end_s": 14.94
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

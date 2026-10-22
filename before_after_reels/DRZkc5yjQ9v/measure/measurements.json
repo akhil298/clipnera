@@ -1,0 +1,394 @@
+{
+ "id": "DRZkc5yjQ9v",
+ "duration_s": 12.928,
+ "fps": 29.97,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  3.07,
+  5.639,
+  7.741,
+  9.243
+ ],
+ "shot_count": 5,
+ "median_shot_s": 2.57,
+ "shortest_shot_s": 1.5,
+ "cuts_in_hook": 0,
+ "cuts_on_beat": 0.5,
+ "flashes": [],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.08,
+  0.06,
+  0.04,
+  0.03,
+  0.02,
+  0.01,
+  0.07,
+  0.03,
+  0.01,
+  0.02,
+  0.01,
+  0.12,
+  0.06,
+  0.06,
+  0.07,
+  0.11,
+  0.11,
+  0.02,
+  0.07,
+  0.02,
+  0.05,
+  0.03,
+  0.02,
+  0.04,
+  0.04,
+  0.01
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 117.5,
+  "beats_s": [
+   0.789,
+   1.3,
+   1.765,
+   2.299,
+   2.833,
+   3.367,
+   3.831,
+   4.296,
+   4.783,
+   5.294,
+   5.828,
+   6.339,
+   6.85,
+   7.407,
+   7.964,
+   8.545,
+   9.079,
+   9.59,
+   10.147,
+   10.704,
+   11.215,
+   11.703,
+   12.283
+  ],
+  "hits_s": [
+   0.07,
+   0.302,
+   0.557,
+   0.906,
+   1.277,
+   1.509,
+   1.741,
+   1.974,
+   2.159,
+   2.461,
+   2.647,
+   3.367,
+   3.622,
+   3.785,
+   3.947,
+   4.133,
+   4.783,
+   4.946,
+   5.108,
+   5.271,
+   5.457,
+   5.828,
+   6.037,
+   6.223,
+   6.385,
+   6.525,
+   6.687,
+   6.85,
+   6.943,
+   7.175,
+   7.384,
+   7.5,
+   7.686,
+   7.941,
+   8.173,
+   8.336,
+   8.452,
+   8.568,
+   8.684,
+   8.847,
+   9.056,
+   9.311,
+   9.59,
+   9.892,
+   10.124,
+   10.356,
+   10.495,
+   10.704,
+   10.983,
+   11.192,
+   11.262,
+   11.378,
+   11.54,
+   11.68,
+   11.912,
+   12.005,
+   12.121,
+   12.283,
+   12.539,
+   12.794
+  ],
+  "drop_s": 3.3,
+  "loudness_half_seconds": [
+   0.21,
+   0.33,
+   0.27,
+   0.39,
+   0.4,
+   0.18,
+   0.28,
+   0.43,
+   0.14,
+   0.22,
+   0.27,
+   0.14,
+   0.29,
+   0.26,
+   0.36,
+   0.28,
+   0.35,
+   0.38,
+   0.17,
+   0.43,
+   0.45,
+   0.28,
+   0.27,
+   0.31,
+   0.22,
+   0.12
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "When I was earning 27 ,000 per month, every rupee meant so much. Any money that I spent on Swiggy or Zomato, I had to really do the math of buying this combo or that combo to save as much money as possible.",
+  "words": [
+   {
+    "word": "When",
+    "start_s": 0.0,
+    "end_s": 0.38
+   },
+   {
+    "word": "I",
+    "start_s": 0.38,
+    "end_s": 0.66
+   },
+   {
+    "word": "was",
+    "start_s": 0.66,
+    "end_s": 0.94
+   },
+   {
+    "word": "earning",
+    "start_s": 0.94,
+    "end_s": 1.54
+   },
+   {
+    "word": "27",
+    "start_s": 1.54,
+    "end_s": 1.88
+   },
+   {
+    "word": ",000",
+    "start_s": 1.88,
+    "end_s": 2.32
+   },
+   {
+    "word": "per",
+    "start_s": 2.32,
+    "end_s": 2.5
+   },
+   {
+    "word": "month,",
+    "start_s": 2.5,
+    "end_s": 2.82
+   },
+   {
+    "word": "every",
+    "start_s": 3.3,
+    "end_s": 3.66
+   },
+   {
+    "word": "rupee",
+    "start_s": 3.66,
+    "end_s": 4.3
+   },
+   {
+    "word": "meant",
+    "start_s": 4.3,
+    "end_s": 4.84
+   },
+   {
+    "word": "so",
+    "start_s": 4.84,
+    "end_s": 5.16
+   },
+   {
+    "word": "much.",
+    "start_s": 5.16,
+    "end_s": 5.5
+   },
+   {
+    "word": "Any",
+    "start_s": 5.78,
+    "end_s": 5.9
+   },
+   {
+    "word": "money",
+    "start_s": 5.9,
+    "end_s": 6.1
+   },
+   {
+    "word": "that",
+    "start_s": 6.1,
+    "end_s": 6.24
+   },
+   {
+    "word": "I",
+    "start_s": 6.24,
+    "end_s": 6.36
+   },
+   {
+    "word": "spent",
+    "start_s": 6.36,
+    "end_s": 6.54
+   },
+   {
+    "word": "on",
+    "start_s": 6.54,
+    "end_s": 6.76
+   },
+   {
+    "word": "Swiggy",
+    "start_s": 6.76,
+    "end_s": 7.16
+   },
+   {
+    "word": "or",
+    "start_s": 7.16,
+    "end_s": 7.26
+   },
+   {
+    "word": "Zomato,",
+    "start_s": 7.26,
+    "end_s": 7.7
+   },
+   {
+    "word": "I",
+    "start_s": 7.88,
+    "end_s": 8.0
+   },
+   {
+    "word": "had",
+    "start_s": 8.0,
+    "end_s": 8.08
+   },
+   {
+    "word": "to",
+    "start_s": 8.08,
+    "end_s": 8.2
+   },
+   {
+    "word": "really",
+    "start_s": 8.2,
+    "end_s": 8.38
+   },
+   {
+    "word": "do",
+    "start_s": 8.38,
+    "end_s": 8.58
+   },
+   {
+    "word": "the",
+    "start_s": 8.58,
+    "end_s": 8.72
+   },
+   {
+    "word": "math",
+    "start_s": 8.72,
+    "end_s": 8.96
+   },
+   {
+    "word": "of",
+    "start_s": 8.96,
+    "end_s": 9.2
+   },
+   {
+    "word": "buying",
+    "start_s": 9.2,
+    "end_s": 9.7
+   },
+   {
+    "word": "this",
+    "start_s": 9.7,
+    "end_s": 9.98
+   },
+   {
+    "word": "combo",
+    "start_s": 9.98,
+    "end_s": 10.36
+   },
+   {
+    "word": "or",
+    "start_s": 10.36,
+    "end_s": 10.56
+   },
+   {
+    "word": "that",
+    "start_s": 10.56,
+    "end_s": 10.78
+   },
+   {
+    "word": "combo",
+    "start_s": 10.78,
+    "end_s": 11.16
+   },
+   {
+    "word": "to",
+    "start_s": 11.16,
+    "end_s": 11.38
+   },
+   {
+    "word": "save",
+    "start_s": 11.38,
+    "end_s": 11.6
+   },
+   {
+    "word": "as",
+    "start_s": 11.6,
+    "end_s": 11.78
+   },
+   {
+    "word": "much",
+    "start_s": 11.78,
+    "end_s": 11.94
+   },
+   {
+    "word": "money",
+    "start_s": 11.94,
+    "end_s": 12.22
+   },
+   {
+    "word": "as",
+    "start_s": 12.22,
+    "end_s": 12.4
+   },
+   {
+    "word": "possible.",
+    "start_s": 12.4,
+    "end_s": 12.78
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

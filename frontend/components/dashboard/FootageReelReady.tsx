@@ -17,7 +17,7 @@ function CopyButton({ text, labelText }: { text: string; labelText: string }) {
 }
 
 /** The finished reel: watch it, take it, copy its post text, or go back and change it. */
-export function FootageReelReady({ edit, onEdit, onNew }: { edit: EditResponse; onEdit: () => void; onNew: () => void }) {
+export function FootageReelReady({ edit, onEdit, onNew }: { edit: EditResponse; onEdit?: () => void; onNew: () => void }) {
   const plan = edit.plan;
   const caption = [plan?.caption, plan?.hashtags.join(' '), edit.music_credit].filter(Boolean).join('\n\n');
 
@@ -32,7 +32,9 @@ export function FootageReelReady({ edit, onEdit, onNew }: { edit: EditResponse; 
         <div className="space-y-2">
           <h2 className="font-syne text-4xl sm:text-5xl font-extrabold leading-none text-white">Your reel is ready.</h2>
           <p className="text-[17px] text-neutral-400 max-w-xl">
-            Download it and post it. Want a change? Go back to the plan; a re-render costs a quarter of the first one.
+            {onEdit
+              ? 'Download it and post it. Want a change? Go back to the plan; a re-render costs a quarter of the first one.'
+              : 'Download it and post it. Below is how the AI edited it and how its review scored it.'}
           </p>
         </div>
         <div className="flex flex-wrap gap-2.5">
@@ -41,9 +43,11 @@ export function FootageReelReady({ edit, onEdit, onNew }: { edit: EditResponse; 
               <Download className="w-5 h-5" /> Download MP4
             </a>
           )}
-          <button type="button" onClick={onEdit} className="inline-flex items-center gap-2 h-14 px-5 rounded-2xl border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 text-[15px] font-semibold text-white">
-            <Pencil className="w-4 h-4" /> Make changes
-          </button>
+          {onEdit && (
+            <button type="button" onClick={onEdit} className="inline-flex items-center gap-2 h-14 px-5 rounded-2xl border border-neutral-700 bg-neutral-900 hover:bg-neutral-800 text-[15px] font-semibold text-white">
+              <Pencil className="w-4 h-4" /> Make changes
+            </button>
+          )}
           <button type="button" onClick={onNew} className="inline-flex items-center gap-2 h-14 px-5 rounded-2xl text-[15px] font-semibold text-amber-300 hover:bg-amber-500/10">
             <Plus className="w-4 h-4" /> Make another reel
           </button>

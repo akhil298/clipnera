@@ -1,0 +1,469 @@
+{
+ "id": "DUDpOGuDks0",
+ "duration_s": 13.312,
+ "fps": 30.0,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  3.733,
+  5.5,
+  6.8,
+  11.333
+ ],
+ "shot_count": 5,
+ "median_shot_s": 1.98,
+ "shortest_shot_s": 1.3,
+ "cuts_in_hook": 0,
+ "cuts_on_beat": 0.5,
+ "flashes": [
+  {
+   "at_s": 1.667,
+   "seconds": 2.067
+  },
+  {
+   "at_s": 5.533,
+   "seconds": 1.267
+  },
+  {
+   "at_s": 9.267,
+   "seconds": 2.067
+  }
+ ],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.01,
+  0.01,
+  0.01,
+  0.07,
+  0.0,
+  0.0,
+  0.0,
+  0.07,
+  0.0,
+  0.0,
+  0.03,
+  0.04,
+  0.0,
+  0.07,
+  0.01,
+  0.0,
+  0.01,
+  0.01,
+  0.07,
+  0.0,
+  0.01,
+  0.01,
+  0.07,
+  0.0,
+  0.01,
+  0.0,
+  0.01
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 129.2,
+  "beats_s": [
+   0.07,
+   0.511,
+   0.929,
+   1.37,
+   1.765,
+   2.206,
+   2.647,
+   3.111,
+   3.553,
+   4.017,
+   4.505,
+   4.992,
+   5.503,
+   5.944,
+   6.432,
+   6.943,
+   7.43,
+   7.941,
+   8.452,
+   8.916,
+   9.358,
+   9.776,
+   10.217,
+   10.635,
+   11.053,
+   11.517,
+   12.005,
+   12.492,
+   12.91
+  ],
+  "hits_s": [
+   0.07,
+   0.186,
+   0.279,
+   0.418,
+   0.557,
+   0.604,
+   0.743,
+   0.906,
+   1.115,
+   1.347,
+   1.463,
+   1.741,
+   1.904,
+   2.043,
+   2.206,
+   2.368,
+   2.624,
+   2.833,
+   3.019,
+   3.251,
+   3.367,
+   3.483,
+   3.553,
+   3.831,
+   3.994,
+   4.203,
+   4.319,
+   4.574,
+   4.667,
+   4.807,
+   4.853,
+   4.992,
+   5.132,
+   5.271,
+   5.48,
+   5.828,
+   5.944,
+   6.107,
+   6.293,
+   6.502,
+   6.641,
+   6.92,
+   7.036,
+   7.129,
+   7.407,
+   7.477,
+   7.639,
+   7.732,
+   7.872,
+   8.034,
+   8.313,
+   8.452,
+   8.499,
+   8.661,
+   8.8,
+   8.916,
+   9.033,
+   9.358,
+   9.52,
+   9.776,
+   9.892,
+   10.217,
+   10.379,
+   10.519,
+   10.704,
+   10.82,
+   11.029,
+   11.192,
+   11.378,
+   11.494,
+   11.819,
+   11.981,
+   12.19,
+   12.307,
+   12.492,
+   12.632,
+   12.817,
+   12.91,
+   13.189
+  ],
+  "drop_s": 3.8,
+  "loudness_half_seconds": [
+   0.65,
+   0.57,
+   0.43,
+   0.51,
+   0.51,
+   0.48,
+   0.37,
+   0.32,
+   0.72,
+   0.5,
+   0.47,
+   0.47,
+   0.4,
+   0.32,
+   0.59,
+   0.46,
+   0.47,
+   0.41,
+   0.46,
+   0.57,
+   0.45,
+   0.43,
+   0.39,
+   0.64,
+   0.5,
+   0.4,
+   0.35
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "Most people think dopamine is a feel -good chemical in your brain, but dopamine is actually called the chemical of motivation. And so I'm going to talk about how to use this chemical in your brain to take action that you need to to create the life that you want.",
+  "words": [
+   {
+    "word": "Most",
+    "start_s": 0.0,
+    "end_s": 0.24
+   },
+   {
+    "word": "people",
+    "start_s": 0.24,
+    "end_s": 0.5
+   },
+   {
+    "word": "think",
+    "start_s": 0.5,
+    "end_s": 0.82
+   },
+   {
+    "word": "dopamine",
+    "start_s": 0.82,
+    "end_s": 1.38
+   },
+   {
+    "word": "is",
+    "start_s": 1.38,
+    "end_s": 1.9
+   },
+   {
+    "word": "a",
+    "start_s": 1.9,
+    "end_s": 2.12
+   },
+   {
+    "word": "feel",
+    "start_s": 2.12,
+    "end_s": 2.46
+   },
+   {
+    "word": "-good",
+    "start_s": 2.46,
+    "end_s": 2.68
+   },
+   {
+    "word": "chemical",
+    "start_s": 2.68,
+    "end_s": 3.06
+   },
+   {
+    "word": "in",
+    "start_s": 3.06,
+    "end_s": 3.28
+   },
+   {
+    "word": "your",
+    "start_s": 3.28,
+    "end_s": 3.36
+   },
+   {
+    "word": "brain,",
+    "start_s": 3.36,
+    "end_s": 3.66
+   },
+   {
+    "word": "but",
+    "start_s": 3.8,
+    "end_s": 3.86
+   },
+   {
+    "word": "dopamine",
+    "start_s": 3.86,
+    "end_s": 4.24
+   },
+   {
+    "word": "is",
+    "start_s": 4.24,
+    "end_s": 4.74
+   },
+   {
+    "word": "actually",
+    "start_s": 4.74,
+    "end_s": 5.12
+   },
+   {
+    "word": "called",
+    "start_s": 5.12,
+    "end_s": 5.38
+   },
+   {
+    "word": "the",
+    "start_s": 5.38,
+    "end_s": 5.54
+   },
+   {
+    "word": "chemical",
+    "start_s": 5.54,
+    "end_s": 5.92
+   },
+   {
+    "word": "of",
+    "start_s": 5.92,
+    "end_s": 6.16
+   },
+   {
+    "word": "motivation.",
+    "start_s": 6.16,
+    "end_s": 6.68
+   },
+   {
+    "word": "And",
+    "start_s": 6.9,
+    "end_s": 6.98
+   },
+   {
+    "word": "so",
+    "start_s": 6.98,
+    "end_s": 7.12
+   },
+   {
+    "word": "I'm",
+    "start_s": 7.12,
+    "end_s": 7.24
+   },
+   {
+    "word": "going",
+    "start_s": 7.24,
+    "end_s": 7.28
+   },
+   {
+    "word": "to",
+    "start_s": 7.28,
+    "end_s": 7.36
+   },
+   {
+    "word": "talk",
+    "start_s": 7.36,
+    "end_s": 7.54
+   },
+   {
+    "word": "about",
+    "start_s": 7.54,
+    "end_s": 7.74
+   },
+   {
+    "word": "how",
+    "start_s": 7.74,
+    "end_s": 7.94
+   },
+   {
+    "word": "to",
+    "start_s": 7.94,
+    "end_s": 8.02
+   },
+   {
+    "word": "use",
+    "start_s": 8.02,
+    "end_s": 8.3
+   },
+   {
+    "word": "this",
+    "start_s": 8.3,
+    "end_s": 8.5
+   },
+   {
+    "word": "chemical",
+    "start_s": 8.5,
+    "end_s": 9.02
+   },
+   {
+    "word": "in",
+    "start_s": 9.02,
+    "end_s": 9.46
+   },
+   {
+    "word": "your",
+    "start_s": 9.46,
+    "end_s": 9.6
+   },
+   {
+    "word": "brain",
+    "start_s": 9.6,
+    "end_s": 10.04
+   },
+   {
+    "word": "to",
+    "start_s": 10.04,
+    "end_s": 10.42
+   },
+   {
+    "word": "take",
+    "start_s": 10.42,
+    "end_s": 10.66
+   },
+   {
+    "word": "action",
+    "start_s": 10.66,
+    "end_s": 11.16
+   },
+   {
+    "word": "that",
+    "start_s": 11.16,
+    "end_s": 11.58
+   },
+   {
+    "word": "you",
+    "start_s": 11.58,
+    "end_s": 11.7
+   },
+   {
+    "word": "need",
+    "start_s": 11.7,
+    "end_s": 11.9
+   },
+   {
+    "word": "to",
+    "start_s": 11.9,
+    "end_s": 12.08
+   },
+   {
+    "word": "to",
+    "start_s": 12.08,
+    "end_s": 12.2
+   },
+   {
+    "word": "create",
+    "start_s": 12.2,
+    "end_s": 12.4
+   },
+   {
+    "word": "the",
+    "start_s": 12.4,
+    "end_s": 12.52
+   },
+   {
+    "word": "life",
+    "start_s": 12.52,
+    "end_s": 12.7
+   },
+   {
+    "word": "that",
+    "start_s": 12.7,
+    "end_s": 12.86
+   },
+   {
+    "word": "you",
+    "start_s": 12.86,
+    "end_s": 13.02
+   },
+   {
+    "word": "want.",
+    "start_s": 13.02,
+    "end_s": 13.24
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

@@ -62,7 +62,12 @@ THEME_GRADE = {"clean": "teal_orange", "bold": "clean_bright", "dark": "moody", 
 
 def lut_path(theme: str) -> Path:
     """The ``.cube`` file for the theme's grade, written on first use."""
-    name = THEME_GRADE.get(theme, "teal_orange")
+    return grade_path(THEME_GRADE.get(theme, "teal_orange"))
+
+
+def grade_path(name: str) -> Path:
+    """The ``.cube`` file for a grade by name (one of ``GRADES``), written on first use."""
+    name = name if name in GRADES else "teal_orange"
     path = kit_dir() / "luts" / f"{name}.cube"
     if not path.is_file():
         path.parent.mkdir(parents=True, exist_ok=True)

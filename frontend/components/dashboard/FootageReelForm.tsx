@@ -11,6 +11,7 @@ import {
   EditSourceType,
   EditTargetSeconds,
   editsApi,
+  type EditEngine,
 } from '@/lib/api';
 import { canUseCaptionStyle, useEntitlements } from '@/hooks/useEntitlements';
 import { DEFAULT_CAPTION_PRESET, getAllCaptionStyles } from '@/lib/utils/captionStyles';
@@ -77,6 +78,9 @@ export function FootageReelForm({ tabs, onCreated }: { tabs?: React.ReactNode; o
   const [captionStyle, setCaptionStyle] = useState<string>(DEFAULT_CAPTION_PRESET);
   const [target, setTarget] = useState<EditTargetSeconds>(0);
   const [autopilot, setAutopilot] = useState(false);
+  // Pro defaults to the premium edit; anyone can still choose to plan, review and render themselves.
+  const [engine, setEngine] = useState<EditEngine | null>(null);
+  const chosenEngine: EditEngine = engine ?? (isPro ? 'premium' : 'classic');
   const [showScript, setShowScript] = useState(false);
   const [showVoice, setShowVoice] = useState(false);
   const [progress, setProgress] = useState<number[] | null>(null);
@@ -108,7 +112,9 @@ export function FootageReelForm({ tabs, onCreated }: { tabs?: React.ReactNode; o
     () => getAllCaptionStyles().filter((s) => !entitlements || canUseCaptionStyle(entitlements, s.id)),
     [entitlements],
   );
-  const estimate = estimateEditCredits(target || 30, rawSeconds, isPro && Boolean(limits?.opus_director) && !pickModel.ai_model);
+  const estimate = chosenEngine === 'premium'
+    ? estimateEditCredits(target || 45, rawSeconds, true)
+    : estimateEditCredits(target || 30, rawSeconds, isPro && Boolean(limits?.opus_director) && !pickModel.ai_model);
 
   const addMedia = async (files: FileList | File[] | null) => {
     const picked = await Promise.all(Array.from(files || []).filter((f) => MEDIA_TYPES.includes(f.type as EditSourceType)).map(pick));
@@ -157,6 +163,7 @@ export function FootageReelForm({ tabs, onCreated }: { tabs?: React.ReactNode; o
         autopilot,
         ...pickModel,
         reference_url: reference?.kind === 'link' ? reference.url : null,
+        engine: chosenEngine,
       });
       const files = [
         ...media.map(({ file, durationS }) => ({ file, durationS })),
@@ -326,6 +333,27 @@ export function FootageReelForm({ tabs, onCreated }: { tabs?: React.ReactNode; o
 
           {/* Settings */}
           <div className={`${card} p-5 sm:px-6 flex flex-wrap items-end gap-x-8 gap-y-4`}>
+            <div className="w-full space-y-2">
+              <span className={label}>How should we edit?</span>
+              <div role="radiogroup" aria-label="How should we edit?" className="grid gap-2 sm:grid-cols-2">
+                {([
+                  ['premium', 'Premium AI edit', 'Cleans your footage, directs the story, designs the graphics and music, reviews its own work. Pro.'],
+                  ['classic', 'Plan, then render', 'See the plan first, change it, then render it yourself.'],
+                ] as [EditEngine, string, string][]).map(([value, name, about]) => {
+                  const locked = value === 'premium' && !isPro;
+                  const on = chosenEngine === value;
+                  return (
+                    <button key={value} type="button" role="radio" aria-checked={on} disabled={locked || busy} onClick={() => setEngine(value)}
+                      className={`text-left rounded-2xl border p-3.5 transition-colors disabled:opacity-50 ${on ? 'border-amber-500/60 bg-amber-500/[0.08]' : 'border-neutral-800 hover:border-neutral-600'}`}>
+                      <span className="flex items-center gap-2 text-[15px] font-semibold text-white">
+                        {value === 'premium' && <Sparkles className="w-4 h-4 text-amber-300" />} {name}{locked ? ' · Pro' : ''}
+                      </span>
+                      <span className="block mt-1 text-[13px] text-neutral-400">{about}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <div className="space-y-2">
               <span className={label}>Length</span>
               <div role="group" aria-label="Reel length" className="flex flex-wrap gap-1.5">
@@ -364,7 +392,7 @@ export function FootageReelForm({ tabs, onCreated }: { tabs?: React.ReactNode; o
                 className={`${ghost} ${showVoice || voice ? 'border-amber-500/50 text-amber-200' : ''}`}>
                 <Mic className="w-4 h-4" /> {voice ? 'Voiceover added' : 'Add a voiceover'}
               </button>
-              <label className="ml-auto flex items-center gap-3 h-11 cursor-pointer">
+              <label className={`ml-auto flex items-center gap-3 h-11 cursor-pointer ${chosenEngine === 'premium' ? 'hidden' : ''}`}>
                 <input type="checkbox" checked={autopilot} onChange={(e) => setAutopilot(e.target.checked)} className="peer sr-only" />
                 <span className="relative w-10 h-6 rounded-full bg-neutral-700 peer-checked:bg-amber-500 peer-focus-visible:ring-2 peer-focus-visible:ring-amber-400 transition-colors after:absolute after:top-1 after:left-1 after:w-4 after:h-4 after:rounded-full after:bg-white after:transition-transform peer-checked:after:translate-x-4" />
                 <span className="text-sm text-neutral-300">Render as soon as the plan is ready</span>
@@ -408,11 +436,13 @@ export function FootageReelForm({ tabs, onCreated }: { tabs?: React.ReactNode; o
               <button type="submit" disabled={!canSubmit}
                 className="inline-flex items-center gap-2.5 h-14 px-7 rounded-2xl bg-amber-500 hover:bg-amber-400 text-neutral-950 text-[17px] font-bold disabled:opacity-40 transition-colors">
                 {busy ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />}
-                {busy ? (progress && uploaded < 1 ? `Uploading ${Math.round(uploaded * 100)}%` : 'Starting…') : 'Plan my reel'}
+                {busy ? (progress && uploaded < 1 ? `Uploading ${Math.round(uploaded * 100)}%` : 'Starting…') : chosenEngine === 'premium' ? 'Edit my reel' : 'Plan my reel'}
               </button>
               <span className="text-[13px] text-neutral-400 flex items-center gap-1.5">
                 {media.length === 0 ? <><Film className="w-3.5 h-3.5" /> Add at least one video or photo</> : (
-                  <>Free to plan · about {estimate} credits when you render{entitlements ? ` · you have ${entitlements.credit_minutes_remaining}` : ''}</>
+                  chosenEngine === 'premium'
+                    ? <>About {estimate} credits when it starts, refunded if it fails{entitlements ? ` · you have ${entitlements.credit_minutes_remaining}` : ''}</>
+                    : <>Free to plan · about {estimate} credits when you render{entitlements ? ` · you have ${entitlements.credit_minutes_remaining}` : ''}</>
                 )}
               </span>
             </div>

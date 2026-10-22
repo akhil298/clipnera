@@ -1,0 +1,454 @@
+{
+ "id": "Dd_nkO8sJG6",
+ "duration_s": 15.333,
+ "fps": 30.0,
+ "width": 720,
+ "height": 1280,
+ "orientation": "portrait",
+ "cuts_s": [
+  13.133
+ ],
+ "shot_count": 2,
+ "median_shot_s": 7.67,
+ "shortest_shot_s": 2.2,
+ "cuts_in_hook": 0,
+ "cuts_on_beat": 0.0,
+ "flashes": [],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.1,
+  0.1,
+  0.1,
+  0.07,
+  0.11,
+  0.1,
+  0.2,
+  0.06,
+  0.04,
+  0.06,
+  0.04,
+  0.06,
+  0.09,
+  0.08,
+  0.06,
+  0.22,
+  0.05,
+  0.03,
+  0.1,
+  0.07,
+  0.12,
+  0.04,
+  0.05,
+  0.04,
+  0.05,
+  0.07,
+  0.27,
+  0.09,
+  0.08,
+  0.05,
+  0.07
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 107.7,
+  "beats_s": [
+   0.836,
+   1.37,
+   1.927,
+   2.508,
+   3.088,
+   3.692,
+   4.249,
+   4.76,
+   5.294,
+   5.851,
+   6.432,
+   6.966,
+   7.477,
+   8.011,
+   8.591,
+   9.102,
+   9.636,
+   10.077,
+   10.635,
+   11.169,
+   11.726,
+   12.283,
+   12.817,
+   13.468,
+   14.095,
+   14.675
+  ],
+  "hits_s": [
+   0.139,
+   0.302,
+   0.418,
+   0.673,
+   0.836,
+   1.091,
+   1.509,
+   1.649,
+   1.811,
+   2.276,
+   2.368,
+   2.717,
+   3.065,
+   3.297,
+   3.46,
+   3.692,
+   3.947,
+   4.226,
+   4.342,
+   4.528,
+   4.69,
+   4.923,
+   5.039,
+   5.294,
+   5.55,
+   5.828,
+   6.014,
+   6.13,
+   6.409,
+   6.664,
+   6.966,
+   7.175,
+   7.848,
+   7.988,
+   8.406,
+   8.568,
+   8.824,
+   9.102,
+   9.218,
+   9.636,
+   9.892,
+   10.054,
+   10.263,
+   10.333,
+   10.495,
+   10.612,
+   10.82,
+   10.96,
+   11.169,
+   11.378,
+   11.726,
+   11.935,
+   12.469,
+   12.678,
+   12.817,
+   13.259,
+   13.491,
+   13.63,
+   13.793,
+   14.095,
+   14.35,
+   14.675,
+   14.861,
+   14.977,
+   15.256
+  ],
+  "drop_s": 7.15,
+  "loudness_half_seconds": [
+   0.73,
+   0.44,
+   0.43,
+   0.43,
+   0.23,
+   0.44,
+   0.42,
+   0.6,
+   0.35,
+   0.33,
+   0.33,
+   0.24,
+   0.37,
+   0.28,
+   0.51,
+   0.47,
+   0.57,
+   0.53,
+   0.48,
+   0.36,
+   0.37,
+   0.34,
+   0.5,
+   0.41,
+   0.46,
+   0.53,
+   0.53,
+   0.4,
+   0.41,
+   0.43,
+   0.38
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "There's a beautiful quote by Zig Ziglar that I love. don't have to be great to start, but you have to start to be great. A video that goes viral, I have to have a book that sells a million copies right off the bat. That's the pressure we're putting on ourselves.",
+  "words": [
+   {
+    "word": "There's",
+    "start_s": 0.0,
+    "end_s": 0.28
+   },
+   {
+    "word": "a",
+    "start_s": 0.28,
+    "end_s": 0.34
+   },
+   {
+    "word": "beautiful",
+    "start_s": 0.34,
+    "end_s": 0.6
+   },
+   {
+    "word": "quote",
+    "start_s": 0.6,
+    "end_s": 0.94
+   },
+   {
+    "word": "by",
+    "start_s": 0.94,
+    "end_s": 1.16
+   },
+   {
+    "word": "Zig",
+    "start_s": 1.16,
+    "end_s": 1.46
+   },
+   {
+    "word": "Ziglar",
+    "start_s": 1.46,
+    "end_s": 1.98
+   },
+   {
+    "word": "that",
+    "start_s": 1.98,
+    "end_s": 2.44
+   },
+   {
+    "word": "I",
+    "start_s": 2.44,
+    "end_s": 2.58
+   },
+   {
+    "word": "love.",
+    "start_s": 2.58,
+    "end_s": 2.94
+   },
+   {
+    "word": "don't",
+    "start_s": 3.52,
+    "end_s": 3.94
+   },
+   {
+    "word": "have",
+    "start_s": 3.94,
+    "end_s": 4.1
+   },
+   {
+    "word": "to",
+    "start_s": 4.1,
+    "end_s": 4.26
+   },
+   {
+    "word": "be",
+    "start_s": 4.26,
+    "end_s": 4.4
+   },
+   {
+    "word": "great",
+    "start_s": 4.4,
+    "end_s": 4.76
+   },
+   {
+    "word": "to",
+    "start_s": 4.76,
+    "end_s": 5.02
+   },
+   {
+    "word": "start,",
+    "start_s": 5.02,
+    "end_s": 5.44
+   },
+   {
+    "word": "but",
+    "start_s": 5.78,
+    "end_s": 5.88
+   },
+   {
+    "word": "you",
+    "start_s": 5.88,
+    "end_s": 6.08
+   },
+   {
+    "word": "have",
+    "start_s": 6.08,
+    "end_s": 6.28
+   },
+   {
+    "word": "to",
+    "start_s": 6.28,
+    "end_s": 6.44
+   },
+   {
+    "word": "start",
+    "start_s": 6.44,
+    "end_s": 6.8
+   },
+   {
+    "word": "to",
+    "start_s": 6.8,
+    "end_s": 7.02
+   },
+   {
+    "word": "be",
+    "start_s": 7.02,
+    "end_s": 7.16
+   },
+   {
+    "word": "great.",
+    "start_s": 7.16,
+    "end_s": 7.36
+   },
+   {
+    "word": "A",
+    "start_s": 7.78,
+    "end_s": 7.88
+   },
+   {
+    "word": "video",
+    "start_s": 7.88,
+    "end_s": 8.22
+   },
+   {
+    "word": "that",
+    "start_s": 8.22,
+    "end_s": 8.44
+   },
+   {
+    "word": "goes",
+    "start_s": 8.44,
+    "end_s": 8.66
+   },
+   {
+    "word": "viral,",
+    "start_s": 8.66,
+    "end_s": 9.06
+   },
+   {
+    "word": "I",
+    "start_s": 9.16,
+    "end_s": 9.28
+   },
+   {
+    "word": "have",
+    "start_s": 9.28,
+    "end_s": 9.54
+   },
+   {
+    "word": "to",
+    "start_s": 9.54,
+    "end_s": 9.66
+   },
+   {
+    "word": "have",
+    "start_s": 9.66,
+    "end_s": 9.82
+   },
+   {
+    "word": "a",
+    "start_s": 9.82,
+    "end_s": 9.92
+   },
+   {
+    "word": "book",
+    "start_s": 9.92,
+    "end_s": 10.16
+   },
+   {
+    "word": "that",
+    "start_s": 10.16,
+    "end_s": 10.44
+   },
+   {
+    "word": "sells",
+    "start_s": 10.44,
+    "end_s": 10.78
+   },
+   {
+    "word": "a",
+    "start_s": 10.78,
+    "end_s": 11.22
+   },
+   {
+    "word": "million",
+    "start_s": 11.22,
+    "end_s": 11.52
+   },
+   {
+    "word": "copies",
+    "start_s": 11.52,
+    "end_s": 11.94
+   },
+   {
+    "word": "right",
+    "start_s": 11.94,
+    "end_s": 12.34
+   },
+   {
+    "word": "off",
+    "start_s": 12.34,
+    "end_s": 12.58
+   },
+   {
+    "word": "the",
+    "start_s": 12.58,
+    "end_s": 12.72
+   },
+   {
+    "word": "bat.",
+    "start_s": 12.72,
+    "end_s": 13.02
+   },
+   {
+    "word": "That's",
+    "start_s": 13.22,
+    "end_s": 13.52
+   },
+   {
+    "word": "the",
+    "start_s": 13.52,
+    "end_s": 13.68
+   },
+   {
+    "word": "pressure",
+    "start_s": 13.68,
+    "end_s": 14.04
+   },
+   {
+    "word": "we're",
+    "start_s": 14.04,
+    "end_s": 14.28
+   },
+   {
+    "word": "putting",
+    "start_s": 14.28,
+    "end_s": 14.46
+   },
+   {
+    "word": "on",
+    "start_s": 14.46,
+    "end_s": 14.66
+   },
+   {
+    "word": "ourselves.",
+    "start_s": 14.66,
+    "end_s": 15.02
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

@@ -1,0 +1,305 @@
+{
+ "id": "DTVS-9TCFxk",
+ "duration_s": 9.664,
+ "fps": 29.97,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  9.61
+ ],
+ "shot_count": 2,
+ "median_shot_s": 4.83,
+ "shortest_shot_s": 0.05,
+ "cuts_in_hook": 0,
+ "cuts_on_beat": 0.0,
+ "flashes": [],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.07,
+  0.02,
+  0.01,
+  0.02,
+  0.04,
+  0.03,
+  0.02,
+  0.03,
+  0.02,
+  0.02,
+  0.02,
+  0.02,
+  0.03,
+  0.03,
+  0.02,
+  0.01,
+  0.02,
+  0.01,
+  0.07
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 136.0,
+  "beats_s": [
+   0.139,
+   0.627,
+   1.091,
+   1.533,
+   1.974,
+   2.392,
+   2.81,
+   3.228,
+   3.646,
+   4.087,
+   4.505,
+   4.923,
+   5.364,
+   5.898,
+   6.339,
+   6.803,
+   7.268,
+   7.709,
+   8.173,
+   8.661,
+   9.149
+  ],
+  "hits_s": [
+   0.07,
+   0.139,
+   0.279,
+   0.418,
+   0.511,
+   0.72,
+   0.789,
+   1.091,
+   1.37,
+   1.625,
+   1.974,
+   2.368,
+   2.554,
+   2.786,
+   2.972,
+   3.274,
+   3.344,
+   3.46,
+   3.646,
+   3.785,
+   3.901,
+   4.087,
+   4.272,
+   4.435,
+   4.714,
+   4.923,
+   5.132,
+   5.364,
+   5.503,
+   5.875,
+   6.339,
+   6.757,
+   6.803,
+   6.92,
+   7.105,
+   7.268,
+   7.546,
+   7.709,
+   7.848,
+   7.895,
+   8.034,
+   8.15,
+   8.29,
+   8.499,
+   8.731,
+   8.893,
+   9.149,
+   9.427,
+   9.474
+  ],
+  "drop_s": 5.85,
+  "loudness_half_seconds": [
+   0.55,
+   0.51,
+   0.51,
+   0.39,
+   0.56,
+   0.22,
+   0.57,
+   0.33,
+   0.37,
+   0.4,
+   0.32,
+   0.38,
+   0.54,
+   0.51,
+   0.69,
+   0.42,
+   0.29,
+   0.39,
+   0.42,
+   0.05
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "I left my $30 ,000 business because I was tired of working 10 to 12 hours a day fulfilling four clients, no weekends, no time spent with my family or friends.",
+  "words": [
+   {
+    "word": "I",
+    "start_s": 0.0,
+    "end_s": 0.18
+   },
+   {
+    "word": "left",
+    "start_s": 0.18,
+    "end_s": 0.36
+   },
+   {
+    "word": "my",
+    "start_s": 0.36,
+    "end_s": 0.56
+   },
+   {
+    "word": "$30",
+    "start_s": 0.56,
+    "end_s": 0.98
+   },
+   {
+    "word": ",000",
+    "start_s": 0.98,
+    "end_s": 1.34
+   },
+   {
+    "word": "business",
+    "start_s": 1.34,
+    "end_s": 1.76
+   },
+   {
+    "word": "because",
+    "start_s": 1.76,
+    "end_s": 2.12
+   },
+   {
+    "word": "I",
+    "start_s": 2.12,
+    "end_s": 2.42
+   },
+   {
+    "word": "was",
+    "start_s": 2.42,
+    "end_s": 2.58
+   },
+   {
+    "word": "tired",
+    "start_s": 2.58,
+    "end_s": 3.1
+   },
+   {
+    "word": "of",
+    "start_s": 3.1,
+    "end_s": 3.4
+   },
+   {
+    "word": "working",
+    "start_s": 3.4,
+    "end_s": 3.58
+   },
+   {
+    "word": "10",
+    "start_s": 3.58,
+    "end_s": 3.98
+   },
+   {
+    "word": "to",
+    "start_s": 3.98,
+    "end_s": 4.12
+   },
+   {
+    "word": "12",
+    "start_s": 4.12,
+    "end_s": 4.38
+   },
+   {
+    "word": "hours",
+    "start_s": 4.38,
+    "end_s": 4.66
+   },
+   {
+    "word": "a",
+    "start_s": 4.66,
+    "end_s": 4.84
+   },
+   {
+    "word": "day",
+    "start_s": 4.84,
+    "end_s": 5.0
+   },
+   {
+    "word": "fulfilling",
+    "start_s": 5.0,
+    "end_s": 5.42
+   },
+   {
+    "word": "four",
+    "start_s": 5.42,
+    "end_s": 6.08
+   },
+   {
+    "word": "clients,",
+    "start_s": 6.08,
+    "end_s": 6.68
+   },
+   {
+    "word": "no",
+    "start_s": 6.82,
+    "end_s": 6.96
+   },
+   {
+    "word": "weekends,",
+    "start_s": 6.96,
+    "end_s": 7.3
+   },
+   {
+    "word": "no",
+    "start_s": 7.64,
+    "end_s": 7.74
+   },
+   {
+    "word": "time",
+    "start_s": 7.74,
+    "end_s": 7.96
+   },
+   {
+    "word": "spent",
+    "start_s": 7.96,
+    "end_s": 8.12
+   },
+   {
+    "word": "with",
+    "start_s": 8.12,
+    "end_s": 8.28
+   },
+   {
+    "word": "my",
+    "start_s": 8.28,
+    "end_s": 8.38
+   },
+   {
+    "word": "family",
+    "start_s": 8.38,
+    "end_s": 8.68
+   },
+   {
+    "word": "or",
+    "start_s": 8.68,
+    "end_s": 8.94
+   },
+   {
+    "word": "friends.",
+    "start_s": 8.94,
+    "end_s": 9.28
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

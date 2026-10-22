@@ -75,3 +75,7 @@ html, body { background: transparent; overflow: hidden; }
 .bubble { padding: .6em .9em; border-radius: 24px; max-width: 82%; font-weight: 700; box-shadow: var(--shadow); }
 .bubble.me { background: #2f80ff; color: #fff; align-self: flex-end; border-bottom-right-radius: 6px; }
 .bubble.them { background: #ececf1; color: #151515; align-self: flex-start; border-bottom-left-radius: 6px; }
+
+/* Reel engine footage templates: keywords stay readable over bright or golden footage. */
+.stroke { -webkit-text-stroke: 3px rgba(40, 20, 0, .85); paint-order: stroke fill;
+  text-shadow: 0 6px 0 rgba(0, 0, 0, .35), 0 0 30px rgba(0, 0, 0, .45), 0 0 34px color-mix(in srgb, var(--accent) 60%, transparent); }

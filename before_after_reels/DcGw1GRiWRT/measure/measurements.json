@@ -1,0 +1,689 @@
+{
+ "id": "DcGw1GRiWRT",
+ "duration_s": 19.541,
+ "fps": 30.0,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  2.433,
+  4.767,
+  6.833,
+  9.433,
+  17.933
+ ],
+ "shot_count": 6,
+ "median_shot_s": 2.38,
+ "shortest_shot_s": 1.61,
+ "cuts_in_hook": 1,
+ "cuts_on_beat": 1.0,
+ "flashes": [],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.17,
+  0.06,
+  0.04,
+  0.02,
+  0.07,
+  0.03,
+  0.02,
+  0.02,
+  0.01,
+  0.05,
+  0.04,
+  0.05,
+  0.05,
+  0.13,
+  0.02,
+  0.04,
+  0.02,
+  0.03,
+  0.07,
+  0.06,
+  0.05,
+  0.02,
+  0.05,
+  0.02,
+  0.03,
+  0.03,
+  0.02,
+  0.02,
+  0.01,
+  0.01,
+  0.05,
+  0.02,
+  0.05,
+  0.04,
+  0.04,
+  0.08,
+  0.03,
+  0.04,
+  0.04
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 117.5,
+  "beats_s": [
+   0.07,
+   0.511,
+   0.998,
+   1.556,
+   2.043,
+   2.531,
+   3.019,
+   3.553,
+   4.017,
+   4.481,
+   4.946,
+   5.457,
+   5.968,
+   6.478,
+   6.943,
+   7.43,
+   7.941,
+   8.452,
+   8.963,
+   9.474,
+   9.985,
+   10.495,
+   10.983,
+   11.471,
+   11.981,
+   12.469,
+   13.003,
+   13.514,
+   14.048,
+   14.582,
+   15.093,
+   15.581,
+   16.045,
+   16.509,
+   17.02,
+   17.531,
+   18.019,
+   18.483,
+   18.947,
+   19.412
+  ],
+  "hits_s": [
+   0.07,
+   0.209,
+   0.255,
+   0.395,
+   0.464,
+   0.65,
+   0.72,
+   0.813,
+   0.975,
+   1.37,
+   1.556,
+   1.695,
+   1.881,
+   2.02,
+   2.368,
+   2.508,
+   2.67,
+   2.717,
+   2.833,
+   2.995,
+   3.181,
+   3.344,
+   3.553,
+   3.715,
+   3.901,
+   3.994,
+   4.272,
+   4.458,
+   4.574,
+   4.714,
+   4.876,
+   4.923,
+   5.085,
+   5.294,
+   5.364,
+   5.457,
+   5.596,
+   5.759,
+   5.968,
+   6.037,
+   6.246,
+   6.478,
+   6.594,
+   6.757,
+   6.92,
+   7.221,
+   7.314,
+   7.43,
+   7.593,
+   7.709,
+   7.848,
+   7.941,
+   8.081,
+   8.243,
+   8.429,
+   8.615,
+   8.777,
+   8.963,
+   9.056,
+   9.242,
+   9.288,
+   9.451,
+   9.543,
+   9.66,
+   9.776,
+   9.868,
+   10.008,
+   10.124,
+   10.24,
+   10.519,
+   10.658,
+   10.82,
+   10.983,
+   11.215,
+   11.355,
+   11.471,
+   11.61,
+   11.749,
+   11.889,
+   12.074,
+   12.33,
+   12.423,
+   12.678,
+   12.748,
+   12.887,
+   13.073,
+   13.351,
+   13.491,
+   13.746,
+   14.025,
+   14.257,
+   14.373,
+   14.582,
+   14.698,
+   14.745,
+   14.907,
+   15.093,
+   15.209,
+   15.325,
+   15.581,
+   15.72,
+   15.813,
+   16.045,
+   16.161,
+   16.254,
+   16.393,
+   16.927,
+   17.02,
+   17.252,
+   17.369,
+   17.531,
+   17.624,
+   17.856,
+   18.019,
+   18.181,
+   18.321,
+   18.46,
+   18.622,
+   18.715,
+   18.785,
+   18.947,
+   19.04,
+   19.203,
+   19.249,
+   19.389
+  ],
+  "drop_s": 4.85,
+  "loudness_half_seconds": [
+   0.5,
+   0.47,
+   0.39,
+   0.47,
+   0.26,
+   0.44,
+   0.35,
+   0.35,
+   0.27,
+   0.33,
+   0.68,
+   0.64,
+   0.55,
+   0.33,
+   0.44,
+   0.29,
+   0.38,
+   0.4,
+   0.33,
+   0.39,
+   0.4,
+   0.28,
+   0.25,
+   0.55,
+   0.39,
+   0.32,
+   0.32,
+   0.22,
+   0.31,
+   0.31,
+   0.22,
+   0.48,
+   0.43,
+   0.23,
+   0.49,
+   0.47,
+   0.3,
+   0.44,
+   0.34,
+   0.21
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "So if you have missing teeth or dentures that move, dental implants might be a really good solution for you. So you may actually be a bit worried about whether it's going to be painful, what the cost is, how long it's going to take hopefully we can clear a few things up for you. So the smile designers, treatment begins with a comprehensive clinical assessment. So we examine your teeth, gums and use the latest 3D x -ray technology.",
+  "words": [
+   {
+    "word": "So",
+    "start_s": 0.0,
+    "end_s": 0.24
+   },
+   {
+    "word": "if",
+    "start_s": 0.24,
+    "end_s": 0.34
+   },
+   {
+    "word": "you",
+    "start_s": 0.34,
+    "end_s": 0.42
+   },
+   {
+    "word": "have",
+    "start_s": 0.42,
+    "end_s": 0.52
+   },
+   {
+    "word": "missing",
+    "start_s": 0.52,
+    "end_s": 0.8
+   },
+   {
+    "word": "teeth",
+    "start_s": 0.8,
+    "end_s": 1.18
+   },
+   {
+    "word": "or",
+    "start_s": 1.18,
+    "end_s": 1.44
+   },
+   {
+    "word": "dentures",
+    "start_s": 1.44,
+    "end_s": 1.78
+   },
+   {
+    "word": "that",
+    "start_s": 1.78,
+    "end_s": 1.94
+   },
+   {
+    "word": "move,",
+    "start_s": 1.94,
+    "end_s": 2.2
+   },
+   {
+    "word": "dental",
+    "start_s": 2.46,
+    "end_s": 2.66
+   },
+   {
+    "word": "implants",
+    "start_s": 2.66,
+    "end_s": 3.08
+   },
+   {
+    "word": "might",
+    "start_s": 3.08,
+    "end_s": 3.4
+   },
+   {
+    "word": "be",
+    "start_s": 3.4,
+    "end_s": 3.56
+   },
+   {
+    "word": "a",
+    "start_s": 3.56,
+    "end_s": 3.62
+   },
+   {
+    "word": "really",
+    "start_s": 3.62,
+    "end_s": 3.78
+   },
+   {
+    "word": "good",
+    "start_s": 3.78,
+    "end_s": 3.94
+   },
+   {
+    "word": "solution",
+    "start_s": 3.94,
+    "end_s": 4.3
+   },
+   {
+    "word": "for",
+    "start_s": 4.3,
+    "end_s": 4.5
+   },
+   {
+    "word": "you.",
+    "start_s": 4.5,
+    "end_s": 4.6
+   },
+   {
+    "word": "So",
+    "start_s": 4.86,
+    "end_s": 4.92
+   },
+   {
+    "word": "you",
+    "start_s": 4.92,
+    "end_s": 5.0
+   },
+   {
+    "word": "may",
+    "start_s": 5.0,
+    "end_s": 5.12
+   },
+   {
+    "word": "actually",
+    "start_s": 5.12,
+    "end_s": 5.32
+   },
+   {
+    "word": "be",
+    "start_s": 5.32,
+    "end_s": 5.48
+   },
+   {
+    "word": "a",
+    "start_s": 5.48,
+    "end_s": 5.52
+   },
+   {
+    "word": "bit",
+    "start_s": 5.52,
+    "end_s": 5.6
+   },
+   {
+    "word": "worried",
+    "start_s": 5.6,
+    "end_s": 5.84
+   },
+   {
+    "word": "about",
+    "start_s": 5.84,
+    "end_s": 6.06
+   },
+   {
+    "word": "whether",
+    "start_s": 6.06,
+    "end_s": 6.3
+   },
+   {
+    "word": "it's",
+    "start_s": 6.3,
+    "end_s": 6.52
+   },
+   {
+    "word": "going",
+    "start_s": 6.52,
+    "end_s": 6.62
+   },
+   {
+    "word": "to",
+    "start_s": 6.62,
+    "end_s": 6.68
+   },
+   {
+    "word": "be",
+    "start_s": 6.68,
+    "end_s": 6.8
+   },
+   {
+    "word": "painful,",
+    "start_s": 6.8,
+    "end_s": 7.24
+   },
+   {
+    "word": "what",
+    "start_s": 7.64,
+    "end_s": 7.74
+   },
+   {
+    "word": "the",
+    "start_s": 7.74,
+    "end_s": 7.86
+   },
+   {
+    "word": "cost",
+    "start_s": 7.86,
+    "end_s": 8.16
+   },
+   {
+    "word": "is,",
+    "start_s": 8.16,
+    "end_s": 8.32
+   },
+   {
+    "word": "how",
+    "start_s": 8.5,
+    "end_s": 8.64
+   },
+   {
+    "word": "long",
+    "start_s": 8.64,
+    "end_s": 8.82
+   },
+   {
+    "word": "it's",
+    "start_s": 8.82,
+    "end_s": 9.0
+   },
+   {
+    "word": "going",
+    "start_s": 9.0,
+    "end_s": 9.1
+   },
+   {
+    "word": "to",
+    "start_s": 9.1,
+    "end_s": 9.2
+   },
+   {
+    "word": "take",
+    "start_s": 9.2,
+    "end_s": 9.36
+   },
+   {
+    "word": "hopefully",
+    "start_s": 9.54,
+    "end_s": 9.82
+   },
+   {
+    "word": "we",
+    "start_s": 9.82,
+    "end_s": 9.94
+   },
+   {
+    "word": "can",
+    "start_s": 9.94,
+    "end_s": 10.08
+   },
+   {
+    "word": "clear",
+    "start_s": 10.08,
+    "end_s": 10.28
+   },
+   {
+    "word": "a",
+    "start_s": 10.28,
+    "end_s": 10.42
+   },
+   {
+    "word": "few",
+    "start_s": 10.42,
+    "end_s": 10.52
+   },
+   {
+    "word": "things",
+    "start_s": 10.52,
+    "end_s": 10.72
+   },
+   {
+    "word": "up",
+    "start_s": 10.72,
+    "end_s": 10.88
+   },
+   {
+    "word": "for",
+    "start_s": 10.88,
+    "end_s": 11.04
+   },
+   {
+    "word": "you.",
+    "start_s": 11.04,
+    "end_s": 11.16
+   },
+   {
+    "word": "So",
+    "start_s": 11.42,
+    "end_s": 11.48
+   },
+   {
+    "word": "the",
+    "start_s": 11.48,
+    "end_s": 11.6
+   },
+   {
+    "word": "smile",
+    "start_s": 11.6,
+    "end_s": 11.82
+   },
+   {
+    "word": "designers,",
+    "start_s": 11.82,
+    "end_s": 12.3
+   },
+   {
+    "word": "treatment",
+    "start_s": 12.6,
+    "end_s": 12.8
+   },
+   {
+    "word": "begins",
+    "start_s": 12.8,
+    "end_s": 13.18
+   },
+   {
+    "word": "with",
+    "start_s": 13.18,
+    "end_s": 13.54
+   },
+   {
+    "word": "a",
+    "start_s": 13.54,
+    "end_s": 13.66
+   },
+   {
+    "word": "comprehensive",
+    "start_s": 13.66,
+    "end_s": 14.26
+   },
+   {
+    "word": "clinical",
+    "start_s": 14.26,
+    "end_s": 14.82
+   },
+   {
+    "word": "assessment.",
+    "start_s": 14.82,
+    "end_s": 15.26
+   },
+   {
+    "word": "So",
+    "start_s": 15.58,
+    "end_s": 15.7
+   },
+   {
+    "word": "we",
+    "start_s": 15.7,
+    "end_s": 15.82
+   },
+   {
+    "word": "examine",
+    "start_s": 15.82,
+    "end_s": 16.12
+   },
+   {
+    "word": "your",
+    "start_s": 16.12,
+    "end_s": 16.32
+   },
+   {
+    "word": "teeth,",
+    "start_s": 16.32,
+    "end_s": 16.56
+   },
+   {
+    "word": "gums",
+    "start_s": 16.88,
+    "end_s": 17.3
+   },
+   {
+    "word": "and",
+    "start_s": 17.3,
+    "end_s": 17.56
+   },
+   {
+    "word": "use",
+    "start_s": 17.56,
+    "end_s": 17.72
+   },
+   {
+    "word": "the",
+    "start_s": 17.72,
+    "end_s": 17.86
+   },
+   {
+    "word": "latest",
+    "start_s": 17.86,
+    "end_s": 18.22
+   },
+   {
+    "word": "3D",
+    "start_s": 18.22,
+    "end_s": 18.72
+   },
+   {
+    "word": "x",
+    "start_s": 18.72,
+    "end_s": 18.96
+   },
+   {
+    "word": "-ray",
+    "start_s": 18.96,
+    "end_s": 19.06
+   },
+   {
+    "word": "technology.",
+    "start_s": 19.06,
+    "end_s": 19.34
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

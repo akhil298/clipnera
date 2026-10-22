@@ -1,0 +1,505 @@
+{
+ "id": "DduLd-RRDxa",
+ "duration_s": 23.01,
+ "fps": 60.0,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  3.533,
+  3.7,
+  7.3,
+  7.467,
+  7.583,
+  11.4,
+  11.533,
+  11.733,
+  11.883,
+  11.983,
+  16.0,
+  16.2
+ ],
+ "shot_count": 13,
+ "median_shot_s": 0.2,
+ "shortest_shot_s": 0.1,
+ "cuts_in_hook": 0,
+ "cuts_on_beat": 0.75,
+ "flashes": [
+  {
+   "at_s": 3.483,
+   "seconds": 0.05
+  },
+  {
+   "at_s": 3.567,
+   "seconds": 0.05
+  },
+  {
+   "at_s": 3.65,
+   "seconds": 0.05
+  },
+  {
+   "at_s": 7.383,
+   "seconds": 0.083
+  },
+  {
+   "at_s": 7.5,
+   "seconds": 0.05
+  },
+  {
+   "at_s": 16.033,
+   "seconds": 0.167
+  }
+ ],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.01,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.03,
+  0.17,
+  0.01,
+  0.0,
+  0.01,
+  0.0,
+  0.0,
+  0.01,
+  0.07,
+  0.06,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.01,
+  0.01,
+  0.01,
+  0.1,
+  0.0,
+  0.0,
+  0.0,
+  0.01,
+  0.01,
+  0.0,
+  0.0,
+  0.0,
+  0.08,
+  0.0,
+  0.01,
+  0.0,
+  0.01,
+  0.0,
+  0.0,
+  0.0,
+  0.01,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 112.3,
+  "beats_s": [
+   0.116,
+   0.604,
+   1.115,
+   1.649,
+   2.183,
+   2.74,
+   3.228,
+   3.738,
+   4.249,
+   4.76,
+   5.271,
+   5.805,
+   6.316,
+   6.85,
+   7.384,
+   7.941,
+   8.475,
+   9.009,
+   9.613,
+   10.147,
+   10.704,
+   11.238,
+   11.773,
+   12.307,
+   12.887,
+   13.468,
+   14.025,
+   14.559,
+   15.116,
+   15.65,
+   16.231,
+   16.765,
+   17.299,
+   17.81,
+   18.46,
+   18.924,
+   19.435,
+   19.9
+  ],
+  "hits_s": [
+   0.093,
+   0.511,
+   0.697,
+   0.859,
+   1.115,
+   1.324,
+   1.649,
+   2.09,
+   2.601,
+   2.74,
+   3.111,
+   3.738,
+   4.087,
+   4.435,
+   5.248,
+   5.805,
+   6.153,
+   6.478,
+   6.594,
+   6.687,
+   6.989,
+   7.384,
+   7.5,
+   7.616,
+   8.336,
+   8.475,
+   8.777,
+   8.986,
+   9.334,
+   9.613,
+   9.822,
+   9.892,
+   11.006,
+   11.238,
+   11.749,
+   11.912,
+   12.144,
+   12.307,
+   12.446,
+   12.98,
+   13.119,
+   14.025,
+   14.536,
+   14.884,
+   15.116,
+   15.256,
+   15.813,
+   15.975,
+   17.02,
+   17.183,
+   17.299,
+   17.786,
+   18.135,
+   18.228,
+   18.297,
+   18.46,
+   18.785,
+   18.901,
+   19.273,
+   19.435,
+   19.482,
+   19.714,
+   19.9
+  ],
+  "drop_s": 11.7,
+  "loudness_half_seconds": [
+   0.52,
+   0.3,
+   0.49,
+   0.21,
+   0.3,
+   0.38,
+   0.21,
+   0.59,
+   0.53,
+   0.22,
+   0.33,
+   0.39,
+   0.4,
+   0.2,
+   0.19,
+   0.5,
+   0.46,
+   0.23,
+   0.23,
+   0.3,
+   0.38,
+   0.21,
+   0.13,
+   0.4,
+   0.28,
+   0.48,
+   0.22,
+   0.12,
+   0.34,
+   0.41,
+   0.2,
+   0.14,
+   0.33,
+   0.2,
+   0.31,
+   0.29,
+   0.17,
+   0.32,
+   0.15,
+   0.21,
+   0.28,
+   0.27,
+   0.26,
+   0.19,
+   0.04,
+   0.0
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "What happens to your paid ads when you have zero organic No organic presence means every impression is cold. 94 % of purchases happen across multiple touchpoints. Organic warms the audience. Ads convert the warm audience. The brands that crack organic make the ad spend work harder.",
+  "words": [
+   {
+    "word": "What",
+    "start_s": 0.0,
+    "end_s": 0.22
+   },
+   {
+    "word": "happens",
+    "start_s": 0.22,
+    "end_s": 0.6
+   },
+   {
+    "word": "to",
+    "start_s": 0.6,
+    "end_s": 0.84
+   },
+   {
+    "word": "your",
+    "start_s": 0.84,
+    "end_s": 0.94
+   },
+   {
+    "word": "paid",
+    "start_s": 0.94,
+    "end_s": 1.2
+   },
+   {
+    "word": "ads",
+    "start_s": 1.2,
+    "end_s": 1.5
+   },
+   {
+    "word": "when",
+    "start_s": 1.5,
+    "end_s": 1.9
+   },
+   {
+    "word": "you",
+    "start_s": 1.9,
+    "end_s": 2.04
+   },
+   {
+    "word": "have",
+    "start_s": 2.04,
+    "end_s": 2.18
+   },
+   {
+    "word": "zero",
+    "start_s": 2.18,
+    "end_s": 2.48
+   },
+   {
+    "word": "organic",
+    "start_s": 2.48,
+    "end_s": 2.86
+   },
+   {
+    "word": "No",
+    "start_s": 3.66,
+    "end_s": 3.8
+   },
+   {
+    "word": "organic",
+    "start_s": 3.8,
+    "end_s": 4.18
+   },
+   {
+    "word": "presence",
+    "start_s": 4.18,
+    "end_s": 4.66
+   },
+   {
+    "word": "means",
+    "start_s": 4.66,
+    "end_s": 5.4
+   },
+   {
+    "word": "every",
+    "start_s": 5.4,
+    "end_s": 6.16
+   },
+   {
+    "word": "impression",
+    "start_s": 6.16,
+    "end_s": 6.6
+   },
+   {
+    "word": "is",
+    "start_s": 6.6,
+    "end_s": 6.86
+   },
+   {
+    "word": "cold.",
+    "start_s": 6.86,
+    "end_s": 7.22
+   },
+   {
+    "word": "94",
+    "start_s": 7.46,
+    "end_s": 7.96
+   },
+   {
+    "word": "%",
+    "start_s": 7.96,
+    "end_s": 8.46
+   },
+   {
+    "word": "of",
+    "start_s": 8.46,
+    "end_s": 8.84
+   },
+   {
+    "word": "purchases",
+    "start_s": 8.84,
+    "end_s": 9.2
+   },
+   {
+    "word": "happen",
+    "start_s": 9.2,
+    "end_s": 9.76
+   },
+   {
+    "word": "across",
+    "start_s": 9.76,
+    "end_s": 10.16
+   },
+   {
+    "word": "multiple",
+    "start_s": 10.16,
+    "end_s": 10.8
+   },
+   {
+    "word": "touchpoints.",
+    "start_s": 10.8,
+    "end_s": 11.4
+   },
+   {
+    "word": "Organic",
+    "start_s": 11.66,
+    "end_s": 12.3
+   },
+   {
+    "word": "warms",
+    "start_s": 12.3,
+    "end_s": 12.88
+   },
+   {
+    "word": "the",
+    "start_s": 12.88,
+    "end_s": 13.06
+   },
+   {
+    "word": "audience.",
+    "start_s": 13.06,
+    "end_s": 13.36
+   },
+   {
+    "word": "Ads",
+    "start_s": 13.92,
+    "end_s": 14.22
+   },
+   {
+    "word": "convert",
+    "start_s": 14.22,
+    "end_s": 14.94
+   },
+   {
+    "word": "the",
+    "start_s": 14.94,
+    "end_s": 15.3
+   },
+   {
+    "word": "warm",
+    "start_s": 15.3,
+    "end_s": 15.48
+   },
+   {
+    "word": "audience.",
+    "start_s": 15.48,
+    "end_s": 15.82
+   },
+   {
+    "word": "The",
+    "start_s": 16.18,
+    "end_s": 16.26
+   },
+   {
+    "word": "brands",
+    "start_s": 16.26,
+    "end_s": 16.66
+   },
+   {
+    "word": "that",
+    "start_s": 16.66,
+    "end_s": 17.12
+   },
+   {
+    "word": "crack",
+    "start_s": 17.12,
+    "end_s": 17.46
+   },
+   {
+    "word": "organic",
+    "start_s": 17.46,
+    "end_s": 18.02
+   },
+   {
+    "word": "make",
+    "start_s": 18.02,
+    "end_s": 18.34
+   },
+   {
+    "word": "the",
+    "start_s": 18.34,
+    "end_s": 18.52
+   },
+   {
+    "word": "ad",
+    "start_s": 18.52,
+    "end_s": 18.72
+   },
+   {
+    "word": "spend",
+    "start_s": 18.72,
+    "end_s": 18.98
+   },
+   {
+    "word": "work",
+    "start_s": 18.98,
+    "end_s": 19.36
+   },
+   {
+    "word": "harder.",
+    "start_s": 19.36,
+    "end_s": 19.7
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

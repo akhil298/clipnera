@@ -95,7 +95,15 @@ backend/static/motion/previews/
 backend/static/motion/cleanup_report.json
 AI Editor/
 # Before/After reference reels (local only)
-before_after_reels/
+before_after_reels/*
+# The analysis and each reel's measurements are kept (the reel engine's style reference); the videos stay local.
+!before_after_reels/ANALYSIS.md
+!before_after_reels/*/
+before_after_reels/*/*
+!before_after_reels/*/reference.json
+!before_after_reels/*/measure/
+before_after_reels/*/measure/*
+!before_after_reels/*/measure/measurements.json
 
 # Clean motion kit: built by backend/scripts/build_motion_kit.py, synced through S3 (--push/--pull)
 backend/static/motion/kit/*
