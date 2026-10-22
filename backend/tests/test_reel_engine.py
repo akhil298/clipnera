@@ -42,7 +42,8 @@ def beat(**kw) -> DBeat:
 
 def director(**kw) -> DirectorPlan:
     base = dict(audio_view="voice", recipe="creator_advice", target_seconds=30, title_lead="", title_text="", cta="",
-                caption_mode="every_word", music="bed", mood="upbeat", sections=[], hooks=[], story=[], beats=[], keywords=[],
+                caption_mode="every_word", music="bed", text_style="punch", mood="upbeat", sections=[], hooks=[], story=[], beats=[],
+                inserts=[], keywords=[],
                 drop_word=-1, spelling=[], notes="")
     return DirectorPlan(**{**base, **kw})
 
@@ -249,3 +250,27 @@ def test_captions_step_aside_for_a_graphic_and_skip_weak_keywords():
     two = next(g for g in graphics if g.kind == "two")
     assert all(not (two.start < c.end and c.start < two.end) for c in captions)
     assert all(c.keyword.lower() not in comp.WEAK for c in captions)
+
+
+def test_music_is_picked_by_mood_and_lands_a_drop_on_the_reveal():
+    from reel_engine import tracks
+
+    track = tracks.Track(key="t", path=Path("t.mp3"), title="T", mood="upbeat", bpm=120, seconds=90, energy=0.6,
+                         downbeats=tuple(i * 2.0 for i in range(40)), drops=((30.0, 1.0), (61.0, 0.5)), licence="x", source="mixkit")
+    start = tracks.offset(track, reveal=6.0, seconds=25)
+    assert start in track.downbeats and abs((30.0 - start) - 6.0) <= tracks.DROP_TOLERANCE
+    assert tracks.offset(track, reveal=None, seconds=25) == 0.0
+    assert abs(track.beat - 0.5) < 1e-9
+
+
+def test_photo_cards_take_the_place_of_story_graphics():
+    from reel_engine.pipeline import add_photo_cards
+    from reel_engine.plan import AssetRef, CaptionLine, InsertItem
+
+    plan = EditPlan(graphics=[GraphicItem(id="g0", kind="two", start=2, end=4), GraphicItem(id="g1", kind="chapter", start=2, end=3)],
+                    captions=[CaptionLine(id="c0", start=2.5, end=3.5, lead="a", keyword="b")],
+                    inserts=[InsertItem(id="i0", kind="photo", start=2, end=4, style="card",
+                                        asset=AssetRef(id="a", kind="photo", path="p.jpg", licence="cc0", source="openverse"))])
+    add_photo_cards(plan)
+    kinds = [g.kind for g in plan.graphics]
+    assert "photocard" in kinds and "two" not in kinds and "chapter" in kinds and not plan.captions and not plan.inserts

@@ -17,6 +17,7 @@ export function PremiumReelReport({ premium }: { premium: PremiumResponse }) {
     ['Graphics', String(premium.graphics)],
     ['Caption lines', String(premium.captions)],
     ['Review passes', String(premium.passes)],
+    ['Music', premium.music ?? 'Composed for this reel'],
   ];
 
   return (

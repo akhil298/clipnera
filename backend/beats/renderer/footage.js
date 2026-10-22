@@ -40,9 +40,9 @@
     }
     const text = boxed(el('div', 'g', root), [x + w * 0.02, y + h * 0.12, w - side - w * 0.04, h * 0.8]);
     Object.assign(text.style, { display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.1em' });
-    const lead = el('div', 'head', text, s.data.lead);
-    Object.assign(lead.style, { color: '#fff', fontWeight: 700, fontSize: `${h * 0.17}px`, letterSpacing: '0.18em', textTransform: 'uppercase' });
-    const big = letters(text, s.data.text.toUpperCase(), 'figure accent glow stroke');
+    const lead = el('div', 'head lead lead-caps', text, s.data.lead);
+    lead.style.fontSize = `${h * 0.17}px`;
+    const big = letters(text, s.data.text, 'figure key');
     big.word.style.alignSelf = 'flex-start';
     fitText(big.word, w - side - w * 0.06, h * 0.56);
     return {
@@ -79,10 +79,10 @@
     Object.assign(col.style, { display: 'flex', flexDirection: 'column', alignItems: icon ? 'flex-start' : 'center' });
     let lead = null;
     if (s.data.lead) {
-      lead = el('div', 'head', col, s.data.lead);
-      Object.assign(lead.style, { color: '#fff', fontWeight: 700, fontSize: `${h * 0.22}px`, textShadow: '0 2px 4px rgba(0,0,0,.8), 0 3px 18px rgba(0,0,0,.7)' });
+      lead = el('div', 'head lead', col, s.data.lead);
+      lead.style.fontSize = `${h * 0.22}px`;
     }
-    const big = letters(col, s.data.text.toUpperCase(), 'figure accent glow stroke');
+    const big = letters(col, s.data.text, `figure key${s.data.alt ? ' alt' : ''}`);
     fitText(big.word, w - (icon ? h : 0) - 20, h * (lead ? 0.62 : 0.85));
     return {
       seek(t) {
@@ -99,8 +99,8 @@
     const [x, y, w, h] = s.box;
     const g = boxed(el('div', 'g', root), s.box);
     Object.assign(g.style, { display: 'flex', alignItems: 'center', justifyContent: s.data.align || 'flex-start' });
-    const pill = el('div', 'pill', g);
-    Object.assign(pill.style, { fontSize: `${h * 0.36}px`, padding: '0.25em 0.8em 0.25em 0.3em', background: 'rgba(255,255,255,.96)' });
+    const pill = el('div', 'pill tag-pill', g);
+    Object.assign(pill.style, { fontSize: `${h * 0.36}px`, padding: '0.25em 0.8em 0.25em 0.3em' });
     let img = null;
     if (s.asset) {
       img = el('img', '', pill);
@@ -123,8 +123,8 @@
     const g = boxed(el('div', 'g', root), s.box);
     Object.assign(g.style, { display: 'grid', placeItems: 'center' });
     const words = s.data.items.map(item => {
-      const word = el('div', 'figure', g, item.text.toUpperCase());
-      Object.assign(word.style, { gridArea: '1 / 1', color: '#fff', textShadow: '0 6px 0 rgba(0,0,0,.35), 0 0 40px rgba(255,176,32,.8)' });
+      const word = el('div', 'figure flick', g, item.text);
+      word.style.gridArea = '1 / 1';
       fitText(word, s.box[2] * 0.95, s.box[3]);
       return word;
     });
@@ -176,6 +176,27 @@
           lab.style.opacity = i === reached ? 1 : 0.55;
           lab.style.color = i === reached ? 'var(--accent)' : '#fff';
         });
+      },
+    };
+  };
+
+  // Photo card: a real photo of what is said, framed and tilted beside the speaker, with a slow push and a label.
+  T.photocard = (s, root) => {
+    const [x, y, w, h] = s.box;
+    const g = boxed(el('div', 'g photo-card', root), s.box);
+    const frame = el('div', 'photo-frame', g);
+    const img = el('img', '', frame);
+    img.src = s.asset;
+    let label = null;
+    if (s.data.text) label = el('div', 'pill tag-pill photo-label', g, s.data.text);
+    if (label) label.style.fontSize = `${Math.max(26, h * 0.075)}px`;
+    const tilt = (s.id.charCodeAt(s.id.length - 1) % 2 ? 1 : -1) * 3;
+    return {
+      seek(t) {
+        envelope(g, t, s.dur, { from: 0.55, blur: 8, rise: 50 });
+        g.style.rotate = `${tilt * (1 - 0.4 * ease.out(span(t, 0, 0.5)))}deg`;
+        img.style.transform = `scale(${1.04 + 0.08 * (t / Math.max(0.1, s.dur))})`;
+        if (label) reveal(label, t, 0.25, { dy: 18 });
       },
     };
   };

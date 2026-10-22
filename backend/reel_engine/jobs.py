@@ -58,6 +58,7 @@ def summary(document: dict[str, Any]) -> dict[str, Any]:
         "passes": plan.review.passes if plan else 0,
         "assets": [{"kind": a.kind, "source": a.source, "made": a.made} for a in plan.assets_made] if plan else [],
         "ai_calls": plan.ai_calls if plan else 0,
+        "music": f"{plan.music.title} · {plan.music.source.capitalize()}" if plan and plan.music else None,
     }
 
 

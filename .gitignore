@@ -108,3 +108,6 @@ before_after_reels/*/measure/*
 # Clean motion kit: built by backend/scripts/build_motion_kit.py, synced through S3 (--push/--pull)
 backend/static/motion/kit/*
 !backend/static/motion/kit/README.md
+
+# Licensed music tracks: fetched by backend/scripts/build_music_library.py on each host (the manifest is kept).
+backend/static/motion/music/library/*.mp3

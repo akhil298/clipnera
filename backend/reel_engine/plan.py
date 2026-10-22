@@ -98,6 +98,8 @@ class Brief(_Model):
     title_text: str = ""
     hook_word: str = ""
     caption_mode: CaptionMode = "every_word"
+    text_style: str = "punch"
+    title_style: str = "punch"
     music: MusicMode = "bed"
     mood: str = "upbeat"
     accent: str = "#ffb020"
@@ -170,6 +172,20 @@ class AudioItem(_Model):
     src_t0: float = 0.0
 
 
+class InsertItem(_Model):
+    """A related picture cut to while the voice carries on: B-roll, a photo, or the user's own footage."""
+
+    id: str
+    kind: Literal["broll", "photo", "footage"]
+    start: float
+    end: float
+    asset: AssetRef
+    label: str = ""
+    query: str = ""
+    src_t0: float = 0.0
+    style: Literal["full", "card"] = "full"
+
+
 class LayerScore(_Model):
     layer: str
     score: int
@@ -181,6 +197,17 @@ class Review(_Model):
     overall: float = 0.0
     fixes: list[str] = Field(default_factory=list)
     passes: int = 0
+
+
+class MusicChoice(_Model):
+    key: str
+    path: str
+    title: str
+    mood: str
+    bpm: float
+    offset: float
+    licence: str
+    source: str
 
 
 class Progress(_Model):
@@ -201,7 +228,9 @@ class EditPlan(_Model):
     video: list[VideoItem] = Field(default_factory=list)
     graphics: list[GraphicItem] = Field(default_factory=list)
     captions: list[CaptionLine] = Field(default_factory=list)
+    inserts: list[InsertItem] = Field(default_factory=list)
     audio_items: list[AudioItem] = Field(default_factory=list)
+    music: MusicChoice | None = None
     assets_made: list[AssetRef] = Field(default_factory=list)
     review: Review = Field(default_factory=Review)
     progress: list[Progress] = Field(default_factory=list)

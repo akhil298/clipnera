@@ -4,6 +4,10 @@
 @font-face { font-family: "Anton"; src: url("../../static/motion/fonts/Anton-Regular.ttf"); }
 @font-face { font-family: "DM Serif Display"; src: url("../../static/motion/fonts/DMSerifDisplay-Regular.ttf"); }
 @font-face { font-family: "Poppins"; font-weight: 900; src: url("../../static/motion/fonts/Poppins-Black.ttf"); }
+@font-face { font-family: "Bebas"; src: url("../../static/motion/fonts/BebasNeue-Regular.ttf"); }
+@font-face { font-family: "Bangers"; src: url("../../static/motion/fonts/Bangers-Regular.ttf"); }
+@font-face { font-family: "Luckiest"; src: url("../../static/motion/fonts/LuckiestGuy-Regular.ttf"); }
+@font-face { font-family: "Archivo Black"; src: url("../../static/motion/fonts/ArchivoBlack-Regular.ttf"); }
 @font-face { font-family: "Marker"; src: url("../../static/motion/fonts/PermanentMarker-Regular.ttf"); }
 @font-face { font-family: "Noto Devanagari"; src: url("../../static/motion/fonts/NotoSansDevanagari-Bold.ttf"); }
 @font-face { font-family: "Noto Telugu"; src: url("../../static/motion/fonts/NotoSansTelugu-Bold.ttf"); }
@@ -79,3 +83,68 @@ html, body { background: transparent; overflow: hidden; }
 /* Reel engine footage templates: keywords stay readable over bright or golden footage. */
 .stroke { -webkit-text-stroke: 3px rgba(40, 20, 0, .85); paint-order: stroke fill;
   text-shadow: 0 6px 0 rgba(0, 0, 0, .35), 0 0 30px rgba(0, 0, 0, .45), 0 0 34px color-mix(in srgb, var(--accent) 60%, transparent); }
+
+/* ---- Reel engine text styles: one per reel for captions and labels, a paired one for titles and chapters.
+   Templates mark text as .lead (small words), .key (the big word), .flick, .tag-pill; each style restyles them. */
+.lead { color: #fff; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,.8), 0 3px 18px rgba(0,0,0,.7); }
+.lead-caps { letter-spacing: .18em; text-transform: uppercase; }
+.key { color: var(--accent); text-transform: uppercase; }
+.key.alt { color: #fff; }
+.flick { text-transform: uppercase; color: #fff; text-shadow: 0 6px 0 rgba(0,0,0,.35), 0 0 40px color-mix(in srgb, var(--accent) 80%, transparent); }
+.tag-pill { background: rgba(255,255,255,.96); color: #141414; }
+.photo-card { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.photo-frame { width: 100%; flex: 1; min-height: 0; overflow: hidden; border-radius: 26px; border: 10px solid #fff;
+  box-shadow: 0 30px 70px rgba(0,0,0,.45); background: #111; }
+.photo-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.style-punch .key { -webkit-text-stroke: 3px rgba(40,20,0,.85); paint-order: stroke fill;
+  text-shadow: 0 6px 0 rgba(0,0,0,.35), 0 0 30px rgba(0,0,0,.45), 0 0 34px color-mix(in srgb, var(--accent) 60%, transparent); }
+
+.style-editorial { --accent: #e0362c; }
+.style-editorial .key { font-family: "DM Serif Display", serif; text-transform: none; color: #fff7e8; letter-spacing: 0;
+  text-shadow: 0 4px 22px rgba(0,0,0,.55); }
+.style-editorial .key.alt { color: #ffd9a8; }
+.style-editorial .lead { font-family: "Montserrat", sans-serif; letter-spacing: .22em; text-transform: uppercase; color: var(--accent);
+  font-size: .8em; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
+.style-editorial .tag-pill { background: #fff7e8; color: #1b1714; border-radius: 6px; font-family: "DM Serif Display", serif; }
+.style-editorial .photo-frame { border-radius: 4px; border-color: #fff7e8; }
+
+.style-neon { --accent: #ff4fd8; }
+.style-neon .key { font-family: "Bebas", "Anton", sans-serif; letter-spacing: .03em; color: #fff;
+  text-shadow: 0 0 6px #fff, 0 0 18px var(--accent), 0 0 42px var(--accent), 0 0 80px var(--accent); }
+.style-neon .key.alt { text-shadow: 0 0 6px #fff, 0 0 18px #3ff3ff, 0 0 42px #3ff3ff, 0 0 80px #3ff3ff; }
+.style-neon .lead { color: #6ef6ff; letter-spacing: .14em; text-transform: uppercase; text-shadow: 0 0 12px #3ff3ff; }
+.style-neon .tag-pill { background: rgba(20,10,40,.78); color: #fff; border: 2px solid var(--accent); box-shadow: 0 0 22px var(--accent); }
+.style-neon .photo-frame { border-color: #1a0f2e; box-shadow: 0 0 40px var(--accent); }
+
+.style-highlight .key { color: #111; background: var(--accent); padding: 0 .16em .02em; border-radius: .1em;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35); font-family: "Archivo Black", "Montserrat", sans-serif; letter-spacing: -.01em; }
+.style-highlight .key.alt { background: #fff; }
+.style-highlight .lead { color: #fff; font-family: "Archivo Black", sans-serif; }
+
+.style-bubble .key { font-family: "Poppins", sans-serif; font-weight: 900; color: #111; background: #fff; padding: .04em .28em .08em;
+  border-radius: .32em; box-shadow: 0 12px 30px rgba(0,0,0,.35); text-transform: none; letter-spacing: -.01em; }
+.style-bubble .key.alt { background: var(--accent); }
+.style-bubble .lead { font-family: "Poppins", sans-serif; font-weight: 900; color: #fff; -webkit-text-stroke: 2px #111; paint-order: stroke fill; }
+.style-bubble .tag-pill { font-family: "Poppins", sans-serif; font-weight: 900; }
+
+.style-script { --accent: #ff7a59; }
+.style-script .key { font-family: "Marker", cursive; text-transform: none; letter-spacing: 0; rotate: -3deg;
+  text-shadow: 0 4px 0 rgba(0,0,0,.4), 0 0 26px rgba(0,0,0,.4); }
+.style-script .key.alt { color: #ffe066; }
+.style-script .lead { font-family: "Montserrat", sans-serif; }
+
+.style-comic { --accent: #ffd400; }
+.style-comic .key { font-family: "Bangers", "Luckiest", sans-serif; letter-spacing: .04em; rotate: -2deg;
+  -webkit-text-stroke: 5px #111; paint-order: stroke fill; text-shadow: 6px 7px 0 #111; }
+.style-comic .key.alt { color: #4fd1ff; }
+.style-comic .lead { font-family: "Luckiest", sans-serif; color: #fff; -webkit-text-stroke: 3px #111; paint-order: stroke fill; letter-spacing: .03em; }
+.style-comic .tag-pill { font-family: "Luckiest", sans-serif; border: 3px solid #111; }
+
+.style-minimal { --accent: #ffffff; }
+.style-minimal .key { font-family: "Montserrat", sans-serif; font-weight: 800; text-transform: lowercase; color: #fff; letter-spacing: -.02em;
+  text-shadow: 0 2px 20px rgba(0,0,0,.45); text-decoration: underline; text-decoration-color: #ffb020; text-underline-offset: .12em;
+  text-decoration-thickness: .06em; }
+.style-minimal .key.alt { text-decoration-color: #7fd3ff; }
+.style-minimal .lead { font-weight: 700; text-transform: lowercase; color: rgba(255,255,255,.92); }
+.style-minimal .tag-pill { background: rgba(255,255,255,.18); color: #fff; backdrop-filter: blur(10px); }

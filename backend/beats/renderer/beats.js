@@ -482,7 +482,7 @@
     ready: true,
     mount(spec) {
       stage.innerHTML = '';
-      stage.className = `theme-${spec.theme || 'clean'}`;
+      stage.className = `theme-${spec.theme || 'clean'} style-${spec.style || 'punch'}`;
       if (spec.accent) stage.style.setProperty('--accent', spec.accent);
       const make = T[spec.kind];
       if (!make) throw new Error(`No template for ${spec.kind}`);

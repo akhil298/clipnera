@@ -179,6 +179,28 @@ async def render_picture(plan: EditPlan, grade_name: str, work: Path) -> Path:
     return cut
 
 
+async def render_inserts(plan: EditPlan, picture: Path, grade_name: str, work: Path) -> Path:
+    """Full-frame cutaways laid over the picture (the voice carries on underneath)."""
+    from reel_engine.inserts import cutaway_cmd, overlay_cmd
+
+    if not plan.inserts:
+        return picture
+    grade = grade_path(grade_name)
+    cuts = []
+    for item in plan.inserts:
+        out = work / f"insert_{item.id}.mp4"
+        try:
+            await asyncio.to_thread(run, cutaway_cmd(item, out, grade, FPS, W, H))
+            cuts.append((item, out))
+        except Exception as exc:  # an unreadable insert is left out; the speaker stays on screen
+            log.warning("Insert %s skipped: %s", item.id, exc)
+    if not cuts:
+        return picture
+    out = work / "picture_inserts.mp4"
+    await asyncio.to_thread(run, overlay_cmd(picture, cuts, out))
+    return out
+
+
 # ------------------------------------------------------------------ graphics
 
 async def resolve_behind(plan: EditPlan, picture: Path, work: Path) -> None:
@@ -202,20 +224,29 @@ def _uri(path: str) -> str:
     return Path(path).resolve().as_uri() if path and Path(path).is_file() else ""
 
 
+TITLE_KINDS = {"chapter", "cta", "flicker", "progress", "statement"}
+# Styles drawn in the brand accent; the others carry their own palette (neon magenta, comic yellow...).
+ACCENT_STYLES = {"punch", "highlight", "bubble"}
+
+
 def graphic_specs(plan: EditPlan) -> list[dict]:
     specs = []
+    text_style = plan.brief.text_style if plan.brief else "punch"
+    title_style = plan.brief.title_style if plan.brief else "punch"
     for g in plan.graphics:
         timed = g.kind in TIMED_KINDS
         data = {k: v for k, v in g.data.items() if k not in ("icon_query", "matte") and not (timed and k == "steps")}
         if g.kind == "map" and g.asset:
             data["svg"] = Path(g.asset.path).read_text(encoding="utf-8")
-        specs.append({"id": g.id, "kind": g.kind, "theme": "clean", "place": g.place, "dur": round(g.end - g.start, 3),
+        style = title_style if g.kind in TITLE_KINDS or g.by == "finish" or g.why == "hook word" else text_style
+        specs.append({"id": g.id, "kind": g.kind, "theme": "clean", "style": style, "place": g.place, "dur": round(g.end - g.start, 3),
                       "box": g.box, "data": data, "steps": g.data.get("steps", []) if timed else [], "asset": _uri(g.asset.path) if g.asset else "",
-                      "accent": plan.brief.accent if plan.brief else "#ffb020"})
-    for c in plan.captions:
-        specs.append({"id": c.id, "kind": "two", "theme": "clean", "place": "beside", "dur": round(c.end - c.start, 3), "box": c.box,
-                      "data": {"lead": c.lead, "text": c.keyword}, "steps": [], "asset": _uri(c.icon.path) if c.icon else "",
-                      "accent": plan.brief.accent if plan.brief else "#ffb020"})
+                      "accent": (plan.brief.accent if plan.brief else "#ffb020") if style in ACCENT_STYLES else ""})
+    for n, c in enumerate(plan.captions):
+        specs.append({"id": c.id, "kind": "two", "theme": "clean", "style": text_style, "place": "beside", "dur": round(c.end - c.start, 3),
+                      "box": c.box, "data": {"lead": c.lead, "text": c.keyword, "alt": n % 3 == 2}, "steps": [],
+                      "asset": _uri(c.icon.path) if c.icon else "",
+                      "accent": (plan.brief.accent if plan.brief else "#ffb020") if text_style in ACCENT_STYLES else ""})
     return specs
 
 

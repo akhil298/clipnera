@@ -2616,6 +2616,8 @@ export interface PremiumResponse {
   passes: number;
   assets: PremiumAsset[];
   ai_calls: number;
+  /** The track under the reel and where it is from, e.g. "Island Beat · Mixkit". */
+  music: string | null;
 }
 
 export interface EditResponse {

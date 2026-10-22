@@ -241,6 +241,7 @@ class PremiumResponse(BaseModel):
     passes: int
     assets: list[PremiumAsset]
     ai_calls: int
+    music: str | None
 
 
 class EditResponse(BaseModel):

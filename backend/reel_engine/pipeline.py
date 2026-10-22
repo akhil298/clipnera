@@ -18,12 +18,13 @@ from pathlib import Path
 from core.logging_config import get_logger
 from reel_engine import layout, sound
 from reel_engine.assets import AssetStore, Scout
-from reel_engine.compile import brief_of, captions_track, graphics_track, video_track
+from reel_engine import inserts, tracks
+from reel_engine.compile import BEAT, brief_of, captions_track, graphics_track, to_output, video_track
 from reel_engine.director import direct, recipe
 from reel_engine.listen import listen
 from reel_engine.media import probe
-from reel_engine.plan import EditPlan, Progress, Source
-from reel_engine.render import compose, render_graphics, render_picture, resolve_behind
+from reel_engine.plan import EditPlan, MusicChoice, Progress, Source
+from reel_engine.render import compose, render_graphics, render_inserts, render_picture, resolve_behind
 from reel_engine.review import apply, review
 from reel_engine.verify import verify
 from reel_engine.watch import watch
@@ -37,6 +38,30 @@ SHIP_SCORE = 8.0
 STAGES = ("ingest", "listen", "watch", "direct", "verify", "compile", "assets", "picture", "layout", "graphics", "sound",
           "compose", "review", "done")
 Progress_ = Callable[[EditPlan], Awaitable[None]] | None
+
+
+def add_photo_cards(plan: EditPlan) -> None:
+    """Photo inserts styled as cards become graphics; a story graphic under one gives way to it."""
+    from reel_engine.plan import GraphicItem
+
+    cards = [i for i in plan.inserts if i.style == "card"]
+    for card in cards:
+        plan.graphics = [g for g in plan.graphics if not (g.kind in ("two", "tag", "keyword", "name", "count_up")
+                                                          and g.start < card.end and card.start < g.end)]
+        plan.graphics.append(GraphicItem(id=f"p{card.id}", kind="photocard", start=card.start, end=card.end, asset=card.asset,
+                                         data={"text": card.label}, place="panel", why="photo of what is said", by="inserts"))
+    plan.inserts = [i for i in plan.inserts if i.style != "card"]
+    plan.graphics.sort(key=lambda g: g.start)
+    plan.captions = [c for c in plan.captions if not any(c.start < k.end and k.start < c.end for k in cards)]
+
+
+def reveal_at(plan: EditPlan, d, words) -> float | None:
+    """Where the music should drop: the reveal word when someone talks, else the first step (or the payoff)."""
+    if 0 <= d.drop_word < len(words):
+        w = words[d.drop_word]
+        return to_output(plan.video, w.src, w.t0)
+    first_step = next((i.out0 for i in plan.video if i.section >= 0), None)
+    return first_step if first_step is not None else next((i.out0 for i in plan.video if i.role == "payoff"), None)
 
 
 def ingest(paths: list[Path]) -> list[Source]:
@@ -72,8 +97,8 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
     await stage("ingest", f"{len(inputs)} file(s)")
     plan.sources = ingest(inputs)
     await stage("listen", "voice, music and words; shots and faces")
-    audio, (shots, tracks, jpegs, how) = await asyncio.gather(listen(plan.sources, work), watch(plan.sources))
-    plan.audio, plan.shots, plan.face_track = audio, shots, tracks
+    audio, (shots, face_track, jpegs, how) = await asyncio.gather(listen(plan.sources, work), watch(plan.sources))
+    plan.audio, plan.shots, plan.face_track = audio, shots, face_track
     await stage("watch", f"{audio.kind}: {audio.why}; {len(shots)} shots")
 
     await stage("direct", "planning the story")
@@ -92,10 +117,17 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
     await stage("compile", "; ".join(changes[:4]) or "labels verified")
     plan.brief, _ = brief_of(d, audio, target_seconds)
     src_len = {s.index: s.duration for s in plan.sources}
-    plan.video = video_track(d, plan.brief, words, shots, src_len, hook)
+    picture = plan.brief.path == "visual"
+    track = tracks.pick(plan.brief.mood, target_seconds or plan.brief.target_seconds or 40, picture) if picture else None
+    plan.video = video_track(d, plan.brief, words, shots, src_len, hook, beat=track.beat if track else BEAT)
     if not plan.video:
         raise RuntimeError("the director's story had no usable clips")
     plan.duration = plan.video[-1].out1
+    track = track or tracks.pick(plan.brief.mood, plan.duration, picture)
+    if track:
+        plan.music = MusicChoice(key=track.key, path=str(track.path), title=track.title, mood=track.mood, bpm=track.bpm,
+                                 offset=tracks.offset(track, reveal_at(plan, d, words), plan.duration),
+                                 licence=track.licence, source=track.source)
     plan.graphics = graphics_track(d, plan.brief, words, plan.video, shots)
     plan.captions, plan.graphics = captions_track(d, plan.brief, words, plan.video, plan.graphics)
 
@@ -109,8 +141,16 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
         if c.icon_query:
             c.icon = await scout.icon(c.icon_query)
 
-    await stage("picture", f"{len(plan.video)} shots, {plan.duration:.1f} s")
-    picture = await render_picture(plan, recipe(plan.brief.recipe).get("grade", "teal_orange"), work)
+    if d.inserts and plan.brief.path == "voice":
+        await stage("assets", f"finding {len(d.inserts)} cutaways and photos")
+        plan.inserts, calls = await inserts.resolve(d.inserts, plan.video, words, scout, work,
+                                                    {s.index: s.path for s in plan.sources if s.kind == "video"})
+        plan.ai_calls += calls
+        add_photo_cards(plan)
+    grade = recipe(plan.brief.recipe).get("grade", "teal_orange")
+    await stage("picture", f"{len(plan.video)} shots, {len(plan.inserts)} cutaways, {plan.duration:.1f} s")
+    picture = await render_picture(plan, grade, work)
+    picture = await render_inserts(plan, picture, grade, work)
     await resolve_behind(plan, picture, work)
     await stage("layout", "placing every graphic off faces and the action")
     await asyncio.to_thread(layout.place, plan.graphics, plan.captions, str(picture))

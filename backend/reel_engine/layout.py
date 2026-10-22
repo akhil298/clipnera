@@ -26,7 +26,7 @@ BOXES = {
     "keyword": (40, 1000, 320, 300), "name": (90, 900, 150, 1300), "count_up": (90, 900, 380, 1100),
     "caption": (80, 920, 210, 1380), "payoff": (70, 940, 280, 1320), "list": (90, 900, 760, 700), "flow": (90, 900, 820, 650),
     "chart": (90, 900, 640, 750), "statement": (86, 908, 1152, 384), "progress": (150, 780, 80, 130), "wash": (0, W, H, 0),
-    "flicker": (60, 960, 300, 780),
+    "flicker": (60, 960, 300, 780), "photocard": (140, 800, 860, 420),
 }
 FIXED = {"statement", "progress", "wash", "flicker"}
 _detector = None

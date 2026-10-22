@@ -61,6 +61,17 @@ class DBeat(_M):
     why: str
 
 
+class DInsert(_M):
+    kind: Literal["broll", "photo", "footage"]
+    w0: int
+    w1: int
+    src: int
+    at: float
+    query: str
+    label: str
+    why: str
+
+
 class DHook(_M):
     clip: DClip
     word: str
@@ -88,11 +99,13 @@ class DirectorPlan(_M):
     cta: str
     caption_mode: Literal["every_word", "keyword", "none"]
     music: Literal["bed", "score", "none"]
-    mood: Literal["upbeat", "chill", "cinematic", "dramatic", "corporate", "lofi", "inspiring", "funny"]
+    text_style: Literal["punch", "editorial", "neon", "highlight", "bubble", "script", "comic", "minimal"]
+    mood: Literal["upbeat", "energetic", "chill", "lofi", "cinematic", "inspiring", "dramatic", "corporate", "funny", "urban"]
     sections: list[DSection]
     hooks: list[DHook]
     story: list[DClip]
     beats: list[DBeat]
+    inserts: list[DInsert]
     keywords: list[int]
     drop_word: int
     spelling: list[DFix]
@@ -146,6 +159,23 @@ sentence's SHAPE, not by keyword spotting:
 - an action or money shot -> two (lead = 1-3 small words, text = 1-2 word keyword, icon = search words)
 Anchor talking beats to word ids w0..w1 (the words that say it; at = until = -1, src = -1). Anchor picture beats
 to src + at..until source seconds (w0 = w1 = -1). Every text must match what is said or clearly visible then.
+
+INSERTS (what the viewer SEES while someone talks; premium edits cut away every few seconds): when a person
+talks, add an insert about every 4-7 s of output on the words that name something showable - a place, object,
+food, product, animal, event, person's work, a number made visual. kind "photo" or "broll" (a short video) with
+query = 3-6 concrete English search words for a real photo or clip (e.g. "international space station exterior
+earth", "fresh croissants bakery tray"); label = 0-3 words to print on a photo card, or "". kind "footage" = a
+moment of the user's OWN footage that shows what is said (src + at in source seconds) - prefer it when it exists.
+Anchor on word ids w0..w1 (src = -1, at = -1) or for footage give src + at too. No inserts on the hook or when
+the speaker's face IS the point (a reaction, a punchline). Picture-only reels: inserts = [] (the clips are the
+pictures). Never ask for logos of real brands or photos of private people.
+
+TEXT STYLE (text_style, the look of every caption and label, like the reference editors' type systems):
+punch (condensed bold amber, energy: advice, hype, sport), editorial (serif, cream and red: lifestyle, interviews,
+stories, fashion), neon (glowing: tech, night, gaming, urban), highlight (black on an amber block: explainers,
+tips, business), bubble (bold words on white bubbles: food, vlogs, everyday, friendly), script (marker pen: food,
+travel, warm and personal), comic (bold outlined, tilted: funny, kids, reactions), minimal (clean lowercase:
+beauty, premium, calm). Pick the one that fits the footage's colours and mood, not always the same.
 
 CAPTIONS: caption_mode from the recipe (every_word for chatty or interview, keyword for advice/explainers, none
 when nobody talks). keywords = word ids shown big (nouns, numbers, punch words; about one per 3-6 words).

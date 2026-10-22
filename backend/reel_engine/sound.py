@@ -22,7 +22,7 @@ from reel_engine.plan import AssetRef, AudioItem, EditPlan
 
 log = get_logger(__name__)
 
-GRAPHIC_SOUNDS = {"chapter": ["whoosh", "ding"], "two": ["whoosh_short"], "tag": ["pop"], "keyword": ["boom"], "statement": ["whoosh"],
+GRAPHIC_SOUNDS = {"photocard": ["whoosh_short"], "chapter": ["whoosh", "ding"], "two": ["whoosh_short"], "tag": ["pop"], "keyword": ["boom"], "statement": ["whoosh"],
                   "list": ["whoosh_short"], "flow": ["whoosh_short"], "count_up": ["tick", "ding"], "chart": ["riser"], "name": ["pop"],
                   "cta": ["pop", "ding"], "wash": [], "progress": [], "flicker": []}
 MIN_SPACING = 0.12
@@ -53,6 +53,8 @@ async def effects(plan: EditPlan, scout: Scout) -> list[tuple[float, AssetRef]]:
             wanted += [(c.start, "whoosh"), (c.start + 0.35, "ding")]
         elif c.icon:
             wanted.append((c.start + 0.02, "pop"))
+    for item in plan.inserts:
+        wanted.append((max(0.0, item.start - 0.06), "whoosh_short"))
     for prev, item in zip(plan.video, plan.video[1:]):
         if item.zoom == "punch" and item.role != "montage":
             wanted.append((max(0.0, item.out0 - 0.08), "whoosh_short"))
@@ -121,7 +123,11 @@ async def mix(plan: EditPlan, scout: Scout, work: Path) -> Path:
     total = plan.duration
     voice = await voice_track(plan, work)
     music_ref: AssetRef | None = None
-    if plan.brief and plan.brief.music == "score":
+    music_start = 0.0
+    if plan.music:
+        music_ref = AssetRef(id=plan.music.key, kind="music", path=plan.music.path, licence=plan.music.licence, source=plan.music.source)
+        music_start = plan.music.offset
+    elif plan.brief and plan.brief.music == "score":
         music_ref = await scout.score(structure(plan), Path(plan.output or "reel").stem)
     elif plan.brief and plan.brief.music == "bed":
         music_ref = scout.bed(plan.brief.mood)
@@ -134,8 +140,9 @@ async def mix(plan: EditPlan, scout: Scout, work: Path) -> Path:
     if music_ref:
         inputs += ["-i", music_ref.path]
         m = len(inputs) // 2 - 1
-        music_gain = 0.33 if voice else 1.0
-        chains.append(f"[{m}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:{total:.3f},volume={music_gain},"
+        music_gain = 0.3 if voice else 1.0
+        chains.append(f"[{m}:a]aresample=48000,aformat=channel_layouts=stereo,atrim={music_start:.3f}:{music_start + total:.3f},"
+                      f"asetpts=PTS-STARTPTS,volume={music_gain},"
                       f"afade=t=out:st={max(0.0, total - 1.2):.3f}:d=1.2[music]")
         plan.audio_items.append(AudioItem(id="m0", kind="music", start=0.0, end=total, asset=music_ref, gain=music_gain))
     if voice:

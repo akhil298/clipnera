@@ -28,8 +28,11 @@ CARD_KINDS = {"statement", "list", "chart", "flow", "count_up"}
 VOICE_KINDS = ("voice", "voice_song")
 LINE_WORDS = 4
 CARD_EVERY = 10.0
+# Titles and chapters in a style that contrasts with the captions' (still one family).
+TITLE_PAIR = {"punch": "editorial", "editorial": "editorial", "neon": "neon", "highlight": "punch", "bubble": "script",
+              "script": "bubble", "comic": "comic", "minimal": "editorial"}
 # Graphics that hold the eye: a caption steps aside while one is on screen.
-CAPTION_YIELDS_TO = {"two", "keyword", "count_up", "statement", "list", "flow", "chart", "cta", "flicker"}
+CAPTION_YIELDS_TO = {"two", "keyword", "count_up", "statement", "list", "flow", "chart", "cta", "flicker", "photocard"}
 # Never the big word of a caption line.
 WEAK = {"a", "an", "the", "and", "but", "or", "so", "to", "of", "in", "on", "at", "it", "is", "was", "be", "we", "we've", "i",
         "i'm", "you", "your", "they", "he", "she", "this", "that", "with", "for", "do", "did", "not", "just", "very", "really",
@@ -53,6 +56,7 @@ def brief_of(d: DirectorPlan, audio: AudioReport, target: float) -> tuple[Brief,
     if path == "visual":
         music = "score"
     brief = Brief(path=path, audio_kind=measured, recipe=r["id"], target_seconds=target or d.target_seconds,
+                  text_style=d.text_style, title_style=TITLE_PAIR.get(d.text_style, d.text_style),
                   title_lead=d.title_lead, title_text=d.title_text,
                   hook_word=(d.hooks[0].word if d.hooks else "").upper()[:12],
                   caption_mode=caption_mode, music=music, mood=d.mood, accent=r["accent"],
@@ -75,12 +79,13 @@ def _talk_spans(words: list[Word], w0: int, w1: int, src_len: dict[int, float]) 
     return [(s, max(0.0, a - PAD_IN), min(src_len.get(s, b + PAD_OUT), b + PAD_OUT), i0, i1) for s, a, b, i0, i1 in spans]
 
 
-def _beats(seconds: float) -> float:
-    return max(0.5, round(seconds / BEAT * 2) / 2)
+def _beats(seconds: float, beat: float = BEAT) -> float:
+    return max(0.5, round(seconds / beat * 2) / 2)
 
 
 def video_track(d: DirectorPlan, brief: Brief, words: list[Word], shots: list[Shot], src_len: dict[int, float],
-                hook_index: int = 0) -> list[VideoItem]:
+                hook_index: int = 0, beat: float = BEAT) -> list[VideoItem]:
+    """The video track; picture clips are cut to whole half-beats of ``beat`` (the music's) from the start."""
     clips = list(d.story)
     if d.hooks:
         hook = d.hooks[min(hook_index, len(d.hooks) - 1)].clip
@@ -106,13 +111,13 @@ def video_track(d: DirectorPlan, brief: Brief, words: list[Word], shots: list[Sh
         end = min(src_len[clip.src], max(clip.end, start + 0.3))
         length = end - start
         if clip.role == "montage":
-            out_len = MONTAGE_SECONDS
+            out_len = round(beat / 2 * FPS) / FPS
             end = min(src_len[clip.src], start + out_len)
             length = end - start
         elif clip.money:
-            out_len = BEAT * _beats(min(length / MONEY_SPEED, 3.2))
+            out_len = beat * _beats(min(length / MONEY_SPEED, 3.2), beat)
         else:
-            out_len = BEAT * _beats(min(length, max(shot_seconds, length / MAX_SPEED)))
+            out_len = beat * _beats(min(length, max(shot_seconds, length / MAX_SPEED)), beat)
         speed = min(MAX_SPEED, max(MIN_SPEED, length / out_len)) if out_len else 1.0
         items.append(VideoItem(id=f"v{len(items)}", src=clip.src, t0=round(start, 3), t1=round(start + speed * out_len, 3),
                                speed=round(speed, 4), zoom=clip.zoom, role=clip.role, section=section, sound=clip.sound,
