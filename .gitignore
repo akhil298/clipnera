@@ -110,4 +110,6 @@ backend/static/motion/kit/*
 !backend/static/motion/kit/README.md
 
 # Licensed music tracks: fetched by backend/scripts/build_music_library.py on each host (the manifest is kept).
-backend/static/motion/music/library/*.mp3
+!backend/static/motion/music/library/
+backend/static/motion/music/library/*
+!backend/static/motion/music/library/manifest.json
