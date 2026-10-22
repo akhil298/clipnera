@@ -131,9 +131,9 @@ export function FootageReelBoard({ editId, onBack }: { editId: string; onBack: (
     );
   }
 
-  const status = EDIT_STATUS[edit.status];
-  const plan = edit.plan;
   const premium = edit.engine === 'premium';
+  const status = premium && edit.status === 'analyzing' ? { ...EDIT_STATUS.analyzing, label: 'Editing' } : EDIT_STATUS[edit.status];
+  const plan = edit.plan;
   const canEdit = (edit.status === 'planned' || edit.status === 'done') && !working;
   const showReady = edit.status === 'done' && Boolean(edit.output_url) && !editing;
   const showReview = Boolean(plan && preview) && edit.status !== 'analyzing' && !showReady;

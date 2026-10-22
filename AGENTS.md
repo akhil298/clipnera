@@ -82,6 +82,15 @@ backend/.env      Environment secrets (IGNORED)
 - Environment files: `.env` is gitignored; use `.env.example` as template
 - Generated files (clips, transcriptions) are gitignored
 
+## Reel engine notes
+- The premium footage reel (`engine = "premium"` on `edit_projects`, Pro) is edited end to end by `backend/reel_engine` in one job (`edits.premium`): listen (voice/music separation with Hybrid Demucs, audio kind from stem levels AND the transcript), watch (shots, face track, contact sheets), one director call (recipe from `reel_engine/data/recipes.json`, hooks, story, sections, beats, captions, music), verify (best hook, labels against frames), compile, assets, picture, layout, graphics, sound, review (up to 2 passes, keeps the best).
+- Everything is written into one Edit Plan (`reel_engine/plan.py`); the reels board shows it through `PremiumResponse` (`reel_engine/jobs.summary`).
+- Agents ask for assets; `reel_engine/assets.Scout` searches the user's assets, the kit, made assets and the packs, makes what is missing (sounds, scores) and stores it in `reel_assets` (scope global or user) so later reels reuse it.
+- A voice is never cut inside a word or sped up; a song never becomes captions; one story graphic on screen at a time; graphics never cover a face (real face detection) and avoid busy detail (food, hands).
+- Run it on local files: `cd backend && venv/bin/python -m reel_engine clip.mp4 --out out/reel.mp4` (writes the plan beside the reel).
+- Credits are taken when it starts and refunded if it fails. Migration `20261022010000_add_reel_engine`.
+- Synthesis (SFX pack, music beds, scores, on-demand foley) lives in `backend/motion/synth.py`; footage graphic templates in `backend/beats/renderer/footage.js`.
+
 ## AI editor notes
 - The studio (`/studio/[id]`, OpenCut) saves every edit to the backend as Timeline ops (`frontend/opencut/src/clipnera/backend-sync.ts`); mapping in `frontend/opencut/BRIDGE.md`.
 - The AI chat is the studio's right-hand column (`clipnera/ai-panel.tsx`). Files dropped there or on the Editor home go to the media library; `clipnera/footage.ts` follows each one (upload → analysis step → ready), posts what the AI found (`understanding/findings.py`), and holds a prompt until the files are understood.

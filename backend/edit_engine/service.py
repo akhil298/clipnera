@@ -416,7 +416,8 @@ class EditService:
         )
 
     def _source_response(self, source: dict[str, Any]) -> EditSourceResponse:
-        playable = source.get("proxy_key") if source["kind"] == "video" else source["key"]
+        # The classic analysis makes a small browser-safe proxy; a premium edit shows the upload itself.
+        playable = (source.get("proxy_key") or source["key"]) if source["kind"] == "video" else source["key"]
         return EditSourceResponse(key=source["key"], kind=source["kind"], name=source.get("name") or "",
                                   duration_s=float(source.get("duration") or 0.0), url=self._url(playable))
 

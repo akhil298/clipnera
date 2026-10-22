@@ -37,6 +37,11 @@ WB_LIMIT = (0.88, 1.12)
 GAMMA_LIMIT = (0.82, 1.22)
 EXPOSURE_FLOOR = 0.46
 SHAKY_MOTION = 25.0
+# Framing: the face fills this share of the frame's height (tighter on punch-ins), the window is never shorter
+# than MIN_WINDOW of the source, and the source is never upscaled more than MAX_UPSCALE.
+FACE_SHARE, FACE_SHARE_TIGHT = 0.2, 0.26
+MIN_WINDOW = 0.4
+MAX_UPSCALE = 4.0
 PARALLEL_SEGMENTS = 3
 # Graphics whose parts land on given seconds (``steps``); others may use a ``steps`` field of their own (progress labels).
 TIMED_KINDS = {"list", "flow", "ui"}
@@ -60,29 +65,42 @@ def exposure(source: Source, item: VideoItem, target: float) -> float:
     return float(np.clip(np.log(level) / np.log(target), *GAMMA_LIMIT))
 
 
-def crop_expr(source: Source, item: VideoItem, track: list[list[float]]) -> str | None:
-    """A 9:16 crop window that follows the face (piecewise linear over the item), or None for vertical sources."""
+def framing(source: Source, item: VideoItem, track: list[list[float]]) -> tuple[str | None, float]:
+    """A 9:16 window framed on the person, as (crop filter, upscale factor); (None, 1) when the source needs none.
+
+    With a face: sized so the face fills about a fifth of the frame (medium close-up), tighter on punch-ins,
+    never upscaled past MAX_UPSCALE, face in the upper third, following the face sideways over the item.
+    Without one: the full height, centred.
+    """
     aspect = source.width / max(1, source.height)
-    if aspect <= 9 / 16 + 0.01:
-        return None
-    window = 9 / 16 / aspect
-    points = [(t, x) for t, x, _, _ in track if item.t0 - 1.0 <= t <= item.t1 + 1.0]
+    points = [p for p in track if item.t0 - 1.0 <= p[0] <= item.t1 + 1.0]
     if not points and track:
         nearest = min(track, key=lambda p: abs(p[0] - (item.t0 + item.t1) / 2))
-        points = [(nearest[0], nearest[1])] if abs(nearest[0] - item.t0) < 6 else []
-    centres = [x for _, x in points] or [0.5]
-    # Lean steady framing: the median face position, eased a little toward each sample.
+        points = [nearest] if abs(nearest[0] - item.t0) < 6 else []
+    if aspect <= 9 / 16 + 0.01 and not points:
+        return None, 1.0
+    height = 1.0
+    top = 0.0
+    if points:
+        face_w = float(np.median([p[3] for p in points]))
+        face_y = float(np.median([p[2] for p in points]))
+        face_h = face_w * aspect * 1.3  # the box is wider than the face is tall; as a share of the frame's height
+        share = FACE_SHARE_TIGHT if item.zoom == "punch" else FACE_SHARE
+        least = (W / MAX_UPSCALE) * 16 / 9 / max(1, source.height)  # the shortest window still sharp enough
+        height = float(np.clip(face_h / share, max(least, MIN_WINDOW), 1.0))
+        height = min(height, aspect * 16 / 9)  # the window can't be wider than the source
+        top = float(np.clip(face_y - 0.32 * height, 0.0, 1.0 - height))
+    width = height * 9 / 16 / aspect
+    centres = [p[1] for p in points] or [0.5]
     anchor = float(np.median(centres))
-    keys = sorted({(round(max(0.0, (t - item.t0) / item.speed), 2), 0.7 * anchor + 0.3 * x) for t, x in points}) or [(0.0, anchor)]
-    left = lambda c: min(max(c - window / 2, 0.0), 1.0 - window)  # noqa: E731
-    if len(keys) == 1:
-        return f"crop=ih*9/16:ih:{left(keys[0][1]):.4f}*iw:0"
+    keys = sorted({(round(max(0.0, (p[0] - item.t0) / item.speed), 2), 0.7 * anchor + 0.3 * p[1]) for p in points}) or [(0.0, anchor)]
+    left = lambda c: min(max(c - width / 2, 0.0), max(0.0, 1.0 - width))  # noqa: E731
     expr = f"{left(keys[-1][1]):.4f}"
     for (t_a, c_a), (t_b, c_b) in reversed(list(zip(keys, keys[1:]))):
         a, b = left(c_a), left(c_b)
-        span = max(0.01, t_b - t_a)
-        expr = f"if(lt(t,{t_b}),{a:.4f}+({b - a:.4f})*(t-{t_a})/{span:.2f},{expr})"
-    return f"crop=ih*9/16:ih:'({expr})*iw':0"
+        expr = f"if(lt(t,{t_b}),{a:.4f}+({b - a:.4f})*(t-{t_a})/{max(0.01, t_b - t_a):.2f},{expr})"
+    upscale = W / max(1.0, width * source.width)
+    return f"crop=iw*{width:.4f}:ih*{height:.4f}:'({expr})*iw':ih*{top:.4f}", upscale
 
 
 def zoom_expr(kind: str, frames: int) -> str:
@@ -110,10 +128,12 @@ def segment_cmd(source: Source, item: VideoItem, track: list[list[float]], wb: s
             chain.append(f"minterpolate=fps={FPS}:mi_mode=mci:mc_mode=aobmc:vsbmc=1")
         if shaky:
             chain.append("deshake")
-        crop = crop_expr(source, item, track)
+        crop, upscale = framing(source, item, track)
         if crop:
             chain.append(crop)
-        chain.append(f"scale={cw}:{ch}:force_original_aspect_ratio=increase,crop={cw}:{ch}")
+        chain.append(f"scale={cw}:{ch}:flags=lanczos:force_original_aspect_ratio=increase,crop={cw}:{ch}")
+        if upscale > 2.0:
+            chain.append("unsharp=5:5:0.6:5:5:0.0")
     chain.append(f"fps={FPS}")
     chain.append(f"zoompan=z='{zoom_expr(item.zoom, count)}':x='iw/2-(iw/zoom/2){shake(item.zoom, 2.3)}'"
                  f":y='ih/2-(ih/zoom/2){shake(item.zoom, 3.1)}':d=1:s={W}x{H}:fps={FPS}")

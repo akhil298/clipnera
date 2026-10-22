@@ -112,6 +112,9 @@ def apply(plan: EditPlan, actions: list[Action]) -> int:
     """Make the reviewer's item changes; returns how many items changed."""
     changed = 0
     structural = {g.id for g in plan.graphics if g.kind in STRUCTURE or g.why == "hook word" or g.by == "finish"}
+    if plan.brief and plan.brief.caption_mode == "every_word":
+        # Every-word captions are what a talking reel is read by: moved or shortened, never removed.
+        structural |= {c.id for c in plan.captions}
     drop = {a.id for a in actions if a.action == "drop" and a.id not in structural}
     for action in actions:
         item = plan.find(action.id)
