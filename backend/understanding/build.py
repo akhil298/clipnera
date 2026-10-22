@@ -19,18 +19,19 @@ from transcription.groq_whisper import GroqWhisperTranscriber
 from transcription.local_whisper import transcribe_local
 from transcription.word_timing import clean_word_timings
 from understanding import analyzers, reading
-from understanding.mud import MUD, Shot, Trim, Utterance, Word, check_mud
+from understanding.mud import MUD, Chapter, Moment, Shot, Trim, Utterance, Word, check_mud
 
 log = get_logger(__name__)
 
 SUMMARY_CHARS = 240
 TOPIC_CHARS = 40
 WHY_CHARS = 80
+CHAPTER_CHARS = 120
 # The most of the speech the reading's cuts may remove.
 MAX_TRIMMED_SHARE = 0.35
 
 # The steps of a build, in order; the studio shows which one is running.
-STAGES = ("shots", "transcript", "music", "moments")
+STAGES = ("shots", "transcript", "music", "reading")
 StageHook = Callable[[str], Awaitable[None]]
 
 
@@ -70,14 +71,15 @@ async def build_mud(path: str, asset_id: str, kind: str, *, is_pro: bool, workdi
             if beats_and_music:
                 mud.beats, mud.music = beats_and_music
 
-    await stage("moments")
+    await stage("reading")
     shots = [_shot(n, raw, duration, len(raw_shots)) for n, raw in enumerate(raw_shots)]
     mud.scenes, mud.shots = analyzers.group_scenes(shots, mud.utterances, mud.silences, duration)
     mud.quality = analyzers.quality_ranges(mud.shots)
     read = await _run(mud, "reading", lambda: reading.read_transcript(mud.utterances)) if mud.utterances else None
     if read:
         mud.summary, mud.topics = _plain(read.summary, SUMMARY_CHARS), [_plain(t, TOPIC_CHARS) for t in read.topics[:reading.MAX_TOPICS]]
-    mud.moments = analyzers.find_moments(mud.utterances, mud.shots, _picks(read, mud.utterances) if read else ())
+        mud.chapters = _chapters(read, mud.utterances)
+    # No moments yet: what is strongest depends on the edit asked for, so they're picked then (ensure_moments).
     mud.trims = _merge_trims([*(_trims(read, mud.utterances, duration) if read else []),
                               *analyzers.find_retakes(mud.utterances)])
     check_mud(mud)
@@ -89,11 +91,27 @@ def _plain(text: str, limit: int) -> str:
     return " ".join(text.split())[:limit]
 
 
-def _picks(read: reading.Reading, utterances: list[Utterance]) -> list[tuple[float, float, float, str]]:
+def _chapters(read: reading.Reading, utterances: list[Utterance]) -> list[Chapter]:
+    """The model's parts as time ranges, in order; a part naming lines that don't exist is dropped."""
+    by_id = {u.id: u for u in utterances}
+    found = []
+    for part in read.chapters[:reading.MAX_CHAPTERS]:
+        first, last = by_id.get(part.first), by_id.get(part.last)
+        if first and last and first.t0 < last.t1 and (text := _plain(part.what, CHAPTER_CHARS)):
+            found.append(Chapter(t0=first.t0, t1=last.t1, text=text))
+    return sorted(found, key=lambda c: c.t0)
+
+
+def moments_of(mud: MUD, picked: reading.Picks | None) -> list[Moment]:
+    """The strongest moments: the model's picks, and the keyword scorer's when there are none."""
+    return analyzers.find_moments(mud.utterances, mud.shots, _picks(picked, mud.utterances) if picked else ())
+
+
+def _picks(picked: reading.Picks, utterances: list[Utterance]) -> list[tuple[float, float, float, str]]:
     """The model's moments as (score, t0, t1, why); a pick naming lines that don't exist is dropped."""
     by_id = {u.id: u for u in utterances}
     picks = []
-    for pick in read.moments[:reading.MAX_PICKS]:
+    for pick in picked.moments[:reading.MAX_PICKS]:
         first, last = by_id.get(pick.first), by_id.get(pick.last)
         if first and last and first.t0 < last.t1:
             picks.append((pick.score, first.t0, last.t1, _plain(pick.why, WHY_CHARS) or "spoken line"))

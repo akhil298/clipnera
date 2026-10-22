@@ -34,7 +34,8 @@ export interface MediaItem {
   /** clipnera-media:// URL of the thumbnail. */
   thumbnail?: string
   /** Words already burned into the picture (subtitles), from a scan of sampled frames. */
-  onScreenText?: { share: number; examples: string[] }
+  /** Words burned into the picture (the text scan): how often, what, and where they sit. */
+  onScreenText?: { share: number; examples: string[]; side?: 'top' | 'bottom' | 'both' | 'none' }
   error?: string
 }
 
@@ -52,3 +53,8 @@ export function playbackUrl(item: Pick<MediaItem, 'id' | 'kind'>): string {
 
 /** A file whose picture carries words this often (its text scan) has subtitles burned in: no captions over them. */
 export const BURNED_IN_TEXT_SHARE = 0.1
+
+/** The ids of the timeline's files with subtitles burned in (at most 50, as the AI's requests take). */
+export function subtitledAssets(items: MediaItem[], assets: Record<string, unknown> | undefined): string[] {
+  return items.filter((m) => assets?.[m.id] && (m.onScreenText?.share ?? 0) >= BURNED_IN_TEXT_SHARE).map((m) => m.id).slice(0, 50)
+}

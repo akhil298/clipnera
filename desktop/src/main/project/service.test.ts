@@ -35,7 +35,16 @@ class FakeBackend implements ProjectBackend {
   captionStyles = async () => []
   sounds = async () => []
   graphics = async () => []
+  broll = async () => []
+  music = async () => []
+  addMusic = async () => ({ key: 'k', seconds: 1 })
+  addBroll = async () => ({ key: 'k', seconds: 1, width: 1, height: 1 })
   looks = async () => []
+  agentTools = async () => []
+  async agentTool(_id: string, name: string) {
+    if (name === 'apply_edits') this.timeline = applyOps(this.timeline, [{ op: 'add_track', id: 't9', kind: 'text' }])
+    return { text: '{}', images: [], is_error: false, version: name === 'apply_edits' ? ++this.version : this.version }
+  }
   style = async () => []
   forgetStyle = async () => []
 }
@@ -87,6 +96,18 @@ describe('ProjectService', () => {
     // Done: no more polling.
     await vi.advanceTimersByTimeAsync(10_000)
     expect(backend.rows).toEqual([])
+  })
+
+  it("shows the person's Claude's edits made on the backend, and doesn't re-read for a look", async () => {
+    const backend = new FakeBackend()
+    const service = new ProjectService()
+    await service.open(backend)
+    const read = vi.spyOn(backend, 'get')
+    await service.agentTool('get_timeline', { arguments: {}, prompt: '', selection: [], subtitled: [] })
+    expect(read).not.toHaveBeenCalled()
+    await service.agentTool('apply_edits', { arguments: {}, prompt: '', selection: [], subtitled: [] })
+    expect(service.get().project).toMatchObject({ version: 1 })
+    expect(service.get().project?.timeline.tracks.map((t) => t.id)).toContain('t9')
   })
 
   it('reads the preview once after a burst of edits', async () => {

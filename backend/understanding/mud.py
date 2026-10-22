@@ -111,6 +111,14 @@ class Trim(_Strict):
     why: str
 
 
+class Chapter(_Strict):
+    """A stretch of the video and what happens in it, as a model read it from the transcript."""
+
+    t0: Sec
+    t1: Sec
+    text: str
+
+
 class Moment(_Strict):
     id: str
     t0: Sec
@@ -134,9 +142,10 @@ class MUD(_Strict):
     # analyzer -> "ok" | "skipped" | "failed"
     analyzers: dict[str, str] = Field(default_factory=dict)
     speech_ratio: Conf = 0.0
-    # What it is about and the topics in order, as a model read them from the transcript.
+    # What it is about, the topics in order and what happens part by part, as a model read them.
     summary: str | None = None
     topics: list[str] = Field(default_factory=list)
+    chapters: list[Chapter] = Field(default_factory=list)
     words: list[Word] = Field(default_factory=list)
     utterances: list[Utterance] = Field(default_factory=list)
     silences: list[Silence] = Field(default_factory=list)
@@ -145,6 +154,8 @@ class MUD(_Strict):
     beats: list[Beat] = Field(default_factory=list)
     music: Music | None = None
     quality: list[QualityFlag] = Field(default_factory=list)
+    # The strongest moments: picked only when an edit needs them (understanding.service.ensure_moments),
+    # never when the file arrives; analyzers["moments"] says whether they have been.
     moments: list[Moment] = Field(default_factory=list)
     trims: list[Trim] = Field(default_factory=list)
 
@@ -170,7 +181,7 @@ def check_mud(mud: MUD) -> None:
     for a, b in zip(mud.words, mud.words[1:]):
         if b.i != a.i + 1 or b.t0 < a.t1 - TOLERANCE:
             raise MudInvalid(f"Words {a.i} and {b.i} are out of order or overlap.")
-    for row in (*mud.utterances, *mud.silences, *mud.scenes, *mud.moments, *mud.quality, *mud.trims):
+    for row in (*mud.utterances, *mud.silences, *mud.scenes, *mud.chapters, *mud.moments, *mud.quality, *mud.trims):
         in_range(type(row).__name__.lower(), row.t0, row.t1)
     ids = [row.id for row in (*mud.shots, *mud.scenes, *mud.moments, *mud.utterances)]
     if len(ids) != len(set(ids)):

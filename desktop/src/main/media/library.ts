@@ -139,8 +139,8 @@ export class MediaLibrary {
   /** Looks for words already on screen (burned-in subtitles), so captions aren't laid over them. */
   private async scanForText(id: string, proxy: string): Promise<void> {
     try {
-      const found = await this.run<{ share: number; examples: string[] }>(id, 'textscan', { path: proxy, samples: TEXT_SAMPLES })
-      this.update(id, { onScreenText: { share: found.share, examples: found.examples } })
+      const found = await this.run<{ share: number; examples: string[]; side?: 'top' | 'bottom' | 'both' | 'none' }>(id, 'textscan', { path: proxy, samples: TEXT_SAMPLES })
+      this.update(id, { onScreenText: { share: found.share, examples: found.examples, side: found.side } })
     } catch {
       // Only a hint: without it captions still work.
     }

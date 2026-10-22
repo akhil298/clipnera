@@ -15,7 +15,7 @@ from sqlalchemy import select
 
 from brain import library, studio
 from brain.route import Constraints, RouteDecision
-from brain.schema import AgentRequest, PlanCard, TurnResult
+from brain.schema import AgentRequest, AgentToolRun, PlanCard, TurnResult
 from clients.ai.base import BaseAI, ToolCall, ToolReply, ToolResult
 from editor.model import EditorOp
 from editor.schema import EditorProjectCreate
@@ -190,8 +190,10 @@ async def test_a_whole_new_edit_goes_to_the_director_without_the_model(db, monke
         return TurnResult(kind="plan", message=card.summary, plan=card)
 
     monkeypatch.setattr(studio, "plan_request", plan_request)
-    events = await run(db, monkeypatch, owner, project_id, Scripted(), prompt="Edit the full video.", auto=True)
+    events = await run(db, monkeypatch, owner, project_id, Scripted(), prompt="Edit the full video.", auto=True, subtitled=["a1"])
     assert [name for name, _ in events] == ["tool", "plan", "tool_done", "done"]
+    # Footage the Mac app found subtitles burned into reaches the plan, so it adds no captions over them.
+    assert seen["subtitled"] == frozenset({"a1"})
     assert events[0][1]["label"] == "Planning the edit" and events[-1][1]["reason"] == "handed_over"
     assert seen["decision"] is router.decision and seen["auto"] is True
 
@@ -281,3 +283,81 @@ def test_a_hook_copies_the_moment_to_the_front_and_keeps_the_cut():
     # The cut stays as it was, later by the hook's length, its zoom intact.
     assert (main["c1"].at, main["c2"].at) == (68, 368) and main["c2"].keyframes["scale"][1].v == 1.2
     assert after.tracks[1].items[0].at == 0 and after.tracks[2].items[0].at == 320 + 68
+
+
+async def test_the_agent_puts_a_broll_shot_over_the_talk(db, monkeypatch) -> None:
+    from brain.schema import BrollAdded
+
+    owner, project_id = await project_with_two_clips(db)
+    copied = []
+
+    async def broll_added(service, user_id, project_id_, shot_id):
+        copied.append(shot_id)
+        return BrollAdded(key=f"editor/{owner}/{project_id_}/shot.mp4", seconds=4.0, width=1920, height=1080)
+
+    monkeypatch.setattr(library, "broll_added", broll_added)
+    model = Scripted(calls(("place_broll", {"shot": "space/rocket.mp4", "at": 1.0, "seconds": 2.0})), answer("Added."))
+    events = await run(db, monkeypatch, owner, project_id, model)
+    assert [d["ok"] for n, d in events if n == "tool_done"] == [True] and copied == ["space/rocket.mp4"]
+    async with db() as session:
+        timeline = (await EditorService(session).get(owner, project_id)).timeline
+    overlay = next(t for t in timeline.tracks if t.kind == "overlay")
+    clip = overlay.items[0]
+    assert (clip.at, clip.frames, clip.transition_in.type) == (30, 60, "fade")
+    assert timeline.assets[clip.asset].has_audio is False
+
+
+async def test_the_agent_lays_shelf_music_under_the_whole_edit(db, monkeypatch) -> None:
+    from brain.schema import MusicAdded
+
+    owner, project_id = await project_with_two_clips(db)
+
+    async def music_added(service, user_id, project_id_, track_id):
+        return MusicAdded(key=f"editor/{owner}/{project_id_}/bed.m4a", seconds=60.0)
+
+    monkeypatch.setattr(library, "music_added", music_added)
+    model = Scripted(calls(("set_music", {"track": "lofi_study", "gain_db": -20})),
+                     calls(("set_music", {"track": "sunny_vlog"})), answer("Music on."))
+    events = await run(db, monkeypatch, owner, project_id, model)
+    assert [d["ok"] for n, d in events if n == "tool_done"] == [True, True]
+    async with db() as session:
+        timeline = (await EditorService(session).get(owner, project_id)).timeline
+    music = next(t for t in timeline.tracks if t.id == "music")
+    # The second pick replaced the first, at a bed's level, the length of the edit.
+    assert len(music.items) == 1 and music.items[0].extra["name"] == "Sunny Vlog"
+    assert abs(music.items[0].volume - 0.1995) < 1e-3 and music.items[0].frames == timeline.duration
+
+
+def test_a_hook_on_a_long_edit_moves_every_item():
+    from editor.ops import apply_ops
+    from editor.timeline import Timeline
+    from understanding.mud import MUD
+
+    clips = [{"type": "clip", "id": f"c{n}", "at": n * 30, "asset": "a", "src_in": n * 30, "src_out": n * 30 + 30} for n in range(40)]
+    sounds = [{"type": "sfx", "id": f"s{n}", "at": n * 30, "name": "pop", "dur": 9} for n in range(30)]
+    timeline = Timeline.model_validate({"fps": 30, "assets": {"a": {"id": "a", "kind": "video", "key": "k", "frames": 1200}},
+                                        "tracks": [{"id": "v1", "kind": "video", "items": clips}, {"id": "a1", "kind": "audio", "items": sounds}]})
+    ops = studio.hook_ops(timeline, {"a": MUD.model_validate({"asset_id": "a", "kind": "video", "duration": 40.0})}, 20.0, 22.0)
+    # More than one apply_edits call may carry: the hook tool commits them itself.
+    assert len(ops) > 50
+    after = apply_ops(timeline, ops)
+    assert after.duration == timeline.duration + 60
+
+
+async def test_the_persons_own_claude_edits_through_the_same_tools_as_one_step_each(db) -> None:
+    owner, project_id = await project_with_two_clips(db)
+    edit = {"base_version": 1, "label": "Zoom in on the opening", "ops": [ZOOM]}
+    assert "apply_edits" in [spec.name for spec in studio.outside_specs()]
+    assert "start_export" not in [spec.name for spec in studio.outside_specs()]
+    async with db() as session:
+        service = EditorService(session)
+        refused = await studio.run_outside(service, owner, project_id, "apply_edits", AgentToolRun(arguments=edit))
+        done = await studio.run_outside(service, owner, project_id, "apply_edits", AgentToolRun(arguments=edit, selection=["c1"]))
+        unknown = await studio.run_outside(service, owner, project_id, "start_export", AgentToolRun())
+    # The person's clips stay theirs unless they point at them, as for the chat's agent.
+    assert refused.is_error and refused.text.startswith("HUMAN_OWNED") and refused.version == 1
+    assert not done.is_error and done.version == 2 and f"{TURN.replace('studio', 'claude')}-1" in done.text
+    assert unknown.is_error
+    async with db() as session:
+        row = (await session.execute(select(EditorOp).where(EditorOp.version == 2))).scalar_one()
+    assert row.author == "agent:claude"

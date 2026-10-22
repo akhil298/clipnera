@@ -46,11 +46,11 @@ const STAGES: Record<string, string> = {
 	shots: "Watching the picture, shot by shot",
 	transcript: "Listening to what's said",
 	music: "Finding the beat",
-	moments: "Picking out the best moments",
+	reading: "Working out what happens",
 };
 // Share of the bar each phase ends at: the upload fills the first part, each analysis step a bit more.
 const UPLOAD_SHARE = 0.4;
-const STAGE_ORDER = ["shots", "transcript", "music", "moments"];
+const STAGE_ORDER = ["shots", "transcript", "music", "reading"];
 const UNSETTLED: ReadonlySet<FileState> = new Set(["uploading", "saving", "waiting", "understanding"]);
 
 let analyses = new Map<string, MediaAnalysisResponse>();
@@ -210,8 +210,8 @@ function report(name: string, found: AnalysisFindings): { text: string; suggesti
 	if (found.summary) lines.push("", found.summary);
 	if (found.topics.length) lines.push(`Topics: ${found.topics.join(" · ")}`);
 	if (found.kind === "video" && found.words === 0) lines.push("Nobody speaks in it, so I'll cut it by the picture.");
-	if (found.moments.length) {
-		lines.push("", "Best moments:", ...found.moments.map((moment) => `• ${clock(moment.t0)}  ${moment.text}`));
+	if (found.chapters?.length) {
+		lines.push("", "What happens:", ...found.chapters.map((part) => `• ${clock(part.t0)}  ${part.text}`));
 	}
 	if (found.problems.length) lines.push("", ...found.problems.map((problem) => `Heads-up: ${problem}`));
 	if (found.suggestions.length) lines.push("", "What should I do with it?");

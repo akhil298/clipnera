@@ -13,6 +13,12 @@ const EXAMPLES = ['Edit the video, keep it tight', 'Remove the pauses and filler
 const STEP_MARK = { pending: '○', running: '●', done: '✓', failed: '✕', skipped: '–' } as const
 
 const send = (prompt: string) => runCommand('agent.send', { prompt })
+// Models with a name of their own in the menu: the person's own Claude.
+const MODEL_NAMES: Record<string, string> = {
+  'claude-code': 'My Claude (Claude Code)',
+  'claude-sonnet-5-5': 'Claude Sonnet 5.5 (my API key)',
+  'claude-opus-5-5': 'Claude Opus 5.5 (my API key)'
+}
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
 function Plan({ plan }: { plan: PlanCard }) {
@@ -162,9 +168,10 @@ export function AiPanel() {
         <span>Clipnera Agent</span>
         {models && (
           <select id="ai-model" aria-label="AI model" value={model ?? ''} onChange={(e) => pickModel(e.target.value)}>
-            {models.models.map((m) => <option key={m} value={m}>{m}</option>)}
+            {models.models.map((m) => <option key={m} value={m}>{MODEL_NAMES[m] ?? m}</option>)}
           </select>
         )}
+        <button type="button" className="aipanel-claude" title="Edit with your own Claude (Pro or Max) through Claude Code" onClick={() => runCommand('agents.useClaude')}>Use my Claude</button>
         <label className="aipanel-auto" title="Auto: never ask, and run whole edits without waiting for approval">
           <input id="ai-auto" type="checkbox" checked={auto} onChange={(e) => chat.set({ auto: e.target.checked })} /> Auto
         </label>

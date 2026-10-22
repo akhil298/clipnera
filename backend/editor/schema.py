@@ -76,7 +76,7 @@ class MediaAnalysisResponse(BaseModel):
 
     asset_id: str
     status: Literal["pending", "running", "ready", "failed"]
-    # While running: "shots", "transcript", "music" or "moments".
+    # While running: "shots", "transcript", "music" or "reading".
     stage: str | None
     findings: AnalysisFindings | None
     error: str | None

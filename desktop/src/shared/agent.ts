@@ -4,6 +4,9 @@
 export type Effort = 'low' | 'medium' | 'high' | 'xhigh'
 
 /** AiModels */
+/** The Claude models for a person's own Anthropic API key (backend clients/ai/roles.py OWN_KEY_MODELS). */
+export const OWN_KEY_MODELS = ['claude-sonnet-5-5', 'claude-opus-5-5'] as const
+
 export interface AiModels {
   models: string[]
   default_model: string

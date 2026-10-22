@@ -208,12 +208,40 @@ had no names on the timeline, titles were refused, and there was no step-by-step
 - [x] `e2e-real/prompts.spec.ts`: ten beginner → advanced requests on a raw video with real astra, recorded
 - Not yet: background removal / green screen (needs a matting model: proposed as its own phase)
 
-## Phase 17 — Clipnera's own assets
+## Use your own Claude ✅ done (2026-10-21)
 
-- [ ] Graphics made in code: lower thirds, arrows, highlight boxes, progress bar, subscribe card, emoji pops, counters
-- [ ] Music made in code: beds by mood (lo-fi, upbeat, cinematic, tension, corporate), with loop points
-- [ ] More fonts (licences beside them) for captions and titles
-- [ ] Public-domain B-roll search through the backend's broll module
+- [x] "Use my Claude" (chat panel, ⌘K, Agents sheet): finds the person's Claude Code, says whether it's signed in
+      (with their Pro/Max), turns the editor's agent access on, connects Claude Code to it for every folder and
+      opens it in Terminal ready to edit (`src/main/mcp/claudeCode.ts`); an "Install in Terminal" button runs
+      Claude Code's official installer when it's missing
+- Signing in to Claude happens in Claude Code, on Anthropic's own page (Google works). Clipnera never sees the
+  person's Claude credentials. A "Sign in with Claude" inside Clipnera's own chat needs Anthropic's approval
+  ("Unless previously approved, Anthropic does not allow third party developers to offer claude.ai login or
+  rate limits for their products", Agent SDK overview), so it isn't built
+- Tests: `claudeCode.test.ts`, `e2e/use-claude.spec.ts` (a stand-in `claude`; no real Terminal)
+- [x] Claude inside Clipnera's own chat (no Terminal): pick "My Claude (Claude Code)" in the model menu. Clipnera runs
+      the person's Claude Code in its documented headless mode (`claude -p --output-format stream-json`), signed in with
+      their own plan, with only the editor's tools (`--tools ""`, strict MCP config) and one conversation per project;
+      its stream shows as the chat's own events (`src/main/agent/claudeChat.ts`). Personal switch, development builds
+      only (or CLIPNERA_PERSONAL_CLAUDE=1) until Anthropic approves Clipnera for it
+- [x] Claude on the person's own Anthropic API key, for customers now: saved encrypted (safeStorage), sent as
+      `X-Anthropic-Key` with turns on "Claude Sonnet/Opus 5.5 (my API key)"; the backend runs every role of that turn on
+      it and never falls back to Clipnera's providers (`roles.own_anthropic_key`)
+- Tests: `claudeChat.test.ts`, `keyStore.test.ts`, `e2e/claude-chat.spec.ts`, `e2e/own-key.spec.ts`, `test_llm_roles.py`
+- Not yet: tried with a real Claude Code install and a real key; whole-edit plans' later steps run on Clipnera's AI
+
+## Phase 17 — Clipnera's own assets in the editor ⏳ in progress
+
+- [x] Graphics panel: the 16 animated graphics, added at the playhead (`GraphicsPanel`, `graphics.add`)
+- [x] B-roll panel + AI tools: the public-domain shelf (`broll_library`, 475 PD shots, mostly NASA; CC BY left
+      out), search, preview, copied into the project on add, faded in over the edit (`GET /editor/broll`,
+      `POST /editor/broll/add`, `find_broll`/`place_broll`). Deploy: sync `broll_library` to the server (BROLL_LIBRARY_DIR)
+- [x] Music composed in code: 8 beds by mood (`scripts/build_synth_music.py` → `static/motion/music`), a
+      shelf in the Music panel, `set_music` for the AI; music loops to the end of the edit (export and viewer)
+- [x] Timeline names shelf music and B-roll by their titles
+- [x] The chat isn't "busy" while a plan waits for approval (Stop showed and looked like slow planning)
+- [ ] Kit icons as stickers, the kit's LUTs as looks
+- [ ] A title font picker (captions already have all their fonts)
 
 ## Phase 18 — The editor shows and offers them
 

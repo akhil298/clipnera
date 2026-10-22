@@ -36,12 +36,12 @@ async function request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?
 }
 
 /** POSTs and returns the open response, for server-sent event streams. */
-async function openStream(path: string, body: unknown, token: string, signal?: AbortSignal): Promise<ReadableStream<Uint8Array>> {
+async function openStream(path: string, body: unknown, token: string, signal?: AbortSignal, extra: Record<string, string> = {}): Promise<ReadableStream<Uint8Array>> {
   let response: Response
   try {
     response = await fetch(`${API_URL}/api/v1${path}`, {
       method: body === undefined ? 'GET' : 'POST',
-      headers: { Accept: 'text/event-stream', Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      headers: { Accept: 'text/event-stream', Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...extra },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal
     })

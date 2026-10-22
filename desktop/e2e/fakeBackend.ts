@@ -24,7 +24,7 @@ export const FINDINGS = {
   dead_air: 0.5,
   shots: 1,
   tempo_bpm: null,
-  moments: [{ t0: 1, t1: 2, text: 'The strongest line of the clip' }],
+  chapters: [{ t0: 1, t1: 2, text: 'Someone says hello to their friends' }],
   problems: [],
   suggestions: ['Edit the full video.']
 }
@@ -46,6 +46,12 @@ export interface FakeBackend {
   agentRequests: Record<string, unknown>[]
   /** Voice notes received: their size, whether they are WebM, and the seconds sent with them. */
   voiceNotes: { bytes: number; webm: boolean; seconds: number }[]
+  /** Shelf shots copied into a project, by id. */
+  brollAdded: string[]
+  /** The X-Anthropic-Key each agent request carried (a person's own key), or null. */
+  agentKeys: (string | null)[]
+  /** Studio agent tools the person's own Claude called through the app: name and request body. */
+  agentToolRuns: { name: string; body: Record<string, unknown> }[]
   calls: string[]
   /** Bytes received per uploaded key. */
   uploads: Map<string, number>
@@ -115,6 +121,9 @@ const readBody = async (req: IncomingMessage) => {
 export async function startFakeBackend(): Promise<FakeBackend> {
   const calls: string[] = []
   const uploads = new Map<string, number>()
+  const brollAdded: string[] = []
+  const agentKeys: (string | null)[] = []
+  const agentToolRuns: FakeBackend['agentToolRuns'] = []
   const projects = new Map<string, Project>()
   const agentRequests: Record<string, unknown>[] = []
   const voiceNotes: FakeBackend['voiceNotes'] = []
@@ -154,6 +163,10 @@ export async function startFakeBackend(): Promise<FakeBackend> {
       if (input().code !== 'one-time' || challenge !== pending?.challenge) return fail(res, 400, 'DESKTOP_CODE_INVALID', 'bad code')
       return ok(res, { access_token: token, token_type: 'bearer', expires_in: 3600 })
     }
+    if (path.startsWith('/static/broll/')) {
+      const file = readFileSync(join(__dirname, '../../broll_library', decodeURIComponent(path.slice('/static/broll/'.length))))
+      return res.writeHead(200, { 'Content-Type': 'video/mp4', 'Content-Length': file.length }).end(file)
+    }
     if (path.startsWith('/static/graphics/')) {
       // The real shelf's file, so the viewer draws a real packed-alpha graphic.
       const file = readFileSync(join(__dirname, '../../backend/static/motion/hook_graphics', path.split('/').pop()!))
@@ -184,6 +197,28 @@ export async function startFakeBackend(): Promise<FakeBackend> {
       if (!(at >= 0) || !seconds) return fail(res, 400, 'VOICE_TYPE', 'Not a voice note')
       return ok(res, { text: 'make it punchier' })
     }
+    if (path === '/api/v1/editor/music') {
+      return ok(res, [{ id: 'lofi_study', name: 'Lo-fi Study', mood: 'lofi', tags: ['lofi'], bpm: 82, seconds: 79, url: '/static/music/lofi_study.m4a', licence: 'Clipnera original, composed in code' }])
+    }
+    if (path === '/api/v1/editor/music/add') {
+      const { project_id, id } = input()
+      if (!projects.has(project_id) || id !== 'lofi_study') return fail(res, 404, 'NOT_FOUND', 'no such track')
+      return ok(res, { key: `editor/${USER.id}/${project_id}/${randomUUID()}.m4a`, seconds: 79 })
+    }
+    if (path.startsWith('/static/music/')) {
+      const file = readFileSync(join(__dirname, '../../backend/static/motion/music', path.split('/').pop()!))
+      return res.writeHead(200, { 'Content-Type': 'audio/mp4', 'Content-Length': file.length }).end(file)
+    }
+    if (path === '/api/v1/editor/broll') {
+      // One real public-domain shot from the shelf.
+      return ok(res, [{ id: 'technology/3d-printer/science-launching-to-space-station-on-nasa-s-20th-nasa-ng-20-science-overview-shot1/science-launching-to-space-station-on-nasa-s-20th-nasa-ng-20-science-overview-shot1.mp4', title: 'Rocket Launch', category: 'science', topic: 'rocket', seconds: 5, url: '/static/broll/technology/3d-printer/science-launching-to-space-station-on-nasa-s-20th-nasa-ng-20-science-overview-shot1/science-launching-to-space-station-on-nasa-s-20th-nasa-ng-20-science-overview-shot1.mp4', licence: 'pd_us_gov', credit: 'Courtesy NASA' }])
+    }
+    if (path === '/api/v1/editor/broll/add') {
+      const { project_id, id } = input()
+      if (!projects.has(project_id) || !String(id).endsWith('.mp4')) return fail(res, 404, 'NOT_FOUND', 'no such shot')
+      brollAdded.push(id)
+      return ok(res, { key: `editor/${USER.id}/${project_id}/${randomUUID()}.mp4`, seconds: 5, width: 1920, height: 1080 })
+    }
     if (path === '/api/v1/editor/graphics') return ok(res, [{ id: 'flash_burst', name: 'Flash Burst', seconds: 1, moods: ['hype'], url: '/static/graphics/flash_burst.mp4' }])
     if (path === '/api/v1/editor/caption-styles') return ok(res, CAPTION_STYLES)
     if (path === '/api/v1/editor/looks') return ok(res, LOOKS)
@@ -192,6 +227,13 @@ export async function startFakeBackend(): Promise<FakeBackend> {
       const key = decodeURIComponent(path.slice('/api/v1/editor/style/'.length))
       style = style.filter((p) => p.key !== key)
       return ok(res, style)
+    }
+    if (path === '/api/v1/editor/agent-tools') {
+      return ok(res, [
+        { name: 'editing_playbook', description: 'How a professional editor works.', input_schema: { type: 'object', properties: {}, additionalProperties: false } },
+        { name: 'apply_edits', description: 'Change the project with Timeline operations.', input_schema: { type: 'object', properties: { base_version: { type: 'integer' }, label: { type: 'string' }, ops: { type: 'array' } }, required: ['base_version', 'label', 'ops'], additionalProperties: false } },
+        { name: 'look_at_frames', description: 'See the picture at timeline times.', input_schema: { type: 'object', properties: { times: { type: 'array' } }, required: ['times'], additionalProperties: false } }
+      ])
     }
     if (path === '/api/v1/editor/models') return ok(res, { models: ['gpt-4o-mini', 'gpt-6-astra-1'], default_model: 'gpt-4o-mini', efforts: ['low', 'medium', 'high'] })
 
@@ -256,9 +298,28 @@ export async function startFakeBackend(): Promise<FakeBackend> {
       to.push(p.timeline)
       return ok(res, commit(p, previous))
     }
+    const toolMatch = /^agent-tools\/(.+)$/.exec(action)
+    if (toolMatch) {
+      const body = input()
+      const name = decodeURIComponent(toolMatch[1])
+      agentToolRuns.push({ name, body })
+      const output = (text: string, images: string[] = [], is_error = false) => ok(res, { text, images, is_error, version: p.version })
+      if (name === 'editing_playbook') return output('How a professional editor works')
+      if (name === 'look_at_frames') return output('0:01: clip c1', ['/9j/4AAQSkZJRg=='])
+      if (name !== 'apply_edits') return output(`There is no tool called ${name}.`, [], true)
+      try {
+        p.undo.push(p.timeline)
+        commit(p, applyOps(p.timeline, body.arguments.ops))
+        return output(JSON.stringify({ undo_step_id: 'claude-1-1', version: p.version }))
+      } catch (error) {
+        p.undo.pop()
+        return output((error as Error).message, [], true)
+      }
+    }
     if (action === 'agent') {
       const request = input()
       agentRequests.push(request)
+      agentKeys.push(typeof req.headers['x-anthropic-key'] === 'string' ? req.headers['x-anthropic-key'] : null)
       res.writeHead(200, { 'Content-Type': 'text/event-stream' })
       const send = (event: string, data: unknown) => res.write(sse(event, data))
       if (String(request.prompt).toLowerCase().includes('full edit')) {
@@ -338,5 +399,5 @@ export async function startFakeBackend(): Promise<FakeBackend> {
 
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
-  return { url: base, calls, uploads, projects, agentRequests, voiceNotes, close: () => new Promise((resolve) => server.close(() => resolve())) }
+  return { url: base, calls, uploads, projects, agentRequests, voiceNotes, brollAdded, agentKeys, agentToolRuns, close: () => new Promise((resolve) => server.close(() => resolve())) }
 }

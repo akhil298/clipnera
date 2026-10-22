@@ -409,3 +409,9 @@ code { font-family: var(--mono); font-size: 12px; }
 .layer-picture { object-fit: cover; }
 /* Rendered but unseen: a display:none video never hands its frames to WebGL. */
 .layer-source { position: absolute; width: 2px; height: 2px; opacity: 0; }
+
+.broll-list li { align-items: center; }
+.broll-thumb { width: 64px; height: 36px; object-fit: cover; border-radius: 3px; background: var(--panel, #000); flex: none; }
+.use-claude { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--border, #444); border-radius: 6px; margin-bottom: 12px; }
+.use-claude h3 { margin: 0; font-size: 13px; }
+.aipanel-claude { font-size: 11px; padding: 2px 8px; }

@@ -14,7 +14,7 @@ const post = (body: unknown, headers: Record<string, string> = {}) =>
 
 describe('the MCP server', () => {
   it('answers JSON-RPC from this Mac with the token, and keeps a session per agent', async () => {
-    server = new McpServer((session) => [{ name: 'who', description: 'Who is calling.', inputSchema: { type: 'object' }, run: async () => session.client }], '0.1.0')
+    server = new McpServer(async (session) => [{ name: 'who', description: 'Who is calling.', inputSchema: { type: 'object' }, run: async () => session.client }], '0.1.0')
     await server.start(PORT, TOKEN)
     const init = await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { clientInfo: { name: 'codex' } } })
     const session = init.headers.get('mcp-session-id')!
@@ -25,7 +25,7 @@ describe('the MCP server', () => {
   })
 
   it('refuses a wrong token, web pages, and other paths', async () => {
-    server = new McpServer(() => [], '0.1.0')
+    server = new McpServer(async () => [], '0.1.0')
     await server.start(PORT, TOKEN)
     const ping = { jsonrpc: '2.0', id: 1, method: 'ping' }
     expect((await post(ping, { Authorization: 'Bearer nope' })).status).toBe(401)

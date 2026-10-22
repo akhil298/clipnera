@@ -36,7 +36,7 @@ MICRO_AUTHOR = "agent:micro"
 # The AI may ask once about a request; after that it decides and says what it assumed.
 QUESTIONS_PER_REQUEST = 1
 # Best moments quoted per file to the router.
-ROUTER_MOMENTS = 2
+ROUTER_CHAPTERS = 2
 _UNDO = re.compile(r"^\s*(undo|go back|revert that|take that back)\b", re.I)
 _REDO = re.compile(r"^\s*(redo|put it back|do that again)\b", re.I)
 _SPLIT = re.compile(r"\b(split|cut)\b.*\b(here|playhead|this|now)\b", re.I)
@@ -136,8 +136,8 @@ def _footage(timeline: Timeline, analyses: Sequence[MediaAnalysisResponse]) -> s
         facts = [found.kind, f"{found.duration:.0f}s", f"{found.words} words spoken", f"{found.shots} shots"]
         if found.tempo_bpm:
             facts.append(f"music at {found.tempo_bpm:.0f} bpm")
-        said = " | ".join(filter(None, [found.summary, *(moment.text for moment in found.moments[:ROUTER_MOMENTS])]))
-        lines.append(f"- {row.asset_id}: {', '.join(facts)}." + (f" About and best moments: {untrusted(said)}" if said else ""))
+        said = " | ".join(filter(None, [found.summary, *(part.text for part in found.chapters[:ROUTER_CHAPTERS])]))
+        lines.append(f"- {row.asset_id}: {', '.join(facts)}." + (f" About and what happens: {untrusted(said)}" if said else ""))
     return "Footage:\n" + "\n".join(lines) if lines else "Footage: none uploaded yet."
 
 
@@ -159,15 +159,27 @@ async def _plan(service: EditorService, user_id: str, project_id: str, prompt: s
                 questions_asked: int = 0, auto: bool = False, subtitled: frozenset[str] = frozenset()) -> TurnResult:
     """The director plans it; the user sees a plan card to approve, edit or reject. In auto mode
     the plan starts running at once, and the card is where the user watches, pauses or undoes it."""
-    ctx = await build_context(service, user_id, project_id, selection=list(selection), playhead=playhead,
-                              session=service.session)
-    # The user may let the AI change what they selected, never anything else they made. A new edit
-    # is the exception for the main cut: asking for one is asking for the cut there now to be replaced.
-    replaced = _main_clips(ctx.timeline) & ctx.human_owned if decision.intent == "new_edit" else set()
-    ctx.human_owned -= replaced
+    async def context() -> tuple[EditContext, set[str]]:
+        ctx = await build_context(service, user_id, project_id, selection=list(selection), playhead=playhead,
+                                  session=service.session)
+        # The user may let the AI change what they selected, never anything else they made. A new edit
+        # is the exception for the main cut: asking for one is asking for the cut there now to be replaced.
+        replaced = _main_clips(ctx.timeline) & ctx.human_owned if decision.intent == "new_edit" else set()
+        ctx.human_owned -= replaced
+        return ctx, replaced
+
+    whole = full_edit.wanted(prompt, decision)
+    if not whole:
+        # A cut-down is built from the strongest moments: they are picked now, for this.
+        await service.ensure_moments(user_id, project_id)
+    ctx, replaced = await context()
     allowed = set(selection) | replaced
-    result = await _full_edit(prompt, decision, ctx, allowed, subtitled) if full_edit.wanted(prompt, decision) else None
+    result = await _full_edit(prompt, decision, ctx, allowed, subtitled) if whole else None
     if result is None:
+        if whole:
+            # The full edit couldn't be made: the director plans it, from the strongest moments.
+            await service.ensure_moments(user_id, project_id)
+            ctx, replaced = await context()
         result = await direct(service, user_id, ctx, prompt, decision, allowed_owned=allowed,
                               recent_turns=list(recent_turns), asked_in_conversation=questions_asked,
                               may_ask=questions_asked < QUESTIONS_PER_REQUEST)

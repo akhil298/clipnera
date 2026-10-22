@@ -105,6 +105,31 @@ export class LocalProjectBackend implements ProjectBackend {
   }
 
   /** The sound library lives on the backend. */
+  async music(): Promise<[]> {
+    return []
+  }
+
+  async addMusic(): Promise<never> {
+    throw new Error('The music shelf needs the Clipnera backend; sign in to use it')
+  }
+
+  /** The AI's tools work on the Clipnera backend; here the person's Claude has the editor's commands only. */
+  async agentTools(): Promise<[]> {
+    return []
+  }
+
+  async agentTool(): Promise<never> {
+    throw new Error('The AI’s editing tools need the Clipnera backend; sign in to use them')
+  }
+
+  async broll(): Promise<[]> {
+    return []
+  }
+
+  async addBroll(): Promise<never> {
+    throw new Error('B-roll needs the Clipnera backend; sign in to use it')
+  }
+
   async graphics(): Promise<[]> {
     return []
   }

@@ -357,3 +357,33 @@ class TestMetering:
     async def test_a_role_call_is_costed(self):
         cost = await record_llm_call("openai", "gpt-4.1", input_tokens=1_000_000, role="director")
         assert cost == pytest.approx(2.0)
+
+
+class TestOwnAnthropicKey:
+    def test_a_turn_on_a_persons_own_key_runs_every_role_on_claude_and_never_falls_back(self, settings):
+        from clients.ai.roles import OWN_KEY_MODELS, _chain, get_role_client, model_for_role, own_anthropic_key, picked_model
+
+        with own_anthropic_key("sk-ant-test-0123456789abcdef"), picked_model("claude-opus-5-5", None):
+            for role in ("studio", "router", "director"):
+                assert (model_for_role(role).provider, model_for_role(role).model) == ("anthropic", "claude-opus-5-5")
+            assert len(_chain("studio", model_for_role("studio"))) == 1
+            client = get_role_client("studio")
+            assert client.api_key == "sk-ant-test-0123456789abcdef" and client.model == "claude-opus-5-5"
+        with own_anthropic_key("sk-ant-test-0123456789abcdef"):
+            assert model_for_role("studio").model == OWN_KEY_MODELS[0]
+        # Outside the turn, nothing of the key is left.
+        assert model_for_role("studio").provider != "anthropic" or settings.LLM_PROFILE == "anthropic"
+
+    def test_the_agent_route_takes_only_an_anthropic_key_and_its_claude_models(self):
+        import pytest
+
+        from core.exceptions import CustomException
+        from editor.route import _check_model, _own_key
+
+        assert _own_key(None) is None
+        assert _own_key("  sk-ant-api03-abcdefghijklmnop  ") == "sk-ant-api03-abcdefghijklmnop"
+        with pytest.raises(CustomException):
+            _own_key("not-a-key")
+        _check_model("claude-sonnet-5-5", own_key=True)
+        with pytest.raises(CustomException):
+            _check_model("claude-sonnet-5-5")

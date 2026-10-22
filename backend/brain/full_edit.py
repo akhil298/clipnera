@@ -133,27 +133,28 @@ def _kept_runs(asset_id: str, mud: MUD) -> list[MomentRef]:
 
 
 def _callouts(videos: list[tuple[str, MUD]]) -> list[PlanText]:
-    """The numbers said in the strongest moments, spaced out, as many as the length warrants."""
+    """Numbers said anywhere in the kept speech, spaced out and spread across the video, as many as its
+    length warrants. Nothing is ranked: a full edit keeps everything, and a number said is worth showing."""
     seconds = sum(mud.duration for _, mud in videos)
     limit = max(CALLOUTS[0], min(CALLOUTS[1], round(seconds / SECONDS_PER_CALLOUT)))
     found: list[tuple[str, float, PlanText]] = []
-    ranked = sorted(((asset_id, mud, m) for asset_id, mud in videos for m in mud.moments if m.kind == "quote"),
-                    key=lambda row: -row[2].score)
-    for asset_id, mud, moment in ranked:
-        words = [w for w in mud.words if w.t0 >= moment.t0 - 0.05 and w.t1 <= moment.t1 + 0.05
-                 and not any(t.t0 <= w.t0 < t.t1 for t in mud.trims)]
-        phrase = number_phrase(words)
-        if phrase is None:
-            continue
-        text, first, last = phrase
-        at = mud.words[first].t0
-        if any(other == asset_id and abs(at - t) < CALLOUT_GAP_SECONDS for other, t, _ in found):
-            continue
-        found.append((asset_id, at, PlanText(kind="callout", content=text,
-                                             anchor=MomentRef(asset=asset_id, words=[first, last]))))
-        if len(found) == limit:
-            break
-    return [text for _, _, text in sorted(found, key=lambda row: (row[0], row[1]))]
+    for asset_id, mud in videos:
+        last = -CALLOUT_GAP_SECONDS
+        for line in mud.utterances:
+            words = [w for w in mud.words[line.w0:line.w1 + 1] if not any(t.t0 <= w.t0 < t.t1 for t in mud.trims)]
+            phrase = number_phrase(words)
+            if phrase is None:
+                continue
+            text, first, end = phrase
+            at = mud.words[first].t0
+            if at - last >= CALLOUT_GAP_SECONDS:
+                found.append((asset_id, at, PlanText(kind="callout", content=text,
+                                                     anchor=MomentRef(asset=asset_id, words=[first, end]))))
+                last = at
+    if len(found) > limit:
+        # Spread the ones shown across the whole video rather than bunching them at its start.
+        found = [found[round(n * (len(found) - 1) / (limit - 1))] for n in range(limit)] if limit > 1 else found[:1]
+    return [text for _, _, text in found]
 
 
 def _removed_line(trims: list) -> str:

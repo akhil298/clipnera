@@ -39,7 +39,8 @@ test('Claude Code drives the open project through MCP, within the AI’s rules',
 
     expect((await rpc('initialize', { protocolVersion: '2025-06-18', clientInfo: { name: 'claude-code' }, capabilities: {} })).result.serverInfo.name).toBe('clipnera-studio')
     const names = (await rpc('tools/list')).result.tools.map((t: { name: string }) => t.name)
-    expect(names).toEqual(['clipnera_get_project', 'clipnera_get_media', 'clipnera_list_commands', 'clipnera_run_command', 'clipnera_ask_clipnera_ai'])
+    expect(names).toEqual(['clipnera_get_project', 'clipnera_get_media', 'clipnera_list_commands', 'clipnera_run_command', 'clipnera_ask_clipnera_ai',
+                           'clipnera_export', 'clipnera_editing_playbook', 'clipnera_apply_edits', 'clipnera_look_at_frames'])
 
     const projectView = JSON.parse((await tool('clipnera_get_project')).text)
     expect(projectView.tracks[0].items[0]).toMatchObject({ type: 'clip', start: 0, end: 3, what: 'clip.mp4' })
@@ -54,6 +55,18 @@ test('Claude Code drives the open project through MCP, within the AI’s rules',
     expect(split.project.tracks[0].items.map((i: { start: number }) => i.start)).toEqual([0, 1])
     await expect(page.getByRole('group', { name: 'Video 1' }).getByRole('button')).toHaveCount(2)
     await expect(page.getByLabel('Activity log').getByRole('listitem').filter({ hasText: 'timeline.split' }).first()).toContainText('claude-code')
+
+    // The AI's own tools, run on the backend: the playbook, an edit (the title may use the person's words), frames.
+    expect((await tool('clipnera_editing_playbook')).text).toContain('professional editor')
+    const version = JSON.parse((await tool('clipnera_get_project')).text).version
+    const title = { op: 'add_item', track: 't9', item: { type: 'text', id: 'x1', at: 0, text: 'BREAKFAST', style: 'title', dur: 30 } }
+    const edited = await tool('clipnera_apply_edits', { base_version: version, label: 'Breakfast card', ops: [{ op: 'add_track', id: 't9', kind: 'text' }, title], user_request: 'A card that says BREAKFAST' })
+    expect(edited.error).toBe(false)
+    expect(backend.agentToolRuns.at(-1)).toMatchObject({ name: 'apply_edits', body: { prompt: 'A card that says BREAKFAST', arguments: { label: 'Breakfast card' } } })
+    expect(backend.agentToolRuns.at(-1)?.body.arguments).not.toHaveProperty('user_request')
+    await expect(page.getByRole('group', { name: 'Text 1' }).getByRole('button')).toHaveCount(1)
+    const frames = await rpc('tools/call', { name: 'clipnera_look_at_frames', arguments: { times: [1] } })
+    expect(frames.result.content).toEqual([{ type: 'text', text: '0:01: clip c1' }, { type: 'image', data: '/9j/4AAQSkZJRg==', mimeType: 'image/jpeg' }])
 
     // What the AI may not do, an outside agent may not do either.
     const refused = await tool('clipnera_run_command', { command: 'export.video' })

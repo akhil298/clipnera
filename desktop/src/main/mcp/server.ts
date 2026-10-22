@@ -19,7 +19,7 @@ export class McpServer {
   private server: Server | null = null
   private readonly sessions = new Map<string, Session>()
 
-  constructor(private readonly tools: (session: Session) => Tool[], private readonly version: string) {}
+  constructor(private readonly tools: (session: Session) => Promise<Tool[]>, private readonly version: string) {}
 
   get listening(): boolean {
     return this.server?.listening ?? false
@@ -76,7 +76,7 @@ export class McpServer {
       this.sessions.set(id, session)
     }
     const messages = Array.isArray(message) ? message : [message]
-    const answers = (await Promise.all(messages.map((m) => handle(m, this.tools(session), session, this.version)))).filter(Boolean)
+    const answers = (await Promise.all(messages.map((m) => handle(m, () => this.tools(session), session, this.version)))).filter(Boolean)
     if (answers.length === 0) {
       res.writeHead(202, { 'Mcp-Session-Id': id }).end()
       return

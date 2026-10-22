@@ -39,7 +39,7 @@ function clockLabel(seconds: number): string {
 function itemLabel(item: Item, t: TimelineDoc, names: Map<string, string>): string {
   switch (item.type) {
     case 'clip':
-      return names.get(item.asset) ?? t.assets[item.asset]?.key.split('/').pop() ?? item.asset
+      return names.get(item.asset) ?? (typeof item.extra.name === 'string' ? item.extra.name : null) ?? t.assets[item.asset]?.key.split('/').pop() ?? item.asset
     case 'text':
       return item.text
     case 'music':

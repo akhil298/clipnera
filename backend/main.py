@@ -28,7 +28,8 @@ from reels.route import reels_router
 from creator_intro.route import creator_intro_router
 from edit_engine.route import edits as edits_router, admin_music as admin_music_router
 from editor.route import editor as editor_router
-from brain.api import admin_router as ai_editor_admin_router, captions_router, looks_router, voice_router, renders_router, router as plans_router, sounds_router, graphics_router, style_router
+from brain import library
+from brain.api import admin_router as ai_editor_admin_router, captions_router, looks_router, voice_router, renders_router, router as plans_router, sounds_router, graphics_router, editor_broll_router, music_router, style_router
 from onboarding.route import onboarding as onboarding_router
 from referral.route import admin_referrals as admin_referrals_router, referrals as referrals_router
 from referral.worker import running_in_background as referral_worker
@@ -85,6 +86,10 @@ app.mount("/static/clips", StaticFiles(directory=settings.CLIP_OUTPUT_DIR), name
 # The studio plays and places library sound effects straight from here (no login on an <audio> tag).
 app.mount("/static/sfx", StaticFiles(directory=str(Path(__file__).parent / "static" / "motion" / "sfx")), name="sfx")
 # Likewise the animated graphics, so the studio's viewer draws what the export will.
+# The public-domain B-roll shelf, when this server has it (BROLL_LIBRARY_DIR).
+if (broll_shelf := library.broll_dir()).is_dir():
+    app.mount("/static/broll", StaticFiles(directory=str(broll_shelf)), name="broll")
+app.mount("/static/music", StaticFiles(directory=str(library.MUSIC_DIR)), name="music")
 app.mount("/static/graphics", StaticFiles(directory=str(Path(__file__).parent / "static" / "motion" / "hook_graphics")), name="graphics")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(notification_router, prefix="/api/v1")
@@ -125,6 +130,8 @@ app.include_router(plans_router, prefix="/api/v1")
 app.include_router(style_router, prefix="/api/v1")
 app.include_router(sounds_router, prefix="/api/v1")
 app.include_router(graphics_router, prefix="/api/v1")
+app.include_router(editor_broll_router, prefix="/api/v1")
+app.include_router(music_router, prefix="/api/v1")
 app.include_router(captions_router, prefix="/api/v1")
 app.include_router(looks_router, prefix="/api/v1")
 app.include_router(voice_router, prefix="/api/v1")

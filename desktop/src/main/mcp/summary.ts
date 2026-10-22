@@ -57,7 +57,8 @@ export function summarizeMedia(media: MediaItem[], analysis: Record<string, Medi
       seconds: m.info?.durationSeconds ?? null,
       understanding: found?.status ?? null,
       summary: found?.findings?.summary ?? null,
-      moments: found?.findings?.moments ?? []
+      // What happens, part by part: a description of the footage, not a pick of its best parts.
+      chapters: found?.findings?.chapters ?? []
     }
   })
 }

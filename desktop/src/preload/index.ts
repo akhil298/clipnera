@@ -37,6 +37,10 @@ const bridge: ClipneraBridge = {
     retryAnalysis: (assetId) => ipcRenderer.invoke(IPC.projectRetryAnalysis, assetId),
     sounds: (query) => ipcRenderer.invoke(IPC.projectSounds, query),
     graphics: () => ipcRenderer.invoke(IPC.projectGraphics),
+    broll: (query) => ipcRenderer.invoke(IPC.projectBroll, query),
+    music: (query) => ipcRenderer.invoke(IPC.projectMusic, query),
+    addMusic: (id) => ipcRenderer.invoke(IPC.projectAddMusic, id),
+    addBroll: (id) => ipcRenderer.invoke(IPC.projectAddBroll, id),
     rules: () => ipcRenderer.invoke(IPC.projectRules),
     setRules: (rules) => ipcRenderer.invoke(IPC.projectSetRules, rules),
     style: () => ipcRenderer.invoke(IPC.projectStyle),
@@ -67,7 +71,14 @@ const bridge: ClipneraBridge = {
     setEnabled: (enabled) => ipcRenderer.invoke(IPC.mcpSetEnabled, enabled === true),
     onChange: (listener) => subscribe<McpState>(IPC.mcpChanged, listener),
     onRequest: (listener) => subscribe<McpWindowRequest>(IPC.mcpRequest, listener),
-    respond: (id, response) => ipcRenderer.invoke(IPC.mcpRespond, id, response)
+    respond: (id, response) => ipcRenderer.invoke(IPC.mcpRespond, id, response),
+    claudeStatus: () => ipcRenderer.invoke(IPC.claudeStatus),
+    openClaude: () => ipcRenderer.invoke(IPC.claudeOpen),
+    installClaude: () => ipcRenderer.invoke(IPC.claudeInstall),
+    setClaudeChat: (on) => ipcRenderer.invoke(IPC.claudeSetChat, on === true),
+    claudeKey: () => ipcRenderer.invoke(IPC.claudeKey),
+    setClaudeKey: (key) => ipcRenderer.invoke(IPC.claudeSetKey, String(key)),
+    clearClaudeKey: () => ipcRenderer.invoke(IPC.claudeClearKey)
   }
 }
 

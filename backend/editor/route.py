@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from typing import Annotated
 
+import anthropic
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,8 +27,9 @@ from editor.schema import (
 from editor.service import EditorService
 from feature_flags.dependencies import require_user_flag
 from usage.context import llm_scope
-from brain.schema import AgentError, AgentRequest, AiModels, TurnRequest, TurnResult
-from clients.ai.roles import EFFORTS, picked_model, selectable_models
+from brain.schema import (AgentError, AgentRequest, AgentToolOutput, AgentToolRun, AgentToolSpec, AiModels,
+                          TurnRequest, TurnResult)
+from clients.ai.roles import EFFORTS, OWN_KEY_MODELS, own_anthropic_key, picked_model, selectable_models
 from core.exceptions import CustomException
 from brain.turns import handle_turn
 from feature_flags.registry import AGENT_EDITOR
@@ -131,24 +133,60 @@ async def take_turn(project_id: str, data: TurnRequest, user: CurrentUserDep, se
 
 
 @editor.post("/projects/{project_id}/agent")
-async def agent_turn(project_id: str, data: AgentRequest, user: CurrentUserDep, service: EditorServiceDep):
+async def agent_turn(project_id: str, data: AgentRequest, user: CurrentUserDep, service: EditorServiceDep,
+                     x_anthropic_key: str | None = Header(None)):
     """One prompt for the studio agent (brain/studio.py), answered as server-sent events while it
-    works: text, tool, tool_done, edit, undone, ui, todos, ask, plan, render, result, then done or error."""
-    _check_model(data.model)
+    works: text, tool, tool_done, edit, undone, ui, todos, ask, plan, render, result, then done or error.
+
+    With ``X-Anthropic-Key``, the turn runs on Claude through the person's own API key (their bill):
+    the key is used for this turn only, never stored or logged."""
+    key = _own_key(x_anthropic_key)
+    _check_model(data.model, own_key=key is not None)
     await service.get(user["user_id"], project_id)  # A missing project is a 404, not a broken stream.
-    return StreamingResponse(_agent_events(user["user_id"], project_id, data), media_type="text/event-stream",
+    return StreamingResponse(_agent_events(user["user_id"], project_id, data, key), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-async def _agent_events(user_id: str, project_id: str, data: AgentRequest) -> AsyncIterator[str]:
+@editor.get("/agent-tools", response_model=ApiResponse[list[AgentToolSpec]])
+async def agent_tools():
+    """The studio agent's tools an outside agent may call: the person's own Claude, through the Mac app."""
+    return ok(studio.outside_specs())
+
+
+@editor.post("/projects/{project_id}/agent-tools/{name}", response_model=ApiResponse[AgentToolOutput])
+async def agent_tool(project_id: str, name: str, data: AgentToolRun, user: CurrentUserDep, service: EditorServiceDep):
+    """One call of an outside agent's tool on the project; an edit is one undoable step by agent:claude."""
+    await service.get(user["user_id"], project_id)
+    with llm_scope(user_id=user["user_id"], step="outside_tool"):
+        return ok(await studio.run_outside(service, user["user_id"], project_id, name, data))
+
+
+def _own_key(value: str | None) -> str | None:
+    if value is None:
+        return None
+    key = value.strip()
+    if not key.startswith("sk-ant-") or not 20 <= len(key) <= 300:
+        raise CustomException(message="That doesn't look like an Anthropic API key.", code="BAD_API_KEY", status_code=422)
+    return key
+
+
+async def _agent_events(user_id: str, project_id: str, data: AgentRequest, key: str | None = None) -> AsyncIterator[str]:
     # Its own session: the request's closes before a streamed body is sent.
     async with AsyncSessionLocal() as session:
-        with llm_scope(user_id=user_id, step="editor_turn"), picked_model(data.model, data.effort):
+        with llm_scope(user_id=user_id, step="editor_turn"), picked_model(data.model, data.effort), own_anthropic_key(key):
             try:
                 async for name, payload in studio.stream(EditorService(session), user_id, project_id, data):
                     yield sse(name, payload.model_dump(mode="json"))
             except httpx.HTTPError:
                 yield sse("error", AgentError(message=_unavailable(data.model)).model_dump())
+            except anthropic.APIStatusError as exc:
+                if key is None:
+                    raise
+                # The person's own Anthropic account answered: say so plainly, in their terms.
+                reason = ("Your Anthropic API key was refused: check it in Use my Claude." if exc.status_code in (401, 403)
+                          else "Your Anthropic account is at its limit or out of credit." if exc.status_code in (402, 429)
+                          else "Claude didn't answer through your API key. Try again.")
+                yield sse("error", AgentError(message=reason).model_dump())
             except CustomException as exc:
                 yield sse("error", AgentError(message=exc.message).model_dump())
             except Exception:
@@ -156,8 +194,8 @@ async def _agent_events(user_id: str, project_id: str, data: AgentRequest) -> As
                 yield sse("error", AgentError(message="Something went wrong. Try again.").model_dump())
 
 
-def _check_model(model: str | None) -> None:
-    if model and model not in selectable_models():
+def _check_model(model: str | None, own_key: bool = False) -> None:
+    if model and model not in (OWN_KEY_MODELS if own_key else selectable_models()):
         raise CustomException(message=f"The AI can't use {model}.", code="UNKNOWN_MODEL", status_code=422)
 
 

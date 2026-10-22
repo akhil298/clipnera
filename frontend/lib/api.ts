@@ -2884,11 +2884,11 @@ export interface TurnResult {
   route: RouteDecision | null;
 }
 
-/** How far the AI has got understanding one asset of an editor project (backend understanding/). */
-export interface FoundMoment {
+/** A part of a file and what happens in it (backend understanding/findings.py FoundChapter). Times are seconds. */
+export interface FoundChapter {
   t0: number;
   t1: number;
-  /** What is said in it, or why it stood out when nothing is. */
+  /** What happens in that part. */
   text: string;
 }
 
@@ -2905,12 +2905,14 @@ export interface AnalysisFindings {
   dead_air: number;
   shots: number;
   tempo_bpm: number | null;
-  moments: FoundMoment[];
+  /** What happens, part by part. */
+  chapters: FoundChapter[];
   problems: string[];
   /** Prompts the chat offers as one-click next steps. */
   suggestions: string[];
 }
 
+/** How far the AI has got understanding one asset of an editor project (backend understanding/). */
 export interface MediaAnalysisResponse {
   asset_id: string;
   status: 'pending' | 'running' | 'ready' | 'failed';

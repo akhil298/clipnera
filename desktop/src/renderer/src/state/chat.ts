@@ -47,7 +47,11 @@ export interface ChatState {
 
 export const chat = createStore<ChatState>({ turns: [], running: false, models: null, model: null, auto: false, unavailable: null, touched: [] })
 
-const FINAL_PLAN = new Set(['done', 'failed', 'rejected', 'stopped'])
+// A plan waiting for approval isn't work in progress: the user is up, not the AI.
+const ACTIVE_PLAN = new Set(['approved', 'running', 'paused'])
+
+/** Whether the AI is busy: a turn still working, or a plan being carried out. */
+const busy = (turns: Turn[]) => turns.some((t) => t.status === 'working' || (t.plan !== null && ACTIVE_PLAN.has(t.plan.status)))
 
 function updateTurn(turns: Turn[], match: (t: Turn) => boolean, change: (t: Turn) => Partial<Turn>): Turn[] {
   const index = turns.findLastIndex(match)
@@ -62,13 +66,18 @@ const withPlan = (planId: string) => (t: Turn) => t.plan?.id === planId
 
 /** How one agent, plan or app message changes the conversation. */
 export function reduce(state: ChatState, msg: AgentMessage): ChatState {
+  const next = apply(state, msg)
+  return next.turns === state.turns ? next : { ...next, running: busy(next.turns) }
+}
+
+function apply(state: ChatState, msg: AgentMessage): ChatState {
   const turns = (match: (t: Turn) => boolean, change: (t: Turn) => Partial<Turn>) => ({ ...state, turns: updateTurn(state.turns, match, change) })
 
   if (msg.source === 'app') {
     const { message } = msg
     if (message.event === 'stopped') return turns(current, () => ({ status: 'stopped', note: 'Stopped. What was already done stays, and each step can be undone.' }))
     if (message.event === 'error') return turns(current, () => ({ status: 'failed', note: message.data.message }))
-    return { ...turns(current, (t) => ({ status: 'done', note: t.note })), running: state.turns.some((t) => t.plan && !FINAL_PLAN.has(t.plan.status)) }
+    return turns(current, (t) => ({ status: 'done', note: t.note }))
   }
 
   if (msg.source === 'plan') {
@@ -83,7 +92,7 @@ export function reduce(state: ChatState, msg: AgentMessage): ChatState {
       case 'op.applied':
         return message.data.cursor ? { ...state, touched: message.data.cursor.items } : state
       case 'done':
-        return { ...turns(withPlan(planId), (t) => ({ plan: t.plan && { ...t.plan, status: message.data.status } })), running: false }
+        return turns(withPlan(planId), (t) => ({ plan: t.plan && { ...t.plan, status: message.data.status } }))
     }
   }
 

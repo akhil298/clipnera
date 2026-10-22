@@ -1,0 +1,123 @@
+{
+  "lofi_study": {
+    "file": "lofi_study.m4a",
+    "name": "Lo-fi Study",
+    "mood": "lofi",
+    "tags": [
+      "lofi",
+      "chill",
+      "study",
+      "cozy",
+      "vlog",
+      "cooking"
+    ],
+    "bpm": 82,
+    "seconds": 79.1,
+    "licence": "Clipnera original, composed in code"
+  },
+  "sunny_vlog": {
+    "file": "sunny_vlog.m4a",
+    "name": "Sunny Vlog",
+    "mood": "upbeat",
+    "tags": [
+      "upbeat",
+      "happy",
+      "vlog",
+      "day in the life",
+      "food",
+      "travel"
+    ],
+    "bpm": 112,
+    "seconds": 58.71,
+    "licence": "Clipnera original, composed in code"
+  },
+  "easy_morning": {
+    "file": "easy_morning.m4a",
+    "name": "Easy Morning",
+    "mood": "chill",
+    "tags": [
+      "chill",
+      "calm",
+      "morning",
+      "soft",
+      "lifestyle"
+    ],
+    "bpm": 90,
+    "seconds": 61.67,
+    "licence": "Clipnera original, composed in code"
+  },
+  "big_reveal": {
+    "file": "big_reveal.m4a",
+    "name": "Big Reveal",
+    "mood": "cinematic",
+    "tags": [
+      "cinematic",
+      "epic",
+      "inspiring",
+      "reveal",
+      "trailer"
+    ],
+    "bpm": 72,
+    "seconds": 63.0,
+    "licence": "Clipnera original, composed in code"
+  },
+  "ticking_clock": {
+    "file": "ticking_clock.m4a",
+    "name": "Ticking Clock",
+    "mood": "dramatic",
+    "tags": [
+      "tension",
+      "suspense",
+      "dramatic",
+      "mystery"
+    ],
+    "bpm": 100,
+    "seconds": 55.8,
+    "licence": "Clipnera original, composed in code"
+  },
+  "bright_pitch": {
+    "file": "bright_pitch.m4a",
+    "name": "Bright Pitch",
+    "mood": "corporate",
+    "tags": [
+      "corporate",
+      "business",
+      "tech",
+      "explainer",
+      "positive"
+    ],
+    "bpm": 108,
+    "seconds": 51.89,
+    "licence": "Clipnera original, composed in code"
+  },
+  "silly_steps": {
+    "file": "silly_steps.m4a",
+    "name": "Silly Steps",
+    "mood": "funny",
+    "tags": [
+      "funny",
+      "playful",
+      "comedy",
+      "quirky",
+      "kids"
+    ],
+    "bpm": 124,
+    "seconds": 41.71,
+    "licence": "Clipnera original, composed in code"
+  },
+  "rise_up": {
+    "file": "rise_up.m4a",
+    "name": "Rise Up",
+    "mood": "inspiring",
+    "tags": [
+      "inspiring",
+      "motivational",
+      "uplifting",
+      "growth",
+      "story"
+    ],
+    "bpm": 96,
+    "seconds": 68.0,
+    "licence": "Clipnera original, composed in code"
+  }
+}

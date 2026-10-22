@@ -1,8 +1,9 @@
-import type { AgentEvent, AgentRequest, AiModels, PlanCard, PlanEvent, RenderStatus, VoiceText } from '../../shared/agent'
+import { OWN_KEY_MODELS, type AgentEvent, type AgentRequest, type AiModels, type PlanCard, type PlanEvent, type RenderStatus, type VoiceText } from '../../shared/agent'
 import type { EditorOpsResponse } from '../../shared/api'
 import type { AgentMessage } from '../../shared/ipc'
 import { api, API_URL, ApiRequestError } from '../api'
 import type { ProjectService } from '../project/service'
+import { CLAUDE_CODE_MODEL, type ClaudeChat } from './claudeChat'
 import { readEvents } from './sse'
 
 export interface AgentDeps {
@@ -13,6 +14,10 @@ export interface AgentDeps {
   rendering(render: RenderStatus): void
   projects: ProjectService
   emit(message: AgentMessage): void
+  /** The chat on the person's own Claude, when they turned it on (personal, in development builds). */
+  claude?: { chat: ClaudeChat; offered(): Promise<boolean> }
+  /** The person's own Anthropic API key, when they saved one. */
+  anthropicKey?(): Promise<string | null>
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
@@ -34,16 +39,23 @@ export class AgentService {
   }
 
   async models(): Promise<AiModels> {
-    return api.getData<AiModels>('/editor/models', await this.auth())
+    const found = await api.getData<AiModels>('/editor/models', await this.auth())
+    // Claude on the person's own API key, and their own Claude through Claude Code, join the list when set up.
+    const ownKey = (await this.deps.anthropicKey?.()) ? [...OWN_KEY_MODELS] : []
+    const claudeCode = (await this.deps.claude?.offered()) ? [CLAUDE_CODE_MODEL] : []
+    return { ...found, models: [...found.models, ...ownKey, ...claudeCode] }
   }
 
   async send(request: AgentRequest): Promise<void> {
-    if (this.turn) throw new Error('The AI is still working on your last request')
+    if (this.turn || this.deps.claude?.chat.running) throw new Error('The AI is still working on your last request')
     const projectId = this.projectId()
+    if (request.model === CLAUDE_CODE_MODEL && this.deps.claude) return this.sendToClaude(projectId, request)
     const token = await this.auth()
     const turn = (this.turn = new AbortController())
     try {
-      const body = await api.stream(`/editor/projects/${projectId}/agent`, request, token, turn.signal)
+      // A turn on the person's own key carries it, for that turn only.
+      const key = (OWN_KEY_MODELS as readonly string[]).includes(request.model ?? '') ? await this.deps.anthropicKey?.() : null
+      const body = await api.stream(`/editor/projects/${projectId}/agent`, request, token, turn.signal, key ? { 'X-Anthropic-Key': key } : {})
       await readEvents(body, (event) => this.onAgent(event as AgentEvent))
     } catch (error) {
       if (turn.signal.aborted) this.deps.emit({ source: 'app', message: { event: 'stopped' } })
@@ -55,8 +67,20 @@ export class AgentService {
     }
   }
 
+  /** The turn on the person's own Claude: its events go to the chat like the backend agent's. */
+  private async sendToClaude(projectId: string, request: AgentRequest): Promise<void> {
+    try {
+      await this.deps.claude!.chat.send(projectId, request)
+    } catch (error) {
+      this.deps.emit({ source: 'app', message: { event: 'error', data: { message: message(error) } } })
+    } finally {
+      this.deps.emit({ source: 'app', message: { event: 'idle' } })
+    }
+  }
+
   /** Stops the turn in flight and any plan that is running. Edits already made stay, each undoable. */
   async stop(): Promise<void> {
+    this.deps.claude?.chat.stop()
     this.turn?.abort()
     const token = await this.deps.token()
     for (const [planId, stream] of this.plans) {

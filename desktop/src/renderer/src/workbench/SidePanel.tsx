@@ -1,7 +1,9 @@
 import type { ReactElement } from 'react'
 import { layout, type SideView } from '../state/layout'
 import { useStore } from '../state/store'
+import { BrollPanel } from './BrollPanel'
 import { EffectsPanel } from './EffectsPanel'
+import { GraphicsPanel } from './GraphicsPanel'
 import { MediaPanel } from './MediaPanel'
 import { MusicPanel } from './MusicPanel'
 import { RulesPanel } from './RulesPanel'
@@ -10,7 +12,7 @@ import { SoundsPanel } from './SoundsPanel'
 import { TextPanel } from './TextPanel'
 import { SIDE_VIEW_INFO } from './sideViews'
 
-const PANELS: Partial<Record<SideView, ReactElement>> = { media: <MediaPanel />, text: <TextPanel />, sounds: <SoundsPanel />, music: <MusicPanel />, effects: <EffectsPanel />, rules: <RulesPanel />, takes: <TakesPanel /> }
+const PANELS: Partial<Record<SideView, ReactElement>> = { media: <MediaPanel />, text: <TextPanel />, broll: <BrollPanel />, sounds: <SoundsPanel />, graphics: <GraphicsPanel />, music: <MusicPanel />, effects: <EffectsPanel />, rules: <RulesPanel />, takes: <TakesPanel /> }
 
 export function SidePanel() {
   const view = useStore(layout, (s) => s.sideView)

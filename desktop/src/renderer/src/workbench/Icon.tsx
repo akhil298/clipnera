@@ -2,6 +2,8 @@ const PATHS = {
   media: 'M3 5h18v14H3zM3 9h18M8 5v4M16 5v4',
   search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4',
   sounds: 'M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2',
+  broll: 'M3 6h12v12H3zM15 10l6-3v10l-6-3',
+  graphics: 'M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18',
   effects: 'M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z',
   text: 'M5 6h14M12 6v13M9 19h6',
   music: 'M9 18V6l11-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM20 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z',

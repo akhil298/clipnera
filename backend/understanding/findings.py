@@ -12,8 +12,7 @@ from pydantic import BaseModel, Field
 
 from understanding.mud import MUD
 
-MOMENTS_SHOWN = 3
-QUOTE_CHARS = 120
+CHAPTERS_SHOWN = 8
 SUGGESTIONS_SHOWN = 3
 # Below this many words there is too little speech to cut or caption by.
 SPOKEN_WORDS = 30
@@ -22,7 +21,7 @@ QUALITY_FROM_SECONDS = 2.0
 QUALITY_STYLE_SHARE = 0.5
 ANALYZER_PROBLEMS = {
     "transcript": "I couldn't make out the speech, so I can't cut by what is said.",
-    "reading": "I couldn't judge which lines are the strongest, so my pick of moments is rough.",
+    "reading": "I couldn't read what happens in it, so I can only describe it roughly.",
     "audio": "I couldn't read the sound.",
     "shots": "I couldn't split the picture into shots.",
     "music": "I couldn't find the beat.",
@@ -30,10 +29,10 @@ ANALYZER_PROBLEMS = {
 QUALITY_NAMES = {"blur": "out of focus", "dark": "too dark", "bright": "overexposed", "fast_motion": "shaky or very fast"}
 
 
-class FoundMoment(BaseModel):
+class FoundChapter(BaseModel):
     t0: float
     t1: float
-    # What is said in it, or why it stood out when nothing is.
+    # What happens in that part.
     text: str
 
 
@@ -50,7 +49,8 @@ class AnalysisFindings(BaseModel):
     dead_air: float = 0.0
     shots: int = 0
     tempo_bpm: float | None = None
-    moments: list[FoundMoment] = Field(default_factory=list)
+    # What happens, part by part: a description, not a pick of the best parts.
+    chapters: list[FoundChapter] = Field(default_factory=list)
     problems: list[str] = Field(default_factory=list)
     # Prompts the chat offers as one-click next steps.
     suggestions: list[str] = Field(default_factory=list)
@@ -63,17 +63,11 @@ def findings_of(mud: MUD) -> AnalysisFindings:
         fillers=sum(1 for word in mud.words if word.filler),
         dead_air=round(sum(s.t1 - s.t0 for s in mud.silences if s.kind == "dead_air"), 1),
         shots=len(mud.shots), tempo_bpm=mud.music.tempo_bpm if mud.music else None,
-        moments=[FoundMoment(t0=m.t0, t1=m.t1, text=_said(mud, m.t0, m.t1) or m.why)
-                 for m in sorted(mud.moments, key=lambda m: -m.score)[:MOMENTS_SHOWN]],
+        chapters=[FoundChapter(t0=c.t0, t1=c.t1, text=c.text) for c in mud.chapters[:CHAPTERS_SHOWN]],
         problems=_problems(mud),
     )
     found.suggestions = _suggestions(found)
     return found
-
-
-def _said(mud: MUD, t0: float, t1: float) -> str:
-    text = " ".join(u.text for u in mud.utterances if u.t1 > t0 and u.t0 < t1).strip()
-    return text if len(text) <= QUOTE_CHARS else f"{text[:QUOTE_CHARS].rsplit(' ', 1)[0]}…"
 
 
 def _problems(mud: MUD) -> list[str]:

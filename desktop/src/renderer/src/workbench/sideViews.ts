@@ -11,7 +11,9 @@ export interface SideViewInfo {
 export const SIDE_VIEW_INFO: Record<SideView, SideViewInfo> = {
   media: { label: 'Media', icon: 'media', empty: 'Your footage, images and audio. Importing arrives in phase 3.' },
   search: { label: 'Search footage', icon: 'search', empty: 'Find moments by what is said or shown. Arrives with the backend link in phase 7.' },
+  broll: { label: 'B-roll', icon: 'broll', empty: 'Public-domain footage to put over the edit.' },
   sounds: { label: 'Sounds', icon: 'sounds', empty: 'Sound effects library.' },
+  graphics: { label: 'Graphics', icon: 'graphics', empty: 'Animated graphics: light leaks, glitches, confetti.' },
   effects: { label: 'Effects', icon: 'effects', empty: 'Zoom and framing.' },
   text: { label: 'Text & Captions', icon: 'text', empty: 'Caption styles, titles and callouts.' },
   music: { label: 'Music', icon: 'music', empty: 'Music for the edit.' },

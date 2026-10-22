@@ -35,6 +35,16 @@
     "expect": "whooshes at the meal changes"
   },
   {
+    "level": "intermediate",
+    "prompt": "Add some happy background music under the whole video.",
+    "expect": "a shelf music bed, ducked, to the end"
+  },
+  {
+    "level": "intermediate",
+    "prompt": "Add some B-roll of food when she talks about breakfast.",
+    "expect": "B-roll if the shelf has it, else an honest 'nothing fits'"
+  },
+  {
     "level": "advanced",
     "prompt": "Make it more fun: a snap zoom with a hit sound on her funniest line, a light leak on breakfast and confetti at the very end.",
     "expect": "a to-do list, then all three"

@@ -1,6 +1,6 @@
 import { createStore } from './store'
 
-export const SIDE_VIEWS = ['media', 'search', 'sounds', 'effects', 'text', 'music', 'rules', 'skills', 'takes'] as const
+export const SIDE_VIEWS = ['media', 'search', 'broll', 'sounds', 'graphics', 'effects', 'text', 'music', 'rules', 'skills', 'takes'] as const
 export type SideView = (typeof SIDE_VIEWS)[number]
 
 export const BOTTOM_TABS = ['activity', 'problems'] as const

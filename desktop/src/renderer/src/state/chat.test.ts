@@ -64,3 +64,17 @@ describe('chat', () => {
     expect(turn()).toMatchObject({ status: 'failed', note: "Can't reach Clipnera." })
   })
 })
+
+describe('when the AI is busy', () => {
+  it('is free while a plan waits for approval, and busy while it runs', () => {
+    startTurn('Edit the video')
+    let state = chat.get()
+    state = reduce(state, { source: 'agent', message: { event: 'plan', data: plan('proposed') } } as AgentMessage)
+    state = reduce(state, { source: 'agent', message: { event: 'done', data: { reason: 'handed_over', message: null } } } as AgentMessage)
+    expect(state.running).toBe(false)
+    state = reduce(state, { source: 'plan', planId: 'plan-1', message: { event: 'plan.updated', data: plan('running') } } as AgentMessage)
+    expect(state.running).toBe(true)
+    state = reduce(state, { source: 'plan', planId: 'plan-1', message: { event: 'done', data: { status: 'done' } } } as AgentMessage)
+    expect(state.running).toBe(false)
+  })
+})

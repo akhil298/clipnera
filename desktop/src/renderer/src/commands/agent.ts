@@ -6,9 +6,10 @@ import { auth } from '../state/auth'
 import { reason } from '../state/errors'
 import { chat, reduce, startTurn, turnSettled } from '../state/chat'
 import { project, settled } from '../state/project'
+import { mcp } from '../state/mcp'
 import { rules } from '../state/rules'
 import { media } from '../state/media'
-import { BURNED_IN_TEXT_SHARE } from '../../../shared/media'
+import { subtitledAssets } from '../../../shared/media'
 import { saveTake } from './takes'
 import { toggleVoice } from '../state/voice'
 import { rangeLabel, timelineView } from '../state/selection'
@@ -67,7 +68,7 @@ export async function sendPrompt(prompt: string, player: Player, from?: string):
     range: range && timeline ? { start: toFrames(range.start * timeline.fps), end: Math.max(toFrames(range.end * timeline.fps), toFrames(range.start * timeline.fps) + 1) } : null,
     point: point ? { x: point.x, y: point.y } : null,
     rules: rules.get().list,
-    subtitled: media.get().items.filter((m) => timeline?.assets[m.id] && (m.onScreenText?.share ?? 0) >= BURNED_IN_TEXT_SHARE).map((m) => m.id).slice(0, 50),
+    subtitled: subtitledAssets(media.get().items, timeline?.assets),
     history: state.turns.slice(-6).map((t) => ({ prompt: t.prompt.slice(0, 2000), reply: t.text.join('\n\n').slice(0, 4000) })),
     questions_asked: questions,
     auto: state.auto,
@@ -158,8 +159,24 @@ export function registerAgentCommands(registry: CommandRegistry, player: Player)
   }
   const offAuth = auth.subscribe(followAuth)
   followAuth()
+  // Turning the chat on the person's own Claude on or off changes which models there are.
+  let claudeChat = mcp.get().state?.claudeChat
+  const offClaude = mcp.subscribe(() => {
+    const on = mcp.get().state?.claudeChat
+    if (on === claudeChat) return
+    claudeChat = on
+    if (signedIn) loadModels()
+  })
 
   const disposers = [
+    registry.register({
+      id: 'agent.reloadModels',
+      title: 'Refresh AI Models',
+      category: 'AI',
+      description: 'Load the AI models again (after adding or removing your own Claude).',
+      aiCanRun: false,
+      run: () => (signedIn ? loadModels() : undefined)
+    }),
     registry.register<{ prompt: string }>({
       id: 'agent.send',
       title: 'Ask the AI',
@@ -202,6 +219,7 @@ export function registerAgentCommands(registry: CommandRegistry, player: Player)
     offEvents()
     offProject()
     offAuth()
+    offClaude()
     clearTimeout(clear)
     disposers.forEach((dispose) => dispose())
   }

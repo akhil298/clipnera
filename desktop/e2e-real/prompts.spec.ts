@@ -84,12 +84,18 @@ test('a person edits a raw video by chat, from beginner to advanced', async () =
         save()
         continue
       }
+      // A person reads the reply before typing the next request.
+      if (n > 0) await page.waitForTimeout(8000)
       const before = await census(page)
       const started = Date.now()
       await page.getByLabel('Message the AI').fill(step.prompt)
       await page.getByLabel('Message the AI').press('Enter')
       const turn = page.locator('.turn').last()
-      await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeHidden({ timeout: 15 * MINUTE })
+      await expect(turn.locator('.turn-prompt')).toContainText(step.prompt.slice(0, 30))
+      // The reply is done when it hands over a plan to approve, or when the AI is free and has stopped thinking.
+      await expect.poll(async () => (await turn.locator('.plan-card button', { hasText: 'Approve' }).count()) > 0
+        || (!(await page.getByRole('button', { name: 'Stop', exact: true }).isVisible()) && (await turn.locator('.thinking').count()) === 0),
+      { timeout: 15 * MINUTE, intervals: [1000] }).toBe(true)
       const planned = (Date.now() - started) / 1000
       // A whole edit comes as a plan card: approve it, as a person would, and wait for it to run.
       const plan = turn.locator('.plan-card')

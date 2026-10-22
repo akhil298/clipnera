@@ -75,8 +75,9 @@ void app.whenReady().then(async () => {
   const account = await setUpAuth()
   const { engine, library, shelf } = setUpMedia()
   const projects = setUpProject(account, library, shelf)
-  setUpAgent(account, projects, setUpExport(account, projects))
-  setUpMcp(projects, library)
+  const exports = setUpExport(account, projects)
+  const access = setUpMcp(projects, library, exports)
+  setUpAgent(account, projects, exports, access)
   app.on('will-quit', () => engine.dispose())
   Menu.setApplicationMenu(
     buildMenu((commandId) => {

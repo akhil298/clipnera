@@ -13,6 +13,7 @@ EditorService.apply as for every agent.
 from __future__ import annotations
 
 import asyncio
+from base64 import b64encode
 from collections import defaultdict
 from collections.abc import AsyncIterator, Mapping
 from contextlib import suppress
@@ -30,7 +31,9 @@ from brain.answer import READ_ONLY
 from brain.frames import Layer as frames_layer, grab, timecode
 from brain.route import RouteDecision, digest
 from brain.schema import (AgentAsk, AgentDone, AgentEdit, AgentRequest, AgentText, AgentTodo, AgentTodos,
-                          AgentToolCall, AgentToolDone, AgentUi, AgentUndone, StudioPanel)
+                          AgentToolCall, AgentToolDone, AgentToolOutput, AgentToolRun, AgentToolSpec, AgentUi,
+                          AgentUndone, StudioPanel)
+from clients.ai.base import ToolCall
 from brain.turns import clip_at, deterministic, plan_request, route_request
 from clients.ai import get_role_client
 from clients.services.s3 import S3
@@ -39,15 +42,19 @@ from core.exceptions import CustomException
 from editor.agent_tools import EditInput, describe
 from editor.history import Actor
 from editor.service import EditorService
-from editor.ops import AddItem, MoveItem
-from editor.timeline import ClipItem, GraphicItem, SfxItem, TextItem, Timeline
+from editor.ops import AddAsset, AddItem, AddTrack, MoveItem, RemoveItem
+from editor.timeline import Asset, ClipItem, GraphicItem, SfxItem, TextItem, Timeline
 from brain.render_adapter import main_track
 from understanding.mud import MUD
 from understanding import lcv
 
 AUTHOR = "agent:studio"
-PROMPT = (Path(__file__).parent / "prompts" / "studio.md").read_text(encoding="utf-8")
-LIMITS = TurnLimits(max_steps=24, seconds=300, usd=0.75, max_tokens=4000)
+_PROMPTS = Path(__file__).parent / "prompts"
+# How a professional editor works: the studio agent's judgement, and the person's own Claude reads it too.
+CRAFT = (_PROMPTS / "craft.md").read_text(encoding="utf-8")
+PROMPT = (_PROMPTS / "studio.md").read_text(encoding="utf-8").replace("{craft}", CRAFT)
+# A professional edit is a long to-do list, worked through and checked: room for it in one turn.
+LIMITS = TurnLimits(max_steps=48, seconds=600, usd=0.75, max_tokens=4000)
 MAX_FRAMES = 6
 RECENT_TURNS = 3
 TOOL_ERROR_CHARS = 300
@@ -67,6 +74,9 @@ LABELS = {
     "get_beats": "Finding the beats",
     "find_effects": "Looking through the effects",
     "open_with_moment": "{label}",
+    "find_broll": 'Looking for B-roll of "{query}"',
+    "set_music": "{label}",
+    "place_broll": "{label}",
     "apply_edits": "{label}",
     "undo_edit": "Taking back an edit",
     "look_at_frames": "Looking at the frames",
@@ -100,6 +110,8 @@ class StudioRun:
     prompt: str = ""
     # Assets with subtitles burned into the picture.
     subtitled: frozenset[str] = frozenset()
+    # Who the edits are by, in the project's history.
+    author: str = AUTHOR
     edits: int = 0
     # A plan card or a question took over: the turn ends after this tool call.
     finished: bool = False
@@ -155,6 +167,24 @@ class PlanInput(_Closed):
                          description="The edit to plan: the user's words, plus anything you learned that matters.")
 
 
+class MusicInput(_Closed):
+    track: str = Field(..., min_length=1, max_length=64, description="A music id from find_effects (kind music).")
+    gain_db: float = Field(-14.0, ge=-40, le=0, description="Its level under the voice; -14 is a bed, -20 quiet.")
+    label: str = Field("Add music", min_length=1, max_length=80)
+
+
+class BrollFindInput(_Closed):
+    query: str = Field(..., min_length=1, max_length=60, description="What the shot should show: 'rocket launch', 'earth from space'.")
+
+
+class BrollPlaceInput(_Closed):
+    shot: str = Field(..., min_length=1, max_length=500, description="A shot id find_broll returned.")
+    at: float = Field(..., ge=0, description="Where it starts on the timeline, in seconds.")
+    seconds: float | None = Field(None, gt=0, le=30, description="How long it shows; the whole shot if left out.")
+    picture_in_picture: bool = Field(False, description="A small window top right instead of filling the frame.")
+    label: str = Field("Add B-roll", min_length=1, max_length=80)
+
+
 class HookInput(_Closed):
     start: float = Field(..., ge=0, description="Where the moment starts on the timeline now, in seconds.")
     end: float = Field(..., gt=0, description="Where it ends on the timeline now, in seconds (at most 15 s later).")
@@ -172,6 +202,10 @@ class AskInput(_Closed):
 
 class NoInput(_Closed):
     pass
+
+
+async def _playbook(run: StudioRun, _: NoInput) -> str:
+    return CRAFT
 
 
 class EffectsInput(_Closed):
@@ -208,7 +242,7 @@ def hook_ops(timeline: Timeline, muds: Mapping[str, MUD], start: float, end: flo
             if inside:
                 src_in = max(clip.src_in, min(src_in, round(inside[0].t0 * fps)))
                 src_out = min(clip.src_out, max(src_out, round(inside[-1].t1 * fps) + 2))
-        pieces.append(ClipItem(type="clip", id=f"hook-{uuid4().hex[:8]}", at=0, asset=clip.asset, src_in=src_in,
+        pieces.append(ClipItem(type="clip", id=f"hook-{uuid4().hex[:8]}{len(pieces)}", at=0, asset=clip.asset, src_in=src_in,
                                src_out=src_out, speed=clip.speed, volume=clip.volume, transform=clip.transform))
     if not pieces:
         raise CustomException(message="Nothing on the main track there to open with.", code="NO_FOOTAGE", status_code=422)
@@ -242,15 +276,83 @@ def _playable(ops: list[Any]) -> list[Any]:
 
 
 async def _apply(run: StudioRun, edit: StudioEditInput) -> dict[str, Any]:
+    return await _commit(run, edit.base_version, edit.ops, edit.label, frozenset(edit.human_owned_ok), edit.declared_destructive)
+
+
+async def _commit(run: StudioRun, base_version: int, ops: list[Any], label: str, owned_ok: frozenset[str] = frozenset(),
+                  destructive_ok: bool = False) -> dict[str, Any]:
+    """One undoable step of the turn: ``ops`` applied as the agent. The tools that build their own edits
+    (a hook, B-roll, music) come here directly, so a long project's edit isn't held to apply_edits' size."""
     run.edits += 1
     step_id = f"{run.turn_id}-{run.edits}"
     # What the user selected is what they're pointing at: the agent may change it even if they made it.
-    owned_ok = frozenset(edit.human_owned_ok) | frozenset(run.selection)
-    actor = Actor(author=AUTHOR, step_id=step_id, turn_id=run.turn_id, human_owned_ok=owned_ok,
-                  destructive_ok=edit.declared_destructive, allowed_text=await _given_text(run))
-    result = await run.service.apply(run.user_id, run.project_id, edit.base_version, _playable(edit.ops), actor)
-    run.emit("edit", AgentEdit(label=edit.label, version=result.version, undo_step_id=step_id))
+    actor = Actor(author=run.author, step_id=step_id, turn_id=run.turn_id, human_owned_ok=owned_ok | frozenset(run.selection),
+                  destructive_ok=destructive_ok, allowed_text=await _given_text(run))
+    result = await run.service.apply(run.user_id, run.project_id, base_version, _playable(ops), actor)
+    run.emit("edit", AgentEdit(label=label, version=result.version, undo_step_id=step_id))
     return {"undo_step_id": step_id, **describe(result.version, result.timeline)}
+
+
+MUSIC_TRACK = "music"
+
+
+def _new_id(run: StudioRun, prefix: str) -> str:
+    """An id for something an agent tool adds: random, and with the edit's number so one turn never repeats one."""
+    return f"{prefix}-{uuid4().hex[:8]}{run.edits + 1}"
+
+
+async def _set_music(run: StudioRun, args: MusicInput) -> dict[str, Any]:
+    """A shelf bed copied into the project and laid under the whole edit, in place of earlier shelf music."""
+    project = await run.service.get(run.user_id, run.project_id)
+    timeline = project.timeline
+    added = await library.music_added(run.service, run.user_id, run.project_id, args.track)
+    fps, asset_id = timeline.fps, _new_id(run, "music")
+    frames = max(1, round(added.seconds * fps))
+    ops: list[Any] = [AddAsset(op="add_asset", asset=Asset(id=asset_id, kind="audio", key=added.key, frames=frames, has_audio=True))]
+    track = next((t for t in timeline.tracks if t.id == MUSIC_TRACK), None)
+    if track is None:
+        ops.append(AddTrack(op="add_track", id=MUSIC_TRACK, kind="audio"))
+    else:
+        ops += [RemoveItem(op="remove_item", item=i.id) for i in track.items]
+    name = library.music()[args.track].name
+    clip = ClipItem.model_validate({"type": "clip", "id": _new_id(run, "mu"), "at": 0, "asset": asset_id, "src_in": 0,
+                                    "src_out": min(frames, max(1, timeline.duration)), "volume": round(10 ** (args.gain_db / 20), 4),
+                                    "extra": {"name": name}})
+    ops.append(AddItem(op="add_item", track=MUSIC_TRACK, item=clip))
+    return await _commit(run, project.version, ops, args.label)
+
+
+async def _find_broll(run: StudioRun, args: BrollFindInput) -> dict[str, Any]:
+    found = library.search_broll(args.query, 12)
+    if not found:
+        return {"shots": [], "note": "Nothing on the public-domain shelf shows that; say so rather than use something off-topic."}
+    return {"shots": [{"id": s.id, "title": s.title, "topic": s.topic, "seconds": s.seconds} for s in found]}
+
+
+async def _place_broll(run: StudioRun, args: BrollPlaceInput) -> dict[str, Any]:
+    """The shot copied into the project and laid on an overlay track: over the talk, the voice carrying on."""
+    project = await run.service.get(run.user_id, run.project_id)
+    timeline = project.timeline
+    added = await library.broll_added(run.service, run.user_id, run.project_id, args.shot)
+    fps, asset_id = timeline.fps, _new_id(run, "broll")
+    frames = max(1, round(added.seconds * fps))
+    ops: list[Any] = [AddAsset(op="add_asset", asset=Asset(id=asset_id, kind="video", key=added.key, frames=frames,
+                                                           width=added.width, height=added.height, has_audio=False))]
+    track = next((t for t in timeline.tracks if t.kind == "overlay"), None)
+    if track is None:
+        track_id = _new_id(run, "ov")
+        ops.append(AddTrack(op="add_track", id=track_id, kind="overlay"))
+    else:
+        track_id = track.id
+    length = min(frames, round(args.seconds * fps)) if args.seconds else frames
+    transform = {"scale": 0.35, "x": 0.78, "y": 0.25} if args.picture_in_picture else {}
+    shot = library.broll().get(args.shot)
+    clip = ClipItem.model_validate({"type": "clip", "id": _new_id(run, "b"), "at": round(args.at * fps), "asset": asset_id,
+                                    "extra": {"name": shot.title[:80] if shot else "B-roll"},
+                                    "src_in": 0, "src_out": length, "transform": transform,
+                                    "transition_in": {"type": "fade", "frames": 6}})
+    ops.append(AddItem(op="add_item", track=track_id, item=clip))
+    return await _commit(run, project.version, ops, args.label)
 
 
 async def _hook(run: StudioRun, args: HookInput) -> dict[str, Any]:
@@ -258,8 +360,8 @@ async def _hook(run: StudioRun, args: HookInput) -> dict[str, Any]:
     muds = (await run.service.media(run.user_id, run.project_id)).muds
     ops = hook_ops(project.timeline, muds, args.start, args.end)
     # The cut on the main track moves later, including clips the user placed: that is what was asked.
-    moved = [op.item for op in ops if isinstance(op, MoveItem)]
-    return await _apply(run, StudioEditInput(base_version=project.version, label=args.label, ops=ops, human_owned_ok=moved[:50]))
+    moved = frozenset(op.item for op in ops if isinstance(op, MoveItem))
+    return await _commit(run, project.version, ops, args.label, moved)
 
 
 async def _undo(run: StudioRun, args: UndoInput) -> dict[str, Any]:
@@ -387,6 +489,12 @@ _TOOLS = [
                              "undoable step. Returns its undo_step_id and the new timeline, or why it was refused.",
               StudioEditInput, _apply),
     AgentTool("undo_edit", "Take back one of your own edits from this turn.", UndoInput, _undo),
+    AgentTool("set_music", "Lay one of Clipnera's own music beds (find_effects kind music) under the whole edit; it "
+                           "ducks under speech, loops to the end, and replaces shelf music already there.", MusicInput, _set_music),
+    AgentTool("find_broll", "Search the public-domain B-roll shelf (mostly NASA: space, earth, science, technology, "
+                            "health, nature). Returns shot ids with what each shows.", BrollFindInput, _find_broll),
+    AgentTool("place_broll", "Put a B-roll shot from find_broll over the edit at a time, as a cutaway (fills the frame) "
+                             "or picture-in-picture; the voice carries on under it.", BrollPlaceInput, _place_broll),
     AgentTool("open_with_moment", "Make a hook: play a copy of the moment from start to end (timeline seconds, up "
                                   "to 15 s, kept to whole words) first, and move everything else later. The rest of "
                                   "the edit is untouched. Add its zoom, sound or title after, with apply_edits.",
@@ -412,6 +520,31 @@ _TOOLS = [
 TOOLS = ToolBox(_TOOLS)
 # Auto mode never asks.
 TOOLS_AUTO = ToolBox([tool for tool in _TOOLS if tool.name != "ask_user"])
+
+# The person's own Claude, working the project through the Mac app, gets the same hands, one call at a
+# time: reading, editing, the shelves, the hook and frames. The chat's own tools (playhead, panels, plan
+# card, to-dos, questions) and export stay with the app, which has its own for those.
+OUTSIDE_AUTHOR = "agent:claude"
+_PLAYBOOK = AgentTool("editing_playbook", "Read this first, once per conversation: how a professional editor works on "
+                                          "this video, from watching the footage to the report at the end.", NoInput, _playbook)
+_OUTSIDE = {"apply_edits", "set_music", "find_broll", "place_broll", "open_with_moment", "find_effects", "look_at_frames"}
+OUTSIDE = ToolBox([_PLAYBOOK, *(tool for tool in _TOOLS if tool.name in _OUTSIDE or tool in READ_ONLY.tools())])
+
+
+def outside_specs() -> list[AgentToolSpec]:
+    return [AgentToolSpec(name=spec.name, description=spec.description, input_schema=spec.schema) for spec in OUTSIDE.specs()]
+
+
+async def run_outside(service: EditorService, user_id: str, project_id: str, name: str,
+                      request: AgentToolRun) -> AgentToolOutput:
+    """One tool call by an outside agent, as its own turn: each edit is one undoable step."""
+    run = StudioRun(service, user_id, project_id, turn_id=f"claude-{uuid4().hex[:12]}", selection=list(request.selection),
+                    playhead=0, recent_turns=[], questions_asked=0, auto=True, prompt=request.prompt,
+                    subtitled=frozenset(request.subtitled), author=OUTSIDE_AUTHOR)
+    result = await OUTSIDE.call(run, ToolCall(id=run.turn_id, name=name, arguments=request.arguments))
+    version = (await service.get(user_id, project_id)).version
+    return AgentToolOutput(text=result.content, images=[b64encode(jpeg).decode() for jpeg in result.images],
+                           is_error=result.is_error, version=version)
 
 
 def label(name: str, arguments: dict[str, Any]) -> str:

@@ -1,5 +1,5 @@
 import type { TimelineOp } from '@timeline'
-import type { MediaAnalysisResponse } from '../../shared/api'
+import type { AgentToolOutput, AgentToolRun, MediaAnalysisResponse } from '../../shared/api'
 import type { ProjectSnapshot, ProjectState } from '../../shared/project'
 import type { ProjectBackend, UploadFile } from './backend'
 
@@ -147,6 +147,39 @@ export class ProjectService {
 
   graphics() {
     return this.require().backend.graphics()
+  }
+
+  broll(query: string) {
+    return this.require().backend.broll(query)
+  }
+
+  music(query: string) {
+    return this.require().backend.music(query)
+  }
+
+  addMusic(id: string) {
+    const { backend, project } = this.require()
+    if (!project) throw new Error('Open a project first')
+    return backend.addMusic(project.id, id)
+  }
+
+  addBroll(id: string) {
+    const { backend, project } = this.require()
+    if (!project) throw new Error('Open a project first')
+    return backend.addBroll(project.id, id)
+  }
+
+  agentTools() {
+    return this.require().backend.agentTools()
+  }
+
+  /** Runs one of the studio agent's tools on the open project, then shows what it changed. */
+  async agentTool(name: string, run: AgentToolRun): Promise<AgentToolOutput> {
+    const { backend, project } = this.require()
+    if (!project) throw new Error('Open a project first')
+    const output = await backend.agentTool(project.id, name, run)
+    if (output.version !== project.version) await this.refresh()
+    return output
   }
 
   upload(file: UploadFile, onProgress: (fraction: number) => void): Promise<string> {

@@ -22,7 +22,7 @@ describe('what outside agents read', () => {
   })
 
   it('lists media with what the AI understood', () => {
-    const [m] = summarizeMedia(media, { a: { asset_id: 'a', status: 'ready', stage: null, error: null, updated_at: '', findings: { summary: 'A talk', moments: [{ t0: 1, t1: 2, text: 'Line' }] } as never } })
-    expect(m).toMatchObject({ name: 'talk.mp4', understanding: 'ready', summary: 'A talk', moments: [{ text: 'Line' }] })
+    const [m] = summarizeMedia(media, { a: { asset_id: 'a', status: 'ready', stage: null, error: null, updated_at: '', findings: { summary: 'A talk', chapters: [{ t0: 1, t1: 2, text: 'She explains the plan' }] } as never } })
+    expect(m).toMatchObject({ name: 'talk.mp4', understanding: 'ready', summary: 'A talk', chapters: [{ text: 'She explains the plan' }] })
   })
 })

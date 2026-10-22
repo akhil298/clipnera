@@ -29,7 +29,8 @@ test('shows the AI understanding a file, then what it found', async () => {
   await expect(found).toContainText(FINDINGS.summary, { timeout: 15_000 })
   await expect(found).toContainText('42 words · 3 fillers · 1 shots')
 
-  await found.getByRole('button', { name: /The strongest line/ }).click()
+  // What happens, part by part: a part plays from where it starts.
+  await found.getByRole('list', { name: 'What happens' }).getByRole('button', { name: /says hello to their friends/ }).click()
   await expect(page.getByRole('button', { name: /Viewing clip.mp4/ })).toBeVisible()
   await expect(page.getByLabel('Playhead time')).not.toHaveText('00:00:00:00')
   // Polling stops once everything is understood.

@@ -22,7 +22,7 @@ from brain import preview, server_render, voice
 from auth.dependencies import get_current_admin
 from brain.metrics import rollout_metrics
 from brain.schema import (
-    CaptionStyleOption, LibraryGraphic, LibrarySound, LookOption, PlanCard, PlanPatch, ProjectPreview, RenderStatus, RolloutMetrics,
+    BrollAddRequest, BrollAdded, CaptionStyleOption, LibraryBroll, LibraryMusic, MusicAddRequest, MusicAdded, LibraryGraphic, LibrarySound, LookOption, PlanCard, PlanPatch, ProjectPreview, RenderStatus, RolloutMetrics,
     SoundSearchResponse, StylePreference, VoiceText,
 )
 from core.database import AsyncSessionLocal, get_db
@@ -40,6 +40,8 @@ admin_router = APIRouter(prefix="/admin/ai-editor", tags=["admin"], dependencies
 voice_router = APIRouter(prefix="/editor/voice", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
 looks_router = APIRouter(prefix="/editor/looks", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
 captions_router = APIRouter(prefix="/editor/caption-styles", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
+music_router = APIRouter(prefix="/editor/music", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
+editor_broll_router = APIRouter(prefix="/editor/broll", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
 graphics_router = APIRouter(prefix="/editor/graphics", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
 sounds_router = APIRouter(prefix="/editor/sounds", tags=["editor"], dependencies=[Depends(require_user_flag(AGENT_EDITOR))])
 SessionDep = Annotated[AsyncSession, Depends(get_db)]
@@ -180,6 +182,32 @@ async def list_graphics(_: CurrentUserDep):
     return ok([LibraryGraphic(id=g.id, name=g.name, seconds=g.duration, moods=list(g.moods),
                               url=f"{library.GRAPHICS_URL}/{g.video.name}")
                for g in library.graphics().values()])
+
+
+@editor_broll_router.get("", response_model=ApiResponse[list[LibraryBroll]])
+async def search_broll(_: CurrentUserDep, q: str = "", limit: int = 40):
+    """The editor's public-domain B-roll shelf, the same one the AI picks from."""
+    return ok([LibraryBroll(id=s.id, title=s.title, category=s.category, topic=s.topic, seconds=s.seconds, url=s.url,
+                            licence=s.licence, credit=s.credit) for s in library.search_broll(q, max(1, min(limit, 100)))])
+
+
+@editor_broll_router.post("/add", response_model=ApiResponse[BrollAdded])
+async def add_broll(data: BrollAddRequest, user: CurrentUserDep, session: SessionDep):
+    """Copy a shelf shot into the project's storage, for an ``add_asset`` and an overlay clip."""
+    return ok(await library.broll_added(EditorService(session), user["user_id"], data.project_id, data.id))
+
+
+@music_router.get("", response_model=ApiResponse[list[LibraryMusic]])
+async def list_music(_: CurrentUserDep, q: str = ""):
+    """Clipnera's own music beds, the same shelf the AI picks from."""
+    return ok([LibraryMusic(id=t.id, name=t.name, mood=t.mood, tags=list(t.tags), bpm=t.bpm, seconds=t.seconds, url=t.url,
+                            licence=t.licence) for t in library.search_music(q)])
+
+
+@music_router.post("/add", response_model=ApiResponse[MusicAdded])
+async def add_music(data: MusicAddRequest, user: CurrentUserDep, session: SessionDep):
+    """Copy a shelf track into the project's storage, for an ``add_asset`` and the music track."""
+    return ok(await library.music_added(EditorService(session), user["user_id"], data.project_id, data.id))
 
 
 @voice_router.post("", response_model=ApiResponse[VoiceText])

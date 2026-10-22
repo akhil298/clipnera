@@ -3,6 +3,7 @@ import { commands } from './commands'
 import { registerAccountCommands } from './commands/account'
 import { registerAgentCommands } from './commands/agent'
 import { registerCaptionCommands } from './commands/captions'
+import { registerLibraryCommands } from './commands/library'
 import { registerSoundCommands } from './commands/sounds'
 import { registerEffectCommands } from './commands/effects'
 import { registerRuleCommands } from './commands/rules'
@@ -46,6 +47,7 @@ export function App() {
   useEffect(() => registerTimelineCommands(commands, player), [])
   useEffect(() => registerCaptionCommands(commands, player), [])
   useEffect(() => registerSoundCommands(commands, player), [])
+  useEffect(() => registerLibraryCommands(commands, player), [])
   useEffect(() => registerEffectCommands(commands, player), [])
   useEffect(() => registerRuleCommands(commands), [])
   useEffect(() => registerTakeCommands(commands), [])
@@ -59,6 +61,18 @@ export function App() {
         title: 'Connect Claude Code or Codex…',
         category: 'AI',
         description: 'Let agents on this Mac (Claude Code, Codex) use Clipnera Studio.',
+        aiCanRun: false,
+        run: () => mcp.set({ open: true })
+      }),
+    []
+  )
+  useEffect(
+    () =>
+      commands.register({
+        id: 'agents.useClaude',
+        title: 'Use My Claude…',
+        category: 'AI',
+        description: 'Edit with your own Claude (Pro or Max) through Claude Code, connected to this editor.',
         aiCanRun: false,
         run: () => mcp.set({ open: true })
       }),

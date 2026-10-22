@@ -1,6 +1,6 @@
 /** Channel names and payloads shared by the main process, the preload script and the renderer. */
 
-import type { LibraryGraphic, LibrarySound, StylePreference, UserProfileResponse } from './api'
+import type { BrollAdded, LibraryBroll, LibraryGraphic, LibraryMusic, LibrarySound, MusicAdded, StylePreference, UserProfileResponse } from './api'
 import type { TimelineOp } from '@timeline'
 import type { AgentEvent, AgentRequest, AiModels, PlanCard, PlanEvent } from './agent'
 import type { ExportState } from './export'
@@ -29,6 +29,10 @@ export const IPC = {
   projectRetryAnalysis: 'project:retryAnalysis',
   projectSounds: 'project:sounds',
   projectGraphics: 'project:graphics',
+  projectBroll: 'project:broll',
+  projectMusic: 'project:music',
+  projectAddMusic: 'project:addMusic',
+  projectAddBroll: 'project:addBroll',
   projectRules: 'project:rules',
   projectSetRules: 'project:setRules',
   projectStyle: 'project:style',
@@ -53,7 +57,14 @@ export const IPC = {
   mcpSetEnabled: 'mcp:setEnabled',
   mcpChanged: 'mcp:changed',
   mcpRequest: 'mcp:request',
-  mcpRespond: 'mcp:respond'
+  mcpRespond: 'mcp:respond',
+  claudeStatus: 'claude:status',
+  claudeOpen: 'claude:open',
+  claudeInstall: 'claude:install',
+  claudeSetChat: 'claude:setChat',
+  claudeKey: 'claude:key',
+  claudeSetKey: 'claude:setKey',
+  claudeClearKey: 'claude:clearKey'
 } as const
 
 export interface AppInfo {
@@ -107,6 +118,13 @@ export interface ProjectBridge {
   sounds(query: string): Promise<LibrarySound[]>
   /** The animated graphics shelf, with playable URLs. */
   graphics(): Promise<LibraryGraphic[]>
+  /** Searches the public-domain B-roll shelf. */
+  broll(query: string): Promise<LibraryBroll[]>
+  /** Copies a shelf shot into the open project; add it with add_asset. */
+  addBroll(id: string): Promise<BrollAdded>
+  /** Clipnera's own music beds, and copying one into the open project. */
+  music(query: string): Promise<LibraryMusic[]>
+  addMusic(id: string): Promise<MusicAdded>
   /** The open project's Edit Rules, and replacing them. */
   rules(): Promise<string[]>
   setRules(rules: string[]): Promise<string[]>
@@ -158,6 +176,9 @@ export interface McpState {
   /** The stdio bridge for agents that start a command (Codex, or Claude Code without HTTP). */
   bridge: string
   error: string | null
+  /** Whether this build may offer the chat on the person's own Claude (until Anthropic approves it for everyone). */
+  claudeChatAvailable: boolean
+  claudeChat: boolean
 }
 
 /** What an outside agent asks the editor window to do; it answers with mcp.respond. */
@@ -168,12 +189,36 @@ export type McpWindowRequest =
 
 export type McpWindowResponse = { ok: true; result: unknown } | { ok: false; error: string }
 
+/** Claude Code's official installer for macOS (code.claude.com/docs/en/setup). */
+export const CLAUDE_INSTALL_COMMAND = 'curl -fsSL https://claude.ai/install.sh | bash'
+
+/** The person's own Claude Code on this Mac (src/main/mcp/claudeCode.ts). */
+export interface ClaudeCodeStatus {
+  installed: boolean
+  path: string | null
+  version: string | null
+  signedIn: boolean
+  authMethod: string | null
+}
+
 export interface McpBridge {
   get(): Promise<McpState>
   setEnabled(enabled: boolean): Promise<McpState>
   onChange(listener: (state: McpState) => void): () => void
   onRequest(listener: (request: McpWindowRequest) => void): () => void
   respond(id: string, response: McpWindowResponse): Promise<void>
+  /** Whether Claude Code is installed and signed in. */
+  claudeStatus(): Promise<ClaudeCodeStatus>
+  /** Turns the editor's agent access on, connects Claude Code to it and opens it in Terminal. */
+  openClaude(): Promise<ClaudeCodeStatus>
+  /** Opens Terminal running Claude Code's official installer. */
+  installClaude(): Promise<void>
+  /** Turns the chat on the person's own Claude on or off. */
+  setClaudeChat(on: boolean): Promise<McpState>
+  /** The person's own Anthropic API key: whether one is saved (never the key itself), saving and removing it. */
+  claudeKey(): Promise<{ saved: boolean; last4: string | null }>
+  setClaudeKey(key: string): Promise<{ saved: boolean; last4: string | null }>
+  clearClaudeKey(): Promise<{ saved: boolean; last4: string | null }>
 }
 
 export interface ClipneraBridge {

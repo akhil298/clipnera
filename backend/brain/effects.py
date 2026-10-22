@@ -16,8 +16,8 @@ from brain import library
 from brain.preview import caption_styles
 from edit_engine.looks import LOOK_LABELS, LOOKS
 
-EffectKind = Literal["motion", "speed", "transition", "sound", "graphic", "look", "caption_style", "title", "broll"]
-KINDS: tuple[EffectKind, ...] = ("motion", "speed", "transition", "sound", "graphic", "look", "caption_style", "title", "broll")
+EffectKind = Literal["motion", "speed", "transition", "sound", "graphic", "music", "look", "caption_style", "title", "broll"]
+KINDS: tuple[EffectKind, ...] = ("motion", "speed", "transition", "sound", "graphic", "music", "look", "caption_style", "title", "broll")
 
 
 def _add(track: str, item: str) -> str:
@@ -72,7 +72,8 @@ _TITLES = [
            _add("text", '{type: "text", id: <id>, at: <frame>, dur: 90, text: <words>, style: "studio", transform: {y: 0.72}}')),
 ]
 _BROLL = [
-    Effect("broll", "cutaway", "Cutaway (B-roll)", "Footage over the talk to show what is being said; the voice carries on underneath.",
+    Effect("broll", "cutaway", "Cutaway (B-roll)", "Footage over the talk to show what is being said; the voice carries on underneath. "
+           "For the public-domain shelf, use find_broll and place_broll instead of this operation.",
            _add("overlay", '{type: "clip", id: <id>, at: <frame>, asset: <video or image asset>, src_in: <frame>, src_out: <frame>}')),
     Effect("broll", "picture_in_picture", "Picture-in-picture", "A small window over the main shot: a screen, a photo, a reaction.",
            'as a cutaway, plus transform: {scale: 0.35, x: 0.78, y: 0.25} (x/y: where its centre sits in the frame)'),
@@ -88,11 +89,13 @@ def catalogue() -> tuple[Effect, ...]:
                        + (f"; its own sound: {g.sfx.stem}" if g.sfx else "") + ".",
                        _add("graphic", f'{{type: "graphic", id: <id>, at: <frame>, dur: {round(g.duration * 30)}, extra: {{graphic: "{g.id}"}}}}'))
                 for g in library.graphics().values()]
+    tracks = [Effect("music", t.id, t.name, f"{t.mood} music bed, {t.bpm:.0f} bpm, {t.seconds:.0f} s, loops to the end. {' '.join(t.tags)}",
+                     f'set_music {{track: "{t.id}"}}') for t in library.music().values()]
     looks = [Effect("look", look, LOOK_LABELS.get(look, look), f"Colour for the whole edit: {LOOK_LABELS.get(look, look).lower()}.",
                     f'set_project {{look: "{look}"}}') for look in LOOKS]
     styles = [Effect("caption_style", s.id, s.name, s.description, f'set_captions {{enabled: true, style: "{s.id}"}}')
               for s in caption_styles()]
-    return (*_MOTION, *_SPEED, *_TRANSITIONS, *_TITLES, *_BROLL, *sounds, *graphics, *looks, *styles)
+    return (*_MOTION, *_SPEED, *_TRANSITIONS, *_TITLES, *_BROLL, *sounds, *graphics, *tracks, *looks, *styles)
 
 
 def find(kind: EffectKind | None = None, query: str = "", limit: int = 25) -> list[dict[str, str]]:

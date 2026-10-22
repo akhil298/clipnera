@@ -88,6 +88,21 @@ _OWN_EFFORT: frozenset[Role] = frozenset({"router", "moderation"})
 
 # The OpenAI deployment and effort picked for this turn or plan (``picked_model``).
 _picked: ContextVar[tuple[str | None, str | None]] = ContextVar("picked_model", default=(None, None))
+# A person's own Anthropic API key, for the turn they sent it with: every role in it runs on Claude through
+# that key (their account, their bill), and never falls back to Clipnera's providers.
+_own_key: ContextVar[str | None] = ContextVar("own_anthropic_key", default=None)
+# The Claude models a person may pick for their own key.
+OWN_KEY_MODELS = ("claude-sonnet-5-5", "claude-opus-5-5")
+
+
+@contextmanager
+def own_anthropic_key(key: str | None) -> Iterator[None]:
+    """Run the block's calls on Claude through ``key`` (a person's own API key); a no-op without one."""
+    token = _own_key.set(key or None)
+    try:
+        yield
+    finally:
+        _own_key.reset(token)
 
 PROFILES: dict[str, dict[Role, ModelChoice]] = {
     "openai": {role: _OPENAI for role in ROLES},
@@ -159,6 +174,9 @@ def model_for_role(role: str, plan_override: str | None = None, request_override
     role = _check_role(role)
     settings = get_settings()
     picked = _picked.get()[0]
+    if _own_key.get():
+        # Every role on the person's own key: the Claude model they picked, else the first offered.
+        return _with_role_effort(role, ModelChoice("anthropic", picked if picked in OWN_KEY_MODELS else OWN_KEY_MODELS[0]))
     pin = request_override or (picked and f"openai:{picked}") or (settings.LLM_ROLE_MODELS or {}).get(role) or plan_override
     choice = parse_pin(pin) if pin else PROFILES[settings.LLM_PROFILE][role]
     return _with_role_effort(role, choice)
@@ -172,6 +190,8 @@ def _role_on(role: Role, provider: str) -> ModelChoice:
 
 def _chain(role: Role, first: ModelChoice) -> list[ModelChoice]:
     """``first``, then the role on each other ``LLM_FALLBACK`` provider; keyless providers are skipped."""
+    if _own_key.get():
+        return [first]  # Never onto Clipnera's own providers: the person chose to pay for this turn.
     others = [p for p in dict.fromkeys(get_settings().LLM_FALLBACK) if p != first.provider and p in TEXT_PROVIDERS]
     chain = [first, *(_role_on(role, p) for p in others)]
     usable = [choice for choice in chain if _has_key(choice.provider)]
@@ -181,7 +201,8 @@ def _chain(role: Role, first: ModelChoice) -> list[ModelChoice]:
 
 
 def _client(role: Role, choice: ModelChoice) -> BaseAI:
-    client = _build(choice)
+    key = _own_key.get()
+    client = TEXT_PROVIDERS["anthropic"](api_key=key, model=choice.model, effort=choice.effort) if key else _build(choice)
     client.role = role
     client.temperature = ROLE_TEMPERATURE.get(role)
     if (seconds := ROLE_TIMEOUT.get(role)) and hasattr(client, "set_timeout"):

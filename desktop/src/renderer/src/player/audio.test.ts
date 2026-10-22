@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { normalise } from '@timeline'
-import { ducked, mixPlan } from './audio'
+import { ducked, loopedTime, mixPlan } from './audio'
 
 const t = normalise({
   fps: 10,
@@ -27,8 +27,16 @@ const t = normalise({
 const plan = mixPlan(t, (id) => `clipnera-media://${id}/proxy.m4a`, (item) => `/static/sfx/${item.name}.wav`)
 
 describe('the viewer mix', () => {
-  it('plays the first audio clip as the music, as the export does', () => {
-    expect(plan.music).toEqual({ id: 'music', url: 'clipnera-media://m/proxy.m4a', start: 0, end: 10, sourceStart: 2, speed: 1, volume: 0.4 })
+  it('plays the first audio clip as the music, on to the end of the edit, as the export does', () => {
+    expect(plan.music).toMatchObject({ id: 'music', url: 'clipnera-media://m/proxy.m4a', start: 0, sourceStart: 2, speed: 1, volume: 0.4 })
+    expect(plan.music!.end).toBeGreaterThanOrEqual(10)
+  })
+
+  it('loops the music: from the clip start point, then the whole file again', () => {
+    const cue = { start: 1, sourceStart: 2, speed: 1 }
+    // A 10 s file entered 2 s in: 8 s play first, then it starts over at 0.
+    expect([2, 9, 10, 11, 19].map((t) => loopedTime(cue, t, 10))).toEqual([3, 0, 1, 2, 0])
+    expect(loopedTime(cue, 9, Number.NaN)).toBe(10)
   })
 
   it('lists sound effects in time order, at the level the export plays them', () => {

@@ -92,6 +92,8 @@ async def get_transcript_range(context: Any, args: TranscriptInput) -> dict[str,
 
 
 async def get_moments(context: Any, args: MomentsInput) -> dict[str, Any]:
+    # Moments are picked when first asked for, not when the footage arrives.
+    await context.service.ensure_moments(context.user_id, context.project_id)
     media = await _media(context)
     found = [
         (asset_id, m) for asset_id, mud in sorted(media.muds.items())

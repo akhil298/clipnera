@@ -63,7 +63,7 @@ class MediaAsset:
 
 
 def card(asset: MediaAsset) -> str:
-    """L0: what the asset is, its quality, its best moments and (for music) its beats."""
+    """L0: what the asset is, its quality, what happens in it, its best moments once picked and (for music) its beats."""
     mud = asset.mud
     if mud is None:
         return f"{asset.id} {untrusted(asset.name)} — not analysed yet ({asset.status})"
@@ -79,6 +79,10 @@ def card(asset: MediaAsset) -> str:
     if mud.quality:
         facts.append("flags: " + ", ".join(f"{q.flag} {_t(q.t0)}-{_t(q.t1)}" for q in mud.quality[:6]))
     lines = [" | ".join(facts)]
+    if mud.chapters:
+        # What happens: a description of the file, read when it arrived.
+        lines.append("what happens: " + " | ".join(f"{_t(c.t0)}-{_t(c.t1)} {untrusted(c.text)}" for c in mud.chapters))
+    # Moments exist once an edit has asked for them (understanding.service.ensure_moments).
     best = sorted(mud.moments, key=lambda m: (-m.score, m.t0))[:TOP_MOMENTS]
     if best:
         lines.append("moments: " + " | ".join(

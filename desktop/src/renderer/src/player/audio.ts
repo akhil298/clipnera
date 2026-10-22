@@ -1,4 +1,4 @@
-import { itemEnd, type ClipItem, type SfxItem, type Timeline } from '@timeline'
+import { duration, itemEnd, type ClipItem, type SfxItem, type Timeline } from '@timeline'
 import type { AssetResolver } from './player'
 import { segments } from './sequence'
 
@@ -48,7 +48,8 @@ export function mixPlan(t: Timeline, resolve: AssetResolver, soundUrl: (item: Sf
   const musicUrl = musicClip && resolve(musicClip.asset)
   const music =
     musicClip && musicUrl
-      ? { id: musicClip.id, url: musicUrl, start: musicClip.at / t.fps, end: itemEnd(musicClip) / t.fps, sourceStart: musicClip.src_in / t.fps, speed: musicClip.speed, volume: musicClip.volume }
+      ? // Like the export, the music plays on to the end of the edit, from its start again when it runs out.
+        { id: musicClip.id, url: musicUrl, start: musicClip.at / t.fps, end: Math.max(itemEnd(musicClip), duration(t)) / t.fps, sourceStart: musicClip.src_in / t.fps, speed: musicClip.speed, volume: musicClip.volume }
       : null
   const sounds = audio
     .flatMap((tr) => tr.items)
@@ -62,6 +63,14 @@ export function mixPlan(t: Timeline, resolve: AssetResolver, soundUrl: (item: Sf
     .filter((s) => t.assets[s.clip.asset]?.has_audio && s.clip.volume > 0)
     .map((s) => ({ start: s.start, end: s.end }))
   return { music, sounds, speech }
+}
+
+/** Where in the music file `time` falls: from the clip's start point, then the whole file again (edit_engine/render.py). */
+export function loopedTime(cue: Pick<MusicCue, 'start' | 'sourceStart' | 'speed'>, time: number, fileSeconds: number): number {
+  const played = (time - cue.start) * cue.speed
+  const first = fileSeconds - cue.sourceStart
+  if (!Number.isFinite(fileSeconds) || fileSeconds <= 0 || played < first) return cue.sourceStart + played
+  return (played - first) % fileSeconds
 }
 
 export const ducked = (plan: MixPlan, time: number) => plan.speech.some((s) => time >= s.start && time < s.end)
@@ -88,7 +97,7 @@ export class AudioMix {
     const cue = this.plan.music
     if (cue && playing && time >= cue.start && time < cue.end) {
       const el = this.music ?? (this.music = this.element(cue.url, 'music'))
-      const target = cue.sourceStart + (time - cue.start) * cue.speed
+      const target = loopedTime(cue, time, el.duration)
       if (Math.abs(el.currentTime - target) > DRIFT) el.currentTime = target
       el.playbackRate = cue.speed
       el.volume = Math.min(1, cue.volume) * (ducked(this.plan, time) ? DUCKED : 1)

@@ -3,7 +3,7 @@
 Used for the verify render (360p, Phase 12) and for "Render on server" (Phase 17). What the
 reel renderer draws, in the Timeline's own shape: the main video track's clips back to back at
 their speed (zoom = scale, crop centre = x, both moving through their keyframes), their speech,
-one music track ducked under it, every library sound effect, the overlay tracks' footage and
+one music track ducked under it (looping to the end), every library sound effect, the overlay tracks' footage and
 images (filling the frame, or picture-in-picture under scale 1; their opacity held at its middle),
 the graphic tracks' flashes and shelf graphics (tracks later in the list draw on top), titles and
 burned captions. What it doesn't (the verifier checks on the Timeline instead): rotation, and the
@@ -127,7 +127,7 @@ def to_reel(timeline: Timeline, muds: Mapping[str, MUD], *, size: tuple[int, int
         "caption_style": timeline.captions.style if timeline.captions else None,
         "music": None if music is None else {
             "offset": round(music.src_in / fps, 3), "gain_db": round(20 * math.log10(max(music.volume, 1e-3)), 2),
-            "duck": True, "asset": music.asset,
+            "duck": True, "asset": music.asset, "loop": True,
         },
     }
     if music is not None:

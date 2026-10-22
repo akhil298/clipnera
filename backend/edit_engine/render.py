@@ -137,9 +137,13 @@ def audio_mix_cmd(timeline: dict[str, Any], sources: dict[int, Path], music: Pat
     args: list[str] = []
     inputs: dict[int, int] = {}
 
-    def add_input(path: Path) -> int:
-        args.extend(["-i", str(path)])
-        return len(args) // 2 - 1
+    count = 0
+
+    def add_input(path: Path, *before: str) -> int:
+        nonlocal count
+        args.extend([*before, "-i", str(path)])
+        count += 1
+        return count - 1
 
     chains: list[str] = []
     stems: list[str] = []
@@ -156,7 +160,8 @@ def audio_mix_cmd(timeline: dict[str, Any], sources: dict[int, Path], music: Pat
 
     spec = timeline.get("music")
     if music is not None and spec:
-        index = add_input(music)
+        # A bed shorter than the edit plays again from its start until the edit ends.
+        index = add_input(music, *(["-stream_loop", "-1"] if spec.get("loop") else []))
         fade_at = max(0.0, duration - 1.2)
         chains.append(
             f"[{index}:a]atrim=start={spec['offset']:.3f},asetpts=PTS-STARTPTS,{STEREO},volume={spec['gain_db']}dB,"

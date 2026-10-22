@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -165,6 +165,64 @@ class LibraryGraphic(BaseModel):
     url: str
 
 
+class LibraryBroll(BaseModel):
+    """A public-domain B-roll shot from the editor's shelf (brain.library.broll)."""
+
+    id: str
+    title: str
+    category: str
+    topic: str
+    seconds: float
+    # Path under the API host, e.g. /static/broll/<id>, to preview it.
+    url: str
+    licence: str
+    credit: str
+
+
+class BrollAddRequest(BaseModel):
+    """POST /editor/broll/add: copy one shelf shot into a project as an asset."""
+
+    project_id: str = Field(..., min_length=1, max_length=64)
+    id: str = Field(..., min_length=1, max_length=500)
+
+
+class BrollAdded(BaseModel):
+    """The project's copy of a shelf shot: add it with ``add_asset`` (kind video, no audio), then place it."""
+
+    key: str
+    seconds: float
+    width: int
+    height: int
+
+
+class LibraryMusic(BaseModel):
+    """A music bed from Clipnera's own shelf (composed in code, brain.library.music)."""
+
+    id: str
+    name: str
+    mood: str
+    tags: list[str]
+    bpm: float
+    seconds: float
+    # Path under the API host, e.g. /static/music/lofi_study.m4a.
+    url: str
+    licence: str
+
+
+class MusicAddRequest(BaseModel):
+    """POST /editor/music/add: copy one shelf track into a project as an asset."""
+
+    project_id: str = Field(..., min_length=1, max_length=64)
+    id: str = Field(..., min_length=1, max_length=64)
+
+
+class MusicAdded(BaseModel):
+    """The project's copy of a shelf track: add it with ``add_asset`` (kind audio), then lay it as the music."""
+
+    key: str
+    seconds: float
+
+
 class SoundSearchResponse(BaseModel):
     results: list[LibrarySound]
     count: int
@@ -285,6 +343,37 @@ class AgentToolDone(BaseModel):
     id: str
     ok: bool
     error: str | None = None
+
+
+class AgentToolSpec(BaseModel):
+    """GET /editor/agent-tools: one tool an outside agent (the person's own Claude, through the Mac app) may call."""
+
+    name: str
+    description: str
+    # JSON Schema of the tool's arguments.
+    input_schema: dict[str, Any]
+
+
+class AgentToolRun(BaseModel):
+    """POST /editor/projects/{id}/agent-tools/{name}: one call of an outside agent's tool."""
+
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    # The person's own words this turn: on-screen text may use them (ND-09).
+    prompt: str = Field("", max_length=4000)
+    # Ids of the items selected in the studio.
+    selection: list[str] = Field(default_factory=list, max_length=200)
+    # Assets with subtitles burned into the picture.
+    subtitled: list[str] = Field(default_factory=list, max_length=50)
+
+
+class AgentToolOutput(BaseModel):
+    """What the tool returned: its text (JSON for most tools), any stills it looked at, and the project version after."""
+
+    text: str
+    # JPEG stills, base64.
+    images: list[str] = Field(default_factory=list)
+    is_error: bool = False
+    version: int
 
 
 class AgentEdit(BaseModel):

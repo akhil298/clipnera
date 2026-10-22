@@ -109,3 +109,25 @@ def test_footage_with_its_own_subtitles_gets_no_captions_over_them():
     assert "captions" in kinds(frozenset())
     _, plan = full_edit.build(ctx, subtitled=frozenset({"a"}))
     assert "captions" not in [s.kind for s in plan.steps] and "own subtitles" in plan.summary
+
+
+def test_the_broll_shelf_is_public_domain_only_and_ranks_the_shots_own_words_first(tmp_path, monkeypatch):
+    from brain import library
+    from core.config import get_settings
+
+    rows = [("a/x/rocket.mp4", "Rocket launch at dawn", "space", "pd_us_gov"),
+            ("a/y/earth.mp4", "Earth from orbit", "rocket", "pd_us_gov"),
+            ("a/z/credit.mp4", "Rocket close-up", "space", "cc_by")]
+    lines = ["file,category,topic,shot_start_s,shot_seconds,source,source_id,title,author,author_url,license_code,license_url,commercial_ok,attribution_text,source_url"]
+    for file, title, topic, licence in rows:
+        (tmp_path / file).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / file).write_bytes(b"x")
+        lines.append(f"{file},science,{topic},0,5.0,nasa,id,{title},NASA,,{licence},,True,Courtesy NASA,")
+    (tmp_path / "CREDITS.csv").write_text("\n".join(lines) + "\n")
+    monkeypatch.setattr(get_settings(), "BROLL_LIBRARY_DIR", str(tmp_path))
+    library.broll.cache_clear()
+    try:
+        assert sorted(library.broll()) == ["a/x/rocket.mp4", "a/y/earth.mp4"]
+        assert [s.id for s in library.search_broll("rocket")] == ["a/x/rocket.mp4", "a/y/earth.mp4"]
+    finally:
+        library.broll.cache_clear()

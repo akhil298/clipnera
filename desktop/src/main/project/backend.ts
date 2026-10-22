@@ -10,7 +10,8 @@ import type {
   EditorProjectResponse,
   CaptionStyleOption,
   EditorProjectSummary,
-  LibraryGraphic, LibrarySound,
+  AgentToolOutput, AgentToolRun, AgentToolSpec,
+  BrollAdded, LibraryBroll, LibraryGraphic, LibraryMusic, LibrarySound, MusicAdded,
   LookOption,
   MediaAnalysisResponse,
   ProjectPreview,
@@ -50,7 +51,16 @@ export interface ProjectBackend {
   sounds(query: string): Promise<LibrarySound[]>
   /** The animated graphics shelf, with playable URLs. */
   graphics(): Promise<LibraryGraphic[]>
+  /** The public-domain B-roll shelf, with playable URLs, and copying a shot into a project. */
+  broll(query: string): Promise<LibraryBroll[]>
+  addBroll(projectId: string, id: string): Promise<BrollAdded>
+  /** Clipnera's own music beds, with playable URLs, and copying one into a project. */
+  music(query: string): Promise<LibraryMusic[]>
+  addMusic(projectId: string, id: string): Promise<MusicAdded>
   looks(): Promise<LookOption[]>
+  /** The studio agent's tools the person's own Claude may call, and calling one on a project. */
+  agentTools(): Promise<AgentToolSpec[]>
+  agentTool(projectId: string, name: string, run: AgentToolRun): Promise<AgentToolOutput>
   /** What the AI has learned from the user's corrections, and forgetting one of them. */
   style(): Promise<StylePreference[]>
   forgetStyle(key: string): Promise<StylePreference[]>
@@ -137,6 +147,32 @@ export class RemoteProjectBackend implements ProjectBackend {
   async graphics(): Promise<LibraryGraphic[]> {
     const found = await api.getData<LibraryGraphic[]>('/editor/graphics', await this.auth())
     return found.map((graphic) => ({ ...graphic, url: absolute(graphic.url) }))
+  }
+
+  async broll(query: string): Promise<LibraryBroll[]> {
+    const found = await api.getData<LibraryBroll[]>(`/editor/broll?${new URLSearchParams({ q: query })}`, await this.auth())
+    return found.map((shot) => ({ ...shot, url: absolute(shot.url) }))
+  }
+
+  async addBroll(projectId: string, id: string): Promise<BrollAdded> {
+    return api.postData<BrollAdded>('/editor/broll/add', { project_id: projectId, id }, await this.auth())
+  }
+
+  async music(query: string): Promise<LibraryMusic[]> {
+    const found = await api.getData<LibraryMusic[]>(`/editor/music?${new URLSearchParams({ q: query })}`, await this.auth())
+    return found.map((track) => ({ ...track, url: absolute(track.url) }))
+  }
+
+  async addMusic(projectId: string, id: string): Promise<MusicAdded> {
+    return api.postData<MusicAdded>('/editor/music/add', { project_id: projectId, id }, await this.auth())
+  }
+
+  async agentTools(): Promise<AgentToolSpec[]> {
+    return api.getData<AgentToolSpec[]>('/editor/agent-tools', await this.auth())
+  }
+
+  async agentTool(projectId: string, name: string, run: AgentToolRun): Promise<AgentToolOutput> {
+    return api.postData<AgentToolOutput>(`/editor/projects/${projectId}/agent-tools/${encodeURIComponent(name)}`, run, await this.auth())
   }
 
   private async auth(): Promise<string> {

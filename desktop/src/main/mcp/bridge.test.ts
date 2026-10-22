@@ -11,7 +11,7 @@ const BRIDGE = join(__dirname, '../../../bin/clipnera-mcp.mjs')
 let server: McpServer
 
 beforeAll(async () => {
-  server = new McpServer((session) => [{ name: 'who', description: 'Who is calling.', inputSchema: { type: 'object' }, run: async () => session.client }], '0.1.0')
+  server = new McpServer(async (session) => [{ name: 'who', description: 'Who is calling.', inputSchema: { type: 'object' }, run: async () => session.client }], '0.1.0')
   await server.start(PORT, TOKEN)
 })
 afterAll(() => server.stop())

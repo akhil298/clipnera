@@ -119,8 +119,8 @@ export interface EditorOpsResponse {
   timeline: Timeline
 }
 
-/** understanding/findings.py FoundMoment (seconds) */
-export interface FoundMoment {
+/** understanding/findings.py FoundChapter (seconds): a part of the file and what happens in it. */
+export interface FoundChapter {
   t0: number
   t1: number
   text: string
@@ -138,7 +138,7 @@ export interface AnalysisFindings {
   dead_air: number
   shots: number
   tempo_bpm: number | null
-  moments: FoundMoment[]
+  chapters: FoundChapter[]
   problems: string[]
   suggestions: string[]
 }
@@ -234,6 +234,67 @@ export interface LibraryGraphic {
   seconds: number
   moods: string[]
   url: string
+}
+
+/** brain/schema.py LibraryBroll — GET /editor/broll?q=. A public-domain shot; `url` is made absolute by the app. */
+export interface LibraryBroll {
+  id: string
+  title: string
+  category: string
+  topic: string
+  seconds: number
+  url: string
+  licence: string
+  credit: string
+}
+
+/** brain/schema.py BrollAdded — POST /editor/broll/add: the project's copy of a shelf shot, for add_asset. */
+export interface BrollAdded {
+  key: string
+  seconds: number
+  width: number
+  height: number
+}
+
+/** brain/schema.py LibraryMusic — GET /editor/music?q=. A bed composed in code; `url` is made absolute by the app. */
+export interface LibraryMusic {
+  id: string
+  name: string
+  mood: string
+  tags: string[]
+  bpm: number
+  seconds: number
+  url: string
+  licence: string
+}
+
+/** brain/schema.py MusicAdded — POST /editor/music/add: the project's copy of a shelf track, for add_asset. */
+export interface MusicAdded {
+  key: string
+  seconds: number
+}
+
+/** brain/schema.py AgentToolSpec — GET /editor/agent-tools: a studio agent tool the person's own Claude may call. */
+export interface AgentToolSpec {
+  name: string
+  description: string
+  input_schema: Record<string, unknown>
+}
+
+/** brain/schema.py AgentToolRun — POST /editor/projects/{id}/agent-tools/{name} */
+export interface AgentToolRun {
+  arguments: Record<string, unknown>
+  prompt: string
+  selection: string[]
+  subtitled: string[]
+}
+
+/** brain/schema.py AgentToolOutput — what the tool returned, any stills (base64 JPEG), the project version after. */
+export interface AgentToolOutput {
+  text: string
+  images: string[]
+  is_error: boolean
+  version: number
 }
 
 /** brain/schema.py SoundSearchResponse — GET /editor/sounds?q=&page=&page_size= */

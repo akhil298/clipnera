@@ -179,6 +179,9 @@ class BaseConfig(BaseSettings):
     PEXELS_API_KEY: str = ""
     PIXABAY_API_KEY: str = ""
     BROLL_S3_PREFIX: str = "broll"
+    # The public-domain B-roll shelf for the editor (broll.collect's folder, CREDITS.csv inside);
+    # empty means broll_library next to the backend folder.
+    BROLL_LIBRARY_DIR: str = ""
     BROLL_MAX_DOWNLOAD_BYTES: int = 300 * 1024 * 1024
     BROLL_MIN_SHORT_SIDE: int = 720
     BROLL_MIN_SHOT_SECONDS: float = 2.0

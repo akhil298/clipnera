@@ -7,7 +7,7 @@ const STAGES: Record<string, string> = {
   shots: 'looking at the shots',
   transcript: 'listening to what is said',
   music: 'finding the beat',
-  moments: 'picking the best moments'
+  reading: 'working out what happens'
 }
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
@@ -36,13 +36,13 @@ export function Understanding({ item }: { item: MediaItem }) {
     <div className="understanding" aria-label={`What the AI found in ${item.name}`}>
       {found.summary && <p className="understanding-summary">{found.summary}</p>}
       {counts.length > 0 && <p className="muted">{counts.join(' · ')}</p>}
-      {found.moments.length > 0 && (
-        <ul className="moments">
-          {found.moments.map((m) => (
+      {found.chapters?.length > 0 && (
+        <ul className="moments" aria-label="What happens">
+          {found.chapters.map((m) => (
             <li key={`${m.t0}`}>
               <button
                 type="button"
-                title="Play this moment"
+                title="Play this part"
                 onClick={() => {
                   runCommand('player.open', { id: item.id })
                   runCommand('player.playRange', { from: m.t0, to: m.t1 })

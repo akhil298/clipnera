@@ -1,0 +1,4474 @@
+[
+ {
+  "id": "map.country.zimbabwe",
+  "kind": "map",
+  "path": "maps/country_zimbabwe.svg",
+  "words": [
+   "zimbabwe",
+   "ज़िम्बाब्वे"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.zambia",
+  "kind": "map",
+  "path": "maps/country_zambia.svg",
+  "words": [
+   "zambia",
+   "ज़ाम्बिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.yemen",
+  "kind": "map",
+  "path": "maps/country_yemen.svg",
+  "words": [
+   "yemen",
+   "यमन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.vietnam",
+  "kind": "map",
+  "path": "maps/country_vietnam.svg",
+  "words": [
+   "vietnam",
+   "वियतनाम"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.venezuela",
+  "kind": "map",
+  "path": "maps/country_venezuela.svg",
+  "words": [
+   "venezuela",
+   "वेनेज़ुएला"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.vatican",
+  "kind": "map",
+  "path": "maps/country_vatican.svg",
+  "words": [
+   "vatican",
+   "vatican city",
+   "वैटिकन नगर"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.vanuatu",
+  "kind": "map",
+  "path": "maps/country_vanuatu.svg",
+  "words": [
+   "vanuatu",
+   "वानूआटू"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.uzbekistan",
+  "kind": "map",
+  "path": "maps/country_uzbekistan.svg",
+  "words": [
+   "uzbekistan",
+   "उज़्बेकिस्तान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.uruguay",
+  "kind": "map",
+  "path": "maps/country_uruguay.svg",
+  "words": [
+   "uruguay",
+   "उरुग्वे"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.micronesia",
+  "kind": "map",
+  "path": "maps/country_micronesia.svg",
+  "words": [
+   "federated states of micronesia",
+   "micronesia",
+   "माइक्रोनेशिया के संघीकृत राज्य"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.marshallis",
+  "kind": "map",
+  "path": "maps/country_marshallis.svg",
+  "words": [
+   "marshall is.",
+   "marshall islands",
+   "मार्शल द्वीपसमूह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.nmarianais",
+  "kind": "map",
+  "path": "maps/country_nmarianais.svg",
+  "words": [
+   "n. mariana is.",
+   "northern mariana islands",
+   "उत्तरी मारियाना द्वीप"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.usvirginis",
+  "kind": "map",
+  "path": "maps/country_usvirginis.svg",
+  "words": [
+   "u.s. virgin is.",
+   "united states virgin islands",
+   "संयुक्त राज्य वर्जिन द्वीपसमूह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.guam",
+  "kind": "map",
+  "path": "maps/country_guam.svg",
+  "words": [
+   "guam",
+   "गुआम"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.americansamoa",
+  "kind": "map",
+  "path": "maps/country_americansamoa.svg",
+  "words": [
+   "american samoa",
+   "अमेरिकी समोआ"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.puertorico",
+  "kind": "map",
+  "path": "maps/country_puertorico.svg",
+  "words": [
+   "puerto rico",
+   "पोर्टो रीको"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.unitedstatesofamerica",
+  "kind": "map",
+  "path": "maps/country_unitedstatesofamerica.svg",
+  "words": [
+   "united states",
+   "united states of america",
+   "संयुक्त राज्य अमेरिका"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.sgeoandtheis",
+  "kind": "map",
+  "path": "maps/country_sgeoandtheis.svg",
+  "words": [
+   "s. geo. and the is.",
+   "south georgia and the islands",
+   "south georgia and the south sandwich islands",
+   "दक्षिण जॉर्जिया एवं दक्षिण सैंडविच द्वीप समूह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.brindianoceanter",
+  "kind": "map",
+  "path": "maps/country_brindianoceanter.svg",
+  "words": [
+   "br. indian ocean ter.",
+   "british indian ocean territory",
+   "ब्रिटिश हिंद महासागर क्षेत्र"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.sainthelena",
+  "kind": "map",
+  "path": "maps/country_sainthelena.svg",
+  "words": [
+   "saint helena",
+   "सन्त हेलेना"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.pitcairnis",
+  "kind": "map",
+  "path": "maps/country_pitcairnis.svg",
+  "words": [
+   "pitcairn is.",
+   "pitcairn islands",
+   "पिटकेर्न द्वीपसमूह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.anguilla",
+  "kind": "map",
+  "path": "maps/country_anguilla.svg",
+  "words": [
+   "anguilla",
+   "अंगुइला"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.falklandis",
+  "kind": "map",
+  "path": "maps/country_falklandis.svg",
+  "words": [
+   "falkland is.",
+   "falkland islands",
+   "falkland islands / malvinas",
+   "फ़ॉकलैंड द्वीपसमूह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.caymanis",
+  "kind": "map",
+  "path": "maps/country_caymanis.svg",
+  "words": [
+   "cayman is.",
+   "cayman islands",
+   "केमन द्वीपसमूह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.bermuda",
+  "kind": "map",
+  "path": "maps/country_bermuda.svg",
+  "words": [
+   "bermuda",
+   "बरमूडा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.britishvirginis",
+  "kind": "map",
+  "path": "maps/country_britishvirginis.svg",
+  "words": [
+   "british virgin is.",
+   "british virgin islands",
+   "ब्रिटिश वर्जिन द्वीपसमूह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.turksandcaicosis",
+  "kind": "map",
+  "path": "maps/country_turksandcaicosis.svg",
+  "words": [
+   "turks and caicos is.",
+   "turks and caicos islands",
+   "तुर्क और केकोस द्वीपसमूह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.montserrat",
+  "kind": "map",
+  "path": "maps/country_montserrat.svg",
+  "words": [
+   "montserrat",
+   "मॉण्टसेराट"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.jersey",
+  "kind": "map",
+  "path": "maps/country_jersey.svg",
+  "words": [
+   "jersey",
+   "जर्सी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.guernsey",
+  "kind": "map",
+  "path": "maps/country_guernsey.svg",
+  "words": [
+   "guernsey",
+   "ग्वेर्नसे"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.isleofman",
+  "kind": "map",
+  "path": "maps/country_isleofman.svg",
+  "words": [
+   "isle of man",
+   "आइल ऑफ़ मैन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.unitedkingdom",
+  "kind": "map",
+  "path": "maps/country_unitedkingdom.svg",
+  "words": [
+   "united kingdom",
+   "यूनाइटेड किंगडम"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.unitedarabemirates",
+  "kind": "map",
+  "path": "maps/country_unitedarabemirates.svg",
+  "words": [
+   "united arab emirates",
+   "संयुक्त अरब अमीरात"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.ukraine",
+  "kind": "map",
+  "path": "maps/country_ukraine.svg",
+  "words": [
+   "ukraine",
+   "युक्रेन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.uganda",
+  "kind": "map",
+  "path": "maps/country_uganda.svg",
+  "words": [
+   "uganda",
+   "युगाण्डा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.turkmenistan",
+  "kind": "map",
+  "path": "maps/country_turkmenistan.svg",
+  "words": [
+   "turkmenistan",
+   "तुर्कमेनिस्तान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.turkey",
+  "kind": "map",
+  "path": "maps/country_turkey.svg",
+  "words": [
+   "turkey",
+   "तुर्की"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.tunisia",
+  "kind": "map",
+  "path": "maps/country_tunisia.svg",
+  "words": [
+   "tunisia",
+   "ट्यूनिशिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.trinidadandtobago",
+  "kind": "map",
+  "path": "maps/country_trinidadandtobago.svg",
+  "words": [
+   "trinidad and tobago",
+   "त्रिनिदाद और टोबैगो"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.tonga",
+  "kind": "map",
+  "path": "maps/country_tonga.svg",
+  "words": [
+   "tonga",
+   "टोंगा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.togo",
+  "kind": "map",
+  "path": "maps/country_togo.svg",
+  "words": [
+   "togo",
+   "टोगो"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.timorleste",
+  "kind": "map",
+  "path": "maps/country_timorleste.svg",
+  "words": [
+   "east timor",
+   "timor-leste",
+   "पूर्वी तिमोर"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.thailand",
+  "kind": "map",
+  "path": "maps/country_thailand.svg",
+  "words": [
+   "thailand",
+   "थाईलैण्ड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.tanzania",
+  "kind": "map",
+  "path": "maps/country_tanzania.svg",
+  "words": [
+   "tanzania",
+   "united republic of tanzania",
+   "तंज़ानिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.tajikistan",
+  "kind": "map",
+  "path": "maps/country_tajikistan.svg",
+  "words": [
+   "tajikistan",
+   "ताजिकिस्तान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.taiwan",
+  "kind": "map",
+  "path": "maps/country_taiwan.svg",
+  "words": [
+   "taiwan",
+   "चीनी गणराज्य"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.syria",
+  "kind": "map",
+  "path": "maps/country_syria.svg",
+  "words": [
+   "syria",
+   "सीरिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.switzerland",
+  "kind": "map",
+  "path": "maps/country_switzerland.svg",
+  "words": [
+   "switzerland",
+   "स्विट्ज़रलैण्ड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.sweden",
+  "kind": "map",
+  "path": "maps/country_sweden.svg",
+  "words": [
+   "sweden",
+   "स्वीडन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.eswatini",
+  "kind": "map",
+  "path": "maps/country_eswatini.svg",
+  "words": [
+   "eswatini",
+   "kingdom of eswatini",
+   "एस्वातीनी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.suriname",
+  "kind": "map",
+  "path": "maps/country_suriname.svg",
+  "words": [
+   "suriname",
+   "सूरीनाम"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.ssudan",
+  "kind": "map",
+  "path": "maps/country_ssudan.svg",
+  "words": [
+   "s. sudan",
+   "south sudan",
+   "दक्षिण सूडान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.sudan",
+  "kind": "map",
+  "path": "maps/country_sudan.svg",
+  "words": [
+   "sudan",
+   "सूडान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.srilanka",
+  "kind": "map",
+  "path": "maps/country_srilanka.svg",
+  "words": [
+   "sri lanka",
+   "श्रीलंका"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.spain",
+  "kind": "map",
+  "path": "maps/country_spain.svg",
+  "words": [
+   "spain",
+   "स्पेन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.southkorea",
+  "kind": "map",
+  "path": "maps/country_southkorea.svg",
+  "words": [
+   "republic of korea",
+   "south korea",
+   "दक्षिण कोरिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.southafrica",
+  "kind": "map",
+  "path": "maps/country_southafrica.svg",
+  "words": [
+   "south africa",
+   "दक्षिण अफ़्रीका"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.somalia",
+  "kind": "map",
+  "path": "maps/country_somalia.svg",
+  "words": [
+   "somalia",
+   "सोमालिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.somaliland",
+  "kind": "map",
+  "path": "maps/country_somaliland.svg",
+  "words": [
+   "somaliland",
+   "सोमालीदेश"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.solomonis",
+  "kind": "map",
+  "path": "maps/country_solomonis.svg",
+  "words": [
+   "solomon is.",
+   "solomon islands",
+   "सोलोमन द्वीपसमूह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.slovakia",
+  "kind": "map",
+  "path": "maps/country_slovakia.svg",
+  "words": [
+   "slovakia",
+   "स्लोवाकिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.slovenia",
+  "kind": "map",
+  "path": "maps/country_slovenia.svg",
+  "words": [
+   "slovenia",
+   "स्लोवेनिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.singapore",
+  "kind": "map",
+  "path": "maps/country_singapore.svg",
+  "words": [
+   "singapore",
+   "सिंगापुर"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.sierraleone",
+  "kind": "map",
+  "path": "maps/country_sierraleone.svg",
+  "words": [
+   "sierra leone",
+   "सिएरा लियोन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.seychelles",
+  "kind": "map",
+  "path": "maps/country_seychelles.svg",
+  "words": [
+   "seychelles",
+   "सेशेल्स"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.serbia",
+  "kind": "map",
+  "path": "maps/country_serbia.svg",
+  "words": [
+   "republic of serbia",
+   "serbia",
+   "सर्बिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.senegal",
+  "kind": "map",
+  "path": "maps/country_senegal.svg",
+  "words": [
+   "senegal",
+   "सेनेगल"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.saudiarabia",
+  "kind": "map",
+  "path": "maps/country_saudiarabia.svg",
+  "words": [
+   "saudi arabia",
+   "सउदी अरब"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.sotomandprincipe",
+  "kind": "map",
+  "path": "maps/country_sotomandprincipe.svg",
+  "words": [
+   "são tomé and principe",
+   "são tomé and príncipe",
+   "साओ तोमे और प्रिन्सिपी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.sanmarino",
+  "kind": "map",
+  "path": "maps/country_sanmarino.svg",
+  "words": [
+   "san marino",
+   "सान मारिनो"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.samoa",
+  "kind": "map",
+  "path": "maps/country_samoa.svg",
+  "words": [
+   "samoa",
+   "समोआ"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.stvinandgren",
+  "kind": "map",
+  "path": "maps/country_stvinandgren.svg",
+  "words": [
+   "saint vincent and the grenadines",
+   "st. vin. and gren.",
+   "सन्त विन्सेण्ट और ग्रेनाडाइन्स"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.saintlucia",
+  "kind": "map",
+  "path": "maps/country_saintlucia.svg",
+  "words": [
+   "saint lucia",
+   "सेंट लूसिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.stkittsandnevis",
+  "kind": "map",
+  "path": "maps/country_stkittsandnevis.svg",
+  "words": [
+   "saint kitts and nevis",
+   "st. kitts and nevis",
+   "सन्त किट्स और नेविस"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.rwanda",
+  "kind": "map",
+  "path": "maps/country_rwanda.svg",
+  "words": [
+   "rwanda",
+   "रवाण्डा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.russia",
+  "kind": "map",
+  "path": "maps/country_russia.svg",
+  "words": [
+   "russia",
+   "russian federation",
+   "रूस"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.romania",
+  "kind": "map",
+  "path": "maps/country_romania.svg",
+  "words": [
+   "romania",
+   "रोमानिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.qatar",
+  "kind": "map",
+  "path": "maps/country_qatar.svg",
+  "words": [
+   "qatar",
+   "क़तर"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.portugal",
+  "kind": "map",
+  "path": "maps/country_portugal.svg",
+  "words": [
+   "portugal",
+   "पुर्तगाल"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.poland",
+  "kind": "map",
+  "path": "maps/country_poland.svg",
+  "words": [
+   "poland",
+   "पोलैंड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.philippines",
+  "kind": "map",
+  "path": "maps/country_philippines.svg",
+  "words": [
+   "philippines",
+   "फ़िलीपीन्स"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.peru",
+  "kind": "map",
+  "path": "maps/country_peru.svg",
+  "words": [
+   "peru",
+   "पेरू"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.paraguay",
+  "kind": "map",
+  "path": "maps/country_paraguay.svg",
+  "words": [
+   "paraguay",
+   "पैराग्वे"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.papuanewguinea",
+  "kind": "map",
+  "path": "maps/country_papuanewguinea.svg",
+  "words": [
+   "papua new guinea",
+   "पापुआ न्यू गिनी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.panama",
+  "kind": "map",
+  "path": "maps/country_panama.svg",
+  "words": [
+   "panama",
+   "पनामा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.palau",
+  "kind": "map",
+  "path": "maps/country_palau.svg",
+  "words": [
+   "palau",
+   "पलाउ"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.pakistan",
+  "kind": "map",
+  "path": "maps/country_pakistan.svg",
+  "words": [
+   "pakistan",
+   "पाकिस्तान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.oman",
+  "kind": "map",
+  "path": "maps/country_oman.svg",
+  "words": [
+   "oman",
+   "ओमान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.norway",
+  "kind": "map",
+  "path": "maps/country_norway.svg",
+  "words": [
+   "norway",
+   "नॉर्वे"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.northkorea",
+  "kind": "map",
+  "path": "maps/country_northkorea.svg",
+  "words": [
+   "dem. rep. korea",
+   "north korea",
+   "उत्तर कोरिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.nigeria",
+  "kind": "map",
+  "path": "maps/country_nigeria.svg",
+  "words": [
+   "nigeria",
+   "नाईजीरिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.niger",
+  "kind": "map",
+  "path": "maps/country_niger.svg",
+  "words": [
+   "niger",
+   "नाइजर"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.nicaragua",
+  "kind": "map",
+  "path": "maps/country_nicaragua.svg",
+  "words": [
+   "nicaragua",
+   "निकारागुआ"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.newzealand",
+  "kind": "map",
+  "path": "maps/country_newzealand.svg",
+  "words": [
+   "new zealand",
+   "न्यूज़ीलैण्ड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.niue",
+  "kind": "map",
+  "path": "maps/country_niue.svg",
+  "words": [
+   "niue",
+   "निउए"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.cookis",
+  "kind": "map",
+  "path": "maps/country_cookis.svg",
+  "words": [
+   "cook is.",
+   "cook islands",
+   "कुक द्वीपसमूह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.netherlands",
+  "kind": "map",
+  "path": "maps/country_netherlands.svg",
+  "words": [
+   "netherlands",
+   "नीदरलैण्ड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.aruba",
+  "kind": "map",
+  "path": "maps/country_aruba.svg",
+  "words": [
+   "aruba",
+   "अरूबा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.curaao",
+  "kind": "map",
+  "path": "maps/country_curaao.svg",
+  "words": [
+   "curaçao",
+   "कुराकाओ"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.nepal",
+  "kind": "map",
+  "path": "maps/country_nepal.svg",
+  "words": [
+   "nepal",
+   "नेपाल"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.nauru",
+  "kind": "map",
+  "path": "maps/country_nauru.svg",
+  "words": [
+   "nauru",
+   "नौरु"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.namibia",
+  "kind": "map",
+  "path": "maps/country_namibia.svg",
+  "words": [
+   "namibia",
+   "नामीबिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.mozambique",
+  "kind": "map",
+  "path": "maps/country_mozambique.svg",
+  "words": [
+   "mozambique",
+   "मोज़ाम्बीक"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.morocco",
+  "kind": "map",
+  "path": "maps/country_morocco.svg",
+  "words": [
+   "morocco",
+   "मोरक्को"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.wsahara",
+  "kind": "map",
+  "path": "maps/country_wsahara.svg",
+  "words": [
+   "w. sahara",
+   "western sahara",
+   "पश्चिमी सहारा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.montenegro",
+  "kind": "map",
+  "path": "maps/country_montenegro.svg",
+  "words": [
+   "montenegro",
+   "मॉन्टेनीग्रो"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.mongolia",
+  "kind": "map",
+  "path": "maps/country_mongolia.svg",
+  "words": [
+   "mongolia",
+   "मंगोलिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.moldova",
+  "kind": "map",
+  "path": "maps/country_moldova.svg",
+  "words": [
+   "moldova",
+   "मॉल्डोवा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.monaco",
+  "kind": "map",
+  "path": "maps/country_monaco.svg",
+  "words": [
+   "monaco",
+   "मोनैको"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.mexico",
+  "kind": "map",
+  "path": "maps/country_mexico.svg",
+  "words": [
+   "mexico",
+   "मेक्सिको"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.mauritius",
+  "kind": "map",
+  "path": "maps/country_mauritius.svg",
+  "words": [
+   "mauritius",
+   "मॉरिशस"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.mauritania",
+  "kind": "map",
+  "path": "maps/country_mauritania.svg",
+  "words": [
+   "mauritania",
+   "मॉरीतानिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.malta",
+  "kind": "map",
+  "path": "maps/country_malta.svg",
+  "words": [
+   "malta",
+   "माल्टा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.mali",
+  "kind": "map",
+  "path": "maps/country_mali.svg",
+  "words": [
+   "mali",
+   "माली"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.maldives",
+  "kind": "map",
+  "path": "maps/country_maldives.svg",
+  "words": [
+   "maldives",
+   "मालदीव"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.malaysia",
+  "kind": "map",
+  "path": "maps/country_malaysia.svg",
+  "words": [
+   "malaysia",
+   "मलेशिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.malawi",
+  "kind": "map",
+  "path": "maps/country_malawi.svg",
+  "words": [
+   "malawi",
+   "मलावी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.madagascar",
+  "kind": "map",
+  "path": "maps/country_madagascar.svg",
+  "words": [
+   "madagascar",
+   "मेडागास्कर"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.northmacedonia",
+  "kind": "map",
+  "path": "maps/country_northmacedonia.svg",
+  "words": [
+   "north macedonia",
+   "उत्तर मैसिडोनिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.luxembourg",
+  "kind": "map",
+  "path": "maps/country_luxembourg.svg",
+  "words": [
+   "luxembourg",
+   "लक्ज़मबर्ग"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.lithuania",
+  "kind": "map",
+  "path": "maps/country_lithuania.svg",
+  "words": [
+   "lithuania",
+   "लिथुआनिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.liechtenstein",
+  "kind": "map",
+  "path": "maps/country_liechtenstein.svg",
+  "words": [
+   "liechtenstein",
+   "लिक्टेन्स्टाइन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.libya",
+  "kind": "map",
+  "path": "maps/country_libya.svg",
+  "words": [
+   "libya",
+   "लीबिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.liberia",
+  "kind": "map",
+  "path": "maps/country_liberia.svg",
+  "words": [
+   "liberia",
+   "लाइबेरिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.lesotho",
+  "kind": "map",
+  "path": "maps/country_lesotho.svg",
+  "words": [
+   "lesotho",
+   "लेसोथो"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.lebanon",
+  "kind": "map",
+  "path": "maps/country_lebanon.svg",
+  "words": [
+   "lebanon",
+   "लेबनान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.latvia",
+  "kind": "map",
+  "path": "maps/country_latvia.svg",
+  "words": [
+   "latvia",
+   "लातविया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.laos",
+  "kind": "map",
+  "path": "maps/country_laos.svg",
+  "words": [
+   "lao pdr",
+   "laos",
+   "लाओस"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.kyrgyzstan",
+  "kind": "map",
+  "path": "maps/country_kyrgyzstan.svg",
+  "words": [
+   "kyrgyzstan",
+   "किर्गिज़स्तान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.kuwait",
+  "kind": "map",
+  "path": "maps/country_kuwait.svg",
+  "words": [
+   "kuwait",
+   "कुवैत"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.kosovo",
+  "kind": "map",
+  "path": "maps/country_kosovo.svg",
+  "words": [
+   "kosovo",
+   "कोसोवो गणराज्य"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.kiribati",
+  "kind": "map",
+  "path": "maps/country_kiribati.svg",
+  "words": [
+   "kiribati",
+   "किरिबाती"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.kenya",
+  "kind": "map",
+  "path": "maps/country_kenya.svg",
+  "words": [
+   "kenya",
+   "कीनिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.kazakhstan",
+  "kind": "map",
+  "path": "maps/country_kazakhstan.svg",
+  "words": [
+   "kazakhstan",
+   "कज़ाख़िस्तान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.jordan",
+  "kind": "map",
+  "path": "maps/country_jordan.svg",
+  "words": [
+   "jordan",
+   "जॉर्डन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.japan",
+  "kind": "map",
+  "path": "maps/country_japan.svg",
+  "words": [
+   "japan",
+   "जापान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.jamaica",
+  "kind": "map",
+  "path": "maps/country_jamaica.svg",
+  "words": [
+   "jamaica",
+   "जमैका"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.italy",
+  "kind": "map",
+  "path": "maps/country_italy.svg",
+  "words": [
+   "italy",
+   "इटली"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.israel",
+  "kind": "map",
+  "path": "maps/country_israel.svg",
+  "words": [
+   "israel",
+   "इज़राइल"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.palestine",
+  "kind": "map",
+  "path": "maps/country_palestine.svg",
+  "words": [
+   "palestine",
+   "फ़िलिस्तीनी राज्यक्षेत्र"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.ireland",
+  "kind": "map",
+  "path": "maps/country_ireland.svg",
+  "words": [
+   "ireland",
+   "आयरलैण्ड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.iraq",
+  "kind": "map",
+  "path": "maps/country_iraq.svg",
+  "words": [
+   "iraq",
+   "इराक"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.iran",
+  "kind": "map",
+  "path": "maps/country_iran.svg",
+  "words": [
+   "iran",
+   "ईरान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.indonesia",
+  "kind": "map",
+  "path": "maps/country_indonesia.svg",
+  "words": [
+   "indonesia",
+   "इंडोनेशिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.india",
+  "kind": "map",
+  "path": "maps/country_india.svg",
+  "words": [
+   "india",
+   "भारत"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.iceland",
+  "kind": "map",
+  "path": "maps/country_iceland.svg",
+  "words": [
+   "iceland",
+   "आइसलैण्ड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.hungary",
+  "kind": "map",
+  "path": "maps/country_hungary.svg",
+  "words": [
+   "hungary",
+   "हंगरी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.honduras",
+  "kind": "map",
+  "path": "maps/country_honduras.svg",
+  "words": [
+   "honduras",
+   "हौण्डुरस"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.haiti",
+  "kind": "map",
+  "path": "maps/country_haiti.svg",
+  "words": [
+   "haiti",
+   "हैती"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.guyana",
+  "kind": "map",
+  "path": "maps/country_guyana.svg",
+  "words": [
+   "guyana",
+   "गयाना"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.guineabissau",
+  "kind": "map",
+  "path": "maps/country_guineabissau.svg",
+  "words": [
+   "guinea-bissau",
+   "गिनी-बिसाऊ"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.guinea",
+  "kind": "map",
+  "path": "maps/country_guinea.svg",
+  "words": [
+   "guinea",
+   "गिनी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.guatemala",
+  "kind": "map",
+  "path": "maps/country_guatemala.svg",
+  "words": [
+   "guatemala",
+   "ग्वाटेमाला"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.grenada",
+  "kind": "map",
+  "path": "maps/country_grenada.svg",
+  "words": [
+   "grenada",
+   "ग्रेनाडा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.greece",
+  "kind": "map",
+  "path": "maps/country_greece.svg",
+  "words": [
+   "greece",
+   "यूनान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.ghana",
+  "kind": "map",
+  "path": "maps/country_ghana.svg",
+  "words": [
+   "ghana",
+   "घाना"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.germany",
+  "kind": "map",
+  "path": "maps/country_germany.svg",
+  "words": [
+   "germany",
+   "जर्मनी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.georgia",
+  "kind": "map",
+  "path": "maps/country_georgia.svg",
+  "words": [
+   "georgia",
+   "जॉर्जिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.gambia",
+  "kind": "map",
+  "path": "maps/country_gambia.svg",
+  "words": [
+   "gambia",
+   "the gambia",
+   "गाम्बिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.gabon",
+  "kind": "map",
+  "path": "maps/country_gabon.svg",
+  "words": [
+   "gabon",
+   "गबॉन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.france",
+  "kind": "map",
+  "path": "maps/country_france.svg",
+  "words": [
+   "france",
+   "फ़्रान्स"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.stpierreandmiquelon",
+  "kind": "map",
+  "path": "maps/country_stpierreandmiquelon.svg",
+  "words": [
+   "saint pierre and miquelon",
+   "st. pierre and miquelon",
+   "सन्त पियर और मिकलान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.wallisandfutunais",
+  "kind": "map",
+  "path": "maps/country_wallisandfutunais.svg",
+  "words": [
+   "wallis and futuna",
+   "wallis and futuna is.",
+   "wallis and futuna islands",
+   "वालिस और फ़्यूचूना"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.stmartin",
+  "kind": "map",
+  "path": "maps/country_stmartin.svg",
+  "words": [
+   "saint martin",
+   "saint-martin",
+   "st-martin",
+   "सेंट मार्टिन की सामूहिकता"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.stbarthlemy",
+  "kind": "map",
+  "path": "maps/country_stbarthlemy.svg",
+  "words": [
+   "saint barthelemy",
+   "saint barthélemy",
+   "saint-barthélemy",
+   "st-barthélemy",
+   "सेंट बार्थेलेमी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.frpolynesia",
+  "kind": "map",
+  "path": "maps/country_frpolynesia.svg",
+  "words": [
+   "fr. polynesia",
+   "french polynesia",
+   "फ़्रान्सीसी पॉलिनेशिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.newcaledonia",
+  "kind": "map",
+  "path": "maps/country_newcaledonia.svg",
+  "words": [
+   "new caledonia",
+   "नया कैलेडोनिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.frsantarcticlands",
+  "kind": "map",
+  "path": "maps/country_frsantarcticlands.svg",
+  "words": [
+   "fr. s. antarctic lands",
+   "french southern and antarctic lands",
+   "दक्षिण फ्रांसीसी और अंटार्कटिक लैंड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.land",
+  "kind": "map",
+  "path": "maps/country_land.svg",
+  "words": [
+   "aland",
+   "åland",
+   "åland islands",
+   "ऑलैण्ड द्वीपसमूह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.finland",
+  "kind": "map",
+  "path": "maps/country_finland.svg",
+  "words": [
+   "finland",
+   "फ़िनलैण्ड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.fiji",
+  "kind": "map",
+  "path": "maps/country_fiji.svg",
+  "words": [
+   "fiji",
+   "फ़िजी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.ethiopia",
+  "kind": "map",
+  "path": "maps/country_ethiopia.svg",
+  "words": [
+   "ethiopia",
+   "इथियोपिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.estonia",
+  "kind": "map",
+  "path": "maps/country_estonia.svg",
+  "words": [
+   "estonia",
+   "एस्टोनिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.eritrea",
+  "kind": "map",
+  "path": "maps/country_eritrea.svg",
+  "words": [
+   "eritrea",
+   "इरित्रिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.eqguinea",
+  "kind": "map",
+  "path": "maps/country_eqguinea.svg",
+  "words": [
+   "eq. guinea",
+   "equatorial guinea",
+   "भूमध्यरेखीय गिनी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.elsalvador",
+  "kind": "map",
+  "path": "maps/country_elsalvador.svg",
+  "words": [
+   "el salvador",
+   "अल साल्वाडोर"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.egypt",
+  "kind": "map",
+  "path": "maps/country_egypt.svg",
+  "words": [
+   "egypt",
+   "मिस्र"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.ecuador",
+  "kind": "map",
+  "path": "maps/country_ecuador.svg",
+  "words": [
+   "ecuador",
+   "ईक्वाडोर"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.dominicanrep",
+  "kind": "map",
+  "path": "maps/country_dominicanrep.svg",
+  "words": [
+   "dominican rep.",
+   "dominican republic",
+   "डोमिनिकन गणराज्य"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.dominica",
+  "kind": "map",
+  "path": "maps/country_dominica.svg",
+  "words": [
+   "dominica",
+   "डोमिनिका"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.djibouti",
+  "kind": "map",
+  "path": "maps/country_djibouti.svg",
+  "words": [
+   "djibouti",
+   "जिबूती"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.greenland",
+  "kind": "map",
+  "path": "maps/country_greenland.svg",
+  "words": [
+   "greenland",
+   "ग्रीनलैण्ड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.faeroeis",
+  "kind": "map",
+  "path": "maps/country_faeroeis.svg",
+  "words": [
+   "faeroe is.",
+   "faeroe islands",
+   "faroe islands",
+   "फ़रो द्वीपसमूह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.denmark",
+  "kind": "map",
+  "path": "maps/country_denmark.svg",
+  "words": [
+   "denmark",
+   "डेनमार्क"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.czechia",
+  "kind": "map",
+  "path": "maps/country_czechia.svg",
+  "words": [
+   "czech republic",
+   "czechia",
+   "चेक गणराज्य"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.ncyprus",
+  "kind": "map",
+  "path": "maps/country_ncyprus.svg",
+  "words": [
+   "n. cyprus",
+   "northern cyprus",
+   "turkish republic of northern cyprus",
+   "उत्तरी साइप्रस"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.cyprus",
+  "kind": "map",
+  "path": "maps/country_cyprus.svg",
+  "words": [
+   "cyprus",
+   "साइप्रस"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.cuba",
+  "kind": "map",
+  "path": "maps/country_cuba.svg",
+  "words": [
+   "cuba",
+   "क्यूबा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.croatia",
+  "kind": "map",
+  "path": "maps/country_croatia.svg",
+  "words": [
+   "croatia",
+   "क्रोएशिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.ctedivoire",
+  "kind": "map",
+  "path": "maps/country_ctedivoire.svg",
+  "words": [
+   "côte d'ivoire",
+   "ivory coast",
+   "कोत दिव्वार"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.costarica",
+  "kind": "map",
+  "path": "maps/country_costarica.svg",
+  "words": [
+   "costa rica",
+   "कोस्टा रीका"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.demrepcongo",
+  "kind": "map",
+  "path": "maps/country_demrepcongo.svg",
+  "words": [
+   "dem. rep. congo",
+   "democratic republic of the congo",
+   "कांगो लोकतान्त्रिक गणराज्य"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.congo",
+  "kind": "map",
+  "path": "maps/country_congo.svg",
+  "words": [
+   "congo",
+   "republic of the congo",
+   "कांगो गणराज्य"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.comoros",
+  "kind": "map",
+  "path": "maps/country_comoros.svg",
+  "words": [
+   "comoros",
+   "कोमोरोस"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.colombia",
+  "kind": "map",
+  "path": "maps/country_colombia.svg",
+  "words": [
+   "colombia",
+   "कोलम्बिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.china",
+  "kind": "map",
+  "path": "maps/country_china.svg",
+  "words": [
+   "china",
+   "people's republic of china",
+   "चीनी जनवादी गणराज्य"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.macao",
+  "kind": "map",
+  "path": "maps/country_macao.svg",
+  "words": [
+   "macao",
+   "macao s.a.r",
+   "macau",
+   "मकाउ"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.hongkong",
+  "kind": "map",
+  "path": "maps/country_hongkong.svg",
+  "words": [
+   "hong kong",
+   "hong kong s.a.r.",
+   "हांगकांग"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.chile",
+  "kind": "map",
+  "path": "maps/country_chile.svg",
+  "words": [
+   "chile",
+   "चिली"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.chad",
+  "kind": "map",
+  "path": "maps/country_chad.svg",
+  "words": [
+   "chad",
+   "चाड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.centralafricanrep",
+  "kind": "map",
+  "path": "maps/country_centralafricanrep.svg",
+  "words": [
+   "central african rep.",
+   "central african republic",
+   "मध्य अफ़्रीकी गणराज्य"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.caboverde",
+  "kind": "map",
+  "path": "maps/country_caboverde.svg",
+  "words": [
+   "cabo verde",
+   "cape verde",
+   "republic of cabo verde",
+   "केप वर्दे"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.canada",
+  "kind": "map",
+  "path": "maps/country_canada.svg",
+  "words": [
+   "canada",
+   "कनाडा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.cameroon",
+  "kind": "map",
+  "path": "maps/country_cameroon.svg",
+  "words": [
+   "cameroon",
+   "कैमरुन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.cambodia",
+  "kind": "map",
+  "path": "maps/country_cambodia.svg",
+  "words": [
+   "cambodia",
+   "कम्बोडिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.myanmar",
+  "kind": "map",
+  "path": "maps/country_myanmar.svg",
+  "words": [
+   "myanmar",
+   "म्यान्मार"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.burundi",
+  "kind": "map",
+  "path": "maps/country_burundi.svg",
+  "words": [
+   "burundi",
+   "बुरुण्डी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.burkinafaso",
+  "kind": "map",
+  "path": "maps/country_burkinafaso.svg",
+  "words": [
+   "burkina faso",
+   "बुर्किना फासो"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.bulgaria",
+  "kind": "map",
+  "path": "maps/country_bulgaria.svg",
+  "words": [
+   "bulgaria",
+   "बुल्गारिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.brunei",
+  "kind": "map",
+  "path": "maps/country_brunei.svg",
+  "words": [
+   "brunei",
+   "brunei darussalam",
+   "ब्रुनेई"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.brazil",
+  "kind": "map",
+  "path": "maps/country_brazil.svg",
+  "words": [
+   "brazil",
+   "ब्राज़ील"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.botswana",
+  "kind": "map",
+  "path": "maps/country_botswana.svg",
+  "words": [
+   "botswana",
+   "बोत्सवाना"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.bosniaandherz",
+  "kind": "map",
+  "path": "maps/country_bosniaandherz.svg",
+  "words": [
+   "bosnia and herz.",
+   "bosnia and herzegovina",
+   "बॉस्निया और हर्ज़ेगोविना"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.bolivia",
+  "kind": "map",
+  "path": "maps/country_bolivia.svg",
+  "words": [
+   "bolivia",
+   "बोलिविया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.bhutan",
+  "kind": "map",
+  "path": "maps/country_bhutan.svg",
+  "words": [
+   "bhutan",
+   "भूटान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.benin",
+  "kind": "map",
+  "path": "maps/country_benin.svg",
+  "words": [
+   "benin",
+   "बेनिन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.belize",
+  "kind": "map",
+  "path": "maps/country_belize.svg",
+  "words": [
+   "belize",
+   "बेलीज़"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.belgium",
+  "kind": "map",
+  "path": "maps/country_belgium.svg",
+  "words": [
+   "belgium",
+   "बेल्जियम"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.belarus",
+  "kind": "map",
+  "path": "maps/country_belarus.svg",
+  "words": [
+   "belarus",
+   "बेलारूस"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.barbados",
+  "kind": "map",
+  "path": "maps/country_barbados.svg",
+  "words": [
+   "barbados",
+   "बारबाडोस"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.bangladesh",
+  "kind": "map",
+  "path": "maps/country_bangladesh.svg",
+  "words": [
+   "bangladesh",
+   "बांग्लादेश"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.bahrain",
+  "kind": "map",
+  "path": "maps/country_bahrain.svg",
+  "words": [
+   "bahrain",
+   "बहरीन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.bahamas",
+  "kind": "map",
+  "path": "maps/country_bahamas.svg",
+  "words": [
+   "bahamas",
+   "the bahamas",
+   "बहामास"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.azerbaijan",
+  "kind": "map",
+  "path": "maps/country_azerbaijan.svg",
+  "words": [
+   "azerbaijan",
+   "अज़रबैजान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.austria",
+  "kind": "map",
+  "path": "maps/country_austria.svg",
+  "words": [
+   "austria",
+   "ऑस्ट्रिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.australia",
+  "kind": "map",
+  "path": "maps/country_australia.svg",
+  "words": [
+   "australia",
+   "ऑस्ट्रेलिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.indianoceanter",
+  "kind": "map",
+  "path": "maps/country_indianoceanter.svg",
+  "words": [
+   "australian indian ocean territories",
+   "indian ocean ter.",
+   "indian ocean territories",
+   "हिंद महासागर के ऑस्ट्रेलियाई क्षेत्र"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.heardiandmcdonaldis",
+  "kind": "map",
+  "path": "maps/country_heardiandmcdonaldis.svg",
+  "words": [
+   "heard i. and mcdonald is.",
+   "heard i. and mcdonald islands",
+   "heard island and mcdonald islands",
+   "हर्ड द्वीप और मैकडोनाल्ड द्वीप"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.norfolkisland",
+  "kind": "map",
+  "path": "maps/country_norfolkisland.svg",
+  "words": [
+   "norfolk island",
+   "नॉर्फ़ोक द्वीप"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.ashmoreandcartieris",
+  "kind": "map",
+  "path": "maps/country_ashmoreandcartieris.svg",
+  "words": [
+   "ashmore and cartier is.",
+   "ashmore and cartier islands",
+   "एशमोर और कार्टियर द्वीप समूह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.armenia",
+  "kind": "map",
+  "path": "maps/country_armenia.svg",
+  "words": [
+   "armenia",
+   "आर्मीनिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.argentina",
+  "kind": "map",
+  "path": "maps/country_argentina.svg",
+  "words": [
+   "argentina",
+   "अर्जेण्टीना"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.antiguaandbarb",
+  "kind": "map",
+  "path": "maps/country_antiguaandbarb.svg",
+  "words": [
+   "antigua and barb.",
+   "antigua and barbuda",
+   "अण्टीगुआ और बारबूडा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.angola",
+  "kind": "map",
+  "path": "maps/country_angola.svg",
+  "words": [
+   "angola",
+   "अंगोला"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.andorra",
+  "kind": "map",
+  "path": "maps/country_andorra.svg",
+  "words": [
+   "andorra",
+   "अण्डोरा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.algeria",
+  "kind": "map",
+  "path": "maps/country_algeria.svg",
+  "words": [
+   "algeria",
+   "अल्जीरिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.albania",
+  "kind": "map",
+  "path": "maps/country_albania.svg",
+  "words": [
+   "albania",
+   "अल्बानिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.afghanistan",
+  "kind": "map",
+  "path": "maps/country_afghanistan.svg",
+  "words": [
+   "afghanistan",
+   "अफ़्गानिस्तान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.siachenglacier",
+  "kind": "map",
+  "path": "maps/country_siachenglacier.svg",
+  "words": [
+   "siachen glacier",
+   "सियाचीन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.antarctica",
+  "kind": "map",
+  "path": "maps/country_antarctica.svg",
+  "words": [
+   "antarctica",
+   "अंटार्कटिका"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.sintmaarten",
+  "kind": "map",
+  "path": "maps/country_sintmaarten.svg",
+  "words": [
+   "sint maarten",
+   "सिंट मार्टेन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.country.tuvalu",
+  "kind": "map",
+  "path": "maps/country_tuvalu.svg",
+  "words": [
+   "tuvalu",
+   "तुवालू"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.ladakh",
+  "kind": "map",
+  "path": "maps/state_in_ladakh.svg",
+  "words": [
+   "ladakh",
+   "लद्दाख़"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.arunachalpradesh",
+  "kind": "map",
+  "path": "maps/state_in_arunachalpradesh.svg",
+  "words": [
+   "agence de la frontisre du nord-est(french-obsolete)",
+   "arunachal pradesh",
+   "north east frontier agency",
+   "अरुणाचल प्रदेश"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.sikkim",
+  "kind": "map",
+  "path": "maps/state_in_sikkim.svg",
+  "words": [
+   "sikkim",
+   "सिक्किम"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.westbengal",
+  "kind": "map",
+  "path": "maps/state_in_westbengal.svg",
+  "words": [
+   "bangla",
+   "bengala occidentale",
+   "bengala ocidental",
+   "bengale occidental",
+   "west bengal",
+   "पश्चिम बंगाल"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.assam",
+  "kind": "map",
+  "path": "maps/state_in_assam.svg",
+  "words": [
+   "assam",
+   "असम"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.uttarakhand",
+  "kind": "map",
+  "path": "maps/state_in_uttarakhand.svg",
+  "words": [
+   "uttarakhand",
+   "uttaranchal",
+   "उत्तराखण्ड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.nagaland",
+  "kind": "map",
+  "path": "maps/state_in_nagaland.svg",
+  "words": [
+   "nagaland",
+   "नागालैण्ड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.manipur",
+  "kind": "map",
+  "path": "maps/state_in_manipur.svg",
+  "words": [
+   "manipur",
+   "मणिपुर"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.mizoram",
+  "kind": "map",
+  "path": "maps/state_in_mizoram.svg",
+  "words": [
+   "mizoram",
+   "मिज़ोरम"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.tripura",
+  "kind": "map",
+  "path": "maps/state_in_tripura.svg",
+  "words": [
+   "tripura",
+   "त्रिपुरा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.meghalaya",
+  "kind": "map",
+  "path": "maps/state_in_meghalaya.svg",
+  "words": [
+   "meghalaya",
+   "मेघालय"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.washington",
+  "kind": "map",
+  "path": "maps/state_us_washington.svg",
+  "words": [
+   "wa",
+   "wash.",
+   "washington",
+   "वॉशिंगटन राज्य"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.idaho",
+  "kind": "map",
+  "path": "maps/state_us_idaho.svg",
+  "words": [
+   "id",
+   "idaho",
+   "आयडाहो"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.montana",
+  "kind": "map",
+  "path": "maps/state_us_montana.svg",
+  "words": [
+   "mont.",
+   "montana",
+   "mt",
+   "मोन्टाना"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.northdakota",
+  "kind": "map",
+  "path": "maps/state_us_northdakota.svg",
+  "words": [
+   "n.d.",
+   "nd",
+   "north dakota",
+   "उत्तर डेकोटा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.minnesota",
+  "kind": "map",
+  "path": "maps/state_us_minnesota.svg",
+  "words": [
+   "minn.",
+   "minnesota",
+   "mn",
+   "मिनेसोटा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.michigan",
+  "kind": "map",
+  "path": "maps/state_us_michigan.svg",
+  "words": [
+   "mi",
+   "mich.",
+   "michigan",
+   "मिशिगन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.ohio",
+  "kind": "map",
+  "path": "maps/state_us_ohio.svg",
+  "words": [
+   "oh",
+   "ohio",
+   "ओहायो"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.pennsylvania",
+  "kind": "map",
+  "path": "maps/state_us_pennsylvania.svg",
+  "words": [
+   "commonwealth of pennsylvania",
+   "pa",
+   "pennsylvania",
+   "पेन्सिलवेनिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.newyork",
+  "kind": "map",
+  "path": "maps/state_us_newyork.svg",
+  "words": [
+   "n.y.",
+   "new york",
+   "ny",
+   "न्यूयॉर्क"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.vermont",
+  "kind": "map",
+  "path": "maps/state_us_vermont.svg",
+  "words": [
+   "vermont",
+   "vt",
+   "वर्मांट"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.newhampshire",
+  "kind": "map",
+  "path": "maps/state_us_newhampshire.svg",
+  "words": [
+   "n.h.",
+   "new hampshire",
+   "nh",
+   "नया हेम्पशायर"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.maine",
+  "kind": "map",
+  "path": "maps/state_us_maine.svg",
+  "words": [
+   "maine",
+   "me",
+   "मेन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.arizona",
+  "kind": "map",
+  "path": "maps/state_us_arizona.svg",
+  "words": [
+   "ariz.",
+   "arizona",
+   "az",
+   "एरीजोना"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.california",
+  "kind": "map",
+  "path": "maps/state_us_california.svg",
+  "words": [
+   "ca",
+   "calif.",
+   "california",
+   "कैलिफ़ोर्निया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.newmexico",
+  "kind": "map",
+  "path": "maps/state_us_newmexico.svg",
+  "words": [
+   "n.m.",
+   "new mexico",
+   "nm",
+   "नया मेक्सिको"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.texas",
+  "kind": "map",
+  "path": "maps/state_us_texas.svg",
+  "words": [
+   "tex.",
+   "texas",
+   "tx",
+   "टॅक्सस"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.punjab",
+  "kind": "map",
+  "path": "maps/state_in_punjab.svg",
+  "words": [
+   "punjab",
+   "पंजाब"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.rajasthan",
+  "kind": "map",
+  "path": "maps/state_in_rajasthan.svg",
+  "words": [
+   "greater rajasthan",
+   "rajasthan",
+   "rajputana",
+   "राजस्थान"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.gujarat",
+  "kind": "map",
+  "path": "maps/state_in_gujarat.svg",
+  "words": [
+   "gujarat",
+   "गुजरात"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.alaska",
+  "kind": "map",
+  "path": "maps/state_us_alaska.svg",
+  "words": [
+   "ak",
+   "alaska",
+   "अलास्का"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.himachalpradesh",
+  "kind": "map",
+  "path": "maps/state_in_himachalpradesh.svg",
+  "words": [
+   "himachal pradesh",
+   "हिमाचल प्रदेश"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.jammuandkashmir",
+  "kind": "map",
+  "path": "maps/state_in_jammuandkashmir.svg",
+  "words": [
+   "jammu and kashmir",
+   "जम्मू और कश्मीर"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.bihar",
+  "kind": "map",
+  "path": "maps/state_in_bihar.svg",
+  "words": [
+   "bihar",
+   "बिहार"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.uttarpradesh",
+  "kind": "map",
+  "path": "maps/state_in_uttarpradesh.svg",
+  "words": [
+   "united provinces",
+   "uttar pradesh",
+   "उत्तर प्रदेश"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.andhrapradesh",
+  "kind": "map",
+  "path": "maps/state_in_andhrapradesh.svg",
+  "words": [
+   "andhra pradesh",
+   "आन्ध्र प्रदेश"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.louisiana",
+  "kind": "map",
+  "path": "maps/state_us_louisiana.svg",
+  "words": [
+   "la",
+   "louisiana",
+   "लुईज़ियाना"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.mississippi",
+  "kind": "map",
+  "path": "maps/state_us_mississippi.svg",
+  "words": [
+   "miss.",
+   "mississippi",
+   "ms",
+   "मिसिसिप्पी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.alabama",
+  "kind": "map",
+  "path": "maps/state_us_alabama.svg",
+  "words": [
+   "al",
+   "ala.",
+   "alabama",
+   "अलाबामा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.florida",
+  "kind": "map",
+  "path": "maps/state_us_florida.svg",
+  "words": [
+   "fl",
+   "fla.",
+   "florida",
+   "फ़्लोरिडा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.georgia",
+  "kind": "map",
+  "path": "maps/state_us_georgia.svg",
+  "words": [
+   "ga",
+   "ga.",
+   "georgia",
+   "जॉर्जिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.southcarolina",
+  "kind": "map",
+  "path": "maps/state_us_southcarolina.svg",
+  "words": [
+   "s.c.",
+   "sc",
+   "south carolina",
+   "दक्षिणी केरोलाइना"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.northcarolina",
+  "kind": "map",
+  "path": "maps/state_us_northcarolina.svg",
+  "words": [
+   "n.c.",
+   "nc",
+   "north carolina",
+   "उत्तरी केरोलिना"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.virginia",
+  "kind": "map",
+  "path": "maps/state_us_virginia.svg",
+  "words": [
+   "va",
+   "virginia",
+   "वर्जीनिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.districtofcolumbia",
+  "kind": "map",
+  "path": "maps/state_us_districtofcolumbia.svg",
+  "words": [
+   "d.c.",
+   "dc",
+   "district of columbia",
+   "washington",
+   "वॉशिंगटन डी॰ सी॰"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.maryland",
+  "kind": "map",
+  "path": "maps/state_us_maryland.svg",
+  "words": [
+   "maryland",
+   "md",
+   "मैरीलैंड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.delaware",
+  "kind": "map",
+  "path": "maps/state_us_delaware.svg",
+  "words": [
+   "de",
+   "del.",
+   "delaware",
+   "डेलावेयर"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.newjersey",
+  "kind": "map",
+  "path": "maps/state_us_newjersey.svg",
+  "words": [
+   "n.j.",
+   "new jersey",
+   "nj",
+   "न्यू जर्सी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.connecticut",
+  "kind": "map",
+  "path": "maps/state_us_connecticut.svg",
+  "words": [
+   "conn.",
+   "connecticut",
+   "ct",
+   "कनेक्टिकट"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.rhodeisland",
+  "kind": "map",
+  "path": "maps/state_us_rhodeisland.svg",
+  "words": [
+   "r.i.",
+   "rhode island",
+   "ri",
+   "state of rhode island and providence plantations",
+   "रोड आइलैंड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.massachusetts",
+  "kind": "map",
+  "path": "maps/state_us_massachusetts.svg",
+  "words": [
+   "commonwealth of massachusetts",
+   "ma",
+   "mass.",
+   "massachusetts",
+   "मैसाचूसिट्स"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.oregon",
+  "kind": "map",
+  "path": "maps/state_us_oregon.svg",
+  "words": [
+   "or",
+   "ore.",
+   "oregon",
+   "औरिगन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.odisha",
+  "kind": "map",
+  "path": "maps/state_in_odisha.svg",
+  "words": [
+   "odisha",
+   "orissa",
+   "ओडिशा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.dadraandnagarhavelianddamananddiu",
+  "kind": "map",
+  "path": "maps/state_in_dadraandnagarhavelianddamananddiu.svg",
+  "words": [
+   "dadra and nagar haveli",
+   "dadra and nagar haveli and daman and diu",
+   "dadra e nagar haveli",
+   "dadra et nagar haveli",
+   "दादरा और नगर हवेली और दमन और दीव"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.maharashtra",
+  "kind": "map",
+  "path": "maps/state_in_maharashtra.svg",
+  "words": [
+   "maharashtra",
+   "महाराष्ट्र"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.goa",
+  "kind": "map",
+  "path": "maps/state_in_goa.svg",
+  "words": [
+   "goa",
+   "gôa",
+   "गोआ"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.karnataka",
+  "kind": "map",
+  "path": "maps/state_in_karnataka.svg",
+  "words": [
+   "karnataka",
+   "maisur",
+   "mysore",
+   "कर्नाटक"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.kerala",
+  "kind": "map",
+  "path": "maps/state_in_kerala.svg",
+  "words": [
+   "kerala",
+   "केरल"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.puducherry",
+  "kind": "map",
+  "path": "maps/state_in_puducherry.svg",
+  "words": [
+   "pondicherry",
+   "pondichéry",
+   "puduchcheri",
+   "puducherry",
+   "पुदुच्चेरी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.tamilnadu",
+  "kind": "map",
+  "path": "maps/state_in_tamilnadu.svg",
+  "words": [
+   "tamil nadu",
+   "तमिल नाडु"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.lakshadweep",
+  "kind": "map",
+  "path": "maps/state_in_lakshadweep.svg",
+  "words": [
+   "laccadive",
+   "laccadives",
+   "lackadiverna",
+   "lakkadi",
+   "lakkadiven",
+   "lakshadweep",
+   "minicoy and amindivi islands",
+   "íles laquedives",
+   "लक्षद्वीप"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.andamanandnicobar",
+  "kind": "map",
+  "path": "maps/state_in_andamanandnicobar.svg",
+  "words": [
+   "andaman & nicobar islands",
+   "andaman and nicobar",
+   "andaman and nicobar islands",
+   "andaman et nicobar",
+   "iihas de andama e nicobar",
+   "inseln andamanen und nikobare",
+   "अण्डमान और निकोबार द्वीपसमूह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.hawaii",
+  "kind": "map",
+  "path": "maps/state_us_hawaii.svg",
+  "words": [
+   "hawaii",
+   "hi",
+   "हवाई"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.jharkhand",
+  "kind": "map",
+  "path": "maps/state_in_jharkhand.svg",
+  "words": [
+   "jharkhand",
+   "vananchal",
+   "झारखण्ड"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.delhi",
+  "kind": "map",
+  "path": "maps/state_in_delhi.svg",
+  "words": [
+   "delhi",
+   "दिल्ली"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.chandigarh",
+  "kind": "map",
+  "path": "maps/state_in_chandigarh.svg",
+  "words": [
+   "chandigarh",
+   "चण्डीगढ़"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.madhyapradesh",
+  "kind": "map",
+  "path": "maps/state_in_madhyapradesh.svg",
+  "words": [
+   "madhya pradesh",
+   "मध्य प्रदेश"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.utah",
+  "kind": "map",
+  "path": "maps/state_us_utah.svg",
+  "words": [
+   "ut",
+   "utah",
+   "यूटाह"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.wyoming",
+  "kind": "map",
+  "path": "maps/state_us_wyoming.svg",
+  "words": [
+   "wy",
+   "wyo.",
+   "wyoming",
+   "वायोमिंग"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.nevada",
+  "kind": "map",
+  "path": "maps/state_us_nevada.svg",
+  "words": [
+   "nev.",
+   "nevada",
+   "nv",
+   "नेवाडा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.colorado",
+  "kind": "map",
+  "path": "maps/state_us_colorado.svg",
+  "words": [
+   "co",
+   "colo.",
+   "colorado",
+   "कॉलराडो"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.southdakota",
+  "kind": "map",
+  "path": "maps/state_us_southdakota.svg",
+  "words": [
+   "s.d.",
+   "sd",
+   "south dakota",
+   "दक्षिण डकोटा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.nebraska",
+  "kind": "map",
+  "path": "maps/state_us_nebraska.svg",
+  "words": [
+   "ne",
+   "nebr.",
+   "nebraska",
+   "नेब्रास्का"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.kansas",
+  "kind": "map",
+  "path": "maps/state_us_kansas.svg",
+  "words": [
+   "kans.",
+   "kansas",
+   "ks",
+   "केन्सास"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.oklahoma",
+  "kind": "map",
+  "path": "maps/state_us_oklahoma.svg",
+  "words": [
+   "ok",
+   "okla.",
+   "oklahoma",
+   "ओक्लाहोमा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.iowa",
+  "kind": "map",
+  "path": "maps/state_us_iowa.svg",
+  "words": [
+   "ia",
+   "iowa",
+   "आयोवा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.missouri",
+  "kind": "map",
+  "path": "maps/state_us_missouri.svg",
+  "words": [
+   "missouri",
+   "mo",
+   "मिसौरी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.chhattisgarh",
+  "kind": "map",
+  "path": "maps/state_in_chhattisgarh.svg",
+  "words": [
+   "chhattisgarh",
+   "छत्तीसगढ़"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.haryana",
+  "kind": "map",
+  "path": "maps/state_in_haryana.svg",
+  "words": [
+   "haryana",
+   "हरियाणा"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.in.telangana",
+  "kind": "map",
+  "path": "maps/state_in_telangana.svg",
+  "words": [
+   "telangana",
+   "तेलंगाना"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.wisconsin",
+  "kind": "map",
+  "path": "maps/state_us_wisconsin.svg",
+  "words": [
+   "wi",
+   "wis.",
+   "wisconsin",
+   "विस्कॉन्सिन"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.illinois",
+  "kind": "map",
+  "path": "maps/state_us_illinois.svg",
+  "words": [
+   "il",
+   "ill.",
+   "illinois",
+   "इलिनॉय"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.kentucky",
+  "kind": "map",
+  "path": "maps/state_us_kentucky.svg",
+  "words": [
+   "commonwealth of kentucky",
+   "kentucky",
+   "ky",
+   "केन्टकी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.arkansas",
+  "kind": "map",
+  "path": "maps/state_us_arkansas.svg",
+  "words": [
+   "ar",
+   "ark.",
+   "arkansas",
+   "अरकांसास"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.tennessee",
+  "kind": "map",
+  "path": "maps/state_us_tennessee.svg",
+  "words": [
+   "tenn.",
+   "tennessee",
+   "tn",
+   "टेनेसी"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.westvirginia",
+  "kind": "map",
+  "path": "maps/state_us_westvirginia.svg",
+  "words": [
+   "w.va.",
+   "west virginia",
+   "wv",
+   "पश्चिमी वर्जीनिया"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ },
+ {
+  "id": "map.state.us.indiana",
+  "kind": "map",
+  "path": "maps/state_us_indiana.svg",
+  "words": [
+   "in",
+   "ind.",
+   "indiana",
+   "इंडियाना"
+  ],
+  "source": "natural-earth",
+  "source_url": "https://www.naturalearthdata.com",
+  "licence": "Public domain",
+  "added": "2026-10-19"
+ }
+]

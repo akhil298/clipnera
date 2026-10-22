@@ -6,6 +6,8 @@ export interface McpSettings {
   enabled: boolean
   port: number
   token: string
+  /** The chat on the person's own Claude (their Claude Code): personal, off until they turn it on. */
+  claudeChat: boolean
 }
 
 export const DEFAULT_PORT = 47821
@@ -18,12 +20,12 @@ export class McpSettingsStore {
     try {
       const saved = JSON.parse(await readFile(this.file, 'utf8')) as Partial<McpSettings>
       if (typeof saved.token === 'string' && saved.token.length >= 32) {
-        return { enabled: saved.enabled === true, port: Number(saved.port) || DEFAULT_PORT, token: saved.token }
+        return { enabled: saved.enabled === true, port: Number(saved.port) || DEFAULT_PORT, token: saved.token, claudeChat: saved.claudeChat === true }
       }
     } catch {
       // First run: make a token.
     }
-    return this.save({ enabled: false, port: DEFAULT_PORT, token: randomBytes(24).toString('hex') })
+    return this.save({ enabled: false, port: DEFAULT_PORT, token: randomBytes(24).toString('hex'), claudeChat: false })
   }
 
   async save(settings: McpSettings): Promise<McpSettings> {

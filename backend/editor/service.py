@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -128,6 +129,11 @@ class EditorService:
         return ProjectMedia(fps=timeline.fps, names={a.id: Path(a.key).name for a in timeline.assets.values()},
                             muds=await understanding.muds(project.id), statuses=statuses)
 
+    async def ensure_moments(self, user_id: str, project_id: str) -> None:
+        """Pick the strongest moments of the project's footage, for an edit that needs them (understanding/)."""
+        project = await self._project(user_id, project_id)
+        await UnderstandingService(self._session, self._s3_client).ensure_moments(project.id)
+
     async def analyses(self, user_id: str, project_id: str) -> list[MediaAnalysisResponse]:
         project = await self._project(user_id, project_id)
         rows = await UnderstandingService(self._session, self._s3_client).statuses(project.id)
@@ -145,6 +151,13 @@ class EditorService:
         key = f"{asset_prefix(user_id, project.id)}{uuid4().hex}{suffix}"
         url = self._s3.presign_put(self._settings.S3_BUCKET_NAME, key, request.content_type, URL_TTL_SECONDS)
         return EditorAssetUpload(key=key, url=url, content_type=request.content_type)
+
+    async def import_file(self, user_id: str, project_id: str, path: Path, content_type: str) -> str:
+        """Copy a file from Clipnera's own shelves into the project's storage; returns its key for ``add_asset``."""
+        project = await self._project(user_id, project_id)
+        key = f"{asset_prefix(user_id, project.id)}{uuid4().hex}{_EXTENSIONS[content_type]}"
+        await asyncio.to_thread(self._s3.upload_file, self._settings.S3_BUCKET_NAME, key, str(path), content_type)
+        return key
 
     async def apply(self, user_id: str, project_id: str, base_version: int, ops: Sequence[Op],
                     actor: Actor = HUMAN) -> EditorOpsResponse:

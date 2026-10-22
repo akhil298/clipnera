@@ -17,9 +17,12 @@ from core.exceptions import CustomException
 from editor.timeline import Asset
 from jobs.queue import Job, get_queue
 from understanding.model import AnalysisStatus, MediaAnalysis
-from understanding.mud import MUD
+from core.logging_config import get_logger
+from understanding import reading
+from understanding.mud import MUD, check_mud
 
 ANALYZE_JOB = "understanding.analyze"
+log = get_logger(__name__)
 _CACHE_SIZE = 64
 # (key, when it was written) -> MUD, so a rebuilt document is read afresh.
 _cache: OrderedDict[tuple[str, str], MUD] = OrderedDict()
@@ -96,6 +99,31 @@ class UnderstandingService:
         ready = [row for row in await self.statuses(project_id) if row.status == AnalysisStatus.READY and row.mud_key]
         loaded = await asyncio.gather(*(self._load(row) for row in ready))
         return {row.asset_id: mud for row, mud in zip(ready, loaded)}
+
+    async def ensure_moments(self, project_id: str) -> dict[str, MUD]:
+        """The ready MUDs with their strongest moments picked: for the edits that need them (a reel, a hook,
+        highlights). Picked once per asset and saved into its MUD; never when the file arrives."""
+        ready = [row for row in await self.statuses(project_id) if row.status == AnalysisStatus.READY and row.mud_key]
+        muds = await asyncio.gather(*(self._load(row) for row in ready))
+        todo = [(row, mud) for row, mud in zip(ready, muds) if mud.utterances and mud.analyzers.get("moments") != "ok"]
+
+        async def pick(row: MediaAnalysis, mud: MUD) -> None:
+            from understanding.build import moments_of  # The analysis stack (shot detection, audio) only when picking.
+
+            try:
+                picked = await reading.pick_moments(mud.utterances)
+            except Exception:
+                log.exception("Picking moments failed: asset=%s", row.asset_id)
+                picked = None
+            mud.moments = moments_of(mud, picked)
+            mud.analyzers["moments"] = "ok" if picked else "failed"
+            check_mud(mud)
+            # The cached copy is this object, so later reads see the moments without loading again.
+            await asyncio.to_thread(self._s3.put_object, get_settings().S3_BUCKET_NAME, row.mud_key,
+                                    mud.model_dump_json(exclude_defaults=True), ContentType="application/json")
+
+        await asyncio.gather(*(pick(row, mud) for row, mud in todo))
+        return {row.asset_id: mud for row, mud in zip(ready, muds)}
 
     async def _load(self, row: MediaAnalysis) -> MUD:
         key = (row.mud_key or "", row.updated_at.isoformat())

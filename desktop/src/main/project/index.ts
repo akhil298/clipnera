@@ -84,6 +84,10 @@ export function setUpProject(account: Account, library: MediaLibrary, shelf: She
   ipcMain.handle(IPC.projectGraphics, async () =>
     Promise.all((await service.graphics()).map(async (graphic) => ({ ...graphic, url: await shelf.local(graphic.url) })))
   )
+  ipcMain.handle(IPC.projectMusic, (_event, query: unknown) => service.music(typeof query === 'string' ? query.slice(0, 60) : ''))
+  ipcMain.handle(IPC.projectAddMusic, (_event, id: unknown) => service.addMusic(String(id).slice(0, 64)))
+  ipcMain.handle(IPC.projectBroll, (_event, query: unknown) => service.broll(typeof query === 'string' ? query.slice(0, 60) : ''))
+  ipcMain.handle(IPC.projectAddBroll, (_event, id: unknown) => service.addBroll(String(id).slice(0, 500)))
   ipcMain.handle(IPC.projectSounds, (_event, query: unknown) => service.sounds(typeof query === 'string' ? query.slice(0, 100) : ''))
   ipcMain.handle(IPC.projectRetryAnalysis, (_event, assetId: unknown) => {
     if (typeof assetId !== 'string') throw new Error('assetId is required')
