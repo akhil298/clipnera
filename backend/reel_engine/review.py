@@ -18,7 +18,7 @@ from reel_engine.plan import LAYERS, EditPlan, LayerScore, Review
 
 log = get_logger(__name__)
 
-MAX_ITEM_FRAMES = 36
+MAX_ITEM_FRAMES = 24
 
 
 class _M(BaseModel):
@@ -72,7 +72,7 @@ def _item_frames(plan: EditPlan, video: str) -> tuple[list[bytes], list[str]]:
     return jpegs, notes
 
 
-def _overview(plan: EditPlan, video: str, count: int = 8) -> list[bytes]:
+def _overview(plan: EditPlan, video: str, count: int = 6) -> list[bytes]:
     out = []
     for k in range(count):
         t = plan.duration * (k + 0.5) / count

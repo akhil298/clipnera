@@ -27,6 +27,13 @@ MIN_GRAPHIC, MAX_GRAPHIC = 1.2, 3.5
 CARD_KINDS = {"statement", "list", "chart", "flow", "count_up"}
 VOICE_KINDS = ("voice", "voice_song")
 LINE_WORDS = 4
+CARD_EVERY = 10.0
+# Graphics that hold the eye: a caption steps aside while one is on screen.
+CAPTION_YIELDS_TO = {"two", "keyword", "count_up", "statement", "list", "flow", "chart", "cta", "flicker"}
+# Never the big word of a caption line.
+WEAK = {"a", "an", "the", "and", "but", "or", "so", "to", "of", "in", "on", "at", "it", "is", "was", "be", "we", "we've", "i",
+        "i'm", "you", "your", "they", "he", "she", "this", "that", "with", "for", "do", "did", "not", "just", "very", "really",
+        "um", "uh", "like", "have", "has", "had", "are", "were", "our", "my", "me", "up", "all", "any", "going"}
 
 
 # ------------------------------------------------------------------ brief
@@ -251,7 +258,18 @@ def graphics_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
     if items and brief.cta:
         last = items[-1]
         add("cta", max(last.out0, last.out1 - 2.2), last.out1 - 0.05, {"verb": brief.cta.upper(), "text": ""}, why="call to action", by="finish")
-    return _space(out)
+    out = _space(out)
+    if brief.path == "voice":
+        out = _few_cards(out, total)
+    return out
+
+
+def _few_cards(graphics: list[GraphicItem], total: float) -> list[GraphicItem]:
+    """A talking reel keeps the speaker on screen: at most one full-screen card per CARD_EVERY seconds."""
+    allowed = max(1, int(total // CARD_EVERY))
+    cards = [g for g in graphics if g.place == "card" and g.kind not in ("wash", "flicker")]
+    keep = set(id(g) for g in sorted(cards, key=lambda g: (g.why == "", g.start))[:allowed])
+    return [g for g in graphics if not (g.place == "card" and g.kind not in ("wash", "flicker")) or id(g) in keep]
 
 
 def _space(graphics: list[GraphicItem]) -> list[GraphicItem]:
@@ -300,7 +318,7 @@ def captions_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
                 lines[-1].append(entry)
                 continue
         lines.append([entry])
-    cards = [(g.start, g.end) for g in graphics if g.kind in CARD_KINDS or g.place == "card"]
+    cards = [(g.start, g.end) for g in graphics if g.kind in CARD_KINDS or g.place == "card" or g.kind in CAPTION_YIELDS_TO]
     tags = [g for g in graphics if g.kind == "tag"]
     out: list[CaptionLine] = []
     used_tags: set[str] = set()
@@ -313,12 +331,13 @@ def captions_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
             for g in graphics:
                 if (g.kind in CARD_KINDS or g.place == "card") and g.start < start < g.end:
                     g.end = round(max(g.start + 0.6, start - 0.05), 3)
-            cards = [(g.start, g.end) for g in graphics if g.kind in CARD_KINDS or g.place == "card"]
+            cards = [(g.start, g.end) for g in graphics if g.kind in CARD_KINDS or g.place == "card" or g.kind in CAPTION_YIELDS_TO]
         if any(a < end and start < b for a, b in cards):
             continue
         if brief.caption_mode == "keyword" and not (ids & keywords) and d.drop_word not in ids:
             continue
-        key = next((w for w, _, _ in line if w.i in keywords), None) or max((w for w, _, _ in line), key=lambda w: len(w.text))
+        strong = [w for w, _, _ in line if w.text.lower().strip(".,!?'\"") not in WEAK] or [w for w, _, _ in line]
+        key = next((w for w, _, _ in line if w.i in keywords), None) or max(strong, key=lambda w: len(w.text))
         lead = " ".join(w.text for w, _, _ in line if w is not key)
         tag = next((t for t in tags if t.start < end and start < t.end and t.id not in used_tags), None)
         icon_query = ""

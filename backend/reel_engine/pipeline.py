@@ -127,7 +127,15 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
         await stage("compose", "final encode")
         final = await compose(plan, picture, placed, mix, pass_dir, pass_dir / "reel.mp4")
         await stage("review", f"pass {n + 1}")
-        result, actions = await review(plan, str(final))
+        try:
+            result, actions = await review(plan, str(final))
+        except Exception as exc:
+            # A review that fails never fails the edit: ship the best pass so far, or this one unreviewed.
+            log.warning("Review pass %d failed, shipping without it: %s", n + 1, exc)
+            await stage("review", f"pass {n + 1}: review unavailable, keeping the best version")
+            if best is None:
+                best = (0.0, final, plan.model_copy(deep=True))
+            break
         plan.ai_calls += 1
         result.passes = n + 1
         plan.review = result

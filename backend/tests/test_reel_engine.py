@@ -231,3 +231,21 @@ def test_chapters_open_with_a_wash_and_a_chaptered_reel_opens_on_its_title():
     assert kinds.count("wash") == 2 and kinds.count("chapter") == 2
     opening = min(graphics, key=lambda g: g.start)
     assert opening.kind == "two" and opening.data["text"] == "breakfast" and opening.start < 0.5
+
+
+def test_a_talking_reel_keeps_the_speaker_on_screen():
+    cards = [GraphicItem(id=f"c{k}", kind="statement", start=k * 3.0, end=k * 3.0 + 2, place="card") for k in range(6)]
+    kept = comp._few_cards(cards + [GraphicItem(id="w", kind="wash", start=0, end=0.3, place="card")], total=20.0)
+    assert sum(1 for g in kept if g.kind == "statement") == 2 and any(g.kind == "wash" for g in kept)
+
+
+def test_captions_step_aside_for_a_graphic_and_skip_weak_keywords():
+    words = words_of("but we have been working together really well up here")
+    d = director(story=[clip(w0=0, w1=len(words) - 1)], beats=[beat(kind="two", w0=4, w1=5, lead="working", text="together")])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0)
+    items = comp.video_track(d, brief, words, [], {0: 20.0})
+    graphics = comp.graphics_track(d, brief, words, items, [])
+    captions, _ = comp.captions_track(d, brief, words, items, graphics)
+    two = next(g for g in graphics if g.kind == "two")
+    assert all(not (two.start < c.end and c.start < two.end) for c in captions)
+    assert all(c.keyword.lower() not in comp.WEAK for c in captions)
