@@ -13,6 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from core.logging_config import get_logger
+from reel_engine.ai import vision_json
 from reel_engine.director import DirectorPlan
 from reel_engine.media import strip
 from reel_engine.plan import Source, Word
@@ -50,8 +51,6 @@ label. A chapter opens a step: keep it when this shot shows that step starting. 
 
 async def verify(d: DirectorPlan, sources: list[Source], words: list[Word]) -> tuple[int, str, list[str]]:
     """Picks the hook and fixes the director's picture-anchored labels and sections in place; returns (hook, why, changes)."""
-    from clients.ai import get_text_client
-
     paths = {s.index: s.path for s in sources}
     jpegs: list[bytes] = []
     lines: list[str] = []
@@ -80,9 +79,12 @@ async def verify(d: DirectorPlan, sources: list[Source], words: list[Word]) -> t
         jpegs.append(strip(paths[src], a, b))
         label = f"chapter '{item.lead} {item.text}'" if kind == "section" else f"{item.kind} '{item.lead} {item.text}'"
         lines.append(f"item {k}: {label} icon '{item.icon}'")
-    client = get_text_client(is_pro=True, step="director")
-    message = client.image_message("Strips in order:\n" + "\n".join(lines) + "\n\nCheck them. JSON only.", [j for j in jpegs if j])
-    verdicts = await client.chat_json([{"role": "system", "content": SYSTEM}, message], Verdicts, max_tokens=4000)
+    try:
+        verdicts = await vision_json(SYSTEM, "Strips in order:\n" + "\n".join(lines) + "\n\nCheck them. JSON only.",
+                                     [j for j in jpegs if j], Verdicts, max_tokens=4000)
+    except Exception as exc:  # a check that cannot run keeps the director's plan as it is
+        log.warning("Verify skipped: %s", exc)
+        return 0, "", []
     changes = []
     drop = set()
     for check in verdicts.checks:

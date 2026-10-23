@@ -13,6 +13,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from core.logging_config import get_logger
+from reel_engine.ai import vision_json
 from reel_engine.media import frame, jpeg, loudness, stamp
 from reel_engine.plan import LAYERS, EditPlan, LayerScore, Review
 
@@ -83,8 +84,6 @@ def _overview(plan: EditPlan, video: str, count: int = 6) -> list[bytes]:
 
 
 async def review(plan: EditPlan, video: str) -> tuple[Review, list[Action]]:
-    from clients.ai import get_text_client
-
     item_jpegs, notes = _item_frames(plan, video)
     overview = _overview(plan, video)
     lufs = loudness(video)
@@ -95,9 +94,7 @@ async def review(plan: EditPlan, video: str) -> tuple[Review, list[Action]]:
              f"{sum(1 for a in plan.audio_items if a.kind == 'sfx')} sound effects. Recipe: {plan.brief.recipe if plan.brief else ''}.")
     message_text = (f"Measurements: {facts}\n\nFirst {len(overview)} images: frames across the reel. Then one image per item:\n"
                     + "\n".join(notes) + "\n\nReview it. JSON only.")
-    client = get_text_client(is_pro=True, step="director")
-    verdict = await client.chat_json([{"role": "system", "content": SYSTEM}, client.image_message(message_text, overview + item_jpegs)],
-                                     Verdict, max_tokens=4000)
+    verdict = await vision_json(SYSTEM, message_text, overview + item_jpegs, Verdict, max_tokens=4000)
     scores = [LayerScore(layer=s.layer, score=max(1, min(10, s.score)), note=s.note) for s in verdict.scores]
     overall = round(sum(s.score for s in scores) / len(scores), 1) if scores else 0.0
     log.info("Review: overall %.1f", overall)

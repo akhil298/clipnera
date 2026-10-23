@@ -274,3 +274,30 @@ def test_photo_cards_take_the_place_of_story_graphics():
     add_photo_cards(plan)
     kinds = [g.kind for g in plan.graphics]
     assert "photocard" in kinds and "two" not in kinds and "chapter" in kinds and not plan.captions and not plan.inserts
+
+
+def test_a_content_filter_flag_retries_with_fewer_frames(monkeypatch):
+    import httpx
+
+    import clients.ai as ai_clients
+    from reel_engine import ai
+
+    calls = []
+
+    class Client:
+        def image_message(self, text, frames):
+            return {"role": "user", "content": text, "frames": len(frames)}
+
+        async def chat_json(self, messages, schema, **kwargs):
+            frames = messages[-1].get("frames", 0)
+            calls.append(frames)
+            if frames >= 2:
+                request = httpx.Request("POST", "https://x")
+                raise httpx.HTTPStatusError("400", request=request, response=httpx.Response(
+                    400, request=request, text='{"error": {"code": "content_policy_violation"}}'))
+            return schema(picks=[])
+
+    monkeypatch.setattr(ai_clients, "get_text_client", lambda **kw: Client())
+    from reel_engine.inserts import Picks
+    result = asyncio.run(ai.vision_json("s", "t", [b"a", b"b", b"c", b"d"], Picks, 100))
+    assert result.picks == [] and calls == [4, 2, 2, 0]

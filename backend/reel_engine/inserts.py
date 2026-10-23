@@ -18,6 +18,7 @@ from pydantic import BaseModel, ConfigDict
 
 from beats import kit
 from core.logging_config import get_logger
+from reel_engine.ai import vision_json
 from reel_engine.assets import AssetRecord, Scout
 from reel_engine.compile import to_output
 from reel_engine.media import frame, jpeg
@@ -102,8 +103,6 @@ def _preview(path: Path, kind: str) -> bytes:
 async def resolve(requests: list, items: list[VideoItem], words: list[Word], scout: Scout, work: Path,
                   sources: dict[int, str], shots_per_source: dict[int, int] | None = None) -> tuple[list[InsertItem], int]:
     """Inserts placed on the cut, with their assets; and how many vision calls it took."""
-    from clients.ai import get_text_client
-
     # The user's own footage only helps when it holds other shots; a single take would cut to the same picture.
     requests = [r for r in requests if r.kind != "footage" or (shots_per_source or {}).get(r.src, 0) >= 3]
     work = work / "inserts"
@@ -154,10 +153,9 @@ async def resolve(requests: list, items: list[VideoItem], words: list[Word], sco
             lines.append(f"request {n}: {request.kind} of '{request.query}' while saying: {request.why[:80]}; "
                          f"candidates {len(cands)} (images in order)")
             jpegs += [_preview(p, request.kind) for p, _ in cands]
-        client = get_text_client(is_pro=True, step="director")
-        message = client.image_message("\n".join(lines) + "\n\nPick for each request. JSON only.", [j for j in jpegs if j])
         try:
-            picks = await client.chat_json([{"role": "system", "content": CHOOSER}, message], Picks, max_tokens=2000)
+            picks = await vision_json(CHOOSER, "\n".join(lines) + "\n\nPick for each request. JSON only.", [j for j in jpegs if j],
+                                      Picks, max_tokens=2000)
             calls = 1
         except Exception as exc:
             log.warning("Insert choice failed, inserts skipped: %s", exc)

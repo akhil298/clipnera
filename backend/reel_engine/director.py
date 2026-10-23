@@ -13,10 +13,10 @@ import json
 from pathlib import Path
 from typing import Literal
 
-import httpx
 from pydantic import BaseModel, ConfigDict
 
 from core.logging_config import get_logger
+from reel_engine.ai import vision_json
 from reel_engine.plan import AudioReport, Shot, Source, Word
 
 log = get_logger(__name__)
@@ -243,8 +243,6 @@ def recipe_text() -> str:
 
 async def direct(sources: list[Source], audio: AudioReport, shots: list[Shot], jpegs: list[bytes], how: str,
                  brief_text: str, target_seconds: float) -> DirectorPlan:
-    from clients.ai import get_text_client
-
     takes = earlier_takes(audio.words) if audio.words else set()
     graphic_every = 2.5
     system = SYSTEM.format(recipes=recipe_text(), audio_kind=audio.kind, audio_why=audio.why,
@@ -256,15 +254,7 @@ async def direct(sources: list[Source], audio: AudioReport, shots: list[Shot], j
             f"Shots:\n{shot_listing(shots)}\n\n"
             f"Words (id:word, ~ = filler, [take] = earlier take):\n{word_listing(audio.words, takes) if audio.words else '(nobody speaks)'}\n\n"
             f"Frames: {how}.\n\nPlan the reel. JSON only.")
-    client = get_text_client(is_pro=True, step="director")
-    try:
-        plan = await client.chat_json([{"role": "system", "content": system}, client.image_message(user, jpegs)], DirectorPlan,
-                                      max_tokens=16000)
-    except httpx.HTTPStatusError as exc:
-        # A rejected request (too large, or a frame the provider won't take) is retried once with half the frames.
-        log.warning("Director request rejected (%s): %s", exc.response.status_code, exc.response.text[:300])
-        plan = await client.chat_json([{"role": "system", "content": system}, client.image_message(user, jpegs[::2])], DirectorPlan,
-                                      max_tokens=16000)
+    plan = await vision_json(system, user, jpegs, DirectorPlan, max_tokens=16000)
     log.info("Director: recipe=%s audio=%s %d clips %d beats %d sections", plan.recipe, plan.audio_view, len(plan.story),
              len(plan.beats), len(plan.sections))
     return plan
