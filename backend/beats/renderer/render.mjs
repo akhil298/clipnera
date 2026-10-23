@@ -55,8 +55,12 @@ async function launchChrome() {
   const proc = spawn(await chromePath(), [
     '--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run',
     '--no-default-browser-check', '--allow-file-access-from-files', '--hide-scrollbars', '--force-color-profile=srgb',
-    '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', 'about:blank',
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
+    // Headless pages are throttled like background tabs, and each screenshot waited on a slowed frame.
+    '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows',
+    'about:blank',
+  // Its own process group, so closing it ends every helper process too (a lingering helper kept the pipe, and node, alive).
+  ], { stdio: ['ignore', 'ignore', 'pipe'], detached: true });
   const wsUrl = await new Promise((resolve, reject) => {
     let log = '';
     proc.stderr.on('data', d => {
@@ -72,13 +76,16 @@ async function launchChrome() {
     cdp,
     async close() {
       cdp.close();
+      const group = (signal) => { try { process.kill(-proc.pid, signal); } catch { /* already gone */ } };
       if (proc.exitCode === null && proc.signalCode === null) {
         await new Promise(r => {
-          const force = setTimeout(() => { proc.kill('SIGKILL'); r(); }, 3000);
+          const force = setTimeout(() => { group('SIGKILL'); r(); }, 3000);
           proc.once('exit', () => { clearTimeout(force); r(); });
-          proc.kill();
+          group('SIGTERM');
         });
       }
+      group('SIGKILL');
+      proc.stderr.destroy();
       await rm(profile, { recursive: true, force: true });
     },
   };
@@ -111,7 +118,7 @@ async function renderBeat(cdp, beat, { W, H, fps }, out) {
   const enc = encoder(out, fps);
   for (let n = 0; n < frames; n++) {
     await evaluate(cdp, `Beats.seek(${n / fps})`);
-    const { data } = await cdp.send('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: W, height: H, scale: 1 } });
+    const { data } = await cdp.send('Page.captureScreenshot', { format: 'png', optimizeForSpeed: true, clip: { x: 0, y: 0, width: W, height: H, scale: 1 } });
     await enc.write(Buffer.from(data, 'base64'));
   }
   await enc.end();
@@ -140,22 +147,22 @@ function withTimeout(promise, ms, what) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-async function main() {
-  const [specPath, outDir] = process.argv.slice(2);
-  if (!specPath || !outDir) throw new Error('usage: node render.mjs <spec.json> <out-dir>');
-  const spec = JSON.parse(await readFile(specPath, 'utf8'));
-  const { W, H } = spec, fps = spec.fps || 30;
+// Pages drawing beats side by side (RENDER_WORKERS, default 3): one page drawing every frame of every beat in turn
+// was the slowest step of a reel and timed out under load.
+const WORKERS = Math.max(1, Number(process.env.RENDER_WORKERS) || 3);
+
+async function worker(queue, rendered, { W, H, fps }, outDir) {
   let chrome = await openPage(W, H);
-  const rendered = [];
   try {
-    for (const beat of spec.beats) {
+    for (let next = queue.shift(); next; next = queue.shift()) {
+      const { beat, index } = next;
       const out = path.join(outDir, `${beat.id}.mov`);
       try {
         const frames = await withTimeout(renderBeat(chrome.cdp, beat, { W, H, fps }, out), BEAT_TIMEOUT_MS + beat.dur * fps * FRAME_MS, `beat ${beat.id}`);
-        rendered.push({ id: beat.id, file: out, frames });
+        rendered[index] = { id: beat.id, file: out, frames };
       } catch (err) {
         // One broken beat is left out; a page that stopped answering is replaced so the rest still render.
-        rendered.push({ id: beat.id, error: String(err.message || err) });
+        rendered[index] = { id: beat.id, error: String(err.message || err) };
         await chrome.close().catch(() => undefined);
         chrome = await openPage(W, H);
       }
@@ -163,7 +170,19 @@ async function main() {
   } finally {
     await chrome.close().catch(() => undefined);
   }
-  await writeFile(path.join(outDir, 'rendered.json'), JSON.stringify(rendered, null, 2));
 }
 
-main().catch(err => { console.error(err.stack || String(err)); process.exit(1); });
+async function main() {
+  const [specPath, outDir] = process.argv.slice(2);
+  if (!specPath || !outDir) throw new Error('usage: node render.mjs <spec.json> <out-dir>');
+  const spec = JSON.parse(await readFile(specPath, 'utf8'));
+  const { W, H } = spec, fps = spec.fps || 30;
+  // Longest first, so the last page to finish is not left with the biggest beat.
+  const queue = spec.beats.map((beat, index) => ({ beat, index })).sort((a, b) => b.beat.dur - a.beat.dur);
+  const rendered = new Array(spec.beats.length);
+  await Promise.all(Array.from({ length: Math.min(WORKERS, queue.length) }, () => worker(queue, rendered, { W, H, fps }, outDir)));
+  await writeFile(path.join(outDir, 'rendered.json'), JSON.stringify(rendered.filter(Boolean), null, 2));
+}
+
+// Exits as soon as the results are written: nothing left open may hold the caller waiting on a finished render.
+main().then(() => process.exit(0), err => { console.error(err.stack || String(err)); process.exit(1); });

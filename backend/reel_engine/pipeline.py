@@ -39,6 +39,29 @@ STAGES = ("ingest", "listen", "watch", "direct", "verify", "compile", "assets", 
 Progress_ = Callable[[EditPlan], Awaitable[None]] | None
 
 
+CAPTIONS_NEEDED = 0.9
+
+
+async def draw(plan: EditPlan, pass_dir: Path) -> list:
+    """Every graphic and caption. A pass that fails, or loses captions, is drawn again, then captions alone; a reel
+    never ships without its captions (the edit fails and is refunded instead)."""
+    for attempt, captions_only in enumerate((False, False, True), 1):
+        try:
+            placed = await render_graphics(plan, pass_dir, captions_only=captions_only)
+        except Exception as exc:
+            log.warning("Graphics attempt %d failed: %s", attempt, exc)
+            continue
+        drawn = sum(1 for p in placed if p.beat.kind == "caption")
+        if drawn >= CAPTIONS_NEEDED * len(plan.captions):
+            if captions_only:
+                log.warning("Graphics drawn as captions only after %d attempts", attempt)
+            return placed
+        log.warning("Graphics attempt %d drew %d of %d captions", attempt, drawn, len(plan.captions))
+    if plan.captions:
+        raise RuntimeError("the captions could not be drawn")
+    return []
+
+
 def add_photo_cards(plan: EditPlan) -> None:
     """Photo inserts styled as cards become graphics; a story graphic under one gives way to it."""
     from reel_engine.plan import GraphicItem
@@ -169,12 +192,7 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
         pass_dir = work / f"pass{n}"
         pass_dir.mkdir(exist_ok=True)
         await stage("graphics", f"pass {n + 1}: {len(plan.graphics)} graphics, {len(plan.captions)} captions")
-        try:
-            placed = await render_graphics(plan, pass_dir)
-        except Exception as exc:  # graphics that will not render never fail the edit
-            log.warning("Graphics pass failed, continuing without them: %s", exc)
-            await stage("graphics", "graphics unavailable for this pass")
-            placed = []
+        placed = await draw(plan, pass_dir)
         await stage("sound", "voice, music and effects")
         plan.audio_items = []
         mix = await sound.mix(plan, scout, pass_dir)

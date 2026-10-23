@@ -45,6 +45,8 @@ MIN_WINDOW = 0.4
 MAX_UPSCALE = 4.0
 PARALLEL_SEGMENTS = 3
 GRAPHICS_TIMEOUT = 300
+# Pages the renderer draws on side by side, and the time each frame may take on a busy machine (shared by the pages).
+RENDER_WORKERS, FRAME_SECONDS = 3, 0.5
 # Graphics whose parts land on given seconds (``steps``); others may use a ``steps`` field of their own (progress labels).
 TIMED_KINDS = {"list", "flow", "ui"}
 
@@ -292,13 +294,13 @@ def graphic_specs(plan: EditPlan) -> list[dict]:
     return specs
 
 
-async def render_graphics(plan: EditPlan, work: Path) -> list[Placed]:
-    specs = graphic_specs(plan)
+async def render_graphics(plan: EditPlan, work: Path, captions_only: bool = False) -> list[Placed]:
+    specs = [s for s in graphic_specs(plan) if not captions_only or s["kind"] == "caption"]
     if not specs:
         return []
     spec_file = work / "graphics.json"
     spec_file.write_text(json.dumps({"W": W, "H": H, "fps": FPS, "beats": specs}))
-    env = {**os.environ}
+    env = {**os.environ, "RENDER_WORKERS": str(RENDER_WORKERS)}
     chrome = (getattr(get_settings(), "CHROME_PATH", "") or "").strip()
     if chrome:
         env["CHROME_PATH"] = chrome
@@ -307,7 +309,8 @@ async def render_graphics(plan: EditPlan, work: Path) -> list[Placed]:
     proc = await asyncio.create_subprocess_exec("node", str(RENDERER), str(spec_file), str(work), env=env,
                                                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     try:
-        _, err = await asyncio.wait_for(proc.communicate(), GRAPHICS_TIMEOUT + 6 * len(specs))
+        frames = sum(s["dur"] for s in specs) * FPS
+        _, err = await asyncio.wait_for(proc.communicate(), GRAPHICS_TIMEOUT + frames * FRAME_SECONDS / RENDER_WORKERS)
     except TimeoutError:
         proc.kill()
         raise RuntimeError("graphics renderer timed out")
