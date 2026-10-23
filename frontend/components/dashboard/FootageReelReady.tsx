@@ -16,10 +16,47 @@ function CopyButton({ text, labelText }: { text: string; labelText: string }) {
   );
 }
 
+/** Several reels from one video: each to watch and download. */
+function ReelSet({ edit, onNew }: { edit: EditResponse; onNew: () => void }) {
+  return (
+    <section aria-labelledby="reel-set" className="space-y-6">
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="space-y-2">
+          <h2 id="reel-set" className="font-syne text-4xl sm:text-5xl font-extrabold leading-none text-white">We found {edit.reels.length} reels.</h2>
+          <p className="text-[17px] text-neutral-400">Each strong moment in your video became its own reel. Best first.</p>
+        </div>
+        <button type="button" onClick={onNew} className="ml-auto inline-flex items-center gap-2 h-12 px-5 rounded-2xl text-[15px] font-semibold text-amber-300 hover:bg-amber-500/10">
+          <Plus className="w-4 h-4" /> Make another
+        </button>
+      </div>
+      <ul className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-5">
+        {edit.reels.map((reel, i) => (
+          <li key={reel.url ?? i} className="rounded-[24px] border border-neutral-800 bg-neutral-900/80 overflow-hidden flex flex-col">
+            <video src={reel.url ?? undefined} controls playsInline preload="metadata" className="w-full aspect-[9/16] bg-black" />
+            <div className="p-4 flex items-center gap-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-semibold text-white truncate">{reel.title}</span>
+                <span className="block text-[13px] text-neutral-400">Reel {i + 1} · {formatSeconds(reel.duration_s)}</span>
+              </span>
+              {reel.url && (
+                <a href={reel.url} download aria-label={`Download reel ${i + 1}`}
+                  className="w-11 h-11 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 flex items-center justify-center shrink-0">
+                  <Download className="w-5 h-5" />
+                </a>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** The finished reel: watch it, take it, copy its post text, or go back and change it. */
 export function FootageReelReady({ edit, onEdit, onNew }: { edit: EditResponse; onEdit?: () => void; onNew: () => void }) {
   const plan = edit.plan;
   const caption = [plan?.caption, plan?.hashtags.join(' '), edit.music_credit].filter(Boolean).join('\n\n');
+  if (edit.reels.length > 1) return <ReelSet edit={edit} onNew={onNew} />;
 
   return (
     <div className="flex flex-wrap gap-8 lg:gap-10 items-start">

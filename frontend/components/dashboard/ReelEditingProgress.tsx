@@ -10,6 +10,9 @@ export function ReelEditingProgress({ edit }: { edit: EditResponse }) {
   const { steps, active, minutesLeft } = editPhase(edit);
   const cover = edit.sources.find((s) => s.kind === 'video' && s.url) ?? edit.sources.find((s) => s.kind === 'image' && s.url);
   const percent = ((active + 0.5) / steps.length) * 100;
+  // After the moments are found: how many reels this video gives, and how many are done.
+  const found = edit.premium?.stages.find((s) => s.stage === 'moments');
+  const many = Number((found?.note ?? '').match(/^(\d+)/)?.[1] ?? 1);
 
   return (
     <div className="mx-auto max-w-5xl flex flex-wrap items-center justify-center gap-10 lg:gap-16 py-2">
@@ -36,9 +39,13 @@ export function ReelEditingProgress({ edit }: { edit: EditResponse }) {
       <section aria-label="Progress" className="flex-[1_1_360px] max-w-md min-w-0 space-y-7">
         <div className="space-y-2">
           <p className="text-[13px] font-bold tracking-[0.14em] text-amber-300">EDITING</p>
-          <h2 className="font-syne text-4xl font-extrabold leading-[1.08] text-white" aria-live="polite">We&apos;re editing your reel</h2>
+          <h2 className="font-syne text-4xl font-extrabold leading-[1.08] text-white" aria-live="polite">
+            {many > 1 ? `We're making ${many} reels` : <>We&apos;re editing your reel</>}
+          </h2>
           <p className="text-base text-neutral-400">
-            About {minutesLeft} minute{minutesLeft === 1 ? '' : 's'} left. You can close this tab; we&apos;ll let you know when it&apos;s ready.
+            {many > 1 ? `Your video has ${many} strong moments. ${edit.reels.length} of ${many} ready. ` : ''}
+            {many > 1 ? 'You can close this tab; we\'ll let you know when they\'re ready.'
+              : <>About {minutesLeft} minute{minutesLeft === 1 ? '' : 's'} left. You can close this tab; we&apos;ll let you know when it&apos;s ready.</>}
           </p>
         </div>
 

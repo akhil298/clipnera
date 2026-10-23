@@ -108,24 +108,37 @@ async def test_premium_needs_pro(world):
     assert caught.value.code == "PRO_REQUIRED"
 
 
+def _fake_many(reels: int, seen: dict):
+    """A stand-in for the engine: ``reels`` reels (each asked for with ``allow`` first), handed over with ``on_reel``."""
+    async def fake_run_many(inputs, work, out_dir, store, owner="", brief="", target_seconds=0.0, passes=2, on_progress=None,
+                            most=1, on_reel=None, allow=None):
+        seen.update(inputs=inputs, brief=brief, owner=owner, store=store, most=most)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        plans = []
+        for n in range(min(reels, most)):
+            if allow and not await allow(n):
+                break
+            plan = EditPlan(brief=Brief(path="visual", audio_kind="silent", recipe="recipe_process", target_seconds=0,
+                                        title_lead="Sunday", title_text=f"pancakes {n + 1}" if n else "pancakes"),
+                            video=[VideoItem(id="v0", src=0, t0=0, t1=2, out0=0, out1=2)], duration=2.0 + n,
+                            review=Review(scores=[LayerScore(layer="hook", score=8)], overall=8.0, passes=1),
+                            progress=[Progress(stage="ingest"), Progress(stage="done")])
+            if on_progress:
+                await on_progress(plan)
+            shutil.copy(inputs[0], out_dir / f"reel{n + 1}.mp4")
+            plan.output = str(out_dir / f"reel{n + 1}.mp4")
+            if on_reel:
+                await on_reel(n, plan)
+            plans.append(plan)
+        return plans
+    return fake_run_many
+
+
 async def test_premium_edit_charges_up_front_and_lands_its_plan(world, monkeypatch):
     user_id = await _user(world, pro=True, email="pro@example.com")
     before = await _balance(world, user_id)
     seen = {}
-
-    async def fake_run(inputs, work, out, store, owner="", brief="", target_seconds=0.0, passes=2, on_progress=None):
-        seen.update(inputs=inputs, brief=brief, owner=owner, store=store)
-        plan = EditPlan(brief=Brief(path="visual", audio_kind="silent", recipe="recipe_process", target_seconds=0,
-                                    title_lead="Sunday", title_text="pancakes"),
-                        video=[VideoItem(id="v0", src=0, t0=0, t1=2, out0=0, out1=2)], duration=2.0,
-                        review=Review(scores=[LayerScore(layer="hook", score=8)], overall=8.0, passes=1),
-                        progress=[Progress(stage="ingest"), Progress(stage="done")])
-        if on_progress:
-            await on_progress(plan)
-        shutil.copy(inputs[0], out)
-        return plan
-
-    monkeypatch.setattr(premium_jobs.pipeline, "run", fake_run)
+    monkeypatch.setattr(premium_jobs.pipeline, "run_many", _fake_many(1, seen))
     edit_id = await _premium_edit(world, user_id)
     charged = before - await _balance(world, user_id)
     assert charged > 0
@@ -138,7 +151,42 @@ async def test_premium_edit_charges_up_front_and_lands_its_plan(world, monkeypat
         edit = await EditService(session, FakeS3()).get(user_id, edit_id)
     assert edit.status == "done" and edit.output_url and edit.title == "Sunday pancakes"
     assert edit.premium.overall == 8.0 and edit.premium.recipe == "recipe_process" and edit.premium.stage == "done"
-    assert edit.credits_charged == charged and edit.credits_estimate == 0
+    assert edit.credits_charged == charged and edit.credits_estimate == 0 and len(edit.reels) == 1
+
+
+async def test_a_long_video_gives_a_reel_per_strong_moment_each_charged(world, monkeypatch):
+    user_id = await _user(world, pro=True, email="many@example.com")
+    before = await _balance(world, user_id)
+    seen = {}
+    monkeypatch.setattr(premium_jobs.pipeline, "run_many", _fake_many(3, seen))
+    edit_id = await _premium_edit(world, user_id)
+    job = world["queued"].pop()
+    per_reel = job.payload["credits"]
+    await premium_jobs.premium_edit(job)
+    async with world["db"]() as session:
+        edit = await EditService(session, FakeS3()).get(user_id, edit_id)
+    assert seen["most"] == premium_jobs.most_reels(True)
+    assert edit.status == "done" and [r.title for r in edit.reels] == ["Sunday pancakes", "Sunday pancakes 2", "Sunday pancakes 3"]
+    assert all(r.url for r in edit.reels) and edit.output_url == edit.reels[0].url
+    assert before - await _balance(world, user_id) == 3 * per_reel == edit.credits_charged
+
+
+async def test_reels_stop_when_the_credits_do(world, monkeypatch):
+    user_id = await _user(world, pro=True, email="short@example.com")
+    monkeypatch.setattr(premium_jobs.pipeline, "run_many", _fake_many(5, {}))
+    edit_id = await _premium_edit(world, user_id)
+    job = world["queued"].pop()
+    per_reel = job.payload["credits"]
+    # Leave enough for exactly one more reel.
+    async with world["db"]() as session:
+        service = SubscriptionService.for_session(session)
+        spare = await _balance(world, user_id) - per_reel
+        if spare > 0:
+            await service.deduct_credits(user_id=user_id, amount=spare, reason="test drain")
+    await premium_jobs.premium_edit(job)
+    async with world["db"]() as session:
+        edit = await EditService(session, FakeS3()).get(user_id, edit_id)
+    assert edit.status == "done" and len(edit.reels) == 2 and edit.credits_charged == 2 * per_reel
 
 
 async def test_a_failed_premium_edit_is_refunded(world, monkeypatch):
@@ -148,7 +196,7 @@ async def test_a_failed_premium_edit_is_refunded(world, monkeypatch):
     async def broken(*args, **kwargs):
         raise RuntimeError("renderer crashed")
 
-    monkeypatch.setattr(premium_jobs.pipeline, "run", broken)
+    monkeypatch.setattr(premium_jobs.pipeline, "run_many", broken)
     edit_id = await _premium_edit(world, user_id)
     await premium_jobs.premium_edit(world["queued"].pop())
     assert await _balance(world, user_id) == before

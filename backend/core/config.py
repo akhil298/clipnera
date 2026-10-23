@@ -240,6 +240,9 @@ class BaseConfig(BaseSettings):
     REEL_IMAGE_PROVIDER: Literal["", "gemini", "openai"] = ""
     GEMINI_IMAGE_MODEL: str = "gemini-2.5-flash-image"
     REEL_MAX_GENERATED_IMAGES: int = 3
+    # Reels one premium edit may cut from a long video: one per strong moment, up to this many (each charged).
+    REEL_MAX_REELS_FREE: int = 1
+    REEL_MAX_REELS_PRO: int = 5
 
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""

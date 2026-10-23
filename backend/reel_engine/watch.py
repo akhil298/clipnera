@@ -97,7 +97,8 @@ def director_sheets(frames: dict[int, list[tuple[float, np.ndarray]]]) -> tuple[
         f"{len(items)} frames packed {columns}x{columns} per sheet, read left-right then top-bottom; each is stamped source:second"
 
 
-async def watch(sources: list[Source]) -> tuple[list[Shot], dict[str, list[list[float]]], dict[str, list[list[float]]], list[bytes], str]:
+async def watch(sources: list[Source]) -> tuple[list[Shot], dict[str, list[list[float]]], dict[str, list[list[float]]], list[bytes], str,
+                                               dict[int, list[tuple[float, np.ndarray]]]]:
     visual = [s for s in sources if s.kind in ("video", "image")]
     results = await asyncio.gather(*(watch_source(s) for s in visual))
     shots: list[Shot] = []
@@ -111,7 +112,7 @@ async def watch(sources: list[Source]) -> tuple[list[Shot], dict[str, list[list[
         frames[source.index] = sampled
     jpegs, how = await asyncio.to_thread(director_sheets, frames)
     log.info("Watch: %d shots across %d sources, %d sheets", len(shots), len(visual), len(jpegs))
-    return shots, tracks, focus, jpegs, how
+    return shots, tracks, focus, jpegs, how, frames
 
 
 def shaky(shot: Shot) -> bool:

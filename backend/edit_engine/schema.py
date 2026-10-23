@@ -246,6 +246,12 @@ class PremiumResponse(BaseModel):
     music: str | None
 
 
+class EditReelResponse(BaseModel):
+    url: str | None
+    duration_s: float
+    title: str
+
+
 class EditResponse(BaseModel):
     id: str
     title: str
@@ -278,6 +284,8 @@ class EditResponse(BaseModel):
     replans_left: int
     chat_edits_left: int
     output_url: str | None
+    # Every reel cut from the footage, best first (one, or several when the video holds several strong moments).
+    reels: list[EditReelResponse]
     music_credit: str | None
     error: str | None
     created_at: datetime

@@ -31,7 +31,7 @@ from edit_engine.music import ALLOWED_LICENCES, MOODS, SOURCES, credit_line, pic
 from edit_engine.perception import probe_media
 from edit_engine.schema import (
     EditChange, EditCreateRequest, EditLimitsResponse, EditLine, EditMusicResponse, EditPicture, EditPlanResponse,
-    EditReferenceResponse, EditResponse, EditSourceResponse, EditSourcesCompleteRequest, EditSourcesInitRequest, EditSourcesInitResponse,
+    EditReelResponse, EditReferenceResponse, EditResponse, EditSourceResponse, EditSourcesCompleteRequest, EditSourcesInitRequest, EditSourcesInitResponse,
     EditChatRequest, EditSourceFile, EditSummary, EditText, EditTimelineMusic, EditTimelineResponse, EditUpload, EditVoicePiece, EditWord,
     MusicTrackResponse, PremiumResponse,
 )
@@ -456,7 +456,10 @@ class EditService:
             credits_estimate=estimate, credits_charged=edit.credits_charged, renders=edit.renders,
             replans_left=max(0, self._settings.EDIT_MAX_REPLANS - edit.replans),
             chat_edits_left=max(0, limits.max_chat_edits - edit.chat_edits),
-            output_url=self._url(edit.output_key), music_credit=_credit_text(edit.music_credit), error=edit.error,
+            output_url=self._url(edit.output_key),
+            reels=[EditReelResponse(url=self._url(r["key"]), duration_s=float(r.get("duration") or 0), title=r.get("title") or edit.title)
+                   for r in json.loads(edit.reels or "[]")],
+            music_credit=_credit_text(edit.music_credit), error=edit.error,
             created_at=edit.created_at,
         )
 

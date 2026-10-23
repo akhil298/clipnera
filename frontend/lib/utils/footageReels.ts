@@ -57,7 +57,7 @@ export const EDIT_PHASES = [
 // The reel engine's stages (reel_engine/pipeline.py STAGES) and the classic analysis's progress text
 // (edit_engine/jobs.py) folded into those phases.
 const PHASE_OF: Record<string, number> = {
-  fetch: 0, queued: 1, ingest: 1, listen: 1, watch: 1, direct: 2, verify: 2, compile: 2,
+  fetch: 0, queued: 1, ingest: 1, listen: 1, watch: 1, moments: 2, direct: 2, verify: 2, compile: 2,
   assets: 3, picture: 3, layout: 3, graphics: 3, sound: 3, compose: 3, review: 4, done: 4,
   'Fetching your YouTube video': 0, 'Waiting to start': 1, 'Reading your clips': 1, 'Listening to what you said': 1,
   'Finding the best takes': 1, 'Studying your reference reel': 1, 'Planning the edit': 2,

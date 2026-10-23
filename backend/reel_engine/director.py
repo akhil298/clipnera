@@ -195,8 +195,9 @@ MUSIC: music "bed" under a voice, "score" for picture-only reels, mood to match.
 (the music drops there), or -1. ACCENT stays the brand amber.
 SPELLING: speech recognition mishears names, dishes and dialect. For each wrong word id give the correct spelling
 as a local would type it (romanized for Indic languages).
-TITLE: title_lead + title_text name the result or the idea (shown over the payoff). cta <= 34 chars, promises
-nothing the video does not have. notes: two sentences on your plan."""
+TITLE: title_lead + title_text name the result or the idea (shown over the payoff). cta <= 34 chars: one action the
+viewer can take right now, tied to this video ("Follow for part 2", "Save this for your next trip", "Comment YES for
+the recipe"); never vague ("Thanks for watching") and it promises nothing the video does not have. notes: two sentences on your plan."""
 
 
 def sentences(words: list[Word]) -> list[tuple[int, int]]:
@@ -245,8 +246,14 @@ def recipe_text() -> str:
 
 
 async def direct(sources: list[Source], audio: AudioReport, shots: list[Shot], jpegs: list[bytes], how: str,
-                 brief_text: str, target_seconds: float) -> DirectorPlan:
-    takes = earlier_takes(audio.words) if audio.words else set()
+                 brief_text: str, target_seconds: float, window: tuple[int, float, float] | None = None) -> DirectorPlan:
+    """The plan for the reel; with ``window`` (source, start, end) only that stretch is offered: one moment, seen closely."""
+    words = audio.words
+    if window:
+        src, t0, t1 = window
+        words = [w for w in words if w.src == src and t0 <= w.t0 <= t1]
+        shots = [s for s in shots if s.src != src or (s.t0 < t1 and t0 < s.t1)]
+    takes = earlier_takes(words) if words else set()
     graphic_every = 2.5
     system = SYSTEM.format(recipes=recipe_text(), audio_kind=audio.kind, audio_why=audio.why,
                            target=f"{target_seconds:.0f}" if target_seconds else "30-60 (pick what holds attention)",
@@ -255,7 +262,7 @@ async def direct(sources: list[Source], audio: AudioReport, shots: list[Shot], j
                             for s in sources)
     user = (f"Sources:\n{source_rows}\n\nUser brief: {brief_text or '(none: make the best reel from this footage)'}\n\n"
             f"Shots:\n{shot_listing(shots)}\n\n"
-            f"Words (id:word, ~ = filler, [take] = earlier take):\n{word_listing(audio.words, takes) if audio.words else '(nobody speaks)'}\n\n"
+            f"Words (id:word, ~ = filler, [take] = earlier take):\n{word_listing(words, takes) if words else '(nobody speaks)'}\n\n"
             f"Frames: {how}.\n\nPlan the reel. JSON only.")
     plan = await vision_json(system + "\n\n" + effects_prompt(), user, jpegs, DirectorPlan, max_tokens=16000)
     log.info("Director: recipe=%s audio=%s %d clips %d beats %d sections %d effects", plan.recipe, plan.audio_view,

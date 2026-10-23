@@ -2622,6 +2622,13 @@ export interface PremiumResponse {
   music: string | null;
 }
 
+/** One reel cut from the footage (backend EditReelResponse). */
+export interface EditReel {
+  url: string | null;
+  duration_s: number;
+  title: string;
+}
+
 export interface EditResponse {
   id: string;
   title: string;
@@ -2654,6 +2661,8 @@ export interface EditResponse {
   replans_left: number;
   chat_edits_left: number;
   output_url: string | null;
+  /** Every reel cut from the footage, best first. */
+  reels: EditReel[];
   music_credit: string | null;
   error: string | null;
   created_at: string;

@@ -466,12 +466,12 @@
     const g = boxed(el('div', 'g', root), s.box);
     Object.assign(g.style, { display: 'flex', alignItems: 'center', justifyContent: 'center' });
     const pill = el('div', 'pill', g);
-    pill.style.fontSize = `${s.box[3] * 0.32}px`;
-    pill.style.background = 'var(--accent)';
-    pill.style.color = 'var(--accent-ink)';
+    // The last thing the viewer reads: big, bold, never clipped (two lines when it needs them).
+    Object.assign(pill.style, { background: 'var(--accent)', color: 'var(--accent-ink)', textAlign: 'center', lineHeight: '1.1',
+      padding: '0.35em 0.8em', boxShadow: '0 18px 50px rgba(0,0,0,.45)', fontWeight: 800 });
     el('span', '', pill, s.data.verb || 'COMMENT');
     if (s.data.text) el('span', '', pill, `“${s.data.text}”`);
-    fitText(pill, s.box[2] * 0.95, s.box[3] * 0.32);
+    fitText(pill, s.box[2] * 0.95, s.box[3] * 0.34, 28, { wrap: true, maxHeight: s.box[3] * 0.92 });
     return {
       seek(t) {
         envelope(g, t, s.dur, { from: 0.3, blur: 0 });

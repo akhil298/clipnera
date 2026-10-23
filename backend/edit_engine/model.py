@@ -63,6 +63,8 @@ class EditProject(Base):
     engine: Mapped[str] = mapped_column(String(20), default="classic", server_default="classic", nullable=False)
     # The reel engine's Edit Plan (JSON), with its progress while it runs.
     premium: Mapped[str] = mapped_column(Text, default="{}", server_default="{}", nullable=False)
+    # Every reel cut from the footage (JSON list of {key, duration, title}); the first is also ``output_key``.
+    reels: Mapped[str] = mapped_column(Text, default="[]", server_default="[]", nullable=False)
     # [{key, kind: video|image|voice|reference, name, content_type, duration, width, height, has_audio, proxy_key}]
     sources: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
     # Perception and transcript: words, sentences, shots, photos, retakes, content type.

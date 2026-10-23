@@ -13,20 +13,21 @@ import asyncio
 import shutil
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from core.logging_config import get_logger
-from reel_engine import accents, effects, icons, inserts, layout, sound, tracks
+from reel_engine import accents, effects, icons, inserts, layout, moments, sound, tracks
 from reel_engine.assets import AssetStore, Scout
 from reel_engine.compile import BEAT, brief_of, captions_track, graphics_track, to_output, video_track
 from reel_engine.director import direct, recipe
 from reel_engine.listen import listen
 from reel_engine.media import probe
-from reel_engine.plan import EditPlan, MusicChoice, Progress, Source
+from reel_engine.plan import AudioReport, EditPlan, MusicChoice, Progress, Shot, Source
 from reel_engine.render import compose, render_graphics, render_inserts, render_picture, resolve_behind
 from reel_engine.review import apply, review
 from reel_engine.verify import verify
-from reel_engine.watch import watch
+from reel_engine.watch import director_sheets, watch
 
 log = get_logger(__name__)
 
@@ -104,10 +105,20 @@ def ingest(paths: list[Path]) -> list[Source]:
     return sources
 
 
-async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owner: str = "", brief: str = "",
-              target_seconds: float = 0.0, passes: int = 2, on_progress: Progress_ = None) -> EditPlan:
-    work.mkdir(parents=True, exist_ok=True)
-    plan = EditPlan()
+@dataclass
+class Analysis:
+    """What listening and watching found, shared by every reel cut from the same footage."""
+    sources: list[Source]
+    audio: AudioReport
+    shots: list[Shot]
+    face_track: dict[str, list[list[float]]]
+    focus_track: dict[str, list[list[float]]]
+    jpegs: list[bytes]
+    how: str
+    frames: dict[int, list]
+
+
+def _stager(plan: EditPlan, on_progress: Progress_) -> Callable[[str, str], Awaitable[None]]:
     started = time.monotonic()
 
     async def stage(name: str, note: str = "") -> None:
@@ -116,15 +127,80 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
         if on_progress:
             await on_progress(plan)
 
+    return stage
+
+
+async def analyze(inputs: list[Path], work: Path, stage: Callable[[str, str], Awaitable[None]]) -> Analysis:
     await stage("ingest", f"{len(inputs)} file(s)")
-    plan.sources = ingest(inputs)
+    sources = ingest(inputs)
     await stage("listen", "voice, music and words; shots and faces")
-    audio, (shots, face_track, focus_track, jpegs, how) = await asyncio.gather(listen(plan.sources, work), watch(plan.sources))
-    plan.audio, plan.shots, plan.face_track, plan.focus_track = audio, shots, face_track, focus_track
+    audio, (shots, face_track, focus_track, jpegs, how, frames) = await asyncio.gather(listen(sources, work), watch(sources))
     await stage("watch", f"{audio.kind}: {audio.why}; {len(shots)} shots")
+    return Analysis(sources, audio, shots, face_track, focus_track, jpegs, how, frames)
+
+
+async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owner: str = "", brief: str = "",
+              target_seconds: float = 0.0, passes: int = 2, on_progress: Progress_ = None) -> EditPlan:
+    """One reel from the footage (the whole of it is the director's to choose from)."""
+    work.mkdir(parents=True, exist_ok=True)
+    plan = EditPlan()
+    stage = _stager(plan, on_progress)
+    found = await analyze(inputs, work, stage)
+    return await edit(found, plan, stage, work, out, store, owner, brief, target_seconds, passes)
+
+
+async def run_many(inputs: list[Path], work: Path, out_dir: Path, store: AssetStore, owner: str = "", brief: str = "",
+                   target_seconds: float = 0.0, passes: int = 2, on_progress: Progress_ = None, most: int = 1,
+                   on_reel: Callable[[int, EditPlan], Awaitable[None]] | None = None,
+                   allow: Callable[[int], Awaitable[bool]] | None = None) -> list[EditPlan]:
+    """Up to ``most`` reels: the footage is analysed once, its moments ranked, and each strong moment edited on its own.
+    A video with one good moment gives one reel. ``allow`` is asked before each reel (it may charge for it, or stop);
+    ``on_reel`` hears about each reel as it is finished."""
+    work.mkdir(parents=True, exist_ok=True)
+    tracker = EditPlan()
+    stage = _stager(tracker, on_progress)
+    found = await analyze(inputs, work, stage)
+    chosen = moments.worth_a_reel(await moments.find(found.audio.words, brief), most) if most > 1 else []
+    await stage("moments", f"{len(chosen) or 1} reel(s)")
+    windows = chosen or [None]
+    plans = []
+    for n, moment in enumerate(windows):
+        if allow and not await allow(n):
+            break
+        plan = EditPlan(progress=list(tracker.progress))
+        reel_stage = _stager(plan, on_progress)
+        window = (moment[3], moment[1], moment[2]) if moment else None
+        note = brief
+        if moment:
+            m = moment[0]
+            spans = moments.sentences(found.audio.words)
+            line = lambda k: " ".join(w.text for w in found.audio.words[spans[k][0]:spans[k][1] + 1]) if 0 <= k < len(spans) else ""  # noqa: E731
+            note = (f"{brief}\nEDIT THIS ONE MOMENT: '{m.title}'. Open with the line: \"{line(m.hook)}\". "
+                    f"End on the payoff: \"{line(m.payoff)}\".").strip()
+        plan = await edit(found, plan, reel_stage, work / f"reel{n}", out_dir / f"reel{n + 1}.mp4", store, owner, note, target_seconds,
+                          passes, window=window)
+        plans.append(plan)
+        if on_reel:
+            await on_reel(n, plan)
+    return plans
+
+
+async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awaitable[None]], work: Path, out: Path,
+               store: AssetStore, owner: str, brief: str, target_seconds: float, passes: int,
+               window: tuple[int, float, float] | None = None) -> EditPlan:
+    """One reel from analysed footage; ``window`` keeps the director to one moment and shows it that stretch closely."""
+    work.mkdir(parents=True, exist_ok=True)
+    plan.sources, plan.audio, plan.shots = found.sources, found.audio, found.shots
+    plan.face_track, plan.focus_track = found.face_track, found.focus_track
+    audio, shots = found.audio, found.shots
+    jpegs, how = found.jpegs, found.how
+    if window:
+        src, t0, t1 = window
+        near = {src: [f for f in found.frames.get(src, []) if t0 - 1 <= f[0] <= t1 + 1]}
+        jpegs, how = await asyncio.to_thread(director_sheets, near)
 
     await stage("direct", "planning the story")
-    d = await direct(plan.sources, audio, shots, jpegs, how, brief, target_seconds)
+    d = await direct(plan.sources, audio, shots, jpegs, how, brief, target_seconds, window)
     plan.ai_calls += 1
     words = audio.words
     for fix in d.spelling:
