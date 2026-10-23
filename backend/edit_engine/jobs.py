@@ -121,7 +121,10 @@ async def fetch_link(job: Job) -> None:
         await save(edit_id, status=EditStatus.FAILED, error=exc.message)
     except Exception as exc:
         log.warning("YouTube fetch failed: edit=%s (%s)", edit_id, exc)
-        reason = str(exc) if isinstance(exc, ValueError) else "check that it's public and try again"
+        if "not a bot" in str(exc):
+            reason = "YouTube is blocking our server right now; try again in a while, or upload the video file instead"
+        else:
+            reason = str(exc) if isinstance(exc, ValueError) else "check that it's public and try again"
         await save(edit_id, status=EditStatus.FAILED, error=f"We couldn't fetch your YouTube video ({reason}).")
 
 

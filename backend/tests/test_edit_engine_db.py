@@ -456,3 +456,23 @@ async def test_a_youtube_fetch_that_fails_leaves_a_clear_reason(world, monkeypat
     async with maker() as session:
         edit = await EditService(session, FakeS3()).get(user_id, created.id)
     assert edit.status == "failed" and "couldn't fetch your YouTube video" in edit.error
+
+
+async def test_a_youtube_bot_block_says_so(world, monkeypatch):
+    _youtube(monkeypatch, world)
+    from clip.youtube_service import YouTubeService
+
+    async def blocked(self, url, folder, max_seconds):
+        raise RuntimeError("ERROR: [youtube] abc: Sign in to confirm you're not a bot.")
+
+    monkeypatch.setattr(YouTubeService, "download_for_edit", blocked)
+    maker = world["db"]
+    user_id = await _user(maker)
+    async with maker() as session:
+        service = EditService(session, FakeS3())
+        created = await service.create(user_id, EditCreateRequest(source_url="https://youtu.be/abcdefghijk"))
+        await service.analyze(user_id, created.id)
+    await _run(world)
+    async with maker() as session:
+        edit = await EditService(session, FakeS3()).get(user_id, created.id)
+    assert edit.status == "failed" and "blocking our server" in edit.error and "upload the video file" in edit.error
