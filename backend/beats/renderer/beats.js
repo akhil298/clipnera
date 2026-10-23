@@ -23,10 +23,15 @@
     Object.assign(node.style, { left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` });
     return node;
   }
-  function fitText(node, maxWidth, maxSize, minSize = 18) {
+  // The biggest size at which ``node`` fits: on one line (it never wraps, so too wide always shows), or with
+  // ``wrap`` over several lines within ``maxHeight``. Text that ran past the frame was the commonest flaw a review found.
+  function fitText(node, maxWidth, maxSize, minSize = 18, { wrap = false, maxHeight = Infinity } = {}) {
     let size = maxSize;
+    if (wrap) node.style.maxWidth = `${maxWidth}px`;  // wraps at the width; only the height and one long word can overflow
+    else node.style.whiteSpace = 'nowrap';
     node.style.fontSize = `${size}px`;
-    while (size > minSize && node.scrollWidth > maxWidth) {
+    const over = () => node.scrollWidth > maxWidth + 1 || (wrap && node.scrollHeight > maxHeight + 1);
+    while (size > minSize && over()) {
       size *= 0.94;
       node.style.fontSize = `${size}px`;
     }
@@ -236,7 +241,8 @@
         ch.style.display = 'inline-block';
         chars.push(ch);
       });
-      fitText(word, s.box[2] * 0.98, room);
+      // Behind the speaker the word enters at 112% scale, so it is fitted with that headroom.
+      fitText(word, s.box[2] * (behind ? 0.98 / 1.12 : 0.96), room);
     });
     return {
       seek(t) {

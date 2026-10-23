@@ -162,7 +162,7 @@
     const g = boxed(el('div', 'g glass-panel', root), [x, y, w, h]);
     Object.assign(g.style, { display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' });
     const text = el('div', 'head glass-text', g, s.data.texts[0] || '');
-    fitText(text, w * 0.86, h * 0.7);
+    fitText(text, w * 0.86, h * 0.42, 18, { wrap: true, maxHeight: h * 0.78 });
     const shine = el('div', 'glass-shine', g);
     return {
       seek(t) {
