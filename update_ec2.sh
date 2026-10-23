@@ -220,6 +220,17 @@ else
     bash scripts/install_deps.sh
 fi
 
+# The job worker renders reels: the graphics renderer's tools, the motion kit (icons, matte model) and the music
+# library. Each step only fetches what is missing, and none of them can stop the deploy.
+if [[ "${ROLE}" == "worker" ]]; then
+    bash scripts/install_render_tools.sh || echo "WARNING: render tools not installed; reels render without graphics." >&2
+    if [[ ! -f static/motion/kit/manifest.json ]]; then
+        "${VENV_DIR}/bin/python" scripts/build_motion_kit.py --pull || "${VENV_DIR}/bin/python" scripts/build_motion_kit.py \
+            || echo "WARNING: motion kit unavailable; graphics needing icons are skipped." >&2
+    fi
+    "${VENV_DIR}/bin/python" scripts/build_music_library.py || echo "WARNING: music library not fetched; reels use composed music." >&2
+fi
+
 # Small machines (t3.micro: 1 GB) get swap so a burst cannot OOM-kill the API.
 if [[ "$(awk '/MemTotal/ {print $2}' /proc/meminfo)" -lt 3000000 ]] && ! swapon --show | grep -q .; then
     sudo fallocate -l 2G /swapfile
