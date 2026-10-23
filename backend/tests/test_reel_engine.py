@@ -450,3 +450,16 @@ def test_picture_effects_build_a_filter_and_need_a_matte_where_said():
     vertigo = effects.make_items("v", "vertigo", 1.0, 2.5, [])[0]
     vertigo.data["face"] = [400, 300, 700, 650]
     assert effects.picture_filter(vertigo, 1.5, False) is None and "alphamerge" in effects.picture_filter(vertigo, 1.5, True)
+
+
+def test_caption_lines_follow_phrases():
+    words = words_of("so you have to balance kar lo the whole thing. then we move on to the next step", gap=0.05)
+    words[10].t0 += 0.5  # a pause before "then"
+    for w in words[11:]:
+        w.t0 += 0.5
+        w.t1 += 0.5
+    kept = [(w, w.t0, w.t1) for w in words]
+    lines = [" ".join(e[0].text for e in line) for line in comp.phrase_lines(kept)]
+    assert all(not line.split()[-1] in comp.BINDING for line in lines[:-1]), lines
+    assert any(line.endswith("thing.") for line in lines) and all(2 <= len(line.split()) <= 6 for line in lines), lines
+    assert "kar | lo" not in " | ".join(lines)

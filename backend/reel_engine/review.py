@@ -92,7 +92,9 @@ async def review(plan: EditPlan, video: str) -> tuple[Review, list[Action]]:
     facts = (f"Length {plan.duration:.1f} s, {len(plan.video)} shots, {len(plan.graphics)} graphics, {len(plan.captions)} caption lines. "
              f"Audio: {plan.audio.kind}; voice in {talking / max(plan.duration, 0.1):.0%} of the reel; music "
              f"{plan.brief.music if plan.brief else 'none'}; integrated loudness {lufs:.1f} LUFS (target -14); "
-             f"{sum(1 for a in plan.audio_items if a.kind == 'sfx')} sound effects. Recipe: {plan.brief.recipe if plan.brief else ''}.")
+             f"{sum(1 for a in plan.audio_items if a.kind == 'sfx')} sound effects. Recipe: {plan.brief.recipe if plan.brief else ''}."
+             + (f" Spoken language: {plan.audio.language}; captions are that speech written in Roman letters (Hinglish/Tenglish "
+                "style), so judge them as that language, not as English." if plan.audio.language not in ("", "en", "english") else ""))
     message_text = (f"Measurements: {facts}\n\nFirst {len(overview)} images: frames across the reel. Then one image per item:\n"
                     + "\n".join(notes) + "\n\nReview it. JSON only.")
     verdict = await vision_json(SYSTEM, message_text, overview + item_jpegs, Verdict, max_tokens=4000)

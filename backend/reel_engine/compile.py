@@ -26,7 +26,6 @@ MONTAGE_SECONDS = round(BEAT / 2 * FPS) / FPS
 MIN_GRAPHIC, MAX_GRAPHIC = 1.2, 3.5
 CARD_KINDS = {"statement", "list", "chart", "flow", "count_up"}
 VOICE_KINDS = ("voice", "voice_song")
-LINE_WORDS = 5
 MIN_LINE_WORDS = 3
 CARD_EVERY = 10.0
 EMOJI_EVERY = 3
@@ -343,6 +342,55 @@ def _space(graphics: list[GraphicItem]) -> list[GraphicItem]:
 
 # ------------------------------------------------------------------ captions
 
+# Words that lean on the next one: a caption line never ends on them ("the | car", "ko | balance kar", "oka | roju").
+BINDING = {"a", "an", "the", "to", "of", "in", "on", "at", "for", "with", "and", "or", "but", "so", "that", "this", "my", "your",
+           "our", "their", "his", "her", "its", "is", "are", "was", "were", "be", "i", "you", "we", "they", "he", "she", "as", "if",
+           "than", "very", "really", "just", "from", "into", "about", "not", "no", "can", "will", "would", "should", "could",
+           # Hindi and Telugu: linking words and verb stems lean forward; postpositions (ko, se, mein, lo, ni) close a phrase.
+           "ka", "ke", "aur", "ya", "jo", "ek", "koi", "kya", "kaise", "ye", "yeh", "wo", "woh", "us", "itni", "itna", "kitna",
+           "bahut", "kar", "karke", "oka", "mariyu", "ee", "aa", "chala"}
+MAX_LINE_WORDS, MAX_LINE_CHARS = 6, 30
+
+
+def phrase_lines(kept: list[tuple[Word, float, float]]) -> list[list[tuple[Word, float, float]]]:
+    """Caption lines that follow the speech's phrasing: broken at pauses and punctuation, 2-6 words, never ending on a
+    word that leans on the next one, never running over a long pause. Chosen as a whole (dynamic programming)."""
+    n = len(kept)
+    if n == 0:
+        return []
+
+    def pause_after(i: int) -> float:
+        return kept[i + 1][1] - kept[i][2] if i + 1 < n else 9.0
+
+    def cost(i: int, j: int) -> float:  # one line of kept[i:j]
+        size = j - i
+        text = " ".join(e[0].text for e in kept[i:j])
+        last = kept[j - 1][0].text.strip().lower()
+        c = 0.5 * (size - 4) ** 2 + max(0, len(text) - MAX_LINE_CHARS) * 0.3
+        c += sum(4.0 for k in range(i, j - 1) if pause_after(k) > 0.6)  # a long pause inside a line
+        c += sum(2.0 for k in range(i, j - 1)  # a sentence end, or a clear breath, inside a line
+                 if kept[k][0].text.strip().endswith((".", "?", "!")) or 0.35 <= pause_after(k) <= 0.6)
+        if j < n:
+            ends_phrase = last.endswith((".", "?", "!", ",", ";", ":")) or pause_after(j - 1) >= 0.35
+            c += 0.0 if ends_phrase else (2.5 if last.strip(".,!?") in BINDING else 0.8)
+        return c
+
+    best = [0.0] + [float("inf")] * n
+    back = [0] * (n + 1)
+    for j in range(1, n + 1):
+        for size in range(1, min(MAX_LINE_WORDS, j) + 1):
+            i = j - size
+            extra = 3.0 if size == 1 and n > 1 else 0.0  # a lone word is a last resort
+            total = best[i] + cost(i, j) + extra
+            if total < best[j]:
+                best[j], back[j] = total, i
+    lines, j = [], n
+    while j > 0:
+        lines.append(kept[back[j]:j])
+        j = back[j]
+    return lines[::-1]
+
+
 def _spoken(text: str) -> set[str]:
     return {t for t in (w.lower().strip(".,!?'\"") for w in text.split()) if t and t not in WEAK}
 
@@ -361,18 +409,7 @@ def captions_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
                 kept.append((w, round(item.out0 + (w.t0 - item.t0) / item.speed, 3), round(item.out0 + (min(w.t1, item.t1) - item.t0) / item.speed, 3)))
     # A stutter ("and and") shows once.
     kept = [e for k, e in enumerate(kept) if k == 0 or e[0].text.lower().strip(",.") != kept[k - 1][0].text.lower().strip(",.")]
-    lines: list[list[tuple[Word, float, float]]] = []
-    for entry in kept:
-        w, a, _ = entry
-        if lines:
-            prev = lines[-1][-1]
-            sentence_end = prev[0].text.rstrip().endswith((".", "?", "!"))
-            short = len(lines[-1]) < MIN_LINE_WORDS
-            # Lines of 3-5 words, broken at sentence ends or a long pause, never left as a one-word fragment.
-            if len(lines[-1]) < LINE_WORDS and a - prev[2] < 0.8 and (short or not sentence_end):
-                lines[-1].append(entry)
-                continue
-        lines.append([entry])
+    lines = phrase_lines(kept)
     def blocking() -> list[tuple[float, float, set[str] | None]]:
         """(start, end, words it shows) of each graphic a caption gives way to; None hides every word."""
         hiding = [(g.start, g.end, None) for g in graphics if g.kind == "effect" and g.data.get("captions") == "hide"]
