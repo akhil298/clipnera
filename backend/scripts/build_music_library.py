@@ -37,14 +37,14 @@ AGENT = {"User-Agent": "Mozilla/5.0 (Clipnera music library builder)"}
 MOODS: dict[str, dict] = {
     "upbeat": {"pages": ["mood/upbeat/", "mood/happy/", "mood/positive/"], "tags": {"upbeat", "happy", "positive", "carefree", "cheerful", "fun"}},
     "energetic": {"pages": ["mood/energetic/", "mood/driving/", "tag/sports/"], "tags": {"energetic", "driving", "propulsive", "aggressive", "sports", "action", "exciting"}},
-    "chill": {"pages": ["mood/relaxed/", "genre/chillout/", "mood/calm/"], "tags": {"relaxed", "calm", "chillout", "mellow", "smooth", "relaxation"}},
-    "lofi": {"pages": ["genre/lo-fi-beats/", "tag/lo-fi/"], "tags": {"lo-fi beats", "lo-fi", "downtempo"}},
-    "cinematic": {"pages": ["mood/epic/", "genre/film-score/", "mood/hopeful/"], "tags": {"epic", "cinematic", "film score", "hopeful", "orchestral pop", "majestic"}},
+    "chill": {"pages": ["mood/relaxed/", "chillout/", "mood/calm/"], "tags": {"relaxed", "calm", "chillout", "mellow", "smooth", "relaxation"}},
+    "lofi": {"pages": ["lo-fi-beats/", "tag/lo-fi/"], "tags": {"lo-fi beats", "lo-fi", "downtempo"}},
+    "cinematic": {"pages": ["mood/epic/", "film-score/", "mood/hopeful/"], "tags": {"epic", "cinematic", "film score", "hopeful", "orchestral pop", "majestic"}},
     "inspiring": {"pages": ["mood/uplifting/", "tag/motivational/", "mood/hopeful/"], "tags": {"uplifting", "motivational", "inspiring", "hopeful", "triumphant"}},
     "dramatic": {"pages": ["mood/dramatic/", "mood/suspenseful/"], "tags": {"dramatic", "tension", "suspenseful", "serious", "dark"}},
-    "corporate": {"pages": ["genre/corporate-music/", "tag/technology/"], "tags": {"corporate music", "corporate", "technology", "underscore"}},
+    "corporate": {"pages": ["corporate-music/", "tag/technology/"], "tags": {"corporate music", "corporate", "technology", "underscore"}},
     "funny": {"pages": ["mood/playful/", "mood/quirky/", "tag/comedy/"], "tags": {"playful", "quirky", "humorous", "silly", "comedy", "whimsical"}},
-    "urban": {"pages": ["genre/hip-hop/", "genre/trap/"], "tags": {"hip hop", "trap", "city", "urban"}},
+    "urban": {"pages": ["hip-hop/", "trap/"], "tags": {"hip hop", "trap", "city", "urban"}},
 }
 SKIP = {"christmas", "horror", "scary", "nightmarish", "eerie", "wedding", "religious", "gregorian chant"}
 
@@ -118,7 +118,8 @@ def main() -> None:
         key = f"mixkit_{track_id}"
         target = OUT / f"{key}.mp3"
         if not target.exists():
-            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+            # Downloaded beside the target, so the final rename never crosses filesystems (/tmp is often its own).
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False, dir=OUT) as tmp:
                 tmp.write(urllib.request.urlopen(urllib.request.Request(f"https://assets.mixkit.co/music/{track_id}/{track_id}.mp3",
                                                                         headers=AGENT), timeout=120).read())
             Path(tmp.name).replace(target)

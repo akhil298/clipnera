@@ -289,8 +289,8 @@ def build_emoji() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("libraries", nargs="*", choices=["sfx", "lottie", "emoji"], default=["sfx", "lottie", "emoji"])
-    for name in parser.parse_args().libraries:
+    parser.add_argument("libraries", nargs="*", choices=["sfx", "lottie", "emoji"], help="which to build (default: all)")
+    for name in parser.parse_args().libraries or ["sfx", "lottie", "emoji"]:
         {"sfx": build_sfx, "lottie": build_lottie, "emoji": build_emoji}[name]()
 
 

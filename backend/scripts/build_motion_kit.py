@@ -316,7 +316,8 @@ def push() -> None:
             if not present:
                 continue
             archive = Path(tmp) / f"{name}.tar"
-            with tarfile.open(archive, "w") as tar:
+            # Follows links: a worktree's kit folders are links to the checkout that built the kit.
+            with tarfile.open(archive, "w", dereference=True) as tar:
                 for part in present:
                     tar.add(KIT / part, arcname=part)
             s3.upload_file(bucket, f"{S3_PREFIX}/{name}.tar", str(archive))
