@@ -151,6 +151,28 @@ def test_keyword_mode_shows_only_turning_points():
     assert captions and all("behavior" in f"{c.lead} {c.keyword}" for c in captions)
 
 
+def test_every_word_captions_keep_running_under_side_cards():
+    words = words_of("there are three things every student must know before choosing a course")
+    d = director(story=[clip(w0=0, w1=len(words) - 1)], beats=[beat(kind="list", w0=0, w1=len(words) - 1, text="Three things")])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0)
+    items = comp.video_track(d, brief, words, [], {0: 20.0})
+    graphics = comp.graphics_track(d, brief, words, items, [])
+    captions, _ = comp.captions_track(d, brief, words, items, graphics)
+    shown = " ".join(w["text"] for c in captions for w in c.words)
+    assert "student" in shown and "course" in shown
+
+
+def test_faces_that_never_move_are_not_followed():
+    from reel_engine.plan import Box
+    from reel_engine.watch import _still
+
+    slide = np.full((144, 256, 3), 90, np.uint8)
+    live = slide.copy()
+    live[10:40, 200:240] = np.random.default_rng(1).integers(0, 255, (30, 40, 3), dtype=np.uint8)
+    assert _still(Box(x=0.3, y=0.4, w=0.2, h=0.3), live, slide)
+    assert not _still(Box(x=200 / 256, y=10 / 144, w=40 / 256, h=30 / 144), live, slide)
+
+
 # ------------------------------------------------------------------ layout
 
 def test_placement_avoids_faces_and_busy_detail():
@@ -240,7 +262,7 @@ def test_a_talking_reel_keeps_the_speaker_on_screen():
     assert sum(1 for g in kept if g.kind == "statement") == 2 and any(g.kind == "wash" for g in kept)
 
 
-def test_captions_step_aside_for_a_graphic_and_skip_weak_keywords():
+def test_captions_never_repeat_a_word_graphic_and_skip_weak_keywords():
     words = words_of("but we have been working together really well up here")
     d = director(story=[clip(w0=0, w1=len(words) - 1)], beats=[beat(kind="two", w0=4, w1=5, lead="working", text="together")])
     brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0)
@@ -248,7 +270,8 @@ def test_captions_step_aside_for_a_graphic_and_skip_weak_keywords():
     graphics = comp.graphics_track(d, brief, words, items, [])
     captions, _ = comp.captions_track(d, brief, words, items, graphics)
     two = next(g for g in graphics if g.kind == "two")
-    assert all(not (two.start < c.end and c.start < two.end) for c in captions)
+    under = [w["text"].lower() for c in captions if two.start < c.end and c.start < two.end for w in c.words]
+    assert "working" not in under and "together" not in under
     assert all(c.keyword.lower() not in comp.WEAK for c in captions)
 
 

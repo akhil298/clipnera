@@ -21,6 +21,8 @@ log = get_logger(__name__)
 
 FACE_SAMPLES_PER_SHOT = 4
 SHAKY_MOTION = 25.0
+# Mean pixel change (0-255) under which a face has not moved at all between samples a second apart.
+STILL_FACE_CHANGE = 1.5
 
 
 def _faces(detector, frame: np.ndarray) -> list[Box]:
@@ -28,11 +30,26 @@ def _faces(detector, frame: np.ndarray) -> list[Box]:
             for f in detector.detect(frame)]
 
 
+def _still(box: Box, image: np.ndarray, before: np.ndarray | None) -> bool:
+    """A face whose pixels did not change since the last sample: a photo on a slide or a poster, not a person."""
+    if before is None or before.shape != image.shape:
+        return False
+    h, w = image.shape[:2]
+    x0, y0 = max(0, int(box.x * w)), max(0, int(box.y * h))
+    x1, y1 = min(w, int((box.x + box.w) * w) + 1), min(h, int((box.y + box.h) * h) + 1)
+    if x1 <= x0 or y1 <= y0:
+        return False
+    change = np.abs(image[y0:y1, x0:x1].astype(np.int16) - before[y0:y1, x0:x1].astype(np.int16)).mean()
+    return float(change) < STILL_FACE_CHANGE
+
+
 def _track(detector, frames: list[tuple[float, np.ndarray]]) -> list[list[float]]:
-    """Per sampled second: [t, centre x, centre y, width] of the largest face, or nothing when there is none."""
+    """Per sampled second: [t, centre x, centre y, width] of the largest living face, or nothing when there is none."""
     track = []
+    before = None
     for t, image in frames:
-        faces = _faces(detector, image)
+        faces = [f for f in _faces(detector, image) if not _still(f, image, before)]
+        before = image
         if faces:
             big = max(faces, key=lambda b: b.w * b.h)
             track.append([round(t, 2), round(big.x + big.w / 2, 4), round(big.y + big.h / 2, 4), round(big.w, 4)])

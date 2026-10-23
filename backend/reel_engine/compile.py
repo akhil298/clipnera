@@ -32,8 +32,12 @@ CARD_EVERY = 10.0
 # Titles and chapters in a style that contrasts with the captions' (still one family).
 TITLE_PAIR = {"punch": "editorial", "editorial": "editorial", "neon": "neon", "highlight": "punch", "bubble": "script",
               "script": "bubble", "comic": "comic", "minimal": "editorial"}
-# Graphics that hold the eye: a caption steps aside while one is on screen.
+# Graphics that hold the eye: a keyword caption steps aside while one is on screen.
 CAPTION_YIELDS_TO = {"two", "keyword", "count_up", "statement", "list", "flow", "chart", "cta", "flicker", "photocard"}
+# Every-word captions carry the speech: they give way to graphics that take the whole frame, and under a word
+# graphic they leave out only the words it already shows.
+FULL_FRAME = {"statement", "flicker", "cta"}
+WORD_GRAPHICS = {"two", "keyword"}
 # Never the big word of a caption line.
 WEAK = {"a", "an", "the", "and", "but", "or", "so", "to", "of", "in", "on", "at", "it", "is", "was", "be", "we", "we've", "i",
         "i'm", "you", "your", "they", "he", "she", "this", "that", "with", "for", "do", "did", "not", "just", "very", "really",
@@ -305,6 +309,10 @@ def _space(graphics: list[GraphicItem]) -> list[GraphicItem]:
 
 # ------------------------------------------------------------------ captions
 
+def _spoken(text: str) -> set[str]:
+    return {t for t in (w.lower().strip(".,!?'\"") for w in text.split()) if t and t not in WEAK}
+
+
 def captions_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list[VideoItem],
                    graphics: list[GraphicItem]) -> tuple[list[CaptionLine], list[GraphicItem]]:
     if brief.caption_mode == "none" or not words:
@@ -331,22 +339,41 @@ def captions_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
                 lines[-1].append(entry)
                 continue
         lines.append([entry])
-    cards = [(g.start, g.end) for g in graphics if g.kind in CARD_KINDS or g.place == "card" or g.kind in CAPTION_YIELDS_TO]
+    def blocking() -> list[tuple[float, float, set[str] | None]]:
+        """(start, end, words it shows) of each graphic a caption gives way to; None hides every word."""
+        if brief.caption_mode == "every_word":
+            return [(g.start, g.end, None if g.kind in FULL_FRAME else _spoken(f"{g.data.get('lead', '')} {g.data.get('text', '')}"))
+                    for g in graphics if g.kind in FULL_FRAME | WORD_GRAPHICS]
+        return [(g.start, g.end, None) for g in graphics if g.kind in CARD_KINDS or g.place == "card" or g.kind in CAPTION_YIELDS_TO]
+
+    cards = blocking()
     tags = [g for g in graphics if g.kind == "tag"]
     out: list[CaptionLine] = []
     used_tags: set[str] = set()
+    runs: list[tuple[list[tuple[Word, float, float]], float]] = []
     for n, line in enumerate(lines):
-        start = line[0][1]
-        end = min(line[-1][2] + 0.5, lines[n + 1][0][1]) if n + 1 < len(lines) else line[-1][2] + 0.5
-        ids = {w.i for w, _, _ in line}
-        if d.drop_word in ids:
+        next_start = lines[n + 1][0][1] if n + 1 < len(lines) else float("inf")
+        if d.drop_word in {w.i for w, _, _ in line}:
             # The payoff line is the reel's big moment: a card still up when it starts ends there.
             for g in graphics:
-                if (g.kind in CARD_KINDS or g.place == "card") and g.start < start < g.end:
-                    g.end = round(max(g.start + 0.6, start - 0.05), 3)
-            cards = [(g.start, g.end) for g in graphics if g.kind in CARD_KINDS or g.place == "card" or g.kind in CAPTION_YIELDS_TO]
-        if any(a < end and start < b for a, b in cards):
-            continue
+                if (g.kind in CARD_KINDS or g.place == "card") and g.start < line[0][1] < g.end:
+                    g.end = round(max(g.start + 0.6, line[0][1] - 0.05), 3)
+            cards = blocking()
+        # Only the words said while a graphic holds the screen are hidden; the rest of the line shows around it.
+        run: list[tuple[Word, float, float]] = []
+        for entry in line + [None]:
+            covered = entry is not None and any((a <= entry[1] < b or (a < entry[2] and entry[1] < b))
+                                                and (shown is None or _spoken(entry[0].text) & shown) for a, b, shown in cards)
+            if entry is not None and not covered:
+                run.append(entry)
+                continue
+            if run and (len(run) >= MIN_LINE_WORDS - 1 or len(run) == len(line)):
+                after = min([a for a, _, shown in cards if shown is None and a > run[0][1]] + [next_start])
+                runs.append((run, min(run[-1][2] + 0.5, after)))
+            run = []
+    for line, end in runs:
+        start = line[0][1]
+        ids = {w.i for w, _, _ in line}
         if brief.caption_mode == "keyword" and not (ids & keywords) and d.drop_word not in ids:
             continue
         strong = [w for w, _, _ in line if w.text.lower().strip(".,!?'\"") not in WEAK]

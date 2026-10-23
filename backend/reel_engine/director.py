@@ -186,7 +186,7 @@ BURNED CAPTIONS: set burned_captions = true when the footage already shows subti
 picture (text along the bottom that follows the speech); then caption_mode must be "none" - two caption tracks
 read as a mistake.
 
-CAPTIONS: caption_mode from the recipe (every_word for chatty or interview, keyword for advice/explainers, none
+CAPTIONS: caption_mode from the recipe (every_word whenever someone talks to camera or narrates, keyword only for ads and demos, none
 when nobody talks). keywords = word ids shown big (nouns, numbers, punch words; about one per 3-6 words).
 MUSIC: music "bed" under a voice, "score" for picture-only reels, mood to match. drop_word = id of the reveal word
 (the music drops there), or -1. ACCENT stays the brand amber.
