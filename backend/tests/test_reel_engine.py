@@ -463,3 +463,52 @@ def test_caption_lines_follow_phrases():
     assert all(not line.split()[-1] in comp.BINDING for line in lines[:-1]), lines
     assert any(line.endswith("thing.") for line in lines) and all(2 <= len(line.split()) <= 6 for line in lines), lines
     assert "kar | lo" not in " | ".join(lines)
+
+
+# ------------------------------------------------------------------ framing
+
+def _src(w=1920, h=1080):
+    from reel_engine.plan import Source
+
+    return Source(index=0, name="a.mp4", path="a.mp4", kind="video", duration=60, width=w, height=h)
+
+
+def _item(t0=0.0, t1=3.0):
+    from reel_engine.plan import VideoItem
+
+    return VideoItem(id="v", src=0, t0=t0, t1=t1, out0=0, out1=t1 - t0, speed=1.0, zoom="hold")
+
+
+def test_framing_follows_the_person_talking_not_the_biggest_face():
+    from reel_engine import render
+
+    rows = []
+    for k in range(12):
+        t = k * 0.25
+        rows.append([t, 0.3, 0.4, 0.12, 0.2, 0.002])   # big face, listening
+        rows.append([t, 0.75, 0.4, 0.08, 0.14, 0.04])  # smaller face, talking
+    found = render.people(rows)
+    chosen, pair = render.pick_people(found, 3.0)
+    assert pair is None and abs(chosen["x"] - 0.75) < 0.05
+    crop, _ = render.framing(_src(), _item(), rows)
+    left = float(crop.split("'(")[1].split(")*iw'")[0].split(",")[-1].rstrip(")"))
+    assert left > 0.4  # the window sits over the right-hand speaker
+
+
+def test_two_people_trading_lines_get_a_split_screen():
+    from reel_engine import render
+
+    rows = [[k * 0.25, x, 0.4, 0.09, 0.15, talk] for k in range(12) for x, talk in ((0.3, 0.03), (0.72, 0.025))]
+    crop, _ = render.framing(_src(), _item(), rows)
+    assert "vstack" in crop and crop.count("crop=") == 2
+
+
+def test_nobody_on_screen_frames_what_matters_not_the_middle():
+    from reel_engine import render
+
+    import re
+
+    focus = [[k * 0.5, 0.82] for k in range(8)]
+    crop, _ = render.framing(_src(), _item(), [], focus)
+    left = float(re.search(r"'\(([0-9.]+)\)\*iw'", crop).group(1))
+    assert left > 0.5  # a centred window would start at 0.34

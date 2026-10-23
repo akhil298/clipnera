@@ -119,8 +119,8 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
     await stage("ingest", f"{len(inputs)} file(s)")
     plan.sources = ingest(inputs)
     await stage("listen", "voice, music and words; shots and faces")
-    audio, (shots, face_track, jpegs, how) = await asyncio.gather(listen(plan.sources, work), watch(plan.sources))
-    plan.audio, plan.shots, plan.face_track = audio, shots, face_track
+    audio, (shots, face_track, focus_track, jpegs, how) = await asyncio.gather(listen(plan.sources, work), watch(plan.sources))
+    plan.audio, plan.shots, plan.face_track, plan.focus_track = audio, shots, face_track, focus_track
     await stage("watch", f"{audio.kind}: {audio.why}; {len(shots)} shots")
 
     await stage("direct", "planning the story")

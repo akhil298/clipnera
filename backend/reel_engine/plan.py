@@ -224,7 +224,10 @@ class EditPlan(_Model):
     audio: AudioReport = Field(default_factory=AudioReport)
     shots: list[Shot] = Field(default_factory=list)
     # Per source: [t, face centre x, face centre y, face width] each sampled second (normalised).
+    # Per source: every face seen [t, cx, cy, w, h, mouth motion] (older plans: [t, cx, cy, w]) and, twice a second,
+    # the centre of what matters when nobody is on screen [t, cx] (reel_engine/track.py).
     face_track: dict[str, list[list[float]]] = Field(default_factory=dict)
+    focus_track: dict[str, list[list[float]]] = Field(default_factory=dict)
     brief: Brief | None = None
     hooks: list[str] = Field(default_factory=list)
     video: list[VideoItem] = Field(default_factory=list)

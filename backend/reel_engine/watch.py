@@ -14,6 +14,7 @@ import numpy as np
 
 from core.logging_config import get_logger
 from edit_engine.perception import BLUR_THRESHOLD, DARK_THRESHOLD, MediaInfo, detect_shots, sample_frames
+from reel_engine import track as tracking
 from reel_engine.media import MAX_IMAGES, sheets
 from reel_engine.plan import Box, Shot, Source
 
@@ -56,7 +57,7 @@ def _track(detector, frames: list[tuple[float, np.ndarray]]) -> list[list[float]
     return track
 
 
-async def watch_source(source: Source) -> tuple[list[Shot], list[list[float]], list[tuple[float, np.ndarray]]]:
+async def watch_source(source: Source) -> tuple[list[Shot], list[list[float]], list[list[float]], list[tuple[float, np.ndarray]]]:
     from video_processor.face_detection import FaceDetector
 
     if source.kind == "image":
@@ -66,12 +67,11 @@ async def watch_source(source: Source) -> tuple[list[Shot], list[list[float]], l
         frames = [(0.0, image)] if image is not None else []
         detector = FaceDetector()
         faces = _faces(detector, image) if image is not None else []
-        return [Shot(id=f"s{source.index}.0", src=source.index, t0=0.0, t1=source.duration, faces=faces)], _track(detector, frames), frames
+        return [Shot(id=f"s{source.index}.0", src=source.index, t0=0.0, t1=source.duration, faces=faces)], _track(detector, frames), [], frames
     info = MediaInfo(duration=source.duration, width=source.width, height=source.height, has_audio=source.has_audio, has_video=True)
-    frames = await sample_frames(source.path, info)
+    (frames, (faces_seen, focus)) = await asyncio.gather(sample_frames(source.path, info), tracking.track(source))
     found = await asyncio.to_thread(detect_shots, frames, source.duration)
     detector = FaceDetector()
-    track = await asyncio.to_thread(_track, detector, frames)
     shots = []
     for n, shot in enumerate(found):
         inside = [f for f in frames if shot.start <= f[0] < shot.end] or frames[:1]
@@ -79,7 +79,7 @@ async def watch_source(source: Source) -> tuple[list[Shot], list[list[float]], l
         faces = max((_faces(detector, image) for _, image in picks), key=len, default=[])
         shots.append(Shot(id=f"s{source.index}.{n}", src=source.index, t0=round(shot.start, 2), t1=round(shot.end, 2), faces=faces,
                           motion=round(shot.motion, 1), sharp=shot.blur >= BLUR_THRESHOLD, dark=shot.brightness < DARK_THRESHOLD))
-    return shots, track, frames
+    return shots, faces_seen, focus, frames
 
 
 def director_sheets(frames: dict[int, list[tuple[float, np.ndarray]]]) -> tuple[list[bytes], str]:
@@ -97,19 +97,21 @@ def director_sheets(frames: dict[int, list[tuple[float, np.ndarray]]]) -> tuple[
         f"{len(items)} frames packed {columns}x{columns} per sheet, read left-right then top-bottom; each is stamped source:second"
 
 
-async def watch(sources: list[Source]) -> tuple[list[Shot], dict[str, list[list[float]]], list[bytes], str]:
+async def watch(sources: list[Source]) -> tuple[list[Shot], dict[str, list[list[float]]], dict[str, list[list[float]]], list[bytes], str]:
     visual = [s for s in sources if s.kind in ("video", "image")]
     results = await asyncio.gather(*(watch_source(s) for s in visual))
     shots: list[Shot] = []
     tracks: dict[str, list[list[float]]] = {}
+    focus: dict[str, list[list[float]]] = {}
     frames: dict[int, list[tuple[float, np.ndarray]]] = {}
-    for source, (found, track, sampled) in zip(visual, results):
+    for source, (found, track, points, sampled) in zip(visual, results):
         shots += found
         tracks[str(source.index)] = track
+        focus[str(source.index)] = points
         frames[source.index] = sampled
     jpegs, how = await asyncio.to_thread(director_sheets, frames)
     log.info("Watch: %d shots across %d sources, %d sheets", len(shots), len(visual), len(jpegs))
-    return shots, tracks, jpegs, how
+    return shots, tracks, focus, jpegs, how
 
 
 def shaky(shot: Shot) -> bool:

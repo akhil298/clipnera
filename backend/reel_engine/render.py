@@ -69,20 +69,87 @@ def exposure(source: Source, item: VideoItem, target: float) -> float:
     return float(np.clip(np.log(level) / np.log(target), *GAMMA_LIMIT))
 
 
-def framing(source: Source, item: VideoItem, track: list[list[float]]) -> tuple[str | None, float]:
-    """A 9:16 window framed on the person, as (crop filter, upscale factor); (None, 1) when the source needs none.
+PERSON_GAP = 0.12        # faces further apart than this (share of the width) are different people
+TALK_MIN = 0.012         # mouth motion under this is someone listening
+SPLIT_MIN_SECONDS = 2.0  # a split screen only for an exchange long enough to read
+SPLIT_FACE_SHARE = 0.34  # a face's height as a share of its half of a split screen
 
-    With a face: sized so the face fills about a fifth of the frame (medium close-up), tighter on punch-ins,
-    never upscaled past MAX_UPSCALE, face in the upper third, following the face sideways over the item.
-    Without one: the full height, centred.
+
+def people(rows: list[list[float]]) -> list[dict]:
+    """Faces grouped into people by where they sit across the frame: rows, how often seen, size, how much they talk."""
+    if not rows:
+        return []
+    times = sorted({r[0] for r in rows})
+    groups: list[list[list[float]]] = []
+    for row in sorted(rows, key=lambda r: r[1]):
+        if groups and row[1] - groups[-1][-1][1] <= PERSON_GAP:
+            groups[-1].append(row)
+        else:
+            groups.append([row])
+    out = []
+    for g in groups:
+        seen = {r[0] for r in g}
+        out.append({"rows": sorted(g, key=lambda r: r[0]), "presence": len(seen) / len(times),
+                    "size": float(np.median([r[3] for r in g])), "talk": float(np.mean([r[5] if len(r) > 5 else 0.0 for r in g])),
+                    "x": float(np.median([r[1] for r in g]))})
+    return sorted(out, key=lambda p: -p["presence"])
+
+
+def pick_people(found: list[dict], seconds: float) -> tuple[dict | None, tuple[dict, dict] | None]:
+    """The person to frame (the one talking, else the most present and biggest) or two for a split screen."""
+    candidates = [p for p in found if p["presence"] >= 0.3] or found[:1]
+    if not candidates:
+        return None, None
+    loudest = max(p["talk"] for p in candidates)
+    if len(candidates) >= 2 and seconds >= SPLIT_MIN_SECONDS and loudest >= TALK_MIN:
+        a, b = sorted(candidates, key=lambda p: -p["talk"])[:2]
+        if a["presence"] >= 0.6 and b["presence"] >= 0.6 and b["talk"] >= 0.45 * a["talk"] and max(a["size"], b["size"]) < 0.3:
+            return None, tuple(sorted((a, b), key=lambda p: p["x"]))
+    if loudest >= TALK_MIN:
+        return max(candidates, key=lambda p: p["talk"] * (0.5 + p["presence"])), None
+    return max(candidates, key=lambda p: p["presence"] * (0.5 + p["size"])), None
+
+
+def _split(source: Source, pair: tuple[dict, dict]) -> tuple[str, float]:
+    """Two people stacked, each in a half of the frame (9:8), sized on their own face."""
+    aspect = source.width / max(1, source.height)
+    parts, widths = [], []
+    for person in pair:
+        rows = person["rows"]
+        face_h = float(np.median([r[4] if len(r) > 4 else r[3] * aspect * 1.3 for r in rows]))
+        face_y = float(np.median([r[2] for r in rows]))
+        height = float(np.clip(face_h / SPLIT_FACE_SHARE, MIN_WINDOW * 0.6, 1.0))
+        width = height * (9 / 8) / aspect
+        if width > 1.0:
+            width, height = 1.0, aspect * 8 / 9
+        top = float(np.clip(face_y - 0.42 * height, 0.0, 1.0 - height))
+        left = float(np.clip(person["x"] - width / 2, 0.0, 1.0 - width))
+        parts.append(f"crop=iw*{width:.4f}:ih*{height:.4f}:iw*{left:.4f}:ih*{top:.4f},scale={W}:{H // 2}")
+        widths.append(width)
+    upscale = W / max(1.0, min(widths) * source.width)
+    return f"split[sa][sb];[sa]{parts[0]}[ta];[sb]{parts[1]}[tb];[ta][tb]vstack", upscale
+
+
+def framing(source: Source, item: VideoItem, track: list[list[float]], focus: list[list[float]] | None = None) -> tuple[str | None, float]:
+    """A 9:16 window framed on the right subject, as (crop filter, upscale factor); (None, 1) when the source needs none.
+
+    The subject is the person talking (followed sideways over the item; the camera stays with them rather than
+    hopping to whoever is biggest each second), both people stacked when two trade lines in a wide two-shot, or,
+    when nobody is on screen, the window holding the most detail and movement (``focus``) instead of the middle.
+    Sized so the face fills about a fifth of the frame, tighter on punch-ins, never upscaled past MAX_UPSCALE.
     """
     aspect = source.width / max(1, source.height)
-    points = [p for p in track if item.t0 - 1.0 <= p[0] <= item.t1 + 1.0]
-    if not points and track:
+    rows = [r for r in track if item.t0 - 0.5 <= r[0] <= item.t1 + 0.5]
+    if not rows and track:
         nearest = min(track, key=lambda p: abs(p[0] - (item.t0 + item.t1) / 2))
-        points = [nearest] if abs(nearest[0] - item.t0) < 6 else []
-    if aspect <= 9 / 16 + 0.01 and not points:
+        rows = [r for r in track if r[0] == nearest[0]] if abs(nearest[0] - item.t0) < 6 else []
+    found = people(rows)
+    if aspect <= 9 / 16 + 0.01 and not found:
         return None, 1.0
+    chosen, pair = pick_people(found, (item.t1 - item.t0) / item.speed)
+    if pair:
+        return _split(source, pair)
+    points = [[r[0], r[1], r[2], r[3]] for r in chosen["rows"]] if chosen else []
     height = 1.0
     top = 0.0
     if points:
@@ -94,6 +161,10 @@ def framing(source: Source, item: VideoItem, track: list[list[float]]) -> tuple[
         height = float(np.clip(face_h / share, max(least, MIN_WINDOW), 1.0))
         height = min(height, aspect * 16 / 9)  # the window can't be wider than the source
         top = float(np.clip(face_y - 0.32 * height, 0.0, 1.0 - height))
+    else:
+        # Nobody on screen: follow what matters (detail and movement), smoothed so the window glides.
+        near = [f for f in (focus or []) if item.t0 - 0.5 <= f[0] <= item.t1 + 0.5]
+        points = [[f[0], float(np.median([g[1] for g in near[max(0, k - 2):k + 3]])), 0.5, 0.0] for k, f in enumerate(near)]
     width = height * 9 / 16 / aspect
     centres = [p[1] for p in points] or [0.5]
     anchor = float(np.median(centres))
@@ -118,7 +189,7 @@ def shake(kind: str, rate: float) -> str:
 
 
 def segment_cmd(source: Source, item: VideoItem, track: list[list[float]], wb: str, gamma: float, grade: Path, shaky: bool,
-                dark: bool, out: Path) -> list[str]:
+                dark: bool, out: Path, focus: list[list[float]] | None = None) -> list[str]:
     length = item.out1 - item.out0
     count = max(1, round(length * FPS))
     cw, ch = ZOOM_CANVAS
@@ -133,7 +204,7 @@ def segment_cmd(source: Source, item: VideoItem, track: list[list[float]], wb: s
             chain.append(f"minterpolate=fps={FPS}:mi_mode=mci:mc_mode=aobmc:vsbmc=1")
         if shaky:
             chain.append("deshake")
-        crop, upscale = framing(source, item, track)
+        crop, upscale = framing(source, item, track, focus)
         if crop:
             chain.append(crop)
         chain.append(f"scale={cw}:{ch}:flags=lanczos:force_original_aspect_ratio=increase,crop={cw}:{ch}")
@@ -171,7 +242,8 @@ async def render_picture(plan: EditPlan, grade_name: str, work: Path) -> Path:
         out = work / f"seg{n:03d}.mp4"
         cmd = segment_cmd(source, item, plan.face_track.get(str(item.src), []), wbs[item.src],
                           exposure(source, item, target) if source.kind == "video" else 1.0, grade,
-                          bool(shot and shot.motion >= SHAKY_MOTION and not shot.faces), bool(shot and shot.dark), out)
+                          bool(shot and shot.motion >= SHAKY_MOTION and not shot.faces), bool(shot and shot.dark), out,
+                          plan.focus_track.get(str(item.src), []))
         async with slots:
             await asyncio.to_thread(run, cmd)
         return out
