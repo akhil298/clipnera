@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 from typing import Literal
 
+import httpx
 from pydantic import BaseModel, ConfigDict
 
 from core.logging_config import get_logger
@@ -98,6 +99,7 @@ class DirectorPlan(_M):
     title_text: str
     cta: str
     caption_mode: Literal["every_word", "keyword", "none"]
+    burned_captions: bool
     music: Literal["bed", "score", "none"]
     text_style: Literal["punch", "editorial", "neon", "highlight", "bubble", "script", "comic", "minimal"]
     mood: Literal["upbeat", "energetic", "chill", "lofi", "cinematic", "inspiring", "dramatic", "corporate", "funny", "urban"]
@@ -180,6 +182,10 @@ tips, business), bubble (bold words on white bubbles: food, vlogs, everyday, fri
 travel, warm and personal), comic (bold outlined, tilted: funny, kids, reactions), minimal (clean lowercase:
 beauty, premium, calm). Pick the one that fits the footage's colours and mood, not always the same.
 
+BURNED CAPTIONS: set burned_captions = true when the footage already shows subtitles or captions burned into the
+picture (text along the bottom that follows the speech); then caption_mode must be "none" - two caption tracks
+read as a mistake.
+
 CAPTIONS: caption_mode from the recipe (every_word for chatty or interview, keyword for advice/explainers, none
 when nobody talks). keywords = word ids shown big (nouns, numbers, punch words; about one per 3-6 words).
 MUSIC: music "bed" under a voice, "score" for picture-only reels, mood to match. drop_word = id of the reveal word
@@ -251,8 +257,14 @@ async def direct(sources: list[Source], audio: AudioReport, shots: list[Shot], j
             f"Words (id:word, ~ = filler, [take] = earlier take):\n{word_listing(audio.words, takes) if audio.words else '(nobody speaks)'}\n\n"
             f"Frames: {how}.\n\nPlan the reel. JSON only.")
     client = get_text_client(is_pro=True, step="director")
-    message = client.image_message(user, jpegs)
-    plan = await client.chat_json([{"role": "system", "content": system}, message], DirectorPlan, max_tokens=16000)
+    try:
+        plan = await client.chat_json([{"role": "system", "content": system}, client.image_message(user, jpegs)], DirectorPlan,
+                                      max_tokens=16000)
+    except httpx.HTTPStatusError as exc:
+        # A rejected request (too large, or a frame the provider won't take) is retried once with half the frames.
+        log.warning("Director request rejected (%s): %s", exc.response.status_code, exc.response.text[:300])
+        plan = await client.chat_json([{"role": "system", "content": system}, client.image_message(user, jpegs[::2])], DirectorPlan,
+                                      max_tokens=16000)
     log.info("Director: recipe=%s audio=%s %d clips %d beats %d sections", plan.recipe, plan.audio_view, len(plan.story),
              len(plan.beats), len(plan.sections))
     return plan

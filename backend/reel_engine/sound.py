@@ -22,10 +22,11 @@ from reel_engine.plan import AssetRef, AudioItem, EditPlan
 
 log = get_logger(__name__)
 
-GRAPHIC_SOUNDS = {"photocard": ["whoosh_short"], "chapter": ["whoosh", "ding"], "two": ["whoosh_short"], "tag": ["pop"], "keyword": ["boom"], "statement": ["whoosh"],
-                  "list": ["whoosh_short"], "flow": ["whoosh_short"], "count_up": ["tick", "ding"], "chart": ["riser"], "name": ["pop"],
-                  "cta": ["pop", "ding"], "wash": [], "progress": [], "flicker": []}
-MIN_SPACING = 0.12
+# Only motivated accents: an entrance, a reveal, a count landing. Captions, small labels and framing stay quiet.
+GRAPHIC_SOUNDS = {"photocard": ["whoosh_short"], "chapter": ["whoosh"], "two": [], "tag": ["pop"], "keyword": ["boom"],
+                  "statement": ["whoosh"], "list": ["whoosh_short"], "flow": ["whoosh_short"], "count_up": ["ding"], "chart": ["riser"],
+                  "name": [], "cta": ["pop"], "wash": [], "progress": [], "flicker": []}
+MIN_SPACING = 2.5
 
 
 def structure(plan: EditPlan) -> Structure:
@@ -50,16 +51,12 @@ async def effects(plan: EditPlan, scout: Scout) -> list[tuple[float, AssetRef]]:
             wanted.append((g.start + (0.3 * k if name != "ding" else 0.35), name))
     for c in plan.captions:
         if c.payoff:
-            wanted += [(c.start, "whoosh"), (c.start + 0.35, "ding")]
-        elif c.icon:
-            wanted.append((c.start + 0.02, "pop"))
+            wanted.append((c.start + 0.3, "ding"))
     for item in plan.inserts:
         wanted.append((max(0.0, item.start - 0.06), "whoosh_short"))
-    for prev, item in zip(plan.video, plan.video[1:]):
-        if item.zoom == "punch" and item.role != "montage":
-            wanted.append((max(0.0, item.out0 - 0.08), "whoosh_short"))
-        if item.role == "montage":
-            wanted.append((item.out0 + 0.01, "tick"))
+    montage = [i for i in plan.video if i.role == "montage"]
+    if montage:
+        wanted.append((montage[0].out0, "riser"))
     if plan.brief and plan.brief.path == "voice":
         for item in plan.video:
             if item.sound in ("sizzle", "chop", "pour", "sparkle"):

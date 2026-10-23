@@ -43,7 +43,7 @@ def beat(**kw) -> DBeat:
 def director(**kw) -> DirectorPlan:
     base = dict(audio_view="voice", recipe="creator_advice", target_seconds=30, title_lead="", title_text="", cta="",
                 caption_mode="every_word", music="bed", text_style="punch", mood="upbeat", sections=[], hooks=[], story=[], beats=[],
-                inserts=[], keywords=[],
+                inserts=[], keywords=[], burned_captions=False,
                 drop_word=-1, spelling=[], notes="")
     return DirectorPlan(**{**base, **kw})
 

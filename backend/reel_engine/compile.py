@@ -54,7 +54,7 @@ def brief_of(d: DirectorPlan, audio: AudioReport, target: float) -> tuple[Brief,
         note = f"Listen measured {audio.kind}, the director heard {d.audio_view}; edited as {measured}."
     path = "voice" if measured in VOICE_KINDS else "visual"
     r = recipe(d.recipe)
-    caption_mode = d.caption_mode if path == "voice" else "none"
+    caption_mode = d.caption_mode if path == "voice" and not d.burned_captions else "none"
     music = d.music if d.music != "none" else r["music"]
     if path == "visual":
         music = "score"
@@ -196,7 +196,7 @@ def graphics_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
     title_first = bool(hook and brief.title_text and len(brief.sections) >= 2)
     if hook and title_first:
         add("two", hook.out0 + 0.15, min(hook.out1 + 0.4, hook.out0 + 2.6), {"lead": brief.title_lead, "text": brief.title_text},
-            icon="sparkles", why="hook word", by="finish")
+            why="hook word", by="finish")
     elif hook and brief.hook_word:
         add("keyword", hook.out0, min(hook.out1, hook.out0 + 2.4), {"text": brief.hook_word, "lead": ""}, place="behind", why="hook word")
     starts = {}
@@ -262,7 +262,7 @@ def graphics_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
     payoff = next((i for i in items if i.role == "payoff"), None) or (items[-2] if len(items) > 2 else None)
     if payoff and brief.title_text and not title_first:
         add("two", payoff.out0 + 0.1, min(payoff.out1, payoff.out0 + 2.6), {"lead": brief.title_lead, "text": brief.title_text},
-            icon="sparkles", why="title over the payoff", by="finish")
+            why="title over the payoff", by="finish")
     if items and brief.cta:
         last = items[-1]
         add("cta", max(last.out0, last.out1 - 2.2), last.out1 - 0.05, {"verb": brief.cta.upper(), "text": ""}, why="call to action", by="finish")
@@ -360,8 +360,6 @@ def captions_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
             used_tags.add(tag.id)
             icon_query = tag.data.get("icon_query", "")
         payoff = d.drop_word in ids
-        if payoff and not icon_query:
-            icon_query = "sparkles"
         out.append(CaptionLine(id=f"c{len(out)}", start=round(start, 3), end=round(end, 3), lead=lead, keyword=key.text if key else "",
                                words=spoken, icon_query=icon_query, payoff=payoff))
     graphics = [g for g in graphics if g.id not in used_tags]
