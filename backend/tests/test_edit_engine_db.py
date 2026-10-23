@@ -122,12 +122,14 @@ def world(db, monkeypatch, tmp_path):  # noqa: F811
     monkeypatch.setattr(jobs, "S3", FakeS3)
     monkeypatch.setattr(jobs, "get_queue", lambda: Queue())
     monkeypatch.setattr(service_module, "get_queue", lambda: Queue())
+    background = []
+    monkeypatch.setattr(service_module, "in_background", background.append)
     monkeypatch.setattr(jobs.GroqWhisperTranscriber, "__init__", lambda self, model=None: None)
     monkeypatch.setattr(jobs.GroqWhisperTranscriber, "transcribe", transcribe)
     monkeypatch.setattr(vision, "caption_sheet", caption_sheet)
     monkeypatch.setattr(jobs, "describe_image", describe_image)
     monkeypatch.setattr(jobs.director, "director_client", lambda is_pro, opus, model=None, effort=None: FakeDirector())
-    return {"db": db, "queued": queued, "tmp": tmp_path}
+    return {"db": db, "queued": queued, "background": background, "tmp": tmp_path}
 
 
 async def _user(maker) -> str:
@@ -140,10 +142,11 @@ async def _user(maker) -> str:
 
 
 async def _run(world) -> None:
+    while world["background"]:
+        await world["background"].pop(0)
     while world["queued"]:
         job = world["queued"].pop(0)
-        await {jobs.FETCH_JOB: jobs.fetch_link, jobs.ANALYZE_JOB: jobs.analyze_edit, jobs.PLAN_JOB: jobs.plan_edit,
-               jobs.RENDER_JOB: jobs.render_edit}[job.kind](job)
+        await {jobs.ANALYZE_JOB: jobs.analyze_edit, jobs.PLAN_JOB: jobs.plan_edit, jobs.RENDER_JOB: jobs.render_edit}[job.kind](job)
 
 
 async def _uploaded_edit(world, script: str | None, reference: bool = False, **request) -> tuple[str, str]:
@@ -398,6 +401,9 @@ def _youtube(monkeypatch, world, duration: float = 9.0) -> None:
         shutil.copy(video, folder / "source.mp4")
         return folder / "source.mp4", "How I train for a marathon"
 
+    import clip.source_video
+
+    monkeypatch.setattr(clip.source_video, "DOWNLOAD_DIR", world["tmp"] / "downloads")
     monkeypatch.setattr(YouTubeService, "fetch_metadata", fetch_metadata)
     monkeypatch.setattr(YouTubeService, "download_for_edit", download_for_edit)
 
@@ -412,7 +418,7 @@ async def test_a_youtube_link_alone_is_fetched_and_edited(world, monkeypatch):
         created = await service.create(user_id, EditCreateRequest(source_url=link, language="auto"))
         assert created.title == "How I train for a marathon" and created.source_url == link
         started = await service.analyze(user_id, created.id)
-        assert started.status == "analyzing" and [j.kind for j in world["queued"]] == [jobs.FETCH_JOB]
+        assert started.status == "analyzing" and len(world["background"]) == 1 and not world["queued"]
     await _run(world)
     async with maker() as session:
         edit = await EditService(session, FakeS3()).get(user_id, created.id)

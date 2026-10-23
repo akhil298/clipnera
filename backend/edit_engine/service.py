@@ -76,6 +76,16 @@ def _credit_text(music_credit: str | None) -> str | None:
     return (json.loads(music_credit).get("credit_text") or None) if music_credit else None
 
 
+_running: set[asyncio.Task] = set()
+
+
+def in_background(work: Any) -> None:
+    """Run ``work`` in this (API) process, keeping a reference so the task is not collected before it ends."""
+    task = asyncio.create_task(work)
+    _running.add(task)
+    task.add_done_callback(_running.discard)
+
+
 class EditService:
     def __init__(self, session: AsyncSession, s3: S3 | None = None) -> None:
         self._session = session
@@ -192,7 +202,7 @@ class EditService:
             else:
                 edit.analysis = json.dumps({"progress": "Fetching your YouTube video"})
             await self._session.commit()
-            await get_queue().enqueue(Job(jobs.FETCH_JOB, {"edit_id": edit.id, "user_id": user_id}))
+            in_background(jobs.fetch_link(edit.id, user_id))
             return await self.response(edit)
         return await self.begin(edit, user_id)
 

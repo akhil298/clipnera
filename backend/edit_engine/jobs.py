@@ -44,7 +44,6 @@ from usage.context import llm_scope
 
 log = get_logger(__name__)
 
-FETCH_JOB = "edits.fetch_link"
 ANALYZE_JOB = "edits.analyze"
 # Spoken language left to Whisper to detect (and recorded in the analysis).
 AUTO_LANGUAGE = "auto"
@@ -91,20 +90,25 @@ def _friendly(exc: Exception, prefix: str) -> str:
     return f"{prefix}: {detail}"[:500]
 
 
-@handler(FETCH_JOB)
-async def fetch_link(job: Job) -> None:
-    """Fetch the reel's YouTube video into its sources, then start the edit as if it had been uploaded."""
+async def fetch_link(edit_id: str, user_id: str) -> None:
+    """Fetch the reel's YouTube video into its sources, then start the edit as if it had been uploaded.
+
+    Runs in the API process (``EditService.analyze``), not on the worker: YouTube turns away server addresses
+    without signed-in cookies, and the API machine keeps its cookies fresh by using them, as the clips flow does.
+    The download goes to the downloads folder on disk (the API machine's /tmp is in memory).
+    """
+    from clip.source_video import DOWNLOAD_DIR
     from clip.youtube_service import YouTubeService
     from core.exceptions import CustomException
     from edit_engine.service import EditService
 
-    edit_id, user_id = job.payload["edit_id"], job.payload["user_id"]
     settings, s3 = get_settings(), S3()
     try:
         edit = await load(edit_id)
         async with AsyncSessionLocal() as session:
             limits = limits_for(await SubscriptionService.for_session(session).get_entitlements(user_id))
-        with tempfile.TemporaryDirectory() as workdir:
+        DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=DOWNLOAD_DIR) as workdir:
             path, title = await YouTubeService().download_for_edit(edit.source_url, Path(workdir), limits.max_raw_seconds)
             info = await perception.probe_media(str(path))
             key = f"edits/{user_id}/{edit_id}/{uuid4().hex}.mp4"

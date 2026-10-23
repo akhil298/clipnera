@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Update one Clipnera machine: pull the branch, install missing packages,
 # (re)write its systemd services and restart them. Run by deploy.sh, which
-# passes the role and address. Both machines get YouTube cookies (exported
-# from this computer's browser only when the server's copy is missing, near
-# expiry or refused): the API reads links, the worker downloads the videos
-# reels are made from. The API machine also applies database migrations.
+# passes the role and address; the API machine also gets YouTube cookies
+# (exported from this computer's browser only when the server's copy is
+# missing, near expiry or refused) and applies database migrations. Every
+# YouTube download (clips and reels) runs on the API machine, whose cookies
+# stay fresh with use; a second copy on the worker would go stale.
 #
 # Settings are never stored on the machines: every service reads them from
 # the env file at CONFIG_S3_URI with the machine's IAM role.
@@ -119,7 +120,10 @@ CHECK_SCRIPT
 }
 
 PUSH_COOKIES=1
-if [[ -n "${COOKIE_FILE}" || "${FORCE_COOKIES}" == "1" ]]; then
+if [[ "${ROLE}" == "worker" ]]; then
+    PUSH_COOKIES=0
+    echo "[1/3] Worker machine: no YouTube cookies needed (the API machine downloads from YouTube)."
+elif [[ -n "${COOKIE_FILE}" || "${FORCE_COOKIES}" == "1" ]]; then
     echo "[1/3] Refreshing YouTube cookies as requested..."
 else
     echo "[1/3] Checking YouTube cookies on EC2..."
@@ -176,7 +180,7 @@ if [[ "${PUSH_COOKIES}" == "1" ]]; then
     echo "[2/3] Copying cookies to ${EC2_USER}@${EC2_HOST}:${REMOTE_COOKIE}..."
     ssh "${SSH_OPTS[@]}" "${TARGET}" "install -d -m 700 '$(dirname "${REMOTE_COOKIE}")'"
     scp -q "${SSH_OPTS[@]}" "${COOKIE_FILE}" "${EC2_USER}@${EC2_HOST}:${REMOTE_COOKIE}"
-else
+elif [[ "${ROLE}" != "worker" ]]; then
     echo "[2/3] Cookies on EC2 are still good; not copying."
 fi
 
