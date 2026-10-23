@@ -229,6 +229,8 @@ if [[ "${ROLE}" == "worker" ]]; then
             || echo "WARNING: motion kit unavailable; graphics needing icons are skipped." >&2
     fi
     "${VENV_DIR}/bin/python" scripts/build_music_library.py || echo "WARNING: music library not fetched; reels use composed music." >&2
+    "${VENV_DIR}/bin/python" scripts/build_asset_libraries.py \
+        || echo "WARNING: sound, motion and emoji libraries not fetched; reels use the built-in set." >&2
 fi
 
 # Small machines (t3.micro: 1 GB) get swap so a burst cannot OOM-kill the API.

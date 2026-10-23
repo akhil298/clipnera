@@ -54,7 +54,19 @@
   /* ---------- templates: each returns { seek(t) } ---------- */
   const T = {};
   // Extra template files (footage.js) add their templates through these hooks.
-  window.BeatsKit = { T, el, boxed, fitText, envelope, reveal, ease, span, clamp, EXIT };
+  // A Lottie animation (motion graphic or animated emoji) posed frame by frame; loop for emoji, play once for accents.
+  function lottieIn(container, data, { loop = false } = {}) {
+    if (!data || !window.lottie) return () => {};
+    const anim = window.lottie.loadAnimation({ container, renderer: 'svg', loop: false, autoplay: false, animationData: data,
+      rendererSettings: { preserveAspectRatio: 'xMidYMid meet' } });
+    const total = Math.max(1, anim.totalFrames - 1), fr = data.fr || 30;
+    return (t) => {
+      const f = t * fr;
+      anim.goToAndStop(loop ? f % total : Math.min(f, total), true);
+    };
+  }
+
+  window.BeatsKit = { T, el, boxed, fitText, envelope, reveal, ease, span, clamp, EXIT, lottieIn };
 
   T.count_up = (s, root) => {
     const { prefix = '', number = '0', suffix = '', label = '' } = s.data;
@@ -492,6 +504,19 @@
           path.setAttribute('fill-opacity', 0.35 * ease.out(span(t, 1.0, 0.4)));
         });
         reveal(label, t, 1.0);
+      },
+    };
+  };
+
+  // An accent: a motion graphic (arrow, burst, confetti, follow button...) played once in its box.
+  T.accent = (s, root) => {
+    const g = boxed(el('div', 'g accent-art', root), s.box);
+    const pose = lottieIn(g, s.lottie);
+    return {
+      seek(t) {
+        const z = 1 - ease.out(span(t, s.dur - EXIT, EXIT));
+        g.style.opacity = clamp(span(t, 0, 0.12)) * z;
+        pose(t);
       },
     };
   };

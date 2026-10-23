@@ -101,8 +101,13 @@
     const g = boxed(el('div', 'g caption', root), s.box);
     Object.assign(g.style, { display: 'flex', flexWrap: 'wrap', alignItems: 'center', alignContent: 'center', justifyContent: 'center',
       columnGap: `${h * 0.07}px`, rowGap: `${h * 0.02}px`, textAlign: 'center' });
-    let icon = null;
-    if (s.asset) {
+    let icon = null, pose = null;
+    if (s.lottie) {
+      // An animated emoji beside the line, looping while it is up.
+      icon = el('div', 'lift', g);
+      Object.assign(icon.style, { width: `${h * 0.5}px`, height: `${h * 0.5}px` });
+      pose = BeatsKit.lottieIn(icon, s.lottie, { loop: true });
+    } else if (s.asset) {
       icon = el('img', 'lift', g);
       icon.src = s.asset;
       Object.assign(icon.style, { width: `${h * 0.42}px`, height: `${h * 0.42}px`, objectFit: 'contain' });
@@ -149,6 +154,7 @@
           }
         });
         if (icon) icon.style.transform = `scale(${ease.back(span(t, 0.05, 0.3))})`;
+        if (pose) pose(t);
       },
     };
   };

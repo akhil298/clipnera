@@ -113,3 +113,13 @@ backend/static/motion/kit/*
 !backend/static/motion/music/library/
 backend/static/motion/music/library/*
 !backend/static/motion/music/library/manifest.json
+
+# Sound effects, motion graphics and animated emoji: fetched by backend/scripts/build_asset_libraries.py on each
+# host (the manifests are kept).
+!backend/static/motion/sfx/library/
+backend/static/motion/sfx/library/*
+!backend/static/motion/sfx/library/manifest.json
+backend/static/motion/lottie/*
+!backend/static/motion/lottie/manifest.json
+backend/static/motion/emoji/*
+!backend/static/motion/emoji/manifest.json

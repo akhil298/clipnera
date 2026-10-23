@@ -16,9 +16,8 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from core.logging_config import get_logger
-from reel_engine import layout, sound
+from reel_engine import accents, icons, inserts, layout, sound, tracks
 from reel_engine.assets import AssetStore, Scout
-from reel_engine import icons, inserts, tracks
 from reel_engine.compile import BEAT, brief_of, captions_track, graphics_track, to_output, video_track
 from reel_engine.director import direct, recipe
 from reel_engine.listen import listen
@@ -136,7 +135,8 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
     wanting = [g for g in plan.graphics if g.data.get("icon_query")] + [c for c in plan.captions if c.icon_query]
     picked = await icons.choose([(item.data["icon_query"], " ".join(str(item.data.get(k, "")) for k in ("lead", "text", "label")) + " " + item.why)
                                  if hasattr(item, "data") else (item.icon_query, " ".join(w["text"] for w in item.words))
-                                 for item in wanting])
+                                 for item in wanting],
+                                animated=frozenset(n for n, item in enumerate(wanting) if not hasattr(item, "data")))
     plan.ai_calls += 1 if wanting else 0
     for item, asset in zip(wanting, picked):
         if hasattr(item, "data"):
@@ -158,6 +158,7 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
     await resolve_behind(plan, picture, work)
     await stage("layout", "placing every graphic off faces and the action")
     await asyncio.to_thread(layout.place, plan.graphics, plan.captions, str(picture))
+    accents.add(plan)
 
     best: tuple[float, Path, EditPlan] | None = None
     for n in range(max(1, passes)):

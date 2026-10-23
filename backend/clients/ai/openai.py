@@ -11,7 +11,7 @@ import time
 from typing import Any, AsyncIterator
 
 import httpx
-from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait_exponential
+from tenacity import AsyncRetrying, retry_if_exception, wait_exponential
 
 from core.config import get_settings
 from core.logging_config import get_logger
@@ -203,6 +203,22 @@ def _function(tool: ToolSpec) -> dict[str, Any]:
     return function
 
 
+def _retry_wait(state) -> float:
+    """How long before the next try: what a rate limit's Retry-After asks (capped), else exponential backoff."""
+    exc = state.outcome.exception() if state.outcome else None
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429:
+        try:
+            return min(60.0, float(exc.response.headers.get("retry-after", "")) + 1.0)
+        except ValueError:
+            return min(60.0, 8.0 * state.attempt_number)
+    return wait_exponential(multiplier=1, min=1, max=10)(state)
+
+
+def _rate_limited(state) -> bool:
+    exc = state.outcome.exception() if state.outcome else None
+    return isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429
+
+
 def _is_retryable_openai_error(exc: BaseException) -> bool:
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code == 429 or exc.response.status_code >= 500
@@ -377,8 +393,9 @@ class OpenAI(BaseAI):
 
     async def _post(self, path: str, payload: dict[str, Any], *, mode: str) -> dict[str, Any]:
         async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=1, min=1, max=10),
+            # Rate limits clear within a minute, so they get more tries than server errors do.
+            stop=lambda state: state.attempt_number >= (6 if _rate_limited(state) else 3),
+            wait=_retry_wait,
             retry=retry_if_exception(_is_retryable_openai_error),
             reraise=True,
         ):

@@ -14,6 +14,7 @@ import asyncio
 from pathlib import Path
 
 from core.logging_config import get_logger
+from reel_engine import accents
 from reel_engine.assets import Scout
 from reel_engine.listen import SEPARATION_RATE, separate
 from reel_engine.media import run
@@ -27,6 +28,9 @@ log = get_logger(__name__)
 GRAPHIC_SOUNDS = {"photocard": ["whoosh_short"], "chapter": ["whoosh_short"], "statement": ["whoosh_short"],
                   "two": ["whoosh_short"], "keyword": ["whoosh_short"]}
 STEP_SOUND, STEP_KINDS, STEP_GAIN = "soft_click", {"list", "flow"}, 0.2
+# Built-in sound name -> sound library role; accents -> the sound they land with.
+LIBRARY_ROLE = {"whoosh_short": "whoosh"}
+ACCENT_SOUNDS = {"follow": "click", "burst": "impact"}
 MIN_SPACING = 3.0
 EFFECT_GAIN = 0.32
 
@@ -56,15 +60,23 @@ async def effects(plan: EditPlan, scout: Scout) -> list[tuple[float, AssetRef, f
             steps += [g.start + float(t) for t in g.data.get("steps", [])]
     for item in plan.inserts:
         wanted.append((max(0.0, item.start - 0.06), "whoosh_short"))
+    for g in plan.graphics:
+        if g.kind == "accent" and g.data.get("role") in ACCENT_SOUNDS:
+            wanted.append((g.start, ACCENT_SOUNDS[g.data["role"]]))
     out, last = [], -1.0
     cache: dict[str, AssetRef | None] = {}
-    for at, name in sorted(wanted):
+    seed = accents.seed_of(plan)
+    for n, (at, name) in enumerate(sorted(wanted)):
         if at - last < MIN_SPACING or at >= plan.duration:
             continue
-        if name not in cache:
-            cache[name] = await scout.sound(name)
-        if cache[name]:
-            out.append((round(at, 3), cache[name], EFFECT_GAIN))
+        # Library sounds by role, a different one each time; the built-in sound when the library is not fetched.
+        ref = accents.sound(LIBRARY_ROLE.get(name, name), n, seed)
+        if ref is None:
+            if name not in cache:
+                cache[name] = await scout.sound(name)
+            ref = cache[name]
+        if ref:
+            out.append((round(at, 3), ref, EFFECT_GAIN))
             last = at
     click = await scout.sound(STEP_SOUND) if steps else None
     if click:

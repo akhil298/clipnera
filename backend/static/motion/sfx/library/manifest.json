@@ -1,0 +1,4757 @@
+{
+ "licence": "Mixkit Sound Effects Free License",
+ "count": 382,
+ "entries": {
+  "mk_1489": {
+   "file": "mk_1489.wav",
+   "role": "whoosh",
+   "title": "Air woosh",
+   "tags": [
+    "woosh",
+    "whoosh"
+   ],
+   "seconds": 2.24,
+   "source": "mixkit sfx 1489",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1492": {
+   "file": "mk_1492.wav",
+   "role": "whoosh",
+   "title": "Cinematic whoosh fast transition",
+   "tags": [
+    "cinematic",
+    "whoosh",
+    "transition"
+   ],
+   "seconds": 1.33,
+   "source": "mixkit sfx 1492",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1491": {
+   "file": "mk_1491.wav",
+   "role": "whoosh",
+   "title": "Arrow whoosh",
+   "tags": [
+    "whoosh",
+    "woosh"
+   ],
+   "seconds": 0.99,
+   "source": "mixkit sfx 1491",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1714": {
+   "file": "mk_1714.wav",
+   "role": "whoosh",
+   "title": "Fast rocket whoosh",
+   "tags": [
+    "whoosh",
+    "rocket",
+    "transition"
+   ],
+   "seconds": 4.45,
+   "source": "mixkit sfx 1714",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1490": {
+   "file": "mk_1490.wav",
+   "role": "whoosh",
+   "title": "Fast whoosh transition",
+   "tags": [
+    "woosh",
+    "whoosh",
+    "transition"
+   ],
+   "seconds": 1.76,
+   "source": "mixkit sfx 1490",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1486": {
+   "file": "mk_1486.wav",
+   "role": "whoosh",
+   "title": "Cinematic tunnel reverb woosh",
+   "tags": [
+    "swoosh",
+    "cinematic",
+    "whoosh",
+    "transition"
+   ],
+   "seconds": 6.6,
+   "source": "mixkit sfx 1486",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3005": {
+   "file": "mk_3005.wav",
+   "role": "whoosh",
+   "title": "Explainer video pops whoosh light pop",
+   "tags": [
+    "pop",
+    "thud",
+    "whoosh"
+   ],
+   "seconds": 0.17,
+   "source": "mixkit sfx 3005",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1485": {
+   "file": "mk_1485.wav",
+   "role": "whoosh",
+   "title": "Metal hit woosh",
+   "tags": [
+    "whoosh",
+    "sword"
+   ],
+   "seconds": 0.45,
+   "source": "mixkit sfx 1485",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_787": {
+   "file": "mk_787.wav",
+   "role": "whoosh",
+   "title": "Cinematic whoosh stutter",
+   "tags": [
+    "cinematic",
+    "whoosh"
+   ],
+   "seconds": 2.22,
+   "source": "mixkit sfx 787",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2623": {
+   "file": "mk_2623.wav",
+   "role": "whoosh",
+   "title": "Ghostly whoosh passing",
+   "tags": [
+    "zoom",
+    "whoosh"
+   ],
+   "seconds": 3.7,
+   "source": "mixkit sfx 2623",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2596": {
+   "file": "mk_2596.wav",
+   "role": "whoosh",
+   "title": "Electric whoosh",
+   "tags": [
+    "electricity",
+    "glitch",
+    "whoosh"
+   ],
+   "seconds": 3.03,
+   "source": "mixkit sfx 2596",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2408": {
+   "file": "mk_2408.wav",
+   "role": "whoosh",
+   "title": "Storm coming whoosh",
+   "tags": [
+    "storm",
+    "whoosh",
+    "transition"
+   ],
+   "seconds": 3.98,
+   "source": "mixkit sfx 2408",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2903": {
+   "file": "mk_2903.wav",
+   "role": "whoosh",
+   "title": "Movie whoosh impact presentation",
+   "tags": [
+    "movie",
+    "intro",
+    "whoosh"
+   ],
+   "seconds": 3.52,
+   "source": "mixkit sfx 2903",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1493": {
+   "file": "mk_1493.wav",
+   "role": "whoosh",
+   "title": "Swirling whoosh",
+   "tags": [
+    "whoosh",
+    "spin"
+   ],
+   "seconds": 2.39,
+   "source": "mixkit sfx 1493",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3024": {
+   "file": "mk_3024.wav",
+   "role": "whoosh",
+   "title": "Meteor whoosh",
+   "tags": [
+    "asteroid",
+    "whoosh"
+   ],
+   "seconds": 4.32,
+   "source": "mixkit sfx 3024",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2608": {
+   "file": "mk_2608.wav",
+   "role": "whoosh",
+   "title": "Air zoom vacuum",
+   "tags": [
+    "woosh",
+    "wind",
+    "transition"
+   ],
+   "seconds": 1.13,
+   "source": "mixkit sfx 2608",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1487": {
+   "file": "mk_1487.wav",
+   "role": "whoosh",
+   "title": "Dagger woosh",
+   "tags": [
+    "woosh",
+    "swoosh",
+    "sword"
+   ],
+   "seconds": 0.26,
+   "source": "mixkit sfx 1487",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2638": {
+   "file": "mk_2638.wav",
+   "role": "whoosh",
+   "title": "Magic transition sweep presentation",
+   "tags": [
+    "woosh",
+    "magic",
+    "sweep",
+    "transition"
+   ],
+   "seconds": 3.54,
+   "source": "mixkit sfx 2638",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2627": {
+   "file": "mk_2627.wav",
+   "role": "whoosh",
+   "title": "Fast swipe zoom",
+   "tags": [
+    "zoom",
+    "woosh"
+   ],
+   "seconds": 1.0,
+   "source": "mixkit sfx 2627",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2637": {
+   "file": "mk_2637.wav",
+   "role": "whoosh",
+   "title": "Fast air transition sweep",
+   "tags": [
+    "hit",
+    "woosh",
+    "sweep"
+   ],
+   "seconds": 0.7,
+   "source": "mixkit sfx 2637",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1168": {
+   "file": "mk_1168.wav",
+   "role": "whoosh",
+   "title": "Woosh wind",
+   "tags": [
+    "wind",
+    "woosh",
+    "transition"
+   ],
+   "seconds": 3.15,
+   "source": "mixkit sfx 1168",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2607": {
+   "file": "mk_2607.wav",
+   "role": "whoosh",
+   "title": "Fast air woosh",
+   "tags": [
+    "woosh",
+    "wind"
+   ],
+   "seconds": 1.73,
+   "source": "mixkit sfx 2607",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2639": {
+   "file": "mk_2639.wav",
+   "role": "whoosh",
+   "title": "Quick metal transition sweep",
+   "tags": [
+    "sweeping",
+    "woosh",
+    "transition"
+   ],
+   "seconds": 1.56,
+   "source": "mixkit sfx 2639",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3220": {
+   "file": "mk_3220.wav",
+   "role": "whoosh",
+   "title": "Powerful air whooshes",
+   "tags": [
+    "misc",
+    "woosh"
+   ],
+   "seconds": 1.8,
+   "source": "mixkit sfx 3220",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2605": {
+   "file": "mk_2605.wav",
+   "role": "whoosh",
+   "title": "Quick air woosh",
+   "tags": [
+    "woosh",
+    "wind"
+   ],
+   "seconds": 1.51,
+   "source": "mixkit sfx 2605",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2615": {
+   "file": "mk_2615.wav",
+   "role": "whoosh",
+   "title": "Mighty mysterious swoosh",
+   "tags": [
+    "woosh",
+    "wind",
+    "transition"
+   ],
+   "seconds": 4.34,
+   "source": "mixkit sfx 2615",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2655": {
+   "file": "mk_2655.wav",
+   "role": "whoosh",
+   "title": "Fast impact blow",
+   "tags": [
+    "blow",
+    "woosh",
+    "impact"
+   ],
+   "seconds": 1.33,
+   "source": "mixkit sfx 2655",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1346": {
+   "file": "mk_1346.wav",
+   "role": "whoosh",
+   "title": "Soft woosh fire",
+   "tags": [
+    "woosh",
+    "fire"
+   ],
+   "seconds": 4.44,
+   "source": "mixkit sfx 1346",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2604": {
+   "file": "mk_2604.wav",
+   "role": "whoosh",
+   "title": "Deep air woosh",
+   "tags": [
+    "woosh",
+    "wind"
+   ],
+   "seconds": 2.95,
+   "source": "mixkit sfx 2604",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2632": {
+   "file": "mk_2632.wav",
+   "role": "whoosh",
+   "title": "Whoosh wind sweep",
+   "tags": [
+    "woosh",
+    "wind",
+    "sweep"
+   ],
+   "seconds": 1.14,
+   "source": "mixkit sfx 2632",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2413": {
+   "file": "mk_2413.wav",
+   "role": "whoosh",
+   "title": "Dark storm wind",
+   "tags": [
+    "storm",
+    "wind",
+    "woosh"
+   ],
+   "seconds": 3.25,
+   "source": "mixkit sfx 2413",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1094": {
+   "file": "mk_1094.wav",
+   "role": "whoosh",
+   "title": "Sci fi rewind woosh",
+   "tags": [
+    "woosh",
+    "rewind"
+   ],
+   "seconds": 4.5,
+   "source": "mixkit sfx 1094",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1348": {
+   "file": "mk_1348.wav",
+   "role": "whoosh",
+   "title": "Fire woosh",
+   "tags": [
+    "fire",
+    "woosh"
+   ],
+   "seconds": 1.97,
+   "source": "mixkit sfx 1348",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1293": {
+   "file": "mk_1293.wav",
+   "role": "whoosh",
+   "title": "Fast thunder whoosh",
+   "tags": [
+    "woosh",
+    "thunder"
+   ],
+   "seconds": 4.12,
+   "source": "mixkit sfx 1293",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1326": {
+   "file": "mk_1326.wav",
+   "role": "whoosh",
+   "title": "Wizard fire woosh",
+   "tags": [
+    "fire",
+    "woosh"
+   ],
+   "seconds": 1.09,
+   "source": "mixkit sfx 1326",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2631": {
+   "file": "mk_2631.wav",
+   "role": "whoosh",
+   "title": "Digital sweep effect",
+   "tags": [
+    "game",
+    "woosh",
+    "sweep"
+   ],
+   "seconds": 1.1,
+   "source": "mixkit sfx 2631",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1488": {
+   "file": "mk_1488.wav",
+   "role": "whoosh",
+   "title": "Throw hard wind woosh",
+   "tags": [
+    "woosh",
+    "wind"
+   ],
+   "seconds": 0.86,
+   "source": "mixkit sfx 1488",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2614": {
+   "file": "mk_2614.wav",
+   "role": "whoosh",
+   "title": "Electric gamma ray whoosh",
+   "tags": [
+    "woosh",
+    "wind",
+    "technology",
+    "robot"
+   ],
+   "seconds": 1.38,
+   "source": "mixkit sfx 2614",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3171": {
+   "file": "mk_3171.wav",
+   "role": "whoosh",
+   "title": "Hi-tech touch with magnet",
+   "tags": [
+    "misc",
+    "high tech",
+    "woosh",
+    "sci-fi"
+   ],
+   "seconds": 1.86,
+   "source": "mixkit sfx 3171",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2610": {
+   "file": "mk_2610.wav",
+   "role": "whoosh",
+   "title": "Wind magic whoosh",
+   "tags": [
+    "woosh",
+    "wind",
+    "magic"
+   ],
+   "seconds": 4.05,
+   "source": "mixkit sfx 2610",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2611": {
+   "file": "mk_2611.wav",
+   "role": "whoosh",
+   "title": "Weird swish glassy whoosh",
+   "tags": [
+    "woosh",
+    "wind",
+    "swoosh"
+   ],
+   "seconds": 1.21,
+   "source": "mixkit sfx 2611",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2613": {
+   "file": "mk_2613.wav",
+   "role": "whoosh",
+   "title": "Trash can whoosh tone",
+   "tags": [
+    "woosh",
+    "wind"
+   ],
+   "seconds": 2.33,
+   "source": "mixkit sfx 2613",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3001": {
+   "file": "mk_3001.wav",
+   "role": "whoosh",
+   "title": "Space shot whoosh",
+   "tags": [
+    "space shooter",
+    "woosh",
+    "shot"
+   ],
+   "seconds": 1.77,
+   "source": "mixkit sfx 3001",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3159": {
+   "file": "mk_3159.wav",
+   "role": "whoosh",
+   "title": "Wrong answer mech styled",
+   "tags": [
+    "misc",
+    "robot",
+    "woosh",
+    "wrong"
+   ],
+   "seconds": 1.87,
+   "source": "mixkit sfx 3159",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1454": {
+   "file": "mk_1454.wav",
+   "role": "whoosh",
+   "title": "Static whoosh",
+   "tags": [
+    "woosh",
+    "static"
+   ],
+   "seconds": 3.71,
+   "source": "mixkit sfx 1454",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2606": {
+   "file": "mk_2606.wav",
+   "role": "whoosh",
+   "title": "Wind woosh",
+   "tags": [
+    "woosh",
+    "wind"
+   ],
+   "seconds": 3.94,
+   "source": "mixkit sfx 2606",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_166": {
+   "file": "mk_166.wav",
+   "role": "whoosh",
+   "title": "Fast small sweep transition",
+   "tags": [
+    "sweep",
+    "swoosh",
+    "transition"
+   ],
+   "seconds": 0.72,
+   "source": "mixkit sfx 166",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1474": {
+   "file": "mk_1474.wav",
+   "role": "whoosh",
+   "title": "Transition windy swoosh",
+   "tags": [
+    "swoosh",
+    "wind",
+    "transition"
+   ],
+   "seconds": 2.98,
+   "source": "mixkit sfx 1474",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1465": {
+   "file": "mk_1465.wav",
+   "role": "whoosh",
+   "title": "Vacuum swoosh transition",
+   "tags": [
+    "swoosh",
+    "transition"
+   ],
+   "seconds": 2.19,
+   "source": "mixkit sfx 1465",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1471": {
+   "file": "mk_1471.wav",
+   "role": "whoosh",
+   "title": "Cinematic wind swoosh",
+   "tags": [
+    "wind",
+    "swoosh"
+   ],
+   "seconds": 1.29,
+   "source": "mixkit sfx 1471",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1461": {
+   "file": "mk_1461.wav",
+   "role": "whoosh",
+   "title": "Short wind swoosh",
+   "tags": [
+    "swoosh",
+    "wind"
+   ],
+   "seconds": 1.39,
+   "source": "mixkit sfx 1461",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3115": {
+   "file": "mk_3115.wav",
+   "role": "whoosh",
+   "title": "Fast transitions swoosh",
+   "tags": [
+    "transition",
+    "swoosh"
+   ],
+   "seconds": 0.51,
+   "source": "mixkit sfx 3115",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1469": {
+   "file": "mk_1469.wav",
+   "role": "whoosh",
+   "title": "Flying fast swoosh",
+   "tags": [
+    "swoosh",
+    "cinematic",
+    "flying",
+    "race car"
+   ],
+   "seconds": 1.41,
+   "source": "mixkit sfx 1469",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_869": {
+   "file": "mk_869.wav",
+   "role": "whoosh",
+   "title": "Fairy sparkle whoosh",
+   "tags": [
+    "fairy",
+    "sparkle",
+    "magic",
+    "swoosh"
+   ],
+   "seconds": 3.88,
+   "source": "mixkit sfx 869",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1345": {
+   "file": "mk_1345.wav",
+   "role": "whoosh",
+   "title": "Short fire whoosh",
+   "tags": [
+    "swoosh",
+    "fire"
+   ],
+   "seconds": 3.09,
+   "source": "mixkit sfx 1345",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1328": {
+   "file": "mk_1328.wav",
+   "role": "whoosh",
+   "title": "Fire swoosh burning",
+   "tags": [
+    "fire",
+    "swoosh"
+   ],
+   "seconds": 2.99,
+   "source": "mixkit sfx 1328",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1476": {
+   "file": "mk_1476.wav",
+   "role": "whoosh",
+   "title": "Sword slash swoosh",
+   "tags": [
+    "swoosh",
+    "sword"
+   ],
+   "seconds": 2.03,
+   "source": "mixkit sfx 1476",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1467": {
+   "file": "mk_1467.wav",
+   "role": "whoosh",
+   "title": "Cinematic laser swoosh",
+   "tags": [
+    "swoosh",
+    "cinematic",
+    "laser"
+   ],
+   "seconds": 1.19,
+   "source": "mixkit sfx 1467",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2901": {
+   "file": "mk_2901.wav",
+   "role": "whoosh",
+   "title": "Epic movie impact",
+   "tags": [
+    "movie",
+    "intro",
+    "swoosh",
+    "impact"
+   ],
+   "seconds": 5.1,
+   "source": "mixkit sfx 2901",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_174": {
+   "file": "mk_174.wav",
+   "role": "whoosh",
+   "title": "Fast sweep transition",
+   "tags": [
+    "sweep",
+    "swoosh",
+    "movie"
+   ],
+   "seconds": 0.77,
+   "source": "mixkit sfx 174",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_168": {
+   "file": "mk_168.wav",
+   "role": "whoosh",
+   "title": "Fast air sweep transition",
+   "tags": [
+    "sweep",
+    "swoosh"
+   ],
+   "seconds": 0.81,
+   "source": "mixkit sfx 168",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1478": {
+   "file": "mk_1478.wav",
+   "role": "whoosh",
+   "title": "Karate hit whoosh",
+   "tags": [
+    "swoosh"
+   ],
+   "seconds": 0.39,
+   "source": "mixkit sfx 1478",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2411": {
+   "file": "mk_2411.wav",
+   "role": "whoosh",
+   "title": "Storm wind",
+   "tags": [
+    "storm",
+    "wind",
+    "swoosh"
+   ],
+   "seconds": 2.41,
+   "source": "mixkit sfx 2411",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_164": {
+   "file": "mk_164.wav",
+   "role": "whoosh",
+   "title": "Fast sweeping transition",
+   "tags": [
+    "sweep",
+    "swoosh",
+    "sci-fi",
+    "flying",
+    "ship"
+   ],
+   "seconds": 1.89,
+   "source": "mixkit sfx 164",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1468": {
+   "file": "mk_1468.wav",
+   "role": "whoosh",
+   "title": "Cinematic transition wind swoosh",
+   "tags": [
+    "wind",
+    "swoosh"
+   ],
+   "seconds": 1.18,
+   "source": "mixkit sfx 1468",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3205": {
+   "file": "mk_3205.wav",
+   "role": "whoosh",
+   "title": "Robot positive item acquired",
+   "tags": [
+    "misc",
+    "technology",
+    "swoosh"
+   ],
+   "seconds": 1.37,
+   "source": "mixkit sfx 3205",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1463": {
+   "file": "mk_1463.wav",
+   "role": "whoosh",
+   "title": "Spellcaster fairy swoosh",
+   "tags": [
+    "swoosh",
+    "fairy",
+    "magic"
+   ],
+   "seconds": 2.4,
+   "source": "mixkit sfx 1463",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_169": {
+   "file": "mk_169.wav",
+   "role": "whoosh",
+   "title": "Futuristic sweep pass by",
+   "tags": [
+    "sweep",
+    "swoosh",
+    "sci-fi",
+    "ship",
+    "flying"
+   ],
+   "seconds": 3.02,
+   "source": "mixkit sfx 169",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3161": {
+   "file": "mk_3161.wav",
+   "role": "whoosh",
+   "title": "Transition flying swoosh",
+   "tags": [
+    "misc",
+    "swoosh",
+    "flying",
+    "transition"
+   ],
+   "seconds": 2.55,
+   "source": "mixkit sfx 3161",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2050": {
+   "file": "mk_2050.wav",
+   "role": "whoosh",
+   "title": "Punch with a hard whistle",
+   "tags": [
+    "hit",
+    "swoosh",
+    "punch"
+   ],
+   "seconds": 1.17,
+   "source": "mixkit sfx 2050",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1167": {
+   "file": "mk_1167.wav",
+   "role": "whoosh",
+   "title": "Swoosh wind passing",
+   "tags": [
+    "swoosh",
+    "wind"
+   ],
+   "seconds": 5.32,
+   "source": "mixkit sfx 1167",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1340": {
+   "file": "mk_1340.wav",
+   "role": "whoosh",
+   "title": "Ghost fire swoosh",
+   "tags": [
+    "swoosh",
+    "fire"
+   ],
+   "seconds": 2.75,
+   "source": "mixkit sfx 1340",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1473": {
+   "file": "mk_1473.wav",
+   "role": "whoosh",
+   "title": "Long hit swoosh",
+   "tags": [
+    "swoosh",
+    "hit"
+   ],
+   "seconds": 0.88,
+   "source": "mixkit sfx 1473",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_863": {
+   "file": "mk_863.wav",
+   "role": "whoosh",
+   "title": "Fairy water spell",
+   "tags": [
+    "fairy",
+    "water",
+    "magic",
+    "swoosh"
+   ],
+   "seconds": 3.74,
+   "source": "mixkit sfx 863",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_576": {
+   "file": "mk_576.wav",
+   "role": "whoosh",
+   "title": "Atmospheric wind drum roll swoosh",
+   "tags": [
+    "swoosh",
+    "drum",
+    "wind",
+    "cymbal"
+   ],
+   "seconds": 6.79,
+   "source": "mixkit sfx 576",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1464": {
+   "file": "mk_1464.wav",
+   "role": "whoosh",
+   "title": "Quick swoosh accent",
+   "tags": [
+    "swoosh"
+   ],
+   "seconds": 1.1,
+   "source": "mixkit sfx 1464",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1344": {
+   "file": "mk_1344.wav",
+   "role": "whoosh",
+   "title": "Catapult fire whoosh",
+   "tags": [
+    "swoosh",
+    "fire"
+   ],
+   "seconds": 5.62,
+   "source": "mixkit sfx 1344",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_881": {
+   "file": "mk_881.wav",
+   "role": "whoosh",
+   "title": "Icicles spell whoosh",
+   "tags": [
+    "swoosh",
+    "spell",
+    "magic"
+   ],
+   "seconds": 2.63,
+   "source": "mixkit sfx 881",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_163": {
+   "file": "mk_163.wav",
+   "role": "whoosh",
+   "title": "Slow sweeping swoosh",
+   "tags": [
+    "sweep",
+    "swoosh",
+    "ship"
+   ],
+   "seconds": 5.38,
+   "source": "mixkit sfx 163",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_167": {
+   "file": "mk_167.wav",
+   "role": "whoosh",
+   "title": "Long sweeping air swoosh",
+   "tags": [
+    "sweep",
+    "swoosh",
+    "sci-fi"
+   ],
+   "seconds": 4.28,
+   "source": "mixkit sfx 167",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1462": {
+   "file": "mk_1462.wav",
+   "role": "whoosh",
+   "title": "Quick swoosh",
+   "tags": [
+    "swoosh"
+   ],
+   "seconds": 1.25,
+   "source": "mixkit sfx 1462",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1481": {
+   "file": "mk_1481.wav",
+   "role": "whoosh",
+   "title": "Cinematic swoosh",
+   "tags": [
+    "swoosh",
+    "cinematic"
+   ],
+   "seconds": 1.91,
+   "source": "mixkit sfx 1481",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1472": {
+   "file": "mk_1472.wav",
+   "role": "whoosh",
+   "title": "Quick hit swoosh",
+   "tags": [
+    "swoosh",
+    "wind"
+   ],
+   "seconds": 0.88,
+   "source": "mixkit sfx 1472",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1470": {
+   "file": "mk_1470.wav",
+   "role": "whoosh",
+   "title": "Cinematic muddy swoosh",
+   "tags": [
+    "swoosh",
+    "cinematic"
+   ],
+   "seconds": 1.87,
+   "source": "mixkit sfx 1470",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2017": {
+   "file": "mk_2017.wav",
+   "role": "whoosh",
+   "title": "Winning swoosh",
+   "tags": [
+    "swoosh",
+    "win"
+   ],
+   "seconds": 1.51,
+   "source": "mixkit sfx 2017",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1458": {
+   "file": "mk_1458.wav",
+   "role": "whoosh",
+   "title": "Steam swoosh",
+   "tags": [
+    "swoosh"
+   ],
+   "seconds": 1.6,
+   "source": "mixkit sfx 1458",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1327": {
+   "file": "mk_1327.wav",
+   "role": "whoosh",
+   "title": "Big fire magic swoosh",
+   "tags": [
+    "swoosh",
+    "fire"
+   ],
+   "seconds": 1.96,
+   "source": "mixkit sfx 1327",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1710": {
+   "file": "mk_1710.wav",
+   "role": "whoosh",
+   "title": "Lightsaber sound swoosh",
+   "tags": [
+    "swoosh",
+    "light saber"
+   ],
+   "seconds": 0.76,
+   "source": "mixkit sfx 1710",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1466": {
+   "file": "mk_1466.wav",
+   "role": "whoosh",
+   "title": "Elevating swoosh",
+   "tags": [
+    "swoosh"
+   ],
+   "seconds": 1.03,
+   "source": "mixkit sfx 1466",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_912": {
+   "file": "mk_912.wav",
+   "role": "whoosh",
+   "title": "Sci Fi tube swoosh",
+   "tags": [
+    "swoosh",
+    "sci-fi"
+   ],
+   "seconds": 0.85,
+   "source": "mixkit sfx 912",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1483": {
+   "file": "mk_1483.wav",
+   "role": "whoosh",
+   "title": "Jetpack swoosh",
+   "tags": [
+    "swoosh"
+   ],
+   "seconds": 3.51,
+   "source": "mixkit sfx 1483",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_607": {
+   "file": "mk_607.wav",
+   "role": "whoosh",
+   "title": "Air whoosh and whistle",
+   "tags": [
+    "whistle",
+    "swoosh"
+   ],
+   "seconds": 1.03,
+   "source": "mixkit sfx 607",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1460": {
+   "file": "mk_1460.wav",
+   "role": "whoosh",
+   "title": "Magic swoosh",
+   "tags": [
+    "swoosh",
+    "magic"
+   ],
+   "seconds": 1.78,
+   "source": "mixkit sfx 1460",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1459": {
+   "file": "mk_1459.wav",
+   "role": "whoosh",
+   "title": "Swirling short swoosh",
+   "tags": [
+    "swoosh"
+   ],
+   "seconds": 3.63,
+   "source": "mixkit sfx 1459",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2161": {
+   "file": "mk_2161.wav",
+   "role": "whoosh",
+   "title": "Air in a hit",
+   "tags": [
+    "hit",
+    "punch",
+    "swish"
+   ],
+   "seconds": 1.24,
+   "source": "mixkit sfx 2161",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1506": {
+   "file": "mk_1506.wav",
+   "role": "whoosh",
+   "title": "Sword blade swish",
+   "tags": [
+    "swish",
+    "sword"
+   ],
+   "seconds": 1.52,
+   "source": "mixkit sfx 1506",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1494": {
+   "file": "mk_1494.wav",
+   "role": "whoosh",
+   "title": "Sand swish",
+   "tags": [
+    "swish",
+    "fairy"
+   ],
+   "seconds": 1.89,
+   "source": "mixkit sfx 1494",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2166": {
+   "file": "mk_2166.wav",
+   "role": "whoosh",
+   "title": "Swift Sword Strike",
+   "tags": [
+    "swish",
+    "sword",
+    "hit"
+   ],
+   "seconds": 1.17,
+   "source": "mixkit sfx 2166",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1497": {
+   "file": "mk_1497.wav",
+   "role": "whoosh",
+   "title": "Fairy spell swish",
+   "tags": [
+    "swish",
+    "wow"
+   ],
+   "seconds": 2.23,
+   "source": "mixkit sfx 1497",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1500": {
+   "file": "mk_1500.wav",
+   "role": "whoosh",
+   "title": "Spacey swish spin",
+   "tags": [
+    "swish",
+    "spin"
+   ],
+   "seconds": 1.75,
+   "source": "mixkit sfx 1500",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1505": {
+   "file": "mk_1505.wav",
+   "role": "whoosh",
+   "title": "Metal tunnel swish",
+   "tags": [
+    "metal",
+    "swish"
+   ],
+   "seconds": 5.25,
+   "source": "mixkit sfx 1505",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1501": {
+   "file": "mk_1501.wav",
+   "role": "whoosh",
+   "title": "Metal swish",
+   "tags": [
+    "swish"
+   ],
+   "seconds": 1.02,
+   "source": "mixkit sfx 1501",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1496": {
+   "file": "mk_1496.wav",
+   "role": "whoosh",
+   "title": "Magical swish",
+   "tags": [
+    "swish"
+   ],
+   "seconds": 4.64,
+   "source": "mixkit sfx 1496",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1498": {
+   "file": "mk_1498.wav",
+   "role": "whoosh",
+   "title": "Stardust swish",
+   "tags": [
+    "swish"
+   ],
+   "seconds": 4.8,
+   "source": "mixkit sfx 1498",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1499": {
+   "file": "mk_1499.wav",
+   "role": "whoosh",
+   "title": "Triple bouncing swish",
+   "tags": [
+    "swish"
+   ],
+   "seconds": 1.57,
+   "source": "mixkit sfx 1499",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1508": {
+   "file": "mk_1508.wav",
+   "role": "whoosh",
+   "title": "Lightning whip",
+   "tags": [
+    "whip",
+    "lightning"
+   ],
+   "seconds": 0.8,
+   "source": "mixkit sfx 1508",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1516": {
+   "file": "mk_1516.wav",
+   "role": "whoosh",
+   "title": "Magic whip swell",
+   "tags": [
+    "swell",
+    "whip"
+   ],
+   "seconds": 2.96,
+   "source": "mixkit sfx 1516",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1512": {
+   "file": "mk_1512.wav",
+   "role": "whoosh",
+   "title": "Game whip shot",
+   "tags": [
+    "whip",
+    "space shooter",
+    "shot"
+   ],
+   "seconds": 0.52,
+   "source": "mixkit sfx 1512",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1511": {
+   "file": "mk_1511.wav",
+   "role": "whoosh",
+   "title": "Fast whip strike",
+   "tags": [
+    "whip"
+   ],
+   "seconds": 1.04,
+   "source": "mixkit sfx 1511",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1513": {
+   "file": "mk_1513.wav",
+   "role": "whoosh",
+   "title": "Lasso fast whip",
+   "tags": [
+    "whip"
+   ],
+   "seconds": 0.32,
+   "source": "mixkit sfx 1513",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1529": {
+   "file": "mk_1529.wav",
+   "role": "whoosh",
+   "title": "Slide hit",
+   "tags": [
+    "whip",
+    "hit"
+   ],
+   "seconds": 1.04,
+   "source": "mixkit sfx 1529",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1518": {
+   "file": "mk_1518.wav",
+   "role": "whoosh",
+   "title": "Futuristic cinematic noise whip",
+   "tags": [
+    "cinematic",
+    "whip"
+   ],
+   "seconds": 5.89,
+   "source": "mixkit sfx 1518",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1515": {
+   "file": "mk_1515.wav",
+   "role": "whoosh",
+   "title": "Magical whip accent",
+   "tags": [
+    "whip"
+   ],
+   "seconds": 2.74,
+   "source": "mixkit sfx 1515",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1519": {
+   "file": "mk_1519.wav",
+   "role": "whoosh",
+   "title": "Whip small explosion",
+   "tags": [
+    "whip",
+    "explosion"
+   ],
+   "seconds": 1.56,
+   "source": "mixkit sfx 1519",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1507": {
+   "file": "mk_1507.wav",
+   "role": "whoosh",
+   "title": "Whip explosion",
+   "tags": [
+    "whip"
+   ],
+   "seconds": 1.75,
+   "source": "mixkit sfx 1507",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_175": {
+   "file": "mk_175.wav",
+   "role": "whoosh",
+   "title": "Short transition sweep",
+   "tags": [
+    "sweep",
+    "movie",
+    "transition"
+   ],
+   "seconds": 0.42,
+   "source": "mixkit sfx 175",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3114": {
+   "file": "mk_3114.wav",
+   "role": "whoosh",
+   "title": "Fast sci fi transition sweep",
+   "tags": [
+    "transition",
+    "sci-fi",
+    "sweep"
+   ],
+   "seconds": 1.11,
+   "source": "mixkit sfx 3114",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2633": {
+   "file": "mk_2633.wav",
+   "role": "whoosh",
+   "title": "Sweeping sparkle presentation intro",
+   "tags": [
+    "intro",
+    "sweep",
+    "magic"
+   ],
+   "seconds": 2.96,
+   "source": "mixkit sfx 2633",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2628": {
+   "file": "mk_2628.wav",
+   "role": "whoosh",
+   "title": "Relaxing harp sweep",
+   "tags": [
+    "intro",
+    "magic",
+    "sweep"
+   ],
+   "seconds": 6.33,
+   "source": "mixkit sfx 2628",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_670": {
+   "file": "mk_670.wav",
+   "role": "whoosh",
+   "title": "Metallic sweep suspense",
+   "tags": [
+    "suspense music",
+    "sweep"
+   ],
+   "seconds": 3.97,
+   "source": "mixkit sfx 670",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2586": {
+   "file": "mk_2586.wav",
+   "role": "whoosh",
+   "title": "Magical light sweep",
+   "tags": [
+    "light",
+    "magic",
+    "sweep"
+   ],
+   "seconds": 4.44,
+   "source": "mixkit sfx 2586",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2629": {
+   "file": "mk_2629.wav",
+   "role": "whoosh",
+   "title": "Magic astral sweep effect",
+   "tags": [
+    "intro",
+    "magic",
+    "sweep"
+   ],
+   "seconds": 3.98,
+   "source": "mixkit sfx 2629",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2636": {
+   "file": "mk_2636.wav",
+   "role": "whoosh",
+   "title": "Futuristic metal transition sweep",
+   "tags": [
+    "technology",
+    "drone",
+    "sweep"
+   ],
+   "seconds": 0.84,
+   "source": "mixkit sfx 2636",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2634": {
+   "file": "mk_2634.wav",
+   "role": "whoosh",
+   "title": "Futuristic transition sweep",
+   "tags": [
+    "technology",
+    "robot",
+    "sweep"
+   ],
+   "seconds": 2.22,
+   "source": "mixkit sfx 2634",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_868": {
+   "file": "mk_868.wav",
+   "role": "whoosh",
+   "title": "Fairy teleport",
+   "tags": [
+    "fairy",
+    "magic",
+    "sweep"
+   ],
+   "seconds": 2.42,
+   "source": "mixkit sfx 868",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2635": {
+   "file": "mk_2635.wav",
+   "role": "whoosh",
+   "title": "Futuristic cinematic sweep",
+   "tags": [
+    "technology",
+    "high tech",
+    "sweep"
+   ],
+   "seconds": 1.18,
+   "source": "mixkit sfx 2635",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_172": {
+   "file": "mk_172.wav",
+   "role": "whoosh",
+   "title": "Sweeping glass debris",
+   "tags": [
+    "sweep",
+    "glass"
+   ],
+   "seconds": 3.02,
+   "source": "mixkit sfx 172",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2908": {
+   "file": "mk_2908.wav",
+   "role": "transition",
+   "title": "Movie trailer epic impact",
+   "tags": [
+    "movie",
+    "impact",
+    "transition"
+   ],
+   "seconds": 4.86,
+   "source": "mixkit sfx 2908",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2909": {
+   "file": "mk_2909.wav",
+   "role": "transition",
+   "title": "Cool impact movie trailer",
+   "tags": [
+    "movie",
+    "drum",
+    "transition"
+   ],
+   "seconds": 5.95,
+   "source": "mixkit sfx 2909",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1287": {
+   "file": "mk_1287.wav",
+   "role": "transition",
+   "title": "Cinematic laser gun thunder",
+   "tags": [
+    "cinematic",
+    "thunder",
+    "transition",
+    "laser"
+   ],
+   "seconds": 4.69,
+   "source": "mixkit sfx 1287",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3120": {
+   "file": "mk_3120.wav",
+   "role": "transition",
+   "title": "Technology transition slide",
+   "tags": [
+    "technology",
+    "slide",
+    "transition"
+   ],
+   "seconds": 1.64,
+   "source": "mixkit sfx 3120",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2289": {
+   "file": "mk_2289.wav",
+   "role": "transition",
+   "title": "Warfare horn",
+   "tags": [
+    "brass",
+    "cinematic",
+    "horn",
+    "transition"
+   ],
+   "seconds": 4.95,
+   "source": "mixkit sfx 2289",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3057": {
+   "file": "mk_3057.wav",
+   "role": "transition",
+   "title": "Apocalyptic stomp impact",
+   "tags": [
+    "stomp",
+    "transition",
+    "sci-fi",
+    "movie"
+   ],
+   "seconds": 2.85,
+   "source": "mixkit sfx 3057",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2907": {
+   "file": "mk_2907.wav",
+   "role": "transition",
+   "title": "Epic blockbuster movie transition",
+   "tags": [
+    "movie",
+    "intro",
+    "transition",
+    "hit"
+   ],
+   "seconds": 4.58,
+   "source": "mixkit sfx 2907",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2297": {
+   "file": "mk_2297.wav",
+   "role": "transition",
+   "title": "Bass rumble hum",
+   "tags": [
+    "bass",
+    "hum",
+    "robot",
+    "transition"
+   ],
+   "seconds": 7.0,
+   "source": "mixkit sfx 2297",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3112": {
+   "file": "mk_3112.wav",
+   "role": "transition",
+   "title": "Horn suspense transition",
+   "tags": [
+    "warfare",
+    "movie",
+    "transition"
+   ],
+   "seconds": 4.6,
+   "source": "mixkit sfx 3112",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1530": {
+   "file": "mk_1530.wav",
+   "role": "transition",
+   "title": "Paper slide",
+   "tags": [
+    "slide",
+    "paper"
+   ],
+   "seconds": 1.07,
+   "source": "mixkit sfx 1530",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2158": {
+   "file": "mk_2158.wav",
+   "role": "transition",
+   "title": "Quick saber cut",
+   "tags": [
+    "fight",
+    "sword",
+    "slide"
+   ],
+   "seconds": 2.02,
+   "source": "mixkit sfx 2158",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_201": {
+   "file": "mk_201.wav",
+   "role": "transition",
+   "title": "Prison metal door close",
+   "tags": [
+    "doors",
+    "metal",
+    "slide"
+   ],
+   "seconds": 1.8,
+   "source": "mixkit sfx 201",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1528": {
+   "file": "mk_1528.wav",
+   "role": "transition",
+   "title": "Magical stone slide",
+   "tags": [
+    "magic",
+    "slide"
+   ],
+   "seconds": 4.35,
+   "source": "mixkit sfx 1528",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1637": {
+   "file": "mk_1637.wav",
+   "role": "transition",
+   "title": "Train door open",
+   "tags": [
+    "train",
+    "slide",
+    "doors"
+   ],
+   "seconds": 2.41,
+   "source": "mixkit sfx 1637",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1524": {
+   "file": "mk_1524.wav",
+   "role": "transition",
+   "title": "Cabinet door slide",
+   "tags": [
+    "slide"
+   ],
+   "seconds": 1.23,
+   "source": "mixkit sfx 1524",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1531": {
+   "file": "mk_1531.wav",
+   "role": "transition",
+   "title": "Warping slide",
+   "tags": [
+    "slide"
+   ],
+   "seconds": 1.83,
+   "source": "mixkit sfx 1531",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2527": {
+   "file": "mk_2527.wav",
+   "role": "transition",
+   "title": "Sci fi futuristic door open",
+   "tags": [
+    "high tech",
+    "doors",
+    "slide"
+   ],
+   "seconds": 3.02,
+   "source": "mixkit sfx 2527",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3157": {
+   "file": "mk_3157.wav",
+   "role": "transition",
+   "title": "Creaky wooden scrap",
+   "tags": [
+    "misc",
+    "wood",
+    "slide"
+   ],
+   "seconds": 1.58,
+   "source": "mixkit sfx 3157",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1638": {
+   "file": "mk_1638.wav",
+   "role": "transition",
+   "title": "Train door close",
+   "tags": [
+    "doors",
+    "slide",
+    "train"
+   ],
+   "seconds": 3.39,
+   "source": "mixkit sfx 1638",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3113": {
+   "file": "mk_3113.wav",
+   "role": "transition",
+   "title": "Sci fi warp slide",
+   "tags": [
+    "warfare",
+    "sci-fi",
+    "slide"
+   ],
+   "seconds": 2.02,
+   "source": "mixkit sfx 3113",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1527": {
+   "file": "mk_1527.wav",
+   "role": "transition",
+   "title": "Glass plate slide",
+   "tags": [
+    "slide"
+   ],
+   "seconds": 1.1,
+   "source": "mixkit sfx 1527",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1533": {
+   "file": "mk_1533.wav",
+   "role": "transition",
+   "title": "Futuristic slide",
+   "tags": [
+    "slide"
+   ],
+   "seconds": 0.6,
+   "source": "mixkit sfx 1533",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1525": {
+   "file": "mk_1525.wav",
+   "role": "transition",
+   "title": "Bathroom door slide",
+   "tags": [
+    "slide"
+   ],
+   "seconds": 0.43,
+   "source": "mixkit sfx 1525",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1526": {
+   "file": "mk_1526.wav",
+   "role": "transition",
+   "title": "Shower door slide",
+   "tags": [
+    "slide"
+   ],
+   "seconds": 0.74,
+   "source": "mixkit sfx 1526",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2619": {
+   "file": "mk_2619.wav",
+   "role": "transition",
+   "title": "UI zoom out",
+   "tags": [
+    "zoom",
+    "robot",
+    "technology"
+   ],
+   "seconds": 1.04,
+   "source": "mixkit sfx 2619",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_772": {
+   "file": "mk_772.wav",
+   "role": "transition",
+   "title": "Quick zoom impact",
+   "tags": [
+    "impact",
+    "zoom"
+   ],
+   "seconds": 1.14,
+   "source": "mixkit sfx 772",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2625": {
+   "file": "mk_2625.wav",
+   "role": "transition",
+   "title": "Fast air zoom",
+   "tags": [
+    "zoom",
+    "wind"
+   ],
+   "seconds": 1.21,
+   "source": "mixkit sfx 2625",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2621": {
+   "file": "mk_2621.wav",
+   "role": "transition",
+   "title": "Ui zoom in, long sound",
+   "tags": [
+    "zoom",
+    "technology"
+   ],
+   "seconds": 1.03,
+   "source": "mixkit sfx 2621",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_890": {
+   "file": "mk_890.wav",
+   "role": "transition",
+   "title": "Sci Fi interface zoom",
+   "tags": [
+    "sci-fi",
+    "zoom"
+   ],
+   "seconds": 1.57,
+   "source": "mixkit sfx 890",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2620": {
+   "file": "mk_2620.wav",
+   "role": "transition",
+   "title": "User interface zoom out",
+   "tags": [
+    "zoom",
+    "robot",
+    "high tech"
+   ],
+   "seconds": 1.04,
+   "source": "mixkit sfx 2620",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2626": {
+   "file": "mk_2626.wav",
+   "role": "transition",
+   "title": "Futuristic zoom move",
+   "tags": [
+    "zoom",
+    "technology"
+   ],
+   "seconds": 2.15,
+   "source": "mixkit sfx 2626",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2618": {
+   "file": "mk_2618.wav",
+   "role": "transition",
+   "title": "User interface zoom in",
+   "tags": [
+    "zoom",
+    "robot",
+    "technology"
+   ],
+   "seconds": 0.56,
+   "source": "mixkit sfx 2618",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2622": {
+   "file": "mk_2622.wav",
+   "role": "transition",
+   "title": "In and out zoom sound",
+   "tags": [
+    "zoom",
+    "technology"
+   ],
+   "seconds": 1.21,
+   "source": "mixkit sfx 2622",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_913": {
+   "file": "mk_913.wav",
+   "role": "transition",
+   "title": "Interface sci fi expand or zoom",
+   "tags": [
+    "zoom",
+    "sci-fi"
+   ],
+   "seconds": 0.44,
+   "source": "mixkit sfx 913",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2617": {
+   "file": "mk_2617.wav",
+   "role": "transition",
+   "title": "UI zoom in",
+   "tags": [
+    "zoom",
+    "robot",
+    "technology"
+   ],
+   "seconds": 0.56,
+   "source": "mixkit sfx 2617",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2624": {
+   "file": "mk_2624.wav",
+   "role": "transition",
+   "title": "Funny magic zoom",
+   "tags": [
+    "zoom",
+    "technology"
+   ],
+   "seconds": 1.33,
+   "source": "mixkit sfx 2624",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2616": {
+   "file": "mk_2616.wav",
+   "role": "transition",
+   "title": "Interface classic zoom",
+   "tags": [
+    "zoom",
+    "technology"
+   ],
+   "seconds": 0.55,
+   "source": "mixkit sfx 2616",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2595": {
+   "file": "mk_2595.wav",
+   "role": "transition",
+   "title": "Small electric glitch",
+   "tags": [
+    "electricity",
+    "glitch",
+    "robot"
+   ],
+   "seconds": 1.02,
+   "source": "mixkit sfx 2595",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1457": {
+   "file": "mk_1457.wav",
+   "role": "transition",
+   "title": "Glitch static",
+   "tags": [
+    "static",
+    "glitch"
+   ],
+   "seconds": 1.4,
+   "source": "mixkit sfx 1457",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1033": {
+   "file": "mk_1033.wav",
+   "role": "transition",
+   "title": "Glitch roar",
+   "tags": [
+    "roar",
+    "glitch"
+   ],
+   "seconds": 1.08,
+   "source": "mixkit sfx 1033",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2594": {
+   "file": "mk_2594.wav",
+   "role": "transition",
+   "title": "Electric buzz glitch",
+   "tags": [
+    "electricity",
+    "technology",
+    "glitch"
+   ],
+   "seconds": 1.01,
+   "source": "mixkit sfx 2594",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1093": {
+   "file": "mk_1093.wav",
+   "role": "transition",
+   "title": "Glitch sci fi rewind transition",
+   "tags": [
+    "glitch",
+    "rewind",
+    "cinematic",
+    "sci-fi"
+   ],
+   "seconds": 3.65,
+   "source": "mixkit sfx 1093",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1039": {
+   "file": "mk_1039.wav",
+   "role": "transition",
+   "title": "Futuristic glitch robot",
+   "tags": [
+    "high tech",
+    "glitch"
+   ],
+   "seconds": 4.36,
+   "source": "mixkit sfx 1039",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2950": {
+   "file": "mk_2950.wav",
+   "role": "transition",
+   "title": "Intro text glitch",
+   "tags": [
+    "break",
+    "sci-fi",
+    "glitch"
+   ],
+   "seconds": 4.57,
+   "source": "mixkit sfx 2950",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1022": {
+   "file": "mk_1022.wav",
+   "role": "transition",
+   "title": "Cinematic sci fi glitch",
+   "tags": [
+    "cinematic",
+    "glitch"
+   ],
+   "seconds": 0.73,
+   "source": "mixkit sfx 1022",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1044": {
+   "file": "mk_1044.wav",
+   "role": "transition",
+   "title": "Glitch crackles",
+   "tags": [
+    "glitch"
+   ],
+   "seconds": 1.95,
+   "source": "mixkit sfx 1044",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2951": {
+   "file": "mk_2951.wav",
+   "role": "transition",
+   "title": "Digital glitch break",
+   "tags": [
+    "break",
+    "glitch"
+   ],
+   "seconds": 1.07,
+   "source": "mixkit sfx 2951",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2946": {
+   "file": "mk_2946.wav",
+   "role": "transition",
+   "title": "Virtual quick glitch",
+   "tags": [
+    "break",
+    "glitch"
+   ],
+   "seconds": 1.76,
+   "source": "mixkit sfx 2946",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1030": {
+   "file": "mk_1030.wav",
+   "role": "transition",
+   "title": "Small sci fi glitch",
+   "tags": [
+    "high tech",
+    "glitch",
+    "sci-fi"
+   ],
+   "seconds": 1.51,
+   "source": "mixkit sfx 1030",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1021": {
+   "file": "mk_1021.wav",
+   "role": "transition",
+   "title": "Cinematic glitch trailer",
+   "tags": [
+    "glitch"
+   ],
+   "seconds": 0.45,
+   "source": "mixkit sfx 1021",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2685": {
+   "file": "mk_2685.wav",
+   "role": "transition",
+   "title": "Tech weird glitch",
+   "tags": [
+    "time machine",
+    "engine",
+    "glitch"
+   ],
+   "seconds": 3.71,
+   "source": "mixkit sfx 2685",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2548": {
+   "file": "mk_2548.wav",
+   "role": "transition",
+   "title": "Digital signal interference",
+   "tags": [
+    "radio",
+    "static",
+    "glitch"
+   ],
+   "seconds": 2.79,
+   "source": "mixkit sfx 2548",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1035": {
+   "file": "mk_1035.wav",
+   "role": "transition",
+   "title": "Robotic glitch",
+   "tags": [
+    "glitch",
+    "robot"
+   ],
+   "seconds": 1.4,
+   "source": "mixkit sfx 1035",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2940": {
+   "file": "mk_2940.wav",
+   "role": "transition",
+   "title": "Electronic glitch sound",
+   "tags": [
+    "break",
+    "glitch",
+    "radio"
+   ],
+   "seconds": 2.75,
+   "source": "mixkit sfx 2940",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2939": {
+   "file": "mk_2939.wav",
+   "role": "transition",
+   "title": "Futuristic device fail",
+   "tags": [
+    "break",
+    "glitch",
+    "electricity",
+    "wrong"
+   ],
+   "seconds": 3.61,
+   "source": "mixkit sfx 2939",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2952": {
+   "file": "mk_2952.wav",
+   "role": "transition",
+   "title": "Break tech impact",
+   "tags": [
+    "break",
+    "sci-fi",
+    "glitch"
+   ],
+   "seconds": 1.43,
+   "source": "mixkit sfx 2952",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_332": {
+   "file": "mk_332.wav",
+   "role": "transition",
+   "title": "Robotic insect buzz",
+   "tags": [
+    "glitch",
+    "insect",
+    "sci-fi",
+    "electricity",
+    "robot"
+   ],
+   "seconds": 3.58,
+   "source": "mixkit sfx 332",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1032": {
+   "file": "mk_1032.wav",
+   "role": "transition",
+   "title": "Sci fi glitch confirmation",
+   "tags": [
+    "glitch"
+   ],
+   "seconds": 2.29,
+   "source": "mixkit sfx 1032",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1034": {
+   "file": "mk_1034.wav",
+   "role": "transition",
+   "title": "Glitch communication sound",
+   "tags": [
+    "glitch",
+    "waves"
+   ],
+   "seconds": 1.54,
+   "source": "mixkit sfx 1034",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2688": {
+   "file": "mk_2688.wav",
+   "role": "transition",
+   "title": "Console glitch",
+   "tags": [
+    "time machine",
+    "engine",
+    "glitch"
+   ],
+   "seconds": 4.28,
+   "source": "mixkit sfx 2688",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1031": {
+   "file": "mk_1031.wav",
+   "role": "transition",
+   "title": "Glitch short",
+   "tags": [
+    "glitch"
+   ],
+   "seconds": 0.73,
+   "source": "mixkit sfx 1031",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1026": {
+   "file": "mk_1026.wav",
+   "role": "transition",
+   "title": "Glitch radio vocals",
+   "tags": [
+    "glitch",
+    "radio"
+   ],
+   "seconds": 3.13,
+   "source": "mixkit sfx 1026",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2948": {
+   "file": "mk_2948.wav",
+   "role": "transition",
+   "title": "Tech device glitch",
+   "tags": [
+    "break",
+    "sci-fi",
+    "glitch"
+   ],
+   "seconds": 1.32,
+   "source": "mixkit sfx 2948",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2686": {
+   "file": "mk_2686.wav",
+   "role": "transition",
+   "title": "Mechanical glitch",
+   "tags": [
+    "time machine",
+    "engine",
+    "glitch"
+   ],
+   "seconds": 2.69,
+   "source": "mixkit sfx 2686",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_690": {
+   "file": "mk_690.wav",
+   "role": "transition",
+   "title": "Sci Fi alien music",
+   "tags": [
+    "music",
+    "glitch"
+   ],
+   "seconds": 5.68,
+   "source": "mixkit sfx 690",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2941": {
+   "file": "mk_2941.wav",
+   "role": "transition",
+   "title": "Futuristic electronic engine fail",
+   "tags": [
+    "break",
+    "glitch",
+    "falling",
+    "wrong"
+   ],
+   "seconds": 6.76,
+   "source": "mixkit sfx 2941",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2554": {
+   "file": "mk_2554.wav",
+   "role": "transition",
+   "title": "Radio frequency signal swell",
+   "tags": [
+    "radio",
+    "glitch",
+    "swell"
+   ],
+   "seconds": 6.81,
+   "source": "mixkit sfx 2554",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2550": {
+   "file": "mk_2550.wav",
+   "role": "transition",
+   "title": "Alien radio frequency connection",
+   "tags": [
+    "radio",
+    "static",
+    "glitch"
+   ],
+   "seconds": 2.07,
+   "source": "mixkit sfx 2550",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2553": {
+   "file": "mk_2553.wav",
+   "role": "transition",
+   "title": "Weird radio frequency connection",
+   "tags": [
+    "radio",
+    "static",
+    "glitch"
+   ],
+   "seconds": 3.53,
+   "source": "mixkit sfx 2553",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1037": {
+   "file": "mk_1037.wav",
+   "role": "transition",
+   "title": "Glitch eco",
+   "tags": [
+    "glitch"
+   ],
+   "seconds": 4.79,
+   "source": "mixkit sfx 1037",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2684": {
+   "file": "mk_2684.wav",
+   "role": "transition",
+   "title": "Futuristic machine glitch",
+   "tags": [
+    "time machine",
+    "engine",
+    "glitch"
+   ],
+   "seconds": 4.27,
+   "source": "mixkit sfx 2684",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2949": {
+   "file": "mk_2949.wav",
+   "role": "transition",
+   "title": "Futuristic tech engine glitch",
+   "tags": [
+    "break",
+    "sci-fi",
+    "glitch",
+    "engine"
+   ],
+   "seconds": 1.98,
+   "source": "mixkit sfx 2949",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_279": {
+   "file": "mk_279.wav",
+   "role": "transition",
+   "title": "Glitchy Sci Fi robotic voices",
+   "tags": [
+    "voices",
+    "sci-fi",
+    "glitch",
+    "white noise"
+   ],
+   "seconds": 4.02,
+   "source": "mixkit sfx 279",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1029": {
+   "file": "mk_1029.wav",
+   "role": "transition",
+   "title": "Fiction alien communication",
+   "tags": [
+    "glitch"
+   ],
+   "seconds": 4.23,
+   "source": "mixkit sfx 1029",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1036": {
+   "file": "mk_1036.wav",
+   "role": "transition",
+   "title": "Game glitch",
+   "tags": [
+    "glitch"
+   ],
+   "seconds": 2.49,
+   "source": "mixkit sfx 1036",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2957": {
+   "file": "mk_2957.wav",
+   "role": "transition",
+   "title": "Radar system glitch",
+   "tags": [
+    "break",
+    "glitch"
+   ],
+   "seconds": 3.33,
+   "source": "mixkit sfx 2957",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1025": {
+   "file": "mk_1025.wav",
+   "role": "transition",
+   "title": "Monster glitch talk",
+   "tags": [
+    "glitch",
+    "monster"
+   ],
+   "seconds": 2.8,
+   "source": "mixkit sfx 1025",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1023": {
+   "file": "mk_1023.wav",
+   "role": "transition",
+   "title": "Monster glitch voice",
+   "tags": [
+    "voices",
+    "glitch"
+   ],
+   "seconds": 3.1,
+   "source": "mixkit sfx 1023",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1028": {
+   "file": "mk_1028.wav",
+   "role": "transition",
+   "title": "Alien glitch communication",
+   "tags": [
+    "glitch"
+   ],
+   "seconds": 6.45,
+   "source": "mixkit sfx 1028",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1674": {
+   "file": "mk_1674.wav",
+   "role": "transition",
+   "title": "Revolver chamber spin",
+   "tags": [
+    "spin",
+    "gun"
+   ],
+   "seconds": 0.17,
+   "source": "mixkit sfx 1674",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2641": {
+   "file": "mk_2641.wav",
+   "role": "transition",
+   "title": "Lighter wheel spin",
+   "tags": [
+    "spin",
+    "tools"
+   ],
+   "seconds": 0.25,
+   "source": "mixkit sfx 2641",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1614": {
+   "file": "mk_1614.wav",
+   "role": "transition",
+   "title": "Fast bike wheel spin",
+   "tags": [
+    "spin",
+    "bike"
+   ],
+   "seconds": 3.15,
+   "source": "mixkit sfx 1614",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2526": {
+   "file": "mk_2526.wav",
+   "role": "transition",
+   "title": "High tech robot movement",
+   "tags": [
+    "high tech",
+    "technology",
+    "spin"
+   ],
+   "seconds": 3.25,
+   "source": "mixkit sfx 2526",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2667": {
+   "file": "mk_2667.wav",
+   "role": "transition",
+   "title": "Intense swell phasing spinning",
+   "tags": [
+    "swell",
+    "cinematic",
+    "spin"
+   ],
+   "seconds": 6.23,
+   "source": "mixkit sfx 2667",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2649": {
+   "file": "mk_2649.wav",
+   "role": "transition",
+   "title": "Spinning magic sound",
+   "tags": [
+    "spin",
+    "magic"
+   ],
+   "seconds": 1.43,
+   "source": "mixkit sfx 2649",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2645": {
+   "file": "mk_2645.wav",
+   "role": "transition",
+   "title": "Game spinning machine",
+   "tags": [
+    "spin",
+    "engine"
+   ],
+   "seconds": 4.91,
+   "source": "mixkit sfx 2645",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2665": {
+   "file": "mk_2665.wav",
+   "role": "transition",
+   "title": "Engine phasing wobble swell",
+   "tags": [
+    "swell",
+    "spin",
+    "engine",
+    "hum"
+   ],
+   "seconds": 6.28,
+   "source": "mixkit sfx 2665",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2690": {
+   "file": "mk_2690.wav",
+   "role": "transition",
+   "title": "Sci fi space machine sounds",
+   "tags": [
+    "time machine",
+    "engine",
+    "spin"
+   ],
+   "seconds": 3.03,
+   "source": "mixkit sfx 2690",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2640": {
+   "file": "mk_2640.wav",
+   "role": "transition",
+   "title": "Spinning fire fx",
+   "tags": [
+    "spin",
+    "hum"
+   ],
+   "seconds": 2.41,
+   "source": "mixkit sfx 2640",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2644": {
+   "file": "mk_2644.wav",
+   "role": "transition",
+   "title": "Game engine hum",
+   "tags": [
+    "spin",
+    "hum",
+    "engine"
+   ],
+   "seconds": 6.07,
+   "source": "mixkit sfx 2644",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2643": {
+   "file": "mk_2643.wav",
+   "role": "transition",
+   "title": "Spinning rattle noise",
+   "tags": [
+    "spin",
+    "hum",
+    "engine"
+   ],
+   "seconds": 3.69,
+   "source": "mixkit sfx 2643",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1088": {
+   "file": "mk_1088.wav",
+   "role": "transition",
+   "title": "Tape rewind cinematic transition",
+   "tags": [
+    "rewind",
+    "movie",
+    "cinematic"
+   ],
+   "seconds": 4.25,
+   "source": "mixkit sfx 1088",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1092": {
+   "file": "mk_1092.wav",
+   "role": "transition",
+   "title": "Fast tape rewind cinematic transition",
+   "tags": [
+    "tape machine",
+    "rewind",
+    "tv"
+   ],
+   "seconds": 1.8,
+   "source": "mixkit sfx 1092",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1095": {
+   "file": "mk_1095.wav",
+   "role": "transition",
+   "title": "Reel to reel rewind",
+   "tags": [
+    "movie projector",
+    "rewind",
+    "tape machine",
+    "tv"
+   ],
+   "seconds": 3.8,
+   "source": "mixkit sfx 1095",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1096": {
+   "file": "mk_1096.wav",
+   "role": "transition",
+   "title": "Reel to reel fast forward",
+   "tags": [
+    "rewind",
+    "movie projector"
+   ],
+   "seconds": 4.33,
+   "source": "mixkit sfx 1096",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1089": {
+   "file": "mk_1089.wav",
+   "role": "transition",
+   "title": "Slow tape rewind cinematic transition",
+   "tags": [
+    "cinematic",
+    "rewind"
+   ],
+   "seconds": 5.4,
+   "source": "mixkit sfx 1089",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1091": {
+   "file": "mk_1091.wav",
+   "role": "transition",
+   "title": "Tape rewind transition",
+   "tags": [
+    "rewind"
+   ],
+   "seconds": 5.21,
+   "source": "mixkit sfx 1091",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1086": {
+   "file": "mk_1086.wav",
+   "role": "transition",
+   "title": "Magic rewind transition",
+   "tags": [
+    "rewind"
+   ],
+   "seconds": 5.24,
+   "source": "mixkit sfx 1086",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2198": {
+   "file": "mk_2198.wav",
+   "role": "impact",
+   "title": "Strong punches to the body",
+   "tags": [
+    "impact",
+    "hit",
+    "punch",
+    "fight"
+   ],
+   "seconds": 2.92,
+   "source": "mixkit sfx 2198",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2782": {
+   "file": "mk_2782.wav",
+   "role": "impact",
+   "title": "Epic impact afar explosion",
+   "tags": [
+    "battle",
+    "gun",
+    "impact",
+    "explosion",
+    "war",
+    "warfare"
+   ],
+   "seconds": 4.53,
+   "source": "mixkit sfx 2782",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_498": {
+   "file": "mk_498.wav",
+   "role": "impact",
+   "title": "Deep heartbeat impact",
+   "tags": [
+    "impact",
+    "hit",
+    "cinematic"
+   ],
+   "seconds": 3.47,
+   "source": "mixkit sfx 498",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2182": {
+   "file": "mk_2182.wav",
+   "role": "impact",
+   "title": "Wood hard hit",
+   "tags": [
+    "hit",
+    "wood",
+    "impact",
+    "thud"
+   ],
+   "seconds": 0.39,
+   "source": "mixkit sfx 2182",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1687": {
+   "file": "mk_1687.wav",
+   "role": "impact",
+   "title": "Dramatic metal explosion impact",
+   "tags": [
+    "explosion",
+    "impact",
+    "cinematic",
+    "crash"
+   ],
+   "seconds": 4.0,
+   "source": "mixkit sfx 1687",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2902": {
+   "file": "mk_2902.wav",
+   "role": "impact",
+   "title": "Movie impact intro presentation",
+   "tags": [
+    "movie",
+    "intro",
+    "impact",
+    "boom"
+   ],
+   "seconds": 5.97,
+   "source": "mixkit sfx 2902",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2150": {
+   "file": "mk_2150.wav",
+   "role": "impact",
+   "title": "Impact of a blow",
+   "tags": [
+    "blow",
+    "impact",
+    "hit"
+   ],
+   "seconds": 0.48,
+   "source": "mixkit sfx 2150",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2152": {
+   "file": "mk_2152.wav",
+   "role": "impact",
+   "title": "Quick knife slice cutting",
+   "tags": [
+    "fight",
+    "hit",
+    "impact"
+   ],
+   "seconds": 1.54,
+   "source": "mixkit sfx 2152",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_833": {
+   "file": "mk_833.wav",
+   "role": "impact",
+   "title": "Metal hammer hit",
+   "tags": [
+    "impact",
+    "hit",
+    "tools",
+    "metal",
+    "construction"
+   ],
+   "seconds": 0.67,
+   "source": "mixkit sfx 833",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2180": {
+   "file": "mk_2180.wav",
+   "role": "impact",
+   "title": "Exciting fast hit",
+   "tags": [
+    "hit",
+    "impact",
+    "water"
+   ],
+   "seconds": 1.87,
+   "source": "mixkit sfx 2180",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2779": {
+   "file": "mk_2779.wav",
+   "role": "impact",
+   "title": "8-bit explosion gun",
+   "tags": [
+    "battle",
+    "gun",
+    "impact",
+    "war",
+    "warfare",
+    "boom"
+   ],
+   "seconds": 2.03,
+   "source": "mixkit sfx 2779",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2780": {
+   "file": "mk_2780.wav",
+   "role": "impact",
+   "title": "Drums of war call",
+   "tags": [
+    "battle",
+    "gun",
+    "impact",
+    "explosion",
+    "war",
+    "warfare"
+   ],
+   "seconds": 4.06,
+   "source": "mixkit sfx 2780",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2600": {
+   "file": "mk_2600.wav",
+   "role": "impact",
+   "title": "Electricity static power up",
+   "tags": [
+    "electricity",
+    "impact"
+   ],
+   "seconds": 2.76,
+   "source": "mixkit sfx 2600",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_774": {
+   "file": "mk_774.wav",
+   "role": "impact",
+   "title": "Space impact",
+   "tags": [
+    "impact"
+   ],
+   "seconds": 4.89,
+   "source": "mixkit sfx 774",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2183": {
+   "file": "mk_2183.wav",
+   "role": "impact",
+   "title": "Glass hitting a metal",
+   "tags": [
+    "hit",
+    "metal",
+    "impact",
+    "glass"
+   ],
+   "seconds": 0.55,
+   "source": "mixkit sfx 2183",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2199": {
+   "file": "mk_2199.wav",
+   "role": "impact",
+   "title": "Body cutting impact",
+   "tags": [
+    "hit",
+    "impact",
+    "fight",
+    "battle"
+   ],
+   "seconds": 4.34,
+   "source": "mixkit sfx 2199",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2599": {
+   "file": "mk_2599.wav",
+   "role": "impact",
+   "title": "Heavy electric shockwave impact",
+   "tags": [
+    "electricity",
+    "impact",
+    "explosion"
+   ],
+   "seconds": 5.73,
+   "source": "mixkit sfx 2599",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1686": {
+   "file": "mk_1686.wav",
+   "role": "impact",
+   "title": "Underground explosion impact echo",
+   "tags": [
+    "explosion",
+    "impact",
+    "cinematic",
+    "crash"
+   ],
+   "seconds": 4.1,
+   "source": "mixkit sfx 1686",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_782": {
+   "file": "mk_782.wav",
+   "role": "impact",
+   "title": "Laser gun impact destruction",
+   "tags": [
+    "sparkle",
+    "impact",
+    "explosion",
+    "laser"
+   ],
+   "seconds": 5.81,
+   "source": "mixkit sfx 782",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2784": {
+   "file": "mk_2784.wav",
+   "role": "impact",
+   "title": "Drums of war",
+   "tags": [
+    "war",
+    "impact",
+    "gun",
+    "warfare"
+   ],
+   "seconds": 4.2,
+   "source": "mixkit sfx 2784",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2778": {
+   "file": "mk_2778.wav",
+   "role": "impact",
+   "title": "8-bit game shots",
+   "tags": [
+    "battle",
+    "gun",
+    "impact",
+    "war",
+    "warfare",
+    "boom",
+    "shot"
+   ],
+   "seconds": 2.11,
+   "source": "mixkit sfx 2778",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2800": {
+   "file": "mk_2800.wav",
+   "role": "impact",
+   "title": "Bomb explosion in battle",
+   "tags": [
+    "bomb",
+    "war",
+    "explosion",
+    "impact",
+    "warfare"
+   ],
+   "seconds": 3.25,
+   "source": "mixkit sfx 2800",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2775": {
+   "file": "mk_2775.wav",
+   "role": "impact",
+   "title": "Hitting metal armor",
+   "tags": [
+    "battle",
+    "impact",
+    "hit",
+    "fight"
+   ],
+   "seconds": 1.08,
+   "source": "mixkit sfx 2775",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2070": {
+   "file": "mk_2070.wav",
+   "role": "impact",
+   "title": "Light impact on the ground",
+   "tags": [
+    "hit",
+    "impact",
+    "ball"
+   ],
+   "seconds": 1.01,
+   "source": "mixkit sfx 2070",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2774": {
+   "file": "mk_2774.wav",
+   "role": "impact",
+   "title": "Axe hits to a plate",
+   "tags": [
+    "battle",
+    "explosion",
+    "impact",
+    "metal"
+   ],
+   "seconds": 1.71,
+   "source": "mixkit sfx 2774",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2186": {
+   "file": "mk_2186.wav",
+   "role": "impact",
+   "title": "Blast hit with echo",
+   "tags": [
+    "hit",
+    "impact",
+    "explosion"
+   ],
+   "seconds": 3.03,
+   "source": "mixkit sfx 2186",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2168": {
+   "file": "mk_2168.wav",
+   "role": "impact",
+   "title": "Sword cutting and killing",
+   "tags": [
+    "sword",
+    "hit",
+    "impact"
+   ],
+   "seconds": 2.62,
+   "source": "mixkit sfx 2168",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2177": {
+   "file": "mk_2177.wav",
+   "role": "impact",
+   "title": "Metal grill quick hit",
+   "tags": [
+    "hit",
+    "impact",
+    "metal"
+   ],
+   "seconds": 1.25,
+   "source": "mixkit sfx 2177",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_778": {
+   "file": "mk_778.wav",
+   "role": "impact",
+   "title": "Tunnel impact echo",
+   "tags": [
+    "impact"
+   ],
+   "seconds": 3.35,
+   "source": "mixkit sfx 778",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1692": {
+   "file": "mk_1692.wav",
+   "role": "impact",
+   "title": "Pixel chiptune explosion",
+   "tags": [
+    "explosion",
+    "impact",
+    "boom"
+   ],
+   "seconds": 2.21,
+   "source": "mixkit sfx 1692",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2187": {
+   "file": "mk_2187.wav",
+   "role": "impact",
+   "title": "Low explosion indoors",
+   "tags": [
+    "explosion",
+    "impact",
+    "game"
+   ],
+   "seconds": 5.09,
+   "source": "mixkit sfx 2187",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2159": {
+   "file": "mk_2159.wav",
+   "role": "impact",
+   "title": "Meat hit sound",
+   "tags": [
+    "fight",
+    "impact",
+    "hit"
+   ],
+   "seconds": 0.91,
+   "source": "mixkit sfx 2159",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_779": {
+   "file": "mk_779.wav",
+   "role": "impact",
+   "title": "Dungeon impact",
+   "tags": [
+    "impact"
+   ],
+   "seconds": 3.48,
+   "source": "mixkit sfx 779",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_785": {
+   "file": "mk_785.wav",
+   "role": "impact",
+   "title": "Cinematic metal cans impacts echo",
+   "tags": [
+    "impact",
+    "metal"
+   ],
+   "seconds": 4.27,
+   "source": "mixkit sfx 785",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_777": {
+   "file": "mk_777.wav",
+   "role": "impact",
+   "title": "Slow motion impact and explosion",
+   "tags": [
+    "impact"
+   ],
+   "seconds": 2.86,
+   "source": "mixkit sfx 777",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_775": {
+   "file": "mk_775.wav",
+   "role": "impact",
+   "title": "Metal sword impact",
+   "tags": [
+    "impact"
+   ],
+   "seconds": 1.79,
+   "source": "mixkit sfx 775",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_759": {
+   "file": "mk_759.wav",
+   "role": "impact",
+   "title": "Glass break with hammer thud",
+   "tags": [
+    "thud",
+    "falling",
+    "break",
+    "glass"
+   ],
+   "seconds": 1.43,
+   "source": "mixkit sfx 759",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2498": {
+   "file": "mk_2498.wav",
+   "role": "impact",
+   "title": "Body impact falling into the sand",
+   "tags": [
+    "desert",
+    "hit",
+    "thud"
+   ],
+   "seconds": 0.97,
+   "source": "mixkit sfx 2498",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3179": {
+   "file": "mk_3179.wav",
+   "role": "impact",
+   "title": "Water drop splashes in cave",
+   "tags": [
+    "misc",
+    "water",
+    "thud",
+    "splash"
+   ],
+   "seconds": 1.96,
+   "source": "mixkit sfx 3179",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_835": {
+   "file": "mk_835.wav",
+   "role": "impact",
+   "title": "Metal tool drop",
+   "tags": [
+    "thud",
+    "metal",
+    "tools"
+   ],
+   "seconds": 1.15,
+   "source": "mixkit sfx 835",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_756": {
+   "file": "mk_756.wav",
+   "role": "impact",
+   "title": "Falling hit on gravel",
+   "tags": [
+    "hit",
+    "thud",
+    "falling"
+   ],
+   "seconds": 1.18,
+   "source": "mixkit sfx 756",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2839": {
+   "file": "mk_2839.wav",
+   "role": "impact",
+   "title": "Dropping keys in the floor",
+   "tags": [
+    "key",
+    "metal",
+    "thud",
+    "drop"
+   ],
+   "seconds": 1.12,
+   "source": "mixkit sfx 2839",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_820": {
+   "file": "mk_820.wav",
+   "role": "impact",
+   "title": "Metal tool falling",
+   "tags": [
+    "falling",
+    "thud",
+    "metal"
+   ],
+   "seconds": 0.65,
+   "source": "mixkit sfx 820",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3049": {
+   "file": "mk_3049.wav",
+   "role": "impact",
+   "title": "Quest game heavy stomp v",
+   "tags": [
+    "stomp",
+    "thud"
+   ],
+   "seconds": 0.73,
+   "source": "mixkit sfx 3049",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3088": {
+   "file": "mk_3088.wav",
+   "role": "impact",
+   "title": "Tv remote control or plastic toy drop",
+   "tags": [
+    "tv",
+    "toy",
+    "thud"
+   ],
+   "seconds": 1.05,
+   "source": "mixkit sfx 3088",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_751": {
+   "file": "mk_751.wav",
+   "role": "impact",
+   "title": "Falling on tree leaves",
+   "tags": [
+    "falling",
+    "thud"
+   ],
+   "seconds": 0.94,
+   "source": "mixkit sfx 751",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3187": {
+   "file": "mk_3187.wav",
+   "role": "impact",
+   "title": "Bag of coins touch",
+   "tags": [
+    "misc",
+    "coin",
+    "game",
+    "thud"
+   ],
+   "seconds": 1.38,
+   "source": "mixkit sfx 3187",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_757": {
+   "file": "mk_757.wav",
+   "role": "impact",
+   "title": "Falling hit",
+   "tags": [
+    "space shooter",
+    "thud"
+   ],
+   "seconds": 1.51,
+   "source": "mixkit sfx 757",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_753": {
+   "file": "mk_753.wav",
+   "role": "impact",
+   "title": "Heavy fall into mud",
+   "tags": [
+    "thud",
+    "falling"
+   ],
+   "seconds": 0.59,
+   "source": "mixkit sfx 753",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_748": {
+   "file": "mk_748.wav",
+   "role": "impact",
+   "title": "Falling on foil",
+   "tags": [
+    "falling",
+    "thud"
+   ],
+   "seconds": 0.57,
+   "source": "mixkit sfx 748",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_754": {
+   "file": "mk_754.wav",
+   "role": "impact",
+   "title": "Fall on foam splash",
+   "tags": [
+    "thud",
+    "water",
+    "splash"
+   ],
+   "seconds": 0.68,
+   "source": "mixkit sfx 754",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_752": {
+   "file": "mk_752.wav",
+   "role": "impact",
+   "title": "Falling on metal roof",
+   "tags": [
+    "thud",
+    "metal"
+   ],
+   "seconds": 0.46,
+   "source": "mixkit sfx 752",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3133": {
+   "file": "mk_3133.wav",
+   "role": "impact",
+   "title": "Short rising thud",
+   "tags": [
+    "misc",
+    "thud"
+   ],
+   "seconds": 6.71,
+   "source": "mixkit sfx 3133",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2920": {
+   "file": "mk_2920.wav",
+   "role": "impact",
+   "title": "Fish dropped hit",
+   "tags": [
+    "boat",
+    "wood",
+    "thud"
+   ],
+   "seconds": 1.32,
+   "source": "mixkit sfx 2920",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_888": {
+   "file": "mk_888.wav",
+   "role": "impact",
+   "title": "Small metallic sci fi drop",
+   "tags": [
+    "falling",
+    "thud",
+    "sci-fi",
+    "electricity"
+   ],
+   "seconds": 5.38,
+   "source": "mixkit sfx 888",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3166": {
+   "file": "mk_3166.wav",
+   "role": "impact",
+   "title": "Metal tools browsing",
+   "tags": [
+    "misc",
+    "metal",
+    "tools",
+    "thud"
+   ],
+   "seconds": 1.01,
+   "source": "mixkit sfx 3166",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_749": {
+   "file": "mk_749.wav",
+   "role": "impact",
+   "title": "Sci Fi fall",
+   "tags": [
+    "thud",
+    "falling"
+   ],
+   "seconds": 0.67,
+   "source": "mixkit sfx 749",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3047": {
+   "file": "mk_3047.wav",
+   "role": "impact",
+   "title": "Mech stomp squish",
+   "tags": [
+    "stomp"
+   ],
+   "seconds": 1.59,
+   "source": "mixkit sfx 3047",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3059": {
+   "file": "mk_3059.wav",
+   "role": "impact",
+   "title": "Game hatchling stomp",
+   "tags": [
+    "stomp"
+   ],
+   "seconds": 1.5,
+   "source": "mixkit sfx 3059",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_790": {
+   "file": "mk_790.wav",
+   "role": "impact",
+   "title": "Cinematic trailer riser",
+   "tags": [
+    "cinematic",
+    "movie"
+   ],
+   "seconds": 1.9,
+   "source": "mixkit sfx 790",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_677": {
+   "file": "mk_677.wav",
+   "role": "impact",
+   "title": "Cinematic glass hit suspense",
+   "tags": [
+    "hit",
+    "suspense music",
+    "cinematic"
+   ],
+   "seconds": 4.71,
+   "source": "mixkit sfx 677",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1144": {
+   "file": "mk_1144.wav",
+   "role": "impact",
+   "title": "Short space stutter intro riser",
+   "tags": [
+    "movie",
+    "cinematic",
+    "intro"
+   ],
+   "seconds": 6.37,
+   "source": "mixkit sfx 1144",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_497": {
+   "file": "mk_497.wav",
+   "role": "impact",
+   "title": "Cinematic heartbeat ambience",
+   "tags": [
+    "heartbeat",
+    "cinematic",
+    "movie"
+   ],
+   "seconds": 5.75,
+   "source": "mixkit sfx 497",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_546": {
+   "file": "mk_546.wav",
+   "role": "impact",
+   "title": "Cinematic mystery trailer drum hit",
+   "tags": [
+    "cinematic",
+    "drum",
+    "movie"
+   ],
+   "seconds": 5.62,
+   "source": "mixkit sfx 546",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_563": {
+   "file": "mk_563.wav",
+   "role": "impact",
+   "title": "Drum deep impact",
+   "tags": [
+    "cinematic",
+    "movie",
+    "drum"
+   ],
+   "seconds": 5.35,
+   "source": "mixkit sfx 563",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2353": {
+   "file": "mk_2353.wav",
+   "role": "impact",
+   "title": "Magic glitter shot",
+   "tags": [
+    "magic",
+    "cinematic",
+    "game",
+    "shot"
+   ],
+   "seconds": 4.12,
+   "source": "mixkit sfx 2353",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2296": {
+   "file": "mk_2296.wav",
+   "role": "impact",
+   "title": "Synthetic power bass transition",
+   "tags": [
+    "bass",
+    "hum",
+    "cinematic"
+   ],
+   "seconds": 6.57,
+   "source": "mixkit sfx 2296",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_549": {
+   "file": "mk_549.wav",
+   "role": "impact",
+   "title": "Deep cinematic subtle drum impact",
+   "tags": [
+    "cinematic",
+    "movie",
+    "drum"
+   ],
+   "seconds": 4.4,
+   "source": "mixkit sfx 549",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1286": {
+   "file": "mk_1286.wav",
+   "role": "impact",
+   "title": "Cinematic impact thunder",
+   "tags": [
+    "thunder",
+    "cinematic"
+   ],
+   "seconds": 4.9,
+   "source": "mixkit sfx 1286",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2592": {
+   "file": "mk_2592.wav",
+   "role": "impact",
+   "title": "Static electricity presentation",
+   "tags": [
+    "electricity",
+    "intro",
+    "static",
+    "cinematic",
+    "movie"
+   ],
+   "seconds": 3.94,
+   "source": "mixkit sfx 2592",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_792": {
+   "file": "mk_792.wav",
+   "role": "impact",
+   "title": "Cinematic fast raiser",
+   "tags": [
+    "cinematic"
+   ],
+   "seconds": 0.87,
+   "source": "mixkit sfx 792",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2301": {
+   "file": "mk_2301.wav",
+   "role": "impact",
+   "title": "Quick bass switch",
+   "tags": [
+    "bass",
+    "robot",
+    "cinematic"
+   ],
+   "seconds": 1.87,
+   "source": "mixkit sfx 2301",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2786": {
+   "file": "mk_2786.wav",
+   "role": "impact",
+   "title": "Far away war explosions",
+   "tags": [
+    "war",
+    "orchestra",
+    "intro",
+    "cinematic",
+    "warfare"
+   ],
+   "seconds": 5.01,
+   "source": "mixkit sfx 2786",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3201": {
+   "file": "mk_3201.wav",
+   "role": "riser",
+   "title": "Electric charge hum",
+   "tags": [
+    "misc",
+    "swell",
+    "electricity"
+   ],
+   "seconds": 2.35,
+   "source": "mixkit sfx 3201",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2669": {
+   "file": "mk_2669.wav",
+   "role": "riser",
+   "title": "Short sci-fi swell",
+   "tags": [
+    "swell",
+    "technology",
+    "metal"
+   ],
+   "seconds": 2.79,
+   "source": "mixkit sfx 2669",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_709": {
+   "file": "mk_709.wav",
+   "role": "riser",
+   "title": "Swell vinyl record scratch",
+   "tags": [
+    "swell",
+    "dj record scratch"
+   ],
+   "seconds": 1.25,
+   "source": "mixkit sfx 709",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1133": {
+   "file": "mk_1133.wav",
+   "role": "click",
+   "title": "Camera shutter click",
+   "tags": [
+    "click",
+    "camera"
+   ],
+   "seconds": 0.21,
+   "source": "mixkit sfx 1133",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_275": {
+   "file": "mk_275.wav",
+   "role": "click",
+   "title": "Fast double click on mouse",
+   "tags": [
+    "click",
+    "mouse"
+   ],
+   "seconds": 0.35,
+   "source": "mixkit sfx 275",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1109": {
+   "file": "mk_1109.wav",
+   "role": "click",
+   "title": "Select click",
+   "tags": [
+    "interface",
+    "click"
+   ],
+   "seconds": 1.1,
+   "source": "mixkit sfx 1109",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3124": {
+   "file": "mk_3124.wav",
+   "role": "click",
+   "title": "Modern technology select",
+   "tags": [
+    "technology",
+    "click"
+   ],
+   "seconds": 0.5,
+   "source": "mixkit sfx 3124",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2568": {
+   "file": "mk_2568.wav",
+   "role": "click",
+   "title": "Cool interface click tone",
+   "tags": [
+    "interface",
+    "click"
+   ],
+   "seconds": 0.2,
+   "source": "mixkit sfx 2568",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1113": {
+   "file": "mk_1113.wav",
+   "role": "click",
+   "title": "Mouse click close",
+   "tags": [
+    "click"
+   ],
+   "seconds": 1.37,
+   "source": "mixkit sfx 1113",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1660": {
+   "file": "mk_1660.wav",
+   "role": "click",
+   "title": "Handgun click",
+   "tags": [
+    "click",
+    "gun"
+   ],
+   "seconds": 0.74,
+   "source": "mixkit sfx 1660",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1117": {
+   "file": "mk_1117.wav",
+   "role": "click",
+   "title": "Classic click",
+   "tags": [
+    "click"
+   ],
+   "seconds": 0.19,
+   "source": "mixkit sfx 1117",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2585": {
+   "file": "mk_2585.wav",
+   "role": "click",
+   "title": "On or off light switch tap",
+   "tags": [
+    "light",
+    "tap",
+    "click"
+   ],
+   "seconds": 1.11,
+   "source": "mixkit sfx 2585",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1137": {
+   "file": "mk_1137.wav",
+   "role": "click",
+   "title": "Old camera shutter click",
+   "tags": [
+    "click"
+   ],
+   "seconds": 0.44,
+   "source": "mixkit sfx 1137",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1125": {
+   "file": "mk_1125.wav",
+   "role": "click",
+   "title": "Typewriter soft click",
+   "tags": [
+    "click",
+    "typewriter"
+   ],
+   "seconds": 0.11,
+   "source": "mixkit sfx 1125",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2577": {
+   "file": "mk_2577.wav",
+   "role": "click",
+   "title": "Interface device click",
+   "tags": [
+    "interface",
+    "click",
+    "technology"
+   ],
+   "seconds": 1.05,
+   "source": "mixkit sfx 2577",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1124": {
+   "file": "mk_1124.wav",
+   "role": "click",
+   "title": "Plastic bubble click",
+   "tags": [
+    "click"
+   ],
+   "seconds": 0.1,
+   "source": "mixkit sfx 1124",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2997": {
+   "file": "mk_2997.wav",
+   "role": "click",
+   "title": "Clear mouse clicks",
+   "tags": [
+    "office",
+    "click"
+   ],
+   "seconds": 1.05,
+   "source": "mixkit sfx 2997",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1119": {
+   "file": "mk_1119.wav",
+   "role": "click",
+   "title": "Hard typewriter click",
+   "tags": [
+    "click",
+    "typewriter"
+   ],
+   "seconds": 0.21,
+   "source": "mixkit sfx 1119",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1120": {
+   "file": "mk_1120.wav",
+   "role": "click",
+   "title": "Modern click box check",
+   "tags": [
+    "click"
+   ],
+   "seconds": 0.14,
+   "source": "mixkit sfx 1120",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2569": {
+   "file": "mk_2569.wav",
+   "role": "click",
+   "title": "Negative tone interface tap",
+   "tags": [
+    "interface",
+    "click",
+    "drum"
+   ],
+   "seconds": 1.25,
+   "source": "mixkit sfx 2569",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2858": {
+   "file": "mk_2858.wav",
+   "role": "click",
+   "title": "Gear metallic lock sound",
+   "tags": [
+    "lock",
+    "metal",
+    "click"
+   ],
+   "seconds": 1.07,
+   "source": "mixkit sfx 2858",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2578": {
+   "file": "mk_2578.wav",
+   "role": "click",
+   "title": "Opening software interface",
+   "tags": [
+    "interface",
+    "click"
+   ],
+   "seconds": 1.11,
+   "source": "mixkit sfx 2578",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_901": {
+   "file": "mk_901.wav",
+   "role": "click",
+   "title": "Sci fi interface robot click",
+   "tags": [
+    "click",
+    "sci-fi",
+    "high tech"
+   ],
+   "seconds": 0.72,
+   "source": "mixkit sfx 901",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2857": {
+   "file": "mk_2857.wav",
+   "role": "click",
+   "title": "Gear fast lock tap",
+   "tags": [
+    "lock",
+    "metal",
+    "click"
+   ],
+   "seconds": 1.13,
+   "source": "mixkit sfx 2857",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2995": {
+   "file": "mk_2995.wav",
+   "role": "click",
+   "title": "Stapling paper",
+   "tags": [
+    "office",
+    "click"
+   ],
+   "seconds": 1.15,
+   "source": "mixkit sfx 2995",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1111": {
+   "file": "mk_1111.wav",
+   "role": "click",
+   "title": "Mouse hard clicking",
+   "tags": [
+    "click"
+   ],
+   "seconds": 1.2,
+   "source": "mixkit sfx 1111",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1114": {
+   "file": "mk_1114.wav",
+   "role": "click",
+   "title": "Game click",
+   "tags": [
+    "click"
+   ],
+   "seconds": 1.11,
+   "source": "mixkit sfx 1114",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1131": {
+   "file": "mk_1131.wav",
+   "role": "click",
+   "title": "Mechanical tool click",
+   "tags": [
+    "tools",
+    "click"
+   ],
+   "seconds": 4.04,
+   "source": "mixkit sfx 1131",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1140": {
+   "file": "mk_1140.wav",
+   "role": "click",
+   "title": "Tech click",
+   "tags": [
+    "click",
+    "high tech"
+   ],
+   "seconds": 0.41,
+   "source": "mixkit sfx 1140",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1116": {
+   "file": "mk_1116.wav",
+   "role": "click",
+   "title": "Single classic click",
+   "tags": [
+    "click"
+   ],
+   "seconds": 0.12,
+   "source": "mixkit sfx 1116",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1126": {
+   "file": "mk_1126.wav",
+   "role": "click",
+   "title": "Interface click",
+   "tags": [
+    "click"
+   ],
+   "seconds": 0.28,
+   "source": "mixkit sfx 1126",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1118": {
+   "file": "mk_1118.wav",
+   "role": "click",
+   "title": "Hard click",
+   "tags": [
+    "click"
+   ],
+   "seconds": 0.45,
+   "source": "mixkit sfx 1118",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1112": {
+   "file": "mk_1112.wav",
+   "role": "click",
+   "title": "Positive interface click",
+   "tags": [
+    "click"
+   ],
+   "seconds": 1.77,
+   "source": "mixkit sfx 1112",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1129": {
+   "file": "mk_1129.wav",
+   "role": "click",
+   "title": "Click melodic tone",
+   "tags": [
+    "click"
+   ],
+   "seconds": 0.36,
+   "source": "mixkit sfx 1129",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2582": {
+   "file": "mk_2582.wav",
+   "role": "click",
+   "title": "Quick switch click",
+   "tags": [
+    "light",
+    "hit",
+    "click"
+   ],
+   "seconds": 1.04,
+   "source": "mixkit sfx 2582",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1924": {
+   "file": "mk_1924.wav",
+   "role": "click",
+   "title": "Gate latch click",
+   "tags": [
+    "click",
+    "garden"
+   ],
+   "seconds": 0.15,
+   "source": "mixkit sfx 1924",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1115": {
+   "file": "mk_1115.wav",
+   "role": "click",
+   "title": "Pen click and release",
+   "tags": [
+    "click"
+   ],
+   "seconds": 1.28,
+   "source": "mixkit sfx 1115",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1130": {
+   "file": "mk_1130.wav",
+   "role": "click",
+   "title": "Slide click",
+   "tags": [
+    "click"
+   ],
+   "seconds": 0.18,
+   "source": "mixkit sfx 1130",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1128": {
+   "file": "mk_1128.wav",
+   "role": "click",
+   "title": "Pebbles click",
+   "tags": [
+    "click"
+   ],
+   "seconds": 0.16,
+   "source": "mixkit sfx 1128",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1139": {
+   "file": "mk_1139.wav",
+   "role": "click",
+   "title": "Quest game interface click",
+   "tags": [
+    "click"
+   ],
+   "seconds": 0.21,
+   "source": "mixkit sfx 1139",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1127": {
+   "file": "mk_1127.wav",
+   "role": "click",
+   "title": "Interface click hover",
+   "tags": [
+    "click"
+   ],
+   "seconds": 0.22,
+   "source": "mixkit sfx 1127",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1132": {
+   "file": "mk_1132.wav",
+   "role": "click",
+   "title": "Sci fi robot metal click",
+   "tags": [
+    "click",
+    "robot",
+    "high tech"
+   ],
+   "seconds": 1.69,
+   "source": "mixkit sfx 1132",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_3209": {
+   "file": "mk_3209.wav",
+   "role": "click",
+   "title": "Collect material",
+   "tags": [
+    "misc",
+    "high tech",
+    "click"
+   ],
+   "seconds": 1.86,
+   "source": "mixkit sfx 3209",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1122": {
+   "file": "mk_1122.wav",
+   "role": "click",
+   "title": "Metal click",
+   "tags": [
+    "click",
+    "metal"
+   ],
+   "seconds": 0.89,
+   "source": "mixkit sfx 1122",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1123": {
+   "file": "mk_1123.wav",
+   "role": "click",
+   "title": "Gun click",
+   "tags": [
+    "click"
+   ],
+   "seconds": 0.77,
+   "source": "mixkit sfx 1123",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1121": {
+   "file": "mk_1121.wav",
+   "role": "click",
+   "title": "Gun metal click",
+   "tags": [
+    "click"
+   ],
+   "seconds": 0.86,
+   "source": "mixkit sfx 1121",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1107": {
+   "file": "mk_1107.wav",
+   "role": "click",
+   "title": "Page forward single chime",
+   "tags": [
+    "chimes",
+    "interface",
+    "page",
+    "paper"
+   ],
+   "seconds": 1.61,
+   "source": "mixkit sfx 1107",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1108": {
+   "file": "mk_1108.wav",
+   "role": "click",
+   "title": "Page back chime",
+   "tags": [
+    "chimes",
+    "page",
+    "paper",
+    "interface"
+   ],
+   "seconds": 2.13,
+   "source": "mixkit sfx 1108",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2570": {
+   "file": "mk_2570.wav",
+   "role": "click",
+   "title": "Game user interface tone",
+   "tags": [
+    "interface",
+    "high tech"
+   ],
+   "seconds": 1.46,
+   "source": "mixkit sfx 2570",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1106": {
+   "file": "mk_1106.wav",
+   "role": "click",
+   "title": "Page turn chime",
+   "tags": [
+    "page",
+    "interface"
+   ],
+   "seconds": 1.69,
+   "source": "mixkit sfx 1106",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1430": {
+   "file": "mk_1430.wav",
+   "role": "click",
+   "title": "Camera shutter hard click",
+   "tags": [
+    "camera"
+   ],
+   "seconds": 0.52,
+   "source": "mixkit sfx 1430",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1438": {
+   "file": "mk_1438.wav",
+   "role": "click",
+   "title": "Vintage camera shutter",
+   "tags": [
+    "camera",
+    "movie projector"
+   ],
+   "seconds": 1.13,
+   "source": "mixkit sfx 1438",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1432": {
+   "file": "mk_1432.wav",
+   "role": "click",
+   "title": "Camera digital shutter",
+   "tags": [
+    "camera"
+   ],
+   "seconds": 1.51,
+   "source": "mixkit sfx 1432",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1440": {
+   "file": "mk_1440.wav",
+   "role": "click",
+   "title": "Classic camera click",
+   "tags": [
+    "camera"
+   ],
+   "seconds": 0.89,
+   "source": "mixkit sfx 1440",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1431": {
+   "file": "mk_1431.wav",
+   "role": "click",
+   "title": "Camera long shutter",
+   "tags": [
+    "camera"
+   ],
+   "seconds": 0.71,
+   "source": "mixkit sfx 1431",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1433": {
+   "file": "mk_1433.wav",
+   "role": "click",
+   "title": "Camera lens shutter",
+   "tags": [
+    "camera"
+   ],
+   "seconds": 1.41,
+   "source": "mixkit sfx 1433",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1434": {
+   "file": "mk_1434.wav",
+   "role": "click",
+   "title": "Nikon camera shutter",
+   "tags": [
+    "camera"
+   ],
+   "seconds": 0.4,
+   "source": "mixkit sfx 1434",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1436": {
+   "file": "mk_1436.wav",
+   "role": "click",
+   "title": "Camera auto focus",
+   "tags": [
+    "camera"
+   ],
+   "seconds": 4.0,
+   "source": "mixkit sfx 1436",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1439": {
+   "file": "mk_1439.wav",
+   "role": "click",
+   "title": "Camera closing lens",
+   "tags": [
+    "camera"
+   ],
+   "seconds": 1.22,
+   "source": "mixkit sfx 1439",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2533": {
+   "file": "mk_2533.wav",
+   "role": "click",
+   "title": "Single key type",
+   "tags": [
+    "keyboard",
+    "type",
+    "office"
+   ],
+   "seconds": 1.21,
+   "source": "mixkit sfx 2533",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2542": {
+   "file": "mk_2542.wav",
+   "role": "click",
+   "title": "Hard single key press in a laptop",
+   "tags": [
+    "keyboard",
+    "type",
+    "office"
+   ],
+   "seconds": 0.2,
+   "source": "mixkit sfx 2542",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2541": {
+   "file": "mk_2541.wav",
+   "role": "click",
+   "title": "Single key press in a laptop",
+   "tags": [
+    "keyboard",
+    "type",
+    "office"
+   ],
+   "seconds": 0.15,
+   "source": "mixkit sfx 2541",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2534": {
+   "file": "mk_2534.wav",
+   "role": "click",
+   "title": "Keyboard  key presses",
+   "tags": [
+    "keyboard",
+    "type",
+    "office"
+   ],
+   "seconds": 1.61,
+   "source": "mixkit sfx 2534",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2843": {
+   "file": "mk_2843.wav",
+   "role": "click",
+   "title": "Pressing a security code",
+   "tags": [
+    "key",
+    "keyboard"
+   ],
+   "seconds": 1.81,
+   "source": "mixkit sfx 2843",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2845": {
+   "file": "mk_2845.wav",
+   "role": "click",
+   "title": "Pressing a secret code",
+   "tags": [
+    "key",
+    "keyboard"
+   ],
+   "seconds": 1.01,
+   "source": "mixkit sfx 2845",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_2844": {
+   "file": "mk_2844.wav",
+   "role": "click",
+   "title": "Security code",
+   "tags": [
+    "key",
+    "keyboard"
+   ],
+   "seconds": 1.66,
+   "source": "mixkit sfx 2844",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1397": {
+   "file": "mk_1397.wav",
+   "role": "click",
+   "title": "Electronic typing",
+   "tags": [
+    "type"
+   ],
+   "seconds": 2.13,
+   "source": "mixkit sfx 1397",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1376": {
+   "file": "mk_1376.wav",
+   "role": "click",
+   "title": "Typing on an electronic device",
+   "tags": [
+    "typewriter"
+   ],
+   "seconds": 3.71,
+   "source": "mixkit sfx 1376",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1365": {
+   "file": "mk_1365.wav",
+   "role": "click",
+   "title": "Mechanical typewriter hit",
+   "tags": [
+    "typewriter",
+    "hit"
+   ],
+   "seconds": 0.57,
+   "source": "mixkit sfx 1365",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1382": {
+   "file": "mk_1382.wav",
+   "role": "click",
+   "title": "Mechanical typewriter single hit",
+   "tags": [
+    "typewriter"
+   ],
+   "seconds": 0.59,
+   "source": "mixkit sfx 1382",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1379": {
+   "file": "mk_1379.wav",
+   "role": "click",
+   "title": "Data short input on typewriter",
+   "tags": [
+    "typewriter"
+   ],
+   "seconds": 2.22,
+   "source": "mixkit sfx 1379",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1366": {
+   "file": "mk_1366.wav",
+   "role": "click",
+   "title": "Typewriter soft hit",
+   "tags": [
+    "typewriter"
+   ],
+   "seconds": 0.43,
+   "source": "mixkit sfx 1366",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1381": {
+   "file": "mk_1381.wav",
+   "role": "click",
+   "title": "Typewriter classic return",
+   "tags": [
+    "typewriter"
+   ],
+   "seconds": 1.58,
+   "source": "mixkit sfx 1381",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1384": {
+   "file": "mk_1384.wav",
+   "role": "click",
+   "title": "Typewriter single mechanical hit",
+   "tags": [
+    "hit",
+    "typewriter"
+   ],
+   "seconds": 0.54,
+   "source": "mixkit sfx 1384",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1363": {
+   "file": "mk_1363.wav",
+   "role": "click",
+   "title": "Digital typewriter",
+   "tags": [
+    "typewriter"
+   ],
+   "seconds": 1.85,
+   "source": "mixkit sfx 1363",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1362": {
+   "file": "mk_1362.wav",
+   "role": "click",
+   "title": "Typewriter hit",
+   "tags": [
+    "hit",
+    "typewriter"
+   ],
+   "seconds": 1.19,
+   "source": "mixkit sfx 1362",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1371": {
+   "file": "mk_1371.wav",
+   "role": "click",
+   "title": "Vintage dot printing",
+   "tags": [
+    "typewriter"
+   ],
+   "seconds": 0.84,
+   "source": "mixkit sfx 1371",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1378": {
+   "file": "mk_1378.wav",
+   "role": "click",
+   "title": "Data input on typewriter",
+   "tags": [
+    "typewriter"
+   ],
+   "seconds": 5.46,
+   "source": "mixkit sfx 1378",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1369": {
+   "file": "mk_1369.wav",
+   "role": "click",
+   "title": "Vintage typewriter hit",
+   "tags": [
+    "typewriter"
+   ],
+   "seconds": 0.63,
+   "source": "mixkit sfx 1369",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1380": {
+   "file": "mk_1380.wav",
+   "role": "click",
+   "title": "Single hit on typewriter",
+   "tags": [
+    "typewriter"
+   ],
+   "seconds": 0.61,
+   "source": "mixkit sfx 1380",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1367": {
+   "file": "mk_1367.wav",
+   "role": "click",
+   "title": "Typewriter hard hit",
+   "tags": [
+    "typewriter"
+   ],
+   "seconds": 0.67,
+   "source": "mixkit sfx 1367",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1364": {
+   "file": "mk_1364.wav",
+   "role": "click",
+   "title": "Hard typewriter hit",
+   "tags": [
+    "typewriter",
+    "hit"
+   ],
+   "seconds": 1.08,
+   "source": "mixkit sfx 1364",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1385": {
+   "file": "mk_1385.wav",
+   "role": "click",
+   "title": "Sci fi futuristic typewriter",
+   "tags": [
+    "typewriter"
+   ],
+   "seconds": 1.34,
+   "source": "mixkit sfx 1385",
+   "licence": "Mixkit Sound Effects Free License"
+  },
+  "mk_1370": {
+   "file": "mk_1370.wav",
+   "role": "click",
+   "title": "Sci Fi typewriter sound",
+   "tags": [
+    "typewriter"
+   ],
+   "seconds": 2.39,
+   "source": "mixkit sfx 1370",
+   "licence": "Mixkit Sound Effects Free License"
+  }
+ }
+}

@@ -29,6 +29,7 @@ VOICE_KINDS = ("voice", "voice_song")
 LINE_WORDS = 5
 MIN_LINE_WORDS = 3
 CARD_EVERY = 10.0
+EMOJI_EVERY = 3
 # Titles and chapters in a style that contrasts with the captions' (still one family).
 TITLE_PAIR = {"punch": "editorial", "editorial": "editorial", "neon": "neon", "highlight": "punch", "bubble": "script",
               "script": "bubble", "comic": "comic", "minimal": "editorial"}
@@ -420,6 +421,9 @@ def captions_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
         if tag:
             used_tags.add(tag.id)
             icon_query = tag.data.get("icon_query", "")
+        elif key and len(out) % EMOJI_EVERY == 1:
+            # Every few lines the big word may earn an animated emoji; the icon check drops it unless one truly fits.
+            icon_query = key.text
         payoff = d.drop_word in ids
         out.append(CaptionLine(id=f"c{len(out)}", start=round(start, 3), end=round(end, 3), lead=lead, keyword=key.text if key else "",
                                words=spoken, icon_query=icon_query, payoff=payoff))

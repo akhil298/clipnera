@@ -28,7 +28,7 @@ BOXES = {
     "chart": (90, 900, 640, 750), "statement": (86, 908, 1152, 384), "progress": (150, 780, 80, 130), "wash": (0, W, H, 0),
     "flicker": (60, 960, 300, 780), "photocard": (140, 800, 860, 420),
 }
-FIXED = {"statement", "progress", "wash", "flicker"}
+FIXED = {"statement", "progress", "wash", "flicker", "accent"}
 _detector = None
 
 

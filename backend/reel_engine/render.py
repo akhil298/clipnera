@@ -234,6 +234,13 @@ LINES_PER_LOOK = 2
 ACCENT_STYLES = {"punch", "highlight", "bubble"}
 
 
+def _lottie(asset) -> dict | None:
+    """The animation of a Lottie asset (a motion graphic or an animated emoji), inlined for the renderer."""
+    if asset and asset.path.endswith(".json") and Path(asset.path).is_file():
+        return json.loads(Path(asset.path).read_text(encoding="utf-8"))
+    return None
+
+
 def caption_look(plan: EditPlan, n: int) -> str:
     """The opening and payoff lines punch; the rest rotate through the looks, starting where this reel's style says."""
     c = plan.captions[n]
@@ -254,13 +261,14 @@ def graphic_specs(plan: EditPlan) -> list[dict]:
             data["svg"] = Path(g.asset.path).read_text(encoding="utf-8")
         style = title_style if g.kind in TITLE_KINDS or g.by == "finish" or g.why == "hook word" else text_style
         specs.append({"id": g.id, "kind": g.kind, "theme": "clean", "style": style, "place": g.place, "dur": round(g.end - g.start, 3),
-                      "box": g.box, "data": data, "steps": g.data.get("steps", []) if timed else [], "asset": _uri(g.asset.path) if g.asset else "",
+                      "box": g.box, "data": data, "steps": g.data.get("steps", []) if timed else [], "lottie": _lottie(g.asset),
+                      "asset": _uri(g.asset.path) if g.asset and not g.asset.path.endswith(".json") else "",
                       "accent": (plan.brief.accent if plan.brief else "#ffb020") if style in ACCENT_STYLES else ""})
     for n, c in enumerate(plan.captions):
         words = [{**w, "text": w["text"].strip(",.")} for w in c.words] or [{"text": c.lead, "key": False, "at": 0}, {"text": c.keyword, "key": True, "at": 0.1}]
         specs.append({"id": c.id, "kind": "caption", "theme": "clean", "style": text_style, "place": "beside", "dur": round(c.end - c.start, 3),
                       "box": c.box, "data": {"words": words, "alt": n % 3 == 2, "look": caption_look(plan, n)}, "steps": [],
-                      "asset": _uri(c.icon.path) if c.icon else "",
+                      "lottie": _lottie(c.icon), "asset": _uri(c.icon.path) if c.icon and not c.icon.path.endswith(".json") else "",
                       "accent": (plan.brief.accent if plan.brief else "#ffb020") if text_style in ACCENT_STYLES else ""})
     return specs
 
