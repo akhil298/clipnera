@@ -436,38 +436,33 @@ export function ReelsView({ reelId, editId }: { reelId?: string; editId?: string
   if (reelId) return <ReelBoard reelId={reelId} onBack={() => router.push('/dashboard/reels')} />;
   const showFootage = footage && mode === 'footage';
   const shown = reels?.filter((r) => matches(r, filter)) ?? [];
-  const tabs = footage && (
-    <div role="group" aria-label="How to make the reel" className="inline-flex flex-wrap gap-1 p-1 rounded-[18px] bg-neutral-950">
-      {([['footage', Film, 'Edit my footage'], ['images', ImageIcon, 'Photos + script']] as const).map(([m, Icon, name]) => (
-        <button key={m} type="button" onClick={() => setMode(m)} aria-pressed={mode === m}
-          className={`h-11 px-5 rounded-[14px] text-sm font-semibold flex items-center gap-2 transition-colors ${mode === m ? 'bg-neutral-800 text-white' : 'text-neutral-400 hover:text-white'}`}>
-          <Icon className={`w-4 h-4 ${mode === m ? 'text-amber-400' : ''}`} /> {name}
-        </button>
-      ))}
-    </div>
-  );
   return (
     <div className="space-y-12 pb-8">
-      <section className="space-y-3.5 max-w-3xl pt-2">
-        <span className="inline-flex items-center gap-2 h-8 px-3 rounded-full bg-amber-500/10 text-[13px] font-semibold text-amber-300">
-          <Sparkles className="w-3.5 h-3.5" /> AI reel editor
-        </span>
-        <h1 className="font-syne text-4xl sm:text-5xl font-extrabold leading-[1.04] tracking-tight text-white">
-          {footage ? <>Drop your raw footage.<br />Say how you want it.<br /><span className="text-amber-400">Get a finished reel.</span></>
+      <section className="space-y-3 max-w-3xl mx-auto pt-4 text-center">
+        <h1 className="font-syne text-4xl sm:text-5xl font-extrabold leading-[1.06] tracking-tight text-white">
+          {showFootage ? <>Drop your footage.<br /><span className="text-amber-400">Get a finished reel.</span></>
             : <>Photos and a script.<br /><span className="text-amber-400">A narrated reel.</span></>}
         </h1>
-        <p className="text-lg text-neutral-400 max-w-2xl">
-          {footage
-            ? 'The AI watches every clip, keeps your best takes, plans the cut and shows it to you before anything is rendered. Planning and previews are free.'
+        <p className="text-lg text-neutral-400">
+          {showFootage
+            ? 'Videos, photos, audio or a YouTube link: add any of them. We pick the best moment and edit it for you.'
             : 'Turn your photos and a short script into a narrated reel with scenes you can change.'}
         </p>
       </section>
 
-      {showFootage ? <FootageReelForm tabs={tabs} onCreated={(id) => router.push(`/dashboard/reels/footage/${id}`)} /> : (
+      {showFootage ? <FootageReelForm onCreated={(id) => router.push(`/dashboard/reels/footage/${id}`)} /> : (
         <section aria-label="New reel" className={COMPOSER}>
-          {tabs}
           <NewReelForm onCreated={(id) => router.push(`/dashboard/reels/${id}`)} />
         </section>
+      )}
+      {footage && (
+        <p className="text-center text-sm text-neutral-400 -mt-6">
+          {showFootage ? 'Have a script instead of footage? ' : 'Have footage instead? '}
+          <button type="button" onClick={() => setMode(showFootage ? 'images' : 'footage')}
+            className="font-semibold text-amber-300 hover:text-amber-200 underline-offset-4 hover:underline">
+            {showFootage ? <><Type className="inline w-4 h-4 -mt-0.5" /> Make a narrated reel from photos</> : <><Film className="inline w-4 h-4 -mt-0.5" /> Edit my footage</>}
+          </button>
+        </p>
       )}
 
       <section className="space-y-4" aria-labelledby="your-reels">

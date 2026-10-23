@@ -56,6 +56,7 @@ export const analysisSteps = (withReference: boolean): string[] => [
 
 /** The reel engine's stages (backend reel_engine/pipeline.py STAGES), as the progress list shows them. */
 export const PREMIUM_STEPS: [string, string][] = [
+  ['fetch', 'Fetching your YouTube video'],
   ['ingest', 'Reading your files'],
   ['listen', 'Listening for voice, music and words'],
   ['watch', 'Watching every shot'],

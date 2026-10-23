@@ -13,6 +13,7 @@ import json
 import tempfile
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from broll.renditions import run
 from clients.ai import get_text_client
@@ -43,7 +44,10 @@ from usage.context import llm_scope
 
 log = get_logger(__name__)
 
+FETCH_JOB = "edits.fetch_link"
 ANALYZE_JOB = "edits.analyze"
+# Spoken language left to Whisper to detect (and recorded in the analysis).
+AUTO_LANGUAGE = "auto"
 PLAN_JOB = "edits.plan"
 RENDER_JOB = "edits.render"
 ANALYSIS_VERSION = 1
@@ -87,6 +91,40 @@ def _friendly(exc: Exception, prefix: str) -> str:
     return f"{prefix}: {detail}"[:500]
 
 
+@handler(FETCH_JOB)
+async def fetch_link(job: Job) -> None:
+    """Fetch the reel's YouTube video into its sources, then start the edit as if it had been uploaded."""
+    from clip.youtube_service import YouTubeService
+    from core.exceptions import CustomException
+    from edit_engine.service import EditService
+
+    edit_id, user_id = job.payload["edit_id"], job.payload["user_id"]
+    settings, s3 = get_settings(), S3()
+    try:
+        edit = await load(edit_id)
+        async with AsyncSessionLocal() as session:
+            limits = limits_for(await SubscriptionService.for_session(session).get_entitlements(user_id))
+        with tempfile.TemporaryDirectory() as workdir:
+            path, title = await YouTubeService().download_for_edit(edit.source_url, Path(workdir), limits.max_raw_seconds)
+            info = await perception.probe_media(str(path))
+            key = f"edits/{user_id}/{edit_id}/{uuid4().hex}.mp4"
+            await asyncio.to_thread(s3.upload_file, settings.S3_BUCKET_NAME, key, str(path), "video/mp4")
+        async with AsyncSessionLocal() as session:
+            edit = await session.get(EditProject, edit_id)
+            sources = json.loads(edit.sources)
+            sources.append({"key": key, "kind": "video", "name": title[:255], "content_type": "video/mp4",
+                            "duration": round(info.duration, 3), "uploaded": True, "link": edit.source_url})
+            edit.sources = json.dumps(sources, ensure_ascii=False)
+            await session.commit()
+            await EditService(session).begin(edit, user_id)
+    except CustomException as exc:
+        await save(edit_id, status=EditStatus.FAILED, error=exc.message)
+    except Exception as exc:
+        log.warning("YouTube fetch failed: edit=%s (%s)", edit_id, exc)
+        reason = str(exc) if isinstance(exc, ValueError) else "check that it's public and try again"
+        await save(edit_id, status=EditStatus.FAILED, error=f"We couldn't fetch your YouTube video ({reason}).")
+
+
 async def _download(sources: list[dict[str, Any]], work: Path, s3: S3) -> dict[int, Path]:
     bucket = get_settings().S3_BUCKET_NAME
     slots = asyncio.Semaphore(PARALLEL_DOWNLOADS)
@@ -109,7 +147,8 @@ async def _analyze(edit_id: str, user_id: str) -> None:
     is_pro = entitlements.pro_ai_provider
     limits = limits_for(entitlements)
     sources = [s for s in json.loads(edit.sources) if s.get("uploaded")]
-    language = spoken_language(edit.language)
+    language = None if edit.language == AUTO_LANGUAGE else spoken_language(edit.language)
+    detected: str | None = None
     prompt = (edit.script or "")[:500] or None
 
     with tempfile.TemporaryDirectory() as workdir:
@@ -157,12 +196,13 @@ async def _analyze(edit_id: str, user_id: str) -> None:
             if info.has_audio:
                 audio = work / f"audio{index}.wav"
                 await perception.extract_audio(path, str(audio))
-                segments, _ = await GroqWhisperTranscriber().transcribe(str(audio), info.duration, language, prompt=prompt)
+                segments, heard = await GroqWhisperTranscriber().transcribe(str(audio), info.duration, language, prompt=prompt)
+                detected = detected or heard
                 words += [{**w, "src": index} for w in clean_word_timings([w for s in segments for w in s.get("words") or []])]
 
         await progress(edit_id, "Listening to what you said")
         words = await _romanized(words, is_pro)
-        voice_words = await _voice_words(edit, sources, local, voice_index, bool(words), language, work, s3)
+        voice_words = await _voice_words(edit, sources, local, voice_index, bool(words), language or detected or "en", work, s3)
 
         await progress(edit_id, "Finding the best takes")
         captioned = vision.shots_to_caption(shots, is_pro)
@@ -178,7 +218,7 @@ async def _analyze(edit_id: str, user_id: str) -> None:
     groups = story.retake_groups(sentences)
     speech_seconds = sum(s["end"] - s["start"] for s in sentences)
     analysis: dict[str, Any] = {
-        "version": ANALYSIS_VERSION, "language": edit.language, "words": words, "sentences": sentences,
+        "version": ANALYSIS_VERSION, "language": language or detected or "en", "words": words, "sentences": sentences,
         "retakes": groups, "dropped": sorted(story.dropped_takes(sentences, groups)), "shots": shots, "photos": photos,
         "content_type": story.classify(speech_seconds, raw_seconds, shots, voice_words is not None),
         "reference": style, "reference_error": style_error,

@@ -142,7 +142,8 @@ async def _user(maker) -> str:
 async def _run(world) -> None:
     while world["queued"]:
         job = world["queued"].pop(0)
-        await {jobs.ANALYZE_JOB: jobs.analyze_edit, jobs.PLAN_JOB: jobs.plan_edit, jobs.RENDER_JOB: jobs.render_edit}[job.kind](job)
+        await {jobs.FETCH_JOB: jobs.fetch_link, jobs.ANALYZE_JOB: jobs.analyze_edit, jobs.PLAN_JOB: jobs.plan_edit,
+               jobs.RENDER_JOB: jobs.render_edit}[job.kind](job)
 
 
 async def _uploaded_edit(world, script: str | None, reference: bool = False, **request) -> tuple[str, str]:
@@ -382,3 +383,76 @@ async def test_reference_and_model_rules(world, monkeypatch):
         with pytest.raises(CustomException):
             await service.init_sources(user_id, edit.id, EditSourcesInitRequest(files=[
                 EditSourceFile(filename="long.mp4", **{**style, "duration_s": 600})]))
+
+
+def _youtube(monkeypatch, world, duration: float = 9.0) -> None:
+    """YouTube faked: the link reads as a public video of ``duration`` seconds and downloads as the test clip."""
+    from clip.youtube_service import PrefetchResult, YouTubeService
+
+    video, _ = _media(world["tmp"])
+
+    async def fetch_metadata(self, url):
+        return PrefetchResult(title="How I train for a marathon", duration=duration, uploader="Runner", thumbnail=None, qualities=[])
+
+    async def download_for_edit(self, url, folder, max_seconds):
+        shutil.copy(video, folder / "source.mp4")
+        return folder / "source.mp4", "How I train for a marathon"
+
+    monkeypatch.setattr(YouTubeService, "fetch_metadata", fetch_metadata)
+    monkeypatch.setattr(YouTubeService, "download_for_edit", download_for_edit)
+
+
+async def test_a_youtube_link_alone_is_fetched_and_edited(world, monkeypatch):
+    _youtube(monkeypatch, world)
+    maker = world["db"]
+    user_id = await _user(maker)
+    link = "https://www.youtube.com/watch?v=abcdefghijk"
+    async with maker() as session:
+        service = EditService(session, FakeS3())
+        created = await service.create(user_id, EditCreateRequest(source_url=link, language="auto"))
+        assert created.title == "How I train for a marathon" and created.source_url == link
+        started = await service.analyze(user_id, created.id)
+        assert started.status == "analyzing" and [j.kind for j in world["queued"]] == [jobs.FETCH_JOB]
+    await _run(world)
+    async with maker() as session:
+        edit = await EditService(session, FakeS3()).get(user_id, created.id)
+    assert edit.status == "planned", edit.error
+    assert [s.kind for s in edit.sources] == ["video"] and edit.sources[0].name == "How I train for a marathon"
+    assert 8 < edit.raw_seconds < 10
+
+
+async def test_youtube_links_are_checked_when_the_reel_is_made(world, monkeypatch):
+    _youtube(monkeypatch, world, duration=3600)
+    maker = world["db"]
+    user_id = await _user(maker)
+    async with maker() as session:
+        service = EditService(session, FakeS3())
+        with pytest.raises(CustomException) as long:
+            await service.create(user_id, EditCreateRequest(source_url="https://youtu.be/abcdefghijk"))
+        assert long.value.code == "FOOTAGE_LIMIT" and "60 minutes" in long.value.message
+        with pytest.raises(CustomException):
+            await service.create(user_id, EditCreateRequest(source_url="https://vimeo.com/123"))
+        empty = await service.create(user_id, EditCreateRequest())
+        with pytest.raises(CustomException) as nothing:
+            await service.analyze(user_id, empty.id)
+        assert "YouTube link" in nothing.value.message
+
+
+async def test_a_youtube_fetch_that_fails_leaves_a_clear_reason(world, monkeypatch):
+    _youtube(monkeypatch, world)
+    from clip.youtube_service import YouTubeService
+
+    async def broken(self, url, folder, max_seconds):
+        raise RuntimeError("HTTP Error 403")
+
+    monkeypatch.setattr(YouTubeService, "download_for_edit", broken)
+    maker = world["db"]
+    user_id = await _user(maker)
+    async with maker() as session:
+        service = EditService(session, FakeS3())
+        created = await service.create(user_id, EditCreateRequest(source_url="https://youtu.be/abcdefghijk"))
+        await service.analyze(user_id, created.id)
+    await _run(world)
+    async with maker() as session:
+        edit = await EditService(session, FakeS3()).get(user_id, created.id)
+    assert edit.status == "failed" and "couldn't fetch your YouTube video" in edit.error

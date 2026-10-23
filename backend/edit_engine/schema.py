@@ -44,6 +44,8 @@ class EditCreateRequest(BaseModel):
     ai_effort: Effort | None = None
     # A reel whose editing style to copy (pacing, captions, energy), by link.
     reference_url: str | None = Field(None, max_length=1000, pattern=r"^https?://\S+$")
+    # A YouTube video to edit: fetched as footage when the edit starts, alone or with uploaded files.
+    source_url: str | None = Field(None, max_length=1000, pattern=r"^https?://\S+$")
 
 
 class EditSourceFile(BaseModel):
@@ -259,6 +261,7 @@ class EditResponse(BaseModel):
     ai_model: str | None
     ai_effort: str | None
     reference_url: str | None
+    source_url: str | None
     reference: EditReferenceResponse | None
     # Why the reference reel was skipped, when it was.
     reference_error: str | None

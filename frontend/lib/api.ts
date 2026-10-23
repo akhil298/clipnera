@@ -2448,6 +2448,8 @@ export interface EditCreateRequest {
   ai_effort?: AiEffort | null;
   /** A YouTube or Shorts link to a reel whose editing style to copy. */
   reference_url?: string | null;
+  /** A YouTube video to edit; fetched as footage when the edit starts. */
+  source_url?: string | null;
   engine?: EditEngine;
 }
 
@@ -2635,6 +2637,7 @@ export interface EditResponse {
   ai_model: string | null;
   ai_effort: AiEffort | null;
   reference_url: string | null;
+  source_url: string | null;
   reference: EditReferenceResponse | null;
   /** Why the reference reel was skipped, when it was. */
   reference_error: string | null;

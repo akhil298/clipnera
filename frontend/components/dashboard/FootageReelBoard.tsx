@@ -13,7 +13,6 @@ import { FootageReelReady } from './FootageReelReady';
 import { PremiumReelProgress } from './PremiumReelProgress';
 import { PremiumReelReport } from './PremiumReelReport';
 import { type ChatMessage, FootageReelReview } from './FootageReelReview';
-import { useReelPick } from './ReelModelPicker';
 
 const BUSY: EditResponse['status'][] = ['analyzing', 'rendering'];
 const HISTORY = 20;
@@ -34,7 +33,6 @@ function useStablePreview(edit: EditResponse | null) {
 
 export function FootageReelBoard({ editId, onBack }: { editId: string; onBack: () => void }) {
   const { entitlements } = useEntitlements();
-  const pickModel = useReelPick();
   const [edit, setEdit] = useState<EditResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
@@ -95,7 +93,7 @@ export function FootageReelBoard({ editId, onBack }: { editId: string; onBack: (
     setMessages((prev) => [...prev, { role: 'user', text: message }]);
     setWorking(true);
     try {
-      const next = await editsApi.chat(editId, { message, ...pickModel });
+      const next = await editsApi.chat(editId, { message });
       setEdit(next);
       remember(before);
       const { changed } = before ? planDiff(before, next) : { changed: [] };

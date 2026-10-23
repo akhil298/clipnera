@@ -57,6 +57,8 @@ class EditProject(Base):
     ai_effort: Mapped[str | None] = mapped_column(String(10), nullable=True)
     # A reel whose editing style to copy, by link; an uploaded one is a "reference" source instead.
     reference_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # A YouTube video to edit, fetched into ``sources`` as a video when the edit starts.
+    source_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     # "classic" (analyse, plan, review, render) or "premium" (the reel engine edits end to end in one job).
     engine: Mapped[str] = mapped_column(String(20), default="classic", server_default="classic", nullable=False)
     # The reel engine's Edit Plan (JSON), with its progress while it runs.
