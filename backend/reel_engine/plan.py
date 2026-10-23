@@ -190,7 +190,9 @@ class InsertItem(_Model):
     label: str = ""
     query: str = ""
     src_t0: float = 0.0
-    style: Literal["full", "card"] = "full"
+    # full = cut away to it; card = a framed photo beside the speaker; object = an animated 3D object or emoji
+    # popping in beside the speaker (the kit's, when no photo shows the thing).
+    style: Literal["full", "card", "object"] = "full"
 
 
 class LayerScore(_Model):

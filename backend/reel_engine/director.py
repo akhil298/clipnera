@@ -72,6 +72,7 @@ class DInsert(_M):
     src: int
     at: float
     query: str
+    show: str
     label: str
     why: str
 
@@ -177,9 +178,13 @@ sentence's SHAPE, not by keyword spotting:
 Anchor talking beats to word ids w0..w1 (the words that say it; at = until = -1, src = -1). Anchor picture beats
 to src + at..until source seconds (w0 = w1 = -1). Every text must match what is said or clearly visible then.
 
-INSERTS (what the viewer SEES while someone talks; premium edits cut away every few seconds): when a person
-talks, add an insert about every 4-7 s of output on the words that name something showable - a place, object,
-food, product, animal, event, person's work, a number made visual. kind "photo" or "broll" (a short video; public-
+INSERTS (what the viewer SEES while someone talks; premium edits show something related every few seconds, never
+just the talking head for long): when a person talks, add an insert about every 3-4 s of output on the words that
+name or imply something showable - a place, object, food, product, animal, body part, event, person's work, a
+feeling or idea made concrete (stress -> a ticking clock, money -> a stack of cash, breathing -> lungs, success ->
+a trophy), a number made visual. show = 1-2 plain English words for ONE concrete object or symbol that pictures
+it (what an emoji or a 3D icon would show: "lungs", "alarm clock", "trophy", "brain", "money bag", "rocket"); it is
+shown as an animated 3D object beside the speaker when no photo exists, so every insert needs a good show. kind "photo" or "broll" (a short video; public-
 domain video exists mainly for space, science, nature, cities' landmarks and history - ask for a photo for
 everyday things like food, products, gadgets or people's activities) with
 query = 3-6 concrete English search words for a real photo or clip (e.g. "international space station exterior

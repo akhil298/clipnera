@@ -29,7 +29,7 @@ from reel_engine.plan import AssetRef, InsertItem, VideoItem, Word
 
 log = get_logger(__name__)
 
-MAX_INSERTS = 10
+MAX_INSERTS = 16
 CANDIDATES = 3
 MIN_SECONDS, MAX_SECONDS = 1.2, 3.2
 MAX_VIDEO_BYTES = 80 * 1024 * 1024
@@ -191,7 +191,9 @@ async def resolve(requests: list, items: list[VideoItem], words: list[Word], sco
     if unresolved:
         from reel_engine import icons
 
-        objects = await icons.choose([(placed[n][2].query, placed[n][2].why) for n in unresolved], kinds=("object3d",))
+        # A 3D object or an animated emoji that shows the thing (the director's "show" words, else its photo search).
+        objects = await icons.choose([(getattr(placed[n][2], "show", "") or placed[n][2].query, placed[n][2].query + "; " + placed[n][2].why)
+                                      for n in unresolved], animated=frozenset(range(len(unresolved))), kinds=("object3d",))
         calls += 1
         for n, asset in zip(unresolved, objects):
             if asset:
@@ -207,8 +209,8 @@ async def resolve(requests: list, items: list[VideoItem], words: list[Word], sco
             asset = found.get(n)
             if asset is None:
                 continue
-        # A kit object is a cut-out, so it always sits on a card; photos alternate full frame and card.
-        style = "card" if asset.kind == "icon" or (request.kind == "photo" and len(out) % 2 == 1) else "full"
+        # A kit object or emoji pops in beside the speaker; photos alternate full frame and card.
+        style = "object" if asset.kind == "icon" else "card" if request.kind == "photo" and len(out) % 2 == 1 else "full"
         out.append(InsertItem(id=f"i{len(out)}", kind=request.kind, start=round(start, 3), end=round(end, 3), asset=asset,
                               label=request.label[:28], query=request.query, src_t0=max(0.0, request.at) if request.kind == "footage" else 0.0,
                               style=style))

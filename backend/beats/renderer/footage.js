@@ -193,6 +193,45 @@
     };
   };
 
+  // Object: the thing being talked about as a big 3D object (or an animated emoji) that springs in beside the
+  // speaker, floats while it is up, casts a soft shadow, and can carry a small label. It shows what is said without
+  // covering the speaker, the way editors drop a sticker of the idea next to the face.
+  T.object = (s, root) => {
+    const [x, y, w, h] = s.box;
+    const g = boxed(el('div', 'g', root), s.box);
+    Object.assign(g.style, { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' });
+    const glow = el('div', '', g);
+    Object.assign(glow.style, { position: 'absolute', left: '15%', right: '15%', top: '12%', bottom: '22%', borderRadius: '50%',
+      background: 'radial-gradient(circle, color-mix(in srgb, var(--accent) 45%, transparent) 0%, transparent 70%)', filter: 'blur(18px)' });
+    const side = Math.min(w, h * (s.data.text ? 0.8 : 0.95));
+    const holder = el('div', 'lift', g);
+    Object.assign(holder.style, { position: 'relative', width: `${side}px`, height: `${side}px`, filter: 'drop-shadow(0 22px 26px rgba(0,0,0,.45))' });
+    let pose = null;
+    if (s.lottie) {
+      pose = BeatsKit.lottieIn(holder, s.lottie, { loop: true });
+    } else if (s.asset) {
+      const img = el('img', '', holder);
+      img.src = s.asset;
+      Object.assign(img.style, { width: '100%', height: '100%', objectFit: 'contain' });
+    }
+    let tag = null;
+    if (s.data.text) {
+      tag = el('div', 'pill tag-pill', g, s.data.text);
+      Object.assign(tag.style, { fontSize: `${h * 0.075}px`, padding: '0.3em 0.9em', marginTop: `${-h * 0.02}px` });
+    }
+    return {
+      seek(t) {
+        const inn = ease.back(span(t, 0, 0.42)), out = 1 - ease.out(span(t, s.dur - 0.25, 0.25));
+        g.style.opacity = clamp(span(t, 0, 0.12)) * out;
+        holder.style.transform = `translateY(${(1 - inn) * 120 + Math.sin(t * 2.2) * 10}px) scale(${(0.3 + 0.7 * inn) * (0.85 + 0.15 * out)}) `
+          + `rotate(${(1 - inn) * -18 + Math.sin(t * 1.7) * 4}deg)`;
+        glow.style.opacity = 0.9 * clamp(span(t, 0.1, 0.3)) * out;
+        if (tag) reveal(tag, t, 0.25, { dy: 18 });
+        if (pose) pose(t);
+      },
+    };
+  };
+
   // Ingredient tag: a pill with a 3D icon, popped beside the thing it names.
   T.tag = (s, root) => {
     const [x, y, w, h] = s.box;

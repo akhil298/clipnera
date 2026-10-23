@@ -5,6 +5,8 @@ Each source returns ``StockClip`` records with ``duration_s`` 0, so photos and c
 
 from __future__ import annotations
 
+import asyncio
+
 from broll.sources.base import StockClip, http_client, split_tags
 
 OPENVERSE_URL = "https://api.openverse.org/v1/images/"
@@ -12,15 +14,21 @@ NASA_URL = "https://images-api.nasa.gov/search"
 NASA_LICENSE_URL = "https://www.nasa.gov/nasa-brand-center/images-and-media/"
 # Openverse licence codes we accept: CC0 and the Public Domain Mark.
 OPEN_LICENCES = {"cc0": "cc0", "pdm": "public_domain"}
+# Anonymous Openverse use is rate limited (a burst of searches gets 403/429): one search at a time, one retry.
+_OPENVERSE_GATE = asyncio.Semaphore(1)
+OPENVERSE_RETRY_SECONDS = 4.0
 
 
 class OpenversePhotos:
     name = "openverse"
 
     async def search(self, query: str, per_page: int) -> list[StockClip]:
-        async with http_client() as client:
-            response = await client.get(OPENVERSE_URL, params={"q": query, "license": "cc0,pdm", "page_size": min(20, per_page * 2),
-                                                               "mature": "false"})
+        params = {"q": query, "license": "cc0,pdm", "page_size": min(20, per_page * 2), "mature": "false"}
+        async with _OPENVERSE_GATE, http_client() as client:
+            response = await client.get(OPENVERSE_URL, params=params)
+            if response.status_code in (403, 429):
+                await asyncio.sleep(OPENVERSE_RETRY_SECONDS)
+                response = await client.get(OPENVERSE_URL, params=params)
             response.raise_for_status()
             out = []
             for r in response.json().get("results") or []:

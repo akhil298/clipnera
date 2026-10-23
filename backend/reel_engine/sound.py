@@ -26,7 +26,7 @@ log = get_logger(__name__)
 # Soft whooshes on real transitions (a new chapter, a full card, a photo, a big word), spaced out; a quiet click as
 # each checklist item lands. No dings, beeps or boings: those read as noise over a voice and over music.
 GRAPHIC_SOUNDS = {"photocard": ["whoosh_short"], "chapter": ["whoosh_short"], "statement": ["whoosh_short"],
-                  "two": ["whoosh_short"], "keyword": ["whoosh_short"]}
+                  "two": ["whoosh_short"], "keyword": ["whoosh_short"], "object": ["whoosh_short"]}
 STEP_SOUND, STEP_KINDS, STEP_GAIN = "soft_click", {"list", "flow"}, 0.2
 # Built-in sound name -> sound library role; accents -> the sound they land with.
 LIBRARY_ROLE = {"whoosh_short": "whoosh"}

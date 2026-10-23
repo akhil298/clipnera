@@ -31,6 +31,8 @@ CATALOG = Path(__file__).resolve().parent / "data" / "effects.json"
 # Story graphics an effect replaces while it is up (captions, chapters, progress and the call to action stay).
 YIELDING = {"two", "keyword", "tag", "list", "statement", "count_up", "chart", "flow", "name", "photocard", "flicker", "accent"}
 CUT_SNAP = 1.0
+# Effects a viewer barely notices: a reel may use one, never only these.
+QUIET = {"glass_type", "pullback"}
 ZOOM_HALF = 0.3
 
 
@@ -69,7 +71,8 @@ def prompt() -> str:
                     f"{'; '.join(needs) or 'no words needed'}.")
     return (f"EFFECTS: signature edits. Use as many as your STYLE allows (its max), favouring its own effects, each "
             f"where it truly fits the words, at least {cat['min_gap']:.0f} s apart, never on the first word; none at all only "
-            "when nothing fits. For each: name, w0-w1 (the words it covers), texts/choice/target as listed (\"\" or [] when "
+            f"when nothing fits. {', '.join(sorted(QUIET))} are quiet: at most one of them, and never all a reel has - every "
+            "reel needs at least one bold effect the viewer notices. For each: name, w0-w1 (the words it covers), texts/choice/target as listed (\"\" or [] when "
             "not listed), why. Texts are written in the reel's language, short and punchy.\n" + "\n".join(rows))
 
 
@@ -101,6 +104,8 @@ def compile_effects(picks: list[DEffect], words: list[Word], items: list[VideoIt
     for n, pick in enumerate(sorted(picks, key=lambda p: p.w0)):
         spec = cat["effects"].get(pick.name)
         if not spec or len({g.data["effect"] + str(g.start) for g in out}) >= (most or cat["max_per_reel"]) or used.get(pick.name, 0) >= spec["max"]:
+            continue
+        if pick.name in QUIET and any(used.get(q) for q in QUIET):
             continue
         span = _word_times(items, words, pick.w0, pick.w1)
         if span is None:

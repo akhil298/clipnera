@@ -538,7 +538,9 @@ def test_a_style_caps_its_effects():
     picks = [fx(name="doodle", w0=k, w1=k + 3, choice="crown", target="face_top") for k in (5, 25)] + \
             [fx(name="glass_type", w0=k, w1=k + 3, texts=["Stay calm"]) for k in (45, 65)]
     assert len(effects.compile_effects(picks, words, items, most=1)) == 1
-    assert len({(g.data["effect"], g.start) for g in effects.compile_effects(picks, words, items, most=4)}) == 4
+    # Four slots, but the second quiet effect (glass_type again) is refused: a reel is never mostly quiet effects.
+    placed = {(g.data["effect"], g.start) for g in effects.compile_effects(picks, words, items, most=4)}
+    assert len(placed) == 3 and sum(1 for name, _ in placed if name in effects.QUIET) == 1
 
 
 def test_the_reviewer_can_enlarge_an_item_inside_the_frame():
@@ -630,3 +632,18 @@ def test_captions_keep_to_their_lanes():
     detail[110:150, :] = 1.0  # hands moving across the low lane
     top = free_top([80, 1360, 920, 210], [], detail, 1360, CAPTION_LANES)
     assert top in CAPTION_LANES and top != 1360
+
+
+def test_a_thing_with_no_photo_pops_in_as_an_object_beside_the_speaker():
+    from reel_engine.pipeline import add_photo_cards
+    from reel_engine.plan import AssetRef, CaptionLine, InsertItem
+
+    icon = AssetRef(id="lungs", kind="icon", path="lungs.png", licence="MIT", source="kit")
+    plan = EditPlan(duration=10, inserts=[InsertItem(id="i0", kind="photo", start=2, end=4, asset=icon, label="Lungs", style="object")],
+                    graphics=[GraphicItem(id="g0", kind="two", start=2.5, end=3.5), GraphicItem(id="g1", kind="list", start=6, end=8)],
+                    captions=[CaptionLine(id="c0", start=2, end=4, lead="breathe", keyword="deep")])
+    add_photo_cards(plan)
+    objects = [g for g in plan.graphics if g.kind == "object"]
+    assert len(objects) == 1 and objects[0].asset.id == "lungs" and objects[0].data["text"] == "Lungs"
+    assert not plan.inserts and [g.id for g in plan.graphics if g.kind != "object"] == ["g1"]
+    assert len(plan.captions) == 1  # the captions carry on beside it

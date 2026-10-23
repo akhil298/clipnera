@@ -31,6 +31,7 @@ BOXES = {
     "caption": (80, 920, 210, 1380), "payoff": (70, 940, 280, 1320), "list": (90, 900, 760, 700), "flow": (90, 900, 820, 650),
     "chart": (90, 900, 640, 750), "statement": (86, 908, 1152, 384), "progress": (150, 780, 80, 130), "wash": (0, W, H, 0),
     "flicker": (60, 960, 300, 780), "photocard": (190, 700, 600, 470), "hook": (60, 960, 300, 250),
+    "object": (300, 480, 440, 880),
 }
 FIXED = {"statement", "progress", "wash", "flicker", "accent", "effect"}
 _detector = None

@@ -66,16 +66,21 @@ async def draw(plan: EditPlan, pass_dir: Path) -> list:
 
 
 def add_photo_cards(plan: EditPlan) -> None:
-    """Photo inserts styled as cards become graphics; a story graphic under one gives way to it."""
+    """Photo inserts styled as cards, and 3D objects, become graphics; a story graphic under one gives way to it.
+    An object pops in beside the speaker while the captions carry on; a card takes the captions' place."""
     from reel_engine.plan import GraphicItem
 
+    for obj in (i for i in plan.inserts if i.style == "object"):
+        plan.graphics = [g for g in plan.graphics if not (g.kind in ("two", "tag", "keyword", "name") and g.start < obj.end and obj.start < g.end)]
+        plan.graphics.append(GraphicItem(id=f"o{obj.id}", kind="object", start=obj.start, end=obj.end, asset=obj.asset,
+                                         data={"text": obj.label}, place="beside", why="what is said, shown", by="inserts"))
     cards = [i for i in plan.inserts if i.style == "card"]
     for card in cards:
         plan.graphics = [g for g in plan.graphics if not (g.kind in ("two", "tag", "keyword", "name", "count_up")
                                                           and g.start < card.end and card.start < g.end)]
         plan.graphics.append(GraphicItem(id=f"p{card.id}", kind="photocard", start=card.start, end=card.end, asset=card.asset,
                                          data={"text": card.label}, place="panel", why="photo of what is said", by="inserts"))
-    plan.inserts = [i for i in plan.inserts if i.style != "card"]
+    plan.inserts = [i for i in plan.inserts if i.style not in ("card", "object")]
     plan.graphics.sort(key=lambda g: g.start)
     plan.captions = [c for c in plan.captions if not any(c.start < k.end and k.start < c.end for k in cards)]
 
@@ -185,7 +190,9 @@ async def run_many(inputs: list[Path], work: Path, out_dir: Path, store: AssetSt
                 m = moment[0]
                 headline = m.headline
                 note = (f"{brief}\nEDIT THIS ONE MOMENT: '{m.title}'. Open with the line: \"{moment_line(found, m.hook)}\". "
-                        f"End on the payoff: \"{moment_line(found, m.payoff)}\". Hook headline: \"{m.headline}\".").strip()
+                        f"End on the payoff: \"{moment_line(found, m.payoff)}\". Hook headline: \"{m.headline}\"."
+                        + (f" This is reel {n + 1} of {len(windows)} from one video: give it its own look - lead with effects "
+                           f"from position {n + 1} onward in your style's list, not the same ones every reel." if len(windows) > 1 else "")).strip()
             length = target_seconds or (moment_length(moment[2] - moment[1]) if moment else 0.0)
             try:
                 plan = await edit(found, plan, _stager(plan, on_progress), work / f"reel{n}", out_dir / f"reel{n + 1}.mp4", store,

@@ -29,7 +29,7 @@ HOOK_SECONDS = 3.2
 CARD_KINDS = {"statement", "list", "chart", "flow", "count_up"}
 VOICE_KINDS = ("voice", "voice_song")
 MIN_LINE_WORDS = 3
-CARD_EVERY = 10.0
+CARD_EVERY = 8.0
 EMOJI_EVERY = 3
 # Titles and chapters in a style that contrasts with the captions' (still one family).
 TITLE_PAIR = {"punch": "editorial", "editorial": "editorial", "neon": "neon", "highlight": "punch", "bubble": "script",

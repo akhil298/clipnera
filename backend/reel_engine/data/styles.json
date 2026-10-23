@@ -6,14 +6,15 @@
    "title": "Podcast / interview",
    "when": "two or more people talking, long conversations, interviews, talk shows",
    "effects": [
-    "glass_type",
     "headline_wall",
-    "cover_story",
-    "pullback",
     "framebreak",
-    "orbit"
+    "orbit",
+    "cover_story",
+    "phone_mockup",
+    "glass_type",
+    "pullback"
    ],
-   "max_effects": 2,
+   "max_effects": 3,
    "caption_looks": [
     "pop",
     "slide",
@@ -71,11 +72,12 @@
    "title": "Education / explainer",
    "when": "teaching, explaining, tutorials, how-to, science, history, health advice",
    "effects": [
-    "glass_type",
+    "ui_world",
+    "paper_cut",
     "phone_mockup",
     "headline_wall",
-    "paper_cut",
-    "ui_world",
+    "doodle",
+    "glass_type",
     "pullback"
    ],
    "max_effects": 3,
