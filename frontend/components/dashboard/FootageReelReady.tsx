@@ -56,7 +56,8 @@ function ReelSet({ edit, onNew }: { edit: EditResponse; onNew: () => void }) {
 export function FootageReelReady({ edit, onEdit, onNew }: { edit: EditResponse; onEdit?: () => void; onNew: () => void }) {
   const plan = edit.plan;
   const caption = [plan?.caption, plan?.hashtags.join(' '), edit.music_credit].filter(Boolean).join('\n\n');
-  if (edit.reels.length > 1) return <ReelSet edit={edit} onNew={onNew} />;
+  // A backend from before several reels per video sends no `reels`.
+  if ((edit.reels?.length ?? 0) > 1) return <ReelSet edit={edit} onNew={onNew} />;
 
   return (
     <div className="flex flex-wrap gap-8 lg:gap-10 items-start">
