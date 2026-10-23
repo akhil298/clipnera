@@ -333,8 +333,9 @@ def caption_look(plan: EditPlan, n: int) -> str:
     c = plan.captions[n]
     if n == 0 or c.payoff:
         return "punch"
-    first = sum(map(ord, plan.brief.text_style if plan.brief else "")) % len(CAPTION_LOOKS)
-    return CAPTION_LOOKS[(first + n // LINES_PER_LOOK) % len(CAPTION_LOOKS)]
+    looks = (plan.brief.caption_looks if plan.brief and plan.brief.caption_looks else None) or CAPTION_LOOKS
+    first = sum(map(ord, plan.brief.text_style if plan.brief else "")) % len(looks)
+    return looks[(first + n // LINES_PER_LOOK) % len(looks)]
 
 
 def graphic_specs(plan: EditPlan) -> list[dict]:

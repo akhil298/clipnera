@@ -16,6 +16,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from core.logging_config import get_logger
+from reel_engine import styles
 from reel_engine.ai import vision_json
 from reel_engine.effects import DEffect
 from reel_engine.effects import prompt as effects_prompt
@@ -113,6 +114,7 @@ class DirectorPlan(_M):
     keywords: list[int]
     drop_word: int
     spelling: list[DFix]
+    style: str
     effects: list[DEffect]
     notes: str
 
@@ -264,7 +266,7 @@ async def direct(sources: list[Source], audio: AudioReport, shots: list[Shot], j
             f"Shots:\n{shot_listing(shots)}\n\n"
             f"Words (id:word, ~ = filler, [take] = earlier take):\n{word_listing(words, takes) if words else '(nobody speaks)'}\n\n"
             f"Frames: {how}.\n\nPlan the reel. JSON only.")
-    plan = await vision_json(system + "\n\n" + effects_prompt(), user, jpegs, DirectorPlan, max_tokens=16000)
+    plan = await vision_json(system + "\n\n" + styles.prompt() + "\n\n" + effects_prompt(), user, jpegs, DirectorPlan, max_tokens=16000)
     log.info("Director: recipe=%s audio=%s %d clips %d beats %d sections %d effects", plan.recipe, plan.audio_view,
              len(plan.story), len(plan.beats), len(plan.sections), len(plan.effects))
     return plan

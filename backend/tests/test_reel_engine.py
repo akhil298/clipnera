@@ -44,7 +44,7 @@ def director(**kw) -> DirectorPlan:
     base = dict(audio_view="voice", recipe="creator_advice", target_seconds=30, title_lead="", title_text="", cta="",
                 caption_mode="every_word", music="bed", text_style="punch", mood="upbeat", sections=[], hooks=[], story=[], beats=[],
                 inserts=[], keywords=[], burned_captions=False,
-                drop_word=-1, spelling=[], effects=[], notes="")
+                drop_word=-1, spelling=[], style="podcast", effects=[], notes="")
     return DirectorPlan(**{**base, **kw})
 
 
@@ -437,7 +437,7 @@ def test_director_prompt_lists_every_catalog_effect():
 
     text = effects.prompt()
     assert all(name in text for name in effects.catalog()["effects"])
-    assert "at most 2 per reel" in text
+    assert "STYLE allows" in text
 
 
 def test_picture_effects_build_a_filter_and_need_a_matte_where_said():
@@ -512,3 +512,30 @@ def test_nobody_on_screen_frames_what_matters_not_the_middle():
     crop, _ = render.framing(_src(), _item(), [], focus)
     left = float(re.findall(r"([0-9]\.[0-9]+)\)*\*iw'", crop)[-1])  # where the window settles
     assert left > 0.5  # a centred window would start at 0.34
+
+
+# ------------------------------------------------------------------ styles
+
+def test_a_style_holds_the_reel_to_its_rules():
+    from reel_engine import styles
+
+    words = words_of("this is a calm talk about breathing and being present every day")
+    d = director(style="calm", text_style="comic", mood="energetic", story=[clip(w0=0, w1=len(words) - 1)])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0)
+    calm = styles.get("calm")
+    assert brief.style == "calm" and brief.text_style in calm["text_styles"] and brief.mood in calm["moods"]
+    assert brief.caption_looks == calm["caption_looks"]
+    assert styles.get("nonsense")["name"] == styles.catalog()["default"]
+
+
+def test_a_style_caps_its_effects():
+    from reel_engine import effects
+
+    words = words_of(" ".join(f"word{k}" for k in range(120)), gap=0.4)
+    d = director(story=[clip(w0=0, w1=len(words) - 1)])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0)
+    items = comp.video_track(d, brief, words, [], {0: 200.0})
+    picks = [fx(name="doodle", w0=k, w1=k + 3, choice="crown", target="face_top") for k in (5, 25)] + \
+            [fx(name="glass_type", w0=k, w1=k + 3, texts=["Stay calm"]) for k in (45, 65)]
+    assert len(effects.compile_effects(picks, words, items, most=1)) == 1
+    assert len({(g.data["effect"], g.start) for g in effects.compile_effects(picks, words, items, most=4)}) == 4

@@ -106,6 +106,9 @@ class Brief(_Model):
     sections: list[Section] = Field(default_factory=list)
     cta: str = ""
     notes: str = ""
+    # The editing style the reel is cut by (data/styles.json) and the caption looks it rotates.
+    style: str = ""
+    caption_looks: list[str] = Field(default_factory=list)
 
 
 class AssetRef(_Model):

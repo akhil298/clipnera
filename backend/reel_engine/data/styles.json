@@ -1,0 +1,48 @@
+{
+ "about": "Editing styles: the house rules a reel is cut by. The director picks the one that fits the creator and the content; code holds the reel to it. effects = the signature effects this style reaches for (data/effects.json names), max_effects = how many one reel may use; caption_looks = the caption looks it rotates (render.CAPTION_LOOKS); text_styles = caption styles it allows (first is its default); moods = music moods it allows (first is its default); graphic_every = seconds of output per story graphic.",
+ "default": "podcast",
+ "styles": {
+  "podcast": {
+   "title": "Podcast / interview", "when": "two or more people talking, long conversations, interviews, talk shows",
+   "effects": ["glass_type", "headline_wall", "cover_story", "pullback", "framebreak", "orbit"], "max_effects": 2,
+   "caption_looks": ["pop", "slide", "pop", "punch"], "text_styles": ["highlight", "minimal", "editorial", "punch"],
+   "moods": ["cinematic", "chill", "inspiring", "dramatic"], "graphic_every": 3.2
+  },
+  "hype": {
+   "title": "Hype / energetic", "when": "high-energy creators, challenges, reactions, gaming, sports, bold opinions",
+   "effects": ["doodle", "zoom_through", "vertigo", "orbit", "ui_world", "couch_wall", "framebreak"], "max_effects": 4,
+   "caption_looks": ["punch", "stack", "pop", "punch", "slide"], "text_styles": ["punch", "comic", "neon", "bubble"],
+   "moods": ["energetic", "urban", "upbeat", "funny"], "graphic_every": 2.0
+  },
+  "education": {
+   "title": "Education / explainer", "when": "teaching, explaining, tutorials, how-to, science, history, health advice",
+   "effects": ["glass_type", "phone_mockup", "headline_wall", "paper_cut", "ui_world", "pullback"], "max_effects": 3,
+   "caption_looks": ["pop", "stack", "slide", "pop"], "text_styles": ["highlight", "bubble", "minimal", "punch"],
+   "moods": ["corporate", "inspiring", "chill", "cinematic"], "graphic_every": 2.4
+  },
+  "business": {
+   "title": "Business / finance", "when": "money, startups, careers, marketing, investing, productivity",
+   "effects": ["ui_world", "phone_mockup", "glass_type", "framebreak", "headline_wall", "cover_story"], "max_effects": 3,
+   "caption_looks": ["pop", "stack", "punch", "pop"], "text_styles": ["punch", "highlight", "editorial", "minimal"],
+   "moods": ["corporate", "inspiring", "cinematic", "energetic"], "graphic_every": 2.4
+  },
+  "vlog": {
+   "title": "Vlog / lifestyle", "when": "day in the life, travel, family, personal stories, lifestyle",
+   "effects": ["doodle", "paper_cut", "green_screen", "zoom_through", "pullback"], "max_effects": 3,
+   "caption_looks": ["pop", "slide", "punch", "pop"], "text_styles": ["script", "bubble", "punch", "minimal"],
+   "moods": ["upbeat", "lofi", "chill", "inspiring"], "graphic_every": 2.8
+  },
+  "food": {
+   "title": "Food / cooking", "when": "recipes, cooking, eating, restaurants, street food",
+   "effects": ["doodle", "paper_cut", "zoom_through", "pullback"], "max_effects": 2,
+   "caption_looks": ["pop", "slide", "pop", "punch"], "text_styles": ["bubble", "script", "comic", "punch"],
+   "moods": ["upbeat", "funny", "chill", "lofi"], "graphic_every": 2.5
+  },
+  "calm": {
+   "title": "Calm / devotional", "when": "spiritual talks, meditation, poetry, slow and reflective content",
+   "effects": ["glass_type", "pullback", "green_screen"], "max_effects": 1,
+   "caption_looks": ["slide", "pop"], "text_styles": ["editorial", "minimal", "script"],
+   "moods": ["cinematic", "chill", "inspiring"], "graphic_every": 4.0
+  }
+ }
+}

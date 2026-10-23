@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from core.logging_config import get_logger
-from reel_engine import accents, effects, icons, inserts, layout, moments, sound, tracks
+from reel_engine import accents, effects, icons, inserts, layout, moments, sound, styles, tracks
 from reel_engine.assets import AssetStore, Scout
 from reel_engine.compile import BEAT, brief_of, captions_track, graphics_track, to_output, video_track
 from reel_engine.director import direct, recipe
@@ -227,7 +227,7 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
                                  offset=tracks.offset(track, reveal_at(plan, d, words), plan.duration),
                                  licence=track.licence, source=track.source)
     plan.graphics = graphics_track(d, plan.brief, words, plan.video, shots)
-    picked = effects.compile_effects(d.effects, words, plan.video)
+    picked = effects.compile_effects(d.effects, words, plan.video, most=styles.get(plan.brief.style)["max_effects"])
     plan.graphics = sorted(effects.clear_under(plan.graphics, picked) + picked, key=lambda g: g.start)
     plan.captions, plan.graphics = captions_track(d, plan.brief, words, plan.video, plan.graphics)
 

@@ -67,10 +67,10 @@ def prompt() -> str:
             needs.append(f"target: one of {', '.join(f['target'])}")
         rows.append(f"- {name} ({e['title']}): use when {e['use_when']}. Avoid when {e['avoid_when']}. "
                     f"{'; '.join(needs) or 'no words needed'}.")
-    return (f"EFFECTS: signature edits. Use at most {cat['max_per_reel']} per reel, only where one truly fits the words, "
-            f"at least {cat['min_gap']:.0f} s apart, never on the first word. An effect is a moment, not a style: if none "
-            "fits, return []. For each: name, w0-w1 (the words it covers), texts/choice/target as listed (\"\" or [] when not "
-            "listed), why. Texts are written in the reel's language, short and punchy.\n" + "\n".join(rows))
+    return (f"EFFECTS: signature edits. Use as many as your STYLE allows (its max), favouring its own effects, each "
+            f"where it truly fits the words, at least {cat['min_gap']:.0f} s apart, never on the first word; none at all only "
+            "when nothing fits. For each: name, w0-w1 (the words it covers), texts/choice/target as listed (\"\" or [] when "
+            "not listed), why. Texts are written in the reel's language, short and punchy.\n" + "\n".join(rows))
 
 
 # ------------------------------------------------------------------ the director's picks -> effect items
@@ -89,7 +89,7 @@ def _cut_near(items: list[VideoItem], t: float) -> float | None:
     return near if near is not None and abs(near - t) <= CUT_SNAP else None
 
 
-def compile_effects(picks: list[DEffect], words: list[Word], items: list[VideoItem]) -> list[GraphicItem]:
+def compile_effects(picks: list[DEffect], words: list[Word], items: list[VideoItem], most: int | None = None) -> list[GraphicItem]:
     """Effect items for the director's picks that pass the catalog: known name, enough words, within limits."""
     from reel_engine.compile import _word_times  # compile imports the director, which imports this module
 
@@ -100,7 +100,7 @@ def compile_effects(picks: list[DEffect], words: list[Word], items: list[VideoIt
     last_end = -999.0
     for n, pick in enumerate(sorted(picks, key=lambda p: p.w0)):
         spec = cat["effects"].get(pick.name)
-        if not spec or len({g.data["effect"] for g in out}) >= cat["max_per_reel"] or used.get(pick.name, 0) >= spec["max"]:
+        if not spec or len({g.data["effect"] + str(g.start) for g in out}) >= (most or cat["max_per_reel"]) or used.get(pick.name, 0) >= spec["max"]:
             continue
         span = _word_times(items, words, pick.w0, pick.w1)
         if span is None:

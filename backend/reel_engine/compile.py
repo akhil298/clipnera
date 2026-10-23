@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+from reel_engine import styles
 from reel_engine.director import DirectorPlan, recipe
 from reel_engine.plan import AudioReport, Brief, CaptionLine, GraphicItem, Section, Shot, VideoItem, Word
 
@@ -62,11 +63,14 @@ def brief_of(d: DirectorPlan, audio: AudioReport, target: float) -> tuple[Brief,
     music = d.music if d.music != "none" else r["music"]
     if path == "visual":
         music = "score"
+    style = styles.get(d.style)
+    text_style, mood = styles.hold(style, d.text_style, d.mood)
     brief = Brief(path=path, audio_kind=measured, recipe=r["id"], target_seconds=target or d.target_seconds,
-                  text_style=d.text_style, title_style=TITLE_PAIR.get(d.text_style, d.text_style),
+                  text_style=text_style, title_style=TITLE_PAIR.get(text_style, text_style), style=style["name"],
+                  caption_looks=style["caption_looks"],
                   title_lead=d.title_lead, title_text=d.title_text,
                   hook_word=(d.hooks[0].word if d.hooks else "").upper()[:12],
-                  caption_mode=caption_mode, music=music, mood=d.mood, accent=r["accent"],
+                  caption_mode=caption_mode, music=music, mood=mood, accent=r["accent"],
                   sections=[Section(**sec.model_dump()) for sec in d.sections[:5]], cta=d.cta[:34], notes=(d.notes + (" " + note if note else "")).strip())
     return brief, note
 
