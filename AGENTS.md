@@ -90,6 +90,9 @@ backend/.env      Environment secrets (IGNORED)
 - Run it on local files: `cd backend && venv/bin/python -m reel_engine clip.mp4 --out out/reel.mp4` (writes the plan beside the reel).
 - Credits are taken when it starts and refunded if it fails. Migration `20261022010000_add_reel_engine`.
 - Synthesis (SFX pack, music beds, scores, on-demand foley) lives in `backend/motion/synth.py`; footage graphic templates in `backend/beats/renderer/footage.js`.
+- The reel maker is one screen (`FootageReelForm.tsx`): videos, photos, one voiceover and/or a YouTube link (`source_url`), at least one of them; no model picker (GPT-Astra edits every plan); language `auto`. Pro gets `premium`, others `classic` with autopilot. A link is checked at create (`_check_source_link`: YouTube, plan length) and fetched at 1080p by the `edits.fetch_link` job, then the edit starts as if uploaded. Migration `20261023010000_add_edit_source_url`.
+- Signature effects (Orbit, Headline Wall, Framebreak, Vertigo, Green Screen...) are a catalog the director picks from: `reel_engine/data/effects.json` + `reel_engine/effects.py` + `beats/renderer/effects.js`. Preview them: `scripts/effects_gallery.py talking_head.mp4 out/`.
+- Sound effects, Lottie motion graphics and animated emoji libraries: `scripts/build_asset_libraries.py` (files gitignored, manifests tracked; deploys build them on the worker).
 
 ## AI editor notes
 - The studio (`/studio/[id]`, OpenCut) saves every edit to the backend as Timeline ops (`frontend/opencut/src/clipnera/backend-sync.ts`); mapping in `frontend/opencut/BRIDGE.md`.
