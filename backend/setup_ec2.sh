@@ -115,6 +115,10 @@ echo "Deno: $(command -v deno)"
 deno --version
 
 echo ""
+echo "[7b/8] Installing Node 22 and Chrome's headless shell for graphic beats..."
+bash "${BACKEND_DIR}/scripts/install_render_tools.sh"
+
+echo ""
 echo "[8/8] Verifying Python environment..."
 cd "${BACKEND_DIR}"
 source "${VENV_DIR}/bin/activate"
@@ -133,6 +137,9 @@ print("Backend dependencies: OK")
 PY
 
 PYTHONPATH="${BACKEND_DIR}" python -c "import main; print('Backend import OK')"
+
+# The clean motion kit (icons, logos, maps, matte model...) lives in S3, built by scripts/build_motion_kit.py.
+python scripts/build_motion_kit.py --pull || echo "Motion kit not pulled; beats needing assets are skipped." >&2
 
 echo ""
 echo "=========================================="

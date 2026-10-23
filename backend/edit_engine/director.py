@@ -7,7 +7,7 @@ checks every answer (``validate``) and ``compiler`` turns it into times. When
 the call fails, ``fallback_plan`` makes a sensible edit without any AI, so a
 reel is never lost to a model error.
 
-Pro runs Sonnet 5; the ``REEL_EDITOR_OPUS`` flag switches Pro to Opus 5.5.
+Every plan runs GPT-Astra (``get_text_client(is_pro=True)``); the ``REEL_EDITOR_OPUS`` flag switches Pro to Opus 5.5.
 """
 
 from __future__ import annotations
@@ -111,13 +111,13 @@ def footage_log(analysis: dict[str, Any], mode: str, script: str | None, intent:
 
 
 def director_client(is_pro: bool, opus: bool, model: str | None = None, effort: str | None = None) -> Any:
-    """The creator's picked OpenAI deployment when there is one, else the plan's director."""
+    """A deployment the reel was made with, else GPT-Astra (every plan); the admin's Opus flag still applies to Pro."""
     if model:
         return get_text_client(choice=ModelChoice("openai", model, effort), step="reel_director")
     # The Opus flag yields to LLM_ROUTING=openai, which sends every step to OpenAI.
     if is_pro and opus and not openai_only():
         return get_text_client(choice=REEL_DIRECTOR_OPUS, step="reel_director")
-    return get_text_client(is_pro=is_pro, step="reel_director")
+    return get_text_client(is_pro=True, step="reel_director")
 
 
 def parse(reply: str) -> dict[str, Any]:

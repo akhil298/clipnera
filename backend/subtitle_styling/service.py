@@ -246,7 +246,7 @@ class SubtitleStylingService:
             timeline, gap = self._bridge(media, hook, transition, tmpdir)
             origin, _ = on_output_timeline([], clip_start, clip_end, hook, gap)
             overlay = self._overlay(motion, body_start, source_end, hook, spans, gap, media, title_seconds=0.0)
-            filters = [ass_filter(self._write_overlay(overlay, tmpdir))] if overlay else ["null"]
+            filters = [ass_filter(self._write_overlay(overlay, tmpdir))] if overlay and overlay.ass else ["null"]
             return await self._encode(
                 video_path, filters, enable_watermark, clip_end - origin, tmpdir, timeline,
                 label="plain", error_code="EXPORT_FAILED", overlay=overlay, has_audio=media.has_audio,
@@ -265,7 +265,7 @@ class SubtitleStylingService:
         try:
             return build_overlay(
                 motion.plan, motion.frames, clip_start, clip_end, hook, spans, gap, media.width, media.height,
-                title_seconds,
+                title_seconds, quiet=motion.quiet,
             )
         except Exception as exc:
             log.warning("Motion graphics skipped for this render: %s", exc)
@@ -471,7 +471,7 @@ class SubtitleStylingService:
                 output_path=os.path.join(tmpdir, "captions.ass"),
             )
             filters = [ass_filter(ass_path)]
-            if overlay:
+            if overlay and overlay.ass:
                 filters.append(ass_filter(self._write_overlay(overlay, tmpdir)))
             return await self._encode(
                 video_path, filters, enable_watermark, duration, tmpdir, timeline,
@@ -557,7 +557,7 @@ class SubtitleStylingService:
                 motion, body_start, source_end, hook, spans, gap, media,
                 title_seconds=TITLE_SECONDS if title_text else 0.0,
             )
-            if overlay:
+            if overlay and overlay.ass:
                 filters.append(ass_filter(self._write_overlay(overlay, tmpdir)))
             return await self._encode(
                 video_path, filters, enable_watermark, duration, tmpdir, timeline,

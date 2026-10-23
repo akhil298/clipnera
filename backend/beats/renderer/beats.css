@@ -1,0 +1,167 @@
+/* The look of every graphic beat. Themes are variables only; templates never hard-code colour. */
+@font-face { font-family: "Montserrat"; font-weight: 800; src: url("../../static/motion/fonts/Montserrat-ExtraBold.ttf"); }
+@font-face { font-family: "Montserrat"; font-weight: 700; src: url("../../static/motion/fonts/Montserrat-Bold.ttf"); }
+@font-face { font-family: "Anton"; src: url("../../static/motion/fonts/Anton-Regular.ttf"); }
+@font-face { font-family: "DM Serif Display"; src: url("../../static/motion/fonts/DMSerifDisplay-Regular.ttf"); }
+@font-face { font-family: "Poppins"; font-weight: 900; src: url("../../static/motion/fonts/Poppins-Black.ttf"); }
+@font-face { font-family: "Bebas"; src: url("../../static/motion/fonts/BebasNeue-Regular.ttf"); }
+@font-face { font-family: "Bangers"; src: url("../../static/motion/fonts/Bangers-Regular.ttf"); }
+@font-face { font-family: "Luckiest"; src: url("../../static/motion/fonts/LuckiestGuy-Regular.ttf"); }
+@font-face { font-family: "Archivo Black"; src: url("../../static/motion/fonts/ArchivoBlack-Regular.ttf"); }
+@font-face { font-family: "Marker"; src: url("../../static/motion/fonts/PermanentMarker-Regular.ttf"); }
+@font-face { font-family: "Noto Devanagari"; src: url("../../static/motion/fonts/NotoSansDevanagari-Bold.ttf"); }
+@font-face { font-family: "Noto Telugu"; src: url("../../static/motion/fonts/NotoSansTelugu-Bold.ttf"); }
+@font-face { font-family: "Noto Tamil"; src: url("../../static/motion/fonts/NotoSansTamil-Bold.ttf"); }
+@font-face { font-family: "Noto Bengali"; src: url("../../static/motion/fonts/NotoSansBengali-Bold.ttf"); }
+@font-face { font-family: "Noto Arabic"; src: url("../../static/motion/fonts/NotoNaskhArabic-Bold.ttf"); }
+@font-face { font-family: "Twemoji"; src: url("../../static/motion/fonts/Twemoji.Mozilla.ttf"); }
+
+:root {
+  --scripts: "Noto Devanagari", "Noto Telugu", "Noto Tamil", "Noto Bengali", "Noto Arabic", "Twemoji";
+  --word: "Montserrat", var(--scripts), sans-serif;
+  --figure: "Anton", "Montserrat", var(--scripts), sans-serif;
+  --head: var(--word);
+  --card: #ffffff; --ink: #141414; --soft: #5b5b5b; --accent: #ffb020; --accent-ink: #141414;
+  --page: #f4f2ed; --good: #22b573; --bad: #ef3b3b; --line: rgba(20, 20, 20, .08);
+  --shadow: 0 24px 60px rgba(0, 0, 0, .28), 0 6px 18px rgba(0, 0, 0, .18);
+  --glow: 0 0 40px color-mix(in srgb, var(--accent) 55%, transparent);
+  --radius: 34px;
+}
+.theme-dark {
+  --card: #16161e; --ink: #ffffff; --soft: #b8b8c8; --accent: #8b6cff; --accent-ink: #ffffff;
+  --page: #0a0a10; --line: rgba(255, 255, 255, .1);
+  --shadow: 0 24px 60px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .06) inset;
+}
+.theme-editorial {
+  --card: #f3ead9; --ink: #1b1714; --soft: #5c534a; --accent: #c8102e; --accent-ink: #ffffff;
+  --page: #efe4cf; --head: "DM Serif Display", var(--scripts), serif; --radius: 10px;
+  --shadow: 0 18px 40px rgba(40, 20, 0, .25);
+}
+.theme-bold { --page: var(--accent); --card: #ffffff; --ink: #111111; }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: transparent; overflow: hidden; }
+#stage { position: absolute; inset: 0; overflow: hidden; font-family: var(--word); color: var(--ink); }
+.g { position: absolute; will-change: transform, opacity, filter; }
+.full { position: absolute; inset: 0; }
+.page { background:
+  radial-gradient(120% 70% at 50% 30%, color-mix(in srgb, var(--page) 70%, white) 0%, var(--page) 60%, color-mix(in srgb, var(--page) 85%, black) 100%); }
+.theme-dark .page { background:
+  radial-gradient(70% 45% at 50% 40%, color-mix(in srgb, var(--accent) 28%, transparent) 0%, transparent 70%),
+  radial-gradient(120% 80% at 50% 50%, #15151d 0%, var(--page) 70%); }
+.theme-editorial .page { background:
+  radial-gradient(rgba(60, 40, 10, .07) 1px, transparent 1.2px) 0 0 / 9px 9px,
+  radial-gradient(120% 80% at 50% 40%, #f6eedd 0%, var(--page) 70%, #e2d3b6 100%); }
+.card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); }
+.head { font-family: var(--head); }
+.figure { font-family: var(--figure); line-height: .92; letter-spacing: .01em; white-space: nowrap; }
+.accent { color: var(--accent); }
+.soft { color: var(--soft); }
+.pill { display: inline-flex; align-items: center; gap: .45em; padding: .38em .9em; border-radius: 999px;
+  background: var(--card); box-shadow: var(--shadow); font-weight: 800; white-space: nowrap; }
+.chip { display: flex; align-items: center; gap: .55em; padding: .5em .8em; border-radius: 18px;
+  background: color-mix(in srgb, var(--card) 92%, var(--accent)); font-weight: 800; }
+.mark { flex: none; width: 1.25em; height: 1.25em; border-radius: 50%; display: grid; place-items: center;
+  color: #fff; font-size: .8em; font-weight: 800; }
+.mark.check { background: var(--good); } .mark.cross { background: var(--bad); }
+.mark.none { background: var(--accent); color: var(--accent-ink); }
+.outline-text { -webkit-text-stroke: 3px var(--ink); color: transparent; }
+.behind-text { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 80%, white) 0%, var(--accent) 60%,
+  color-mix(in srgb, var(--accent) 70%, black) 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 10px 30px rgba(0, 0, 0, .35)); }
+.lift { filter: drop-shadow(0 12px 28px rgba(0, 0, 0, .35)); }
+.glow { text-shadow: 0 4px 0 rgba(0, 0, 0, .25), 0 0 34px color-mix(in srgb, var(--accent) 70%, transparent); }
+.ui-bar { display: flex; align-items: center; gap: .6em; padding: .7em 1em; border-radius: 999px; background: #fff;
+  color: #1a1a1a; box-shadow: var(--shadow); font-weight: 700; }
+.notif { display: flex; gap: .7em; align-items: center; padding: .75em .9em; border-radius: 26px;
+  background: rgba(250, 250, 252, .92); color: #151515; box-shadow: var(--shadow); font-weight: 700; }
+.notif .dot { flex: none; width: 1.7em; height: 1.7em; border-radius: 10px; background: var(--accent); }
+.bubble { padding: .6em .9em; border-radius: 24px; max-width: 82%; font-weight: 700; box-shadow: var(--shadow); }
+.bubble.me { background: #2f80ff; color: #fff; align-self: flex-end; border-bottom-right-radius: 6px; }
+.bubble.them { background: #ececf1; color: #151515; align-self: flex-start; border-bottom-left-radius: 6px; }
+
+/* Reel engine footage templates: keywords stay readable over bright or golden footage. */
+.stroke { -webkit-text-stroke: 3px rgba(40, 20, 0, .85); paint-order: stroke fill;
+  text-shadow: 0 6px 0 rgba(0, 0, 0, .35), 0 0 30px rgba(0, 0, 0, .45), 0 0 34px color-mix(in srgb, var(--accent) 60%, transparent); }
+
+/* ---- Reel engine text styles: one per reel for captions and labels, a paired one for titles and chapters.
+   Templates mark text as .lead (small words), .key (the big word), .flick, .tag-pill; each style restyles them. */
+.lead { color: #fff; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,.8), 0 3px 18px rgba(0,0,0,.7); }
+.lead-caps { letter-spacing: .18em; text-transform: uppercase; }
+.hook-word { color: #fff; text-transform: uppercase; text-shadow: 0 3px 6px rgba(0,0,0,.75), 0 6px 26px rgba(0,0,0,.6); }
+.key { color: var(--accent); text-transform: uppercase; }
+.key.alt { color: #fff; }
+.flick { text-transform: uppercase; color: #fff; text-shadow: 0 6px 0 rgba(0,0,0,.35), 0 0 40px color-mix(in srgb, var(--accent) 80%, transparent); }
+.tag-pill { background: rgba(255,255,255,.96); color: #141414; }
+.photo-card { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.photo-frame { width: 100%; flex: 1; min-height: 0; overflow: hidden; border-radius: 26px; border: 10px solid #fff;
+  box-shadow: 0 30px 70px rgba(0,0,0,.45); background: #111; }
+.photo-frame img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.style-punch .key { -webkit-text-stroke: 3px rgba(40,20,0,.85); paint-order: stroke fill;
+  text-shadow: 0 6px 0 rgba(0,0,0,.35), 0 0 30px rgba(0,0,0,.45), 0 0 34px color-mix(in srgb, var(--accent) 60%, transparent); }
+
+.style-editorial { --accent: #e0362c; }
+.style-editorial .key { font-family: "DM Serif Display", serif; text-transform: none; color: #fff7e8; letter-spacing: 0;
+  text-shadow: 0 4px 22px rgba(0,0,0,.55); }
+.style-editorial .key.alt { color: #ffd9a8; }
+.style-editorial .lead { font-family: "Montserrat", sans-serif; letter-spacing: .22em; text-transform: uppercase; color: var(--accent);
+  font-size: .8em; text-shadow: 0 1px 8px rgba(0,0,0,.6); }
+.style-editorial .tag-pill { background: #fff7e8; color: #1b1714; border-radius: 6px; font-family: "DM Serif Display", serif; }
+.style-editorial .photo-frame { border-radius: 4px; border-color: #fff7e8; }
+
+.style-neon { --accent: #ff4fd8; }
+.style-neon .key { font-family: "Bebas", "Anton", sans-serif; letter-spacing: .03em; color: #fff;
+  text-shadow: 0 0 6px #fff, 0 0 18px var(--accent), 0 0 42px var(--accent), 0 0 80px var(--accent); }
+.style-neon .key.alt { text-shadow: 0 0 6px #fff, 0 0 18px #3ff3ff, 0 0 42px #3ff3ff, 0 0 80px #3ff3ff; }
+.style-neon .lead { color: #6ef6ff; letter-spacing: .14em; text-transform: uppercase; text-shadow: 0 0 12px #3ff3ff; }
+.style-neon .tag-pill { background: rgba(20,10,40,.78); color: #fff; border: 2px solid var(--accent); box-shadow: 0 0 22px var(--accent); }
+.style-neon .photo-frame { border-color: #1a0f2e; box-shadow: 0 0 40px var(--accent); }
+
+.style-highlight .key { color: #111; background: var(--accent); padding: 0 .16em .02em; border-radius: .1em;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35); font-family: "Archivo Black", "Montserrat", sans-serif; letter-spacing: -.01em; }
+.style-highlight .key.alt { background: #fff; }
+.style-highlight .lead { color: #fff; font-family: "Archivo Black", sans-serif; }
+
+.style-bubble .key { font-family: "Poppins", sans-serif; font-weight: 900; color: #111; background: #fff; padding: .04em .28em .08em;
+  border-radius: .32em; box-shadow: 0 12px 30px rgba(0,0,0,.35); text-transform: none; letter-spacing: -.01em; }
+.style-bubble .key.alt { background: var(--accent); }
+.style-bubble .lead { font-family: "Poppins", sans-serif; font-weight: 900; color: #fff; -webkit-text-stroke: 2px #111; paint-order: stroke fill; }
+.style-bubble .tag-pill { font-family: "Poppins", sans-serif; font-weight: 900; }
+
+.style-script { --accent: #ff7a59; }
+.style-script .key { font-family: "Marker", cursive; text-transform: none; letter-spacing: 0; rotate: -3deg;
+  text-shadow: 0 4px 0 rgba(0,0,0,.4), 0 0 26px rgba(0,0,0,.4); }
+.style-script .key.alt { color: #ffe066; }
+.style-script .lead { font-family: "Montserrat", sans-serif; }
+
+.style-comic { --accent: #ffd400; }
+.style-comic .key { font-family: "Bangers", "Luckiest", sans-serif; letter-spacing: .04em; rotate: -2deg;
+  -webkit-text-stroke: 5px #111; paint-order: stroke fill; text-shadow: 6px 7px 0 #111; }
+.style-comic .key.alt { color: #4fd1ff; }
+.style-comic .lead { font-family: "Luckiest", sans-serif; color: #fff; -webkit-text-stroke: 3px #111; paint-order: stroke fill; letter-spacing: .03em; }
+.style-comic .tag-pill { font-family: "Luckiest", sans-serif; border: 3px solid #111; }
+
+.style-minimal { --accent: #ffffff; }
+.style-minimal .key { font-family: "Montserrat", sans-serif; font-weight: 800; text-transform: lowercase; color: #fff; letter-spacing: -.02em;
+  text-shadow: 0 2px 20px rgba(0,0,0,.45); text-decoration: underline; text-decoration-color: #ffb020; text-underline-offset: .12em;
+  text-decoration-thickness: .06em; }
+.style-minimal .key.alt { text-decoration-color: #7fd3ff; }
+.style-minimal .lead { font-weight: 700; text-transform: lowercase; color: rgba(255,255,255,.92); }
+.style-minimal .tag-pill { background: rgba(255,255,255,.18); color: #fff; backdrop-filter: blur(10px); }
+
+/* Captions on busy footage: a crisp dark outline under the styles that have no box of their own. */
+.caption { position: absolute; }
+.caption .lead, .style-editorial .caption .key, .style-script .caption .key, .style-minimal .caption .key, .style-neon .caption .lead {
+  -webkit-text-stroke: 2px rgba(0,0,0,.75); paint-order: stroke fill; }
+
+/* Caption looks (footage.js T.caption) and the drifting light on full cards (beats.js ambient). */
+.key-bar { position: absolute; left: -4%; right: -4%; bottom: -0.08em; height: 0.14em; border-radius: 0.07em;
+  background: var(--accent); transform-origin: left center; transform: scaleX(0); z-index: -1; }
+.key.look-punch { text-shadow: 0 0.06em 0.2em rgba(0,0,0,.45); }
+.page { overflow: hidden; }
+.blob { position: absolute; border-radius: 50%; background: var(--accent); opacity: .16; filter: blur(60px); transform: translate(-50%, -50%); }
+.sweep { position: absolute; top: 45%; left: 0; width: 100%; height: 3px; background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: .5; }
+/* Lottie art comes in any colour: a soft light halo keeps a dark animation readable on dark footage. */
+.accent-art { filter: drop-shadow(0 0 10px rgba(255,255,255,.75)) drop-shadow(0 4px 16px rgba(0,0,0,.35)); }

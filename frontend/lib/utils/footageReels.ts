@@ -45,14 +45,36 @@ export const CONTENT_TYPE_LABEL: Record<string, string> = {
   vlog: 'Vlog',
 };
 
-/** The progress steps the analysis reports, in order (see backend edit_engine/jobs.py). */
-export const analysisSteps = (withReference: boolean): string[] => [
-  'Reading your clips',
-  'Listening to what you said',
-  'Finding the best takes',
-  ...(withReference ? ['Studying your reference reel'] : []),
-  'Planning the edit',
-];
+/** What a person sees while a reel is made: a few plain steps, never the engine's internal stages. */
+export const EDIT_PHASES = [
+  { label: 'Getting your video', minutes: 1 },
+  { label: 'Watching your footage', minutes: 2 },
+  { label: 'Finding the best moment', minutes: 2 },
+  { label: 'Editing', minutes: 4 },
+  { label: 'Final touches', minutes: 1 },
+] as const;
+
+// The reel engine's stages (reel_engine/pipeline.py STAGES) and the classic analysis's progress text
+// (edit_engine/jobs.py) folded into those phases.
+const PHASE_OF: Record<string, number> = {
+  fetch: 0, queued: 1, ingest: 1, listen: 1, watch: 1, moments: 2, direct: 2, verify: 2, compile: 2,
+  assets: 3, picture: 3, layout: 3, graphics: 3, sound: 3, compose: 3, review: 4, done: 4,
+  'Fetching your YouTube video': 0, 'Waiting to start': 1, 'Reading your clips': 1, 'Listening to what you said': 1,
+  'Finding the best takes': 1, 'Studying your reference reel': 1, 'Planning the edit': 2,
+};
+
+/** The steps this reel shows (fetching only for a YouTube link), the one under way, and roughly how long is left. */
+export function editPhase(edit: EditResponse): { steps: string[]; active: number; minutesLeft: number } {
+  const phases = edit.source_url ? EDIT_PHASES : EDIT_PHASES.slice(1);
+  const offset = edit.source_url ? 0 : 1;
+  const stages = edit.premium?.stages ?? [];
+  const where = edit.status === 'rendering' ? 3
+    : edit.engine === 'premium' ? PHASE_OF[stages.length ? stages[stages.length - 1].stage : 'queued'] ?? 1
+    : PHASE_OF[edit.progress ?? 'Waiting to start'] ?? 1;
+  const active = Math.min(phases.length - 1, Math.max(0, where - offset));
+  const minutesLeft = Math.max(1, Math.round(phases.slice(active).reduce((sum, p, i) => sum + (i ? p.minutes : p.minutes / 2), 0)));
+  return { steps: phases.map((p) => p.label), active, minutesLeft };
+}
 
 /** Mirrors MAX_SECONDS in backend/edit_engine/reference.py. */
 export const REFERENCE_MAX_SECONDS = 180;

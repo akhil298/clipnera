@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import tempfile
 import zlib
 from dataclasses import dataclass
@@ -24,7 +25,9 @@ import numpy as np
 from scipy.io import wavfile
 from scipy.signal import fftconvolve
 
-from build_synth_sfx import SR, bandpass, decay, glide, highpass, lowpass, noise, osc, swell, times
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from motion.synth import SR, Signal, bass, clap, crackle, decay, hat, highpass, hz, keys, kick, lowpass, noise, pad, pluck, shaker, snare, tom  # noqa: E402
 
 OUT = Path(__file__).resolve().parents[1] / "static" / "motion" / "music"
 LICENCE = "Clipnera original, composed in code"
@@ -34,84 +37,6 @@ MINOR = (0, 2, 3, 5, 7, 8, 10)
 TARGET_RMS_DB = -18.0
 PEAK = 10 ** (-1.0 / 20)
 
-Signal = np.ndarray
-
-
-def hz(semitones_from_a4: float) -> float:
-    return 440.0 * 2 ** (semitones_from_a4 / 12)
-
-
-# ---------------------------------------------------------------- instruments (mono, one note each)
-
-def kick(punch: float = 1.0) -> Signal:
-    body = osc(glide(150 * punch, 45, 0.35), 0.35) * decay(0.35, 11)
-    click = highpass(noise(0.01, np.random.default_rng(1)), 2000) * 0.3
-    return body + np.pad(click, (0, len(body) - len(click)))
-
-
-def snare(rng: np.random.Generator) -> Signal:
-    rattle = bandpass(noise(0.22, rng), 1500, 7000) * decay(0.22, 16)
-    tone = osc(185, 0.22) * decay(0.22, 28)
-    return 0.8 * rattle + 0.5 * tone
-
-
-def clap(rng: np.random.Generator) -> Signal:
-    out = np.zeros(int(0.25 * SR))
-    for at in (0.0, 0.012, 0.024):
-        burst = bandpass(noise(0.2, rng), 900, 5000) * decay(0.2, 30 if at < 0.02 else 14)
-        i = int(at * SR)
-        out[i:i + len(burst)] += burst[: len(out) - i]
-    return out * 0.6
-
-
-def hat(rng: np.random.Generator, open_: bool = False) -> Signal:
-    length = 0.25 if open_ else 0.05
-    return highpass(noise(length, rng), 7000) * decay(length, 12 if open_ else 70) * 0.35
-
-
-def shaker(rng: np.random.Generator) -> Signal:
-    return bandpass(noise(0.09, rng), 5000, 11000) * swell(0.09, 0.3) * 0.25
-
-
-def tom(freq: float) -> Signal:
-    return osc(glide(freq * 1.6, freq, 0.5), 0.5) * decay(0.5, 7)
-
-
-def keys(freq: float, seconds: float, brightness: float = 1.0) -> Signal:
-    """An electric piano: a few harmonics, the upper ones fading first, a soft tremolo."""
-    t = times(seconds)
-    tone = osc(freq, seconds) + 0.35 * brightness * osc(2 * freq, seconds) * decay(seconds, 4) \
-        + 0.12 * brightness * osc(3 * freq, seconds) * decay(seconds, 7)
-    attack = np.minimum(1.0, t / 0.004)
-    return tone * attack * decay(seconds, 2.2) * (1 + 0.06 * np.sin(2 * np.pi * 4.5 * t))
-
-
-def pluck(freq: float, seconds: float) -> Signal:
-    raw = osc(freq, seconds, "saw") + 0.5 * osc(freq * 1.005, seconds, "saw")
-    return lowpass(raw, min(6000, freq * 6)) * decay(seconds, 9) * np.minimum(1.0, times(seconds) / 0.002) * 0.6
-
-
-def pad(freqs: list[float], seconds: float, cutoff: float = 1800) -> Signal:
-    """Detuned saws, filtered soft, swelling in and out over the chord."""
-    out = np.zeros(int(seconds * SR))
-    for f in freqs:
-        for cents in (-8, 0, 7):
-            out += osc(f * 2 ** (cents / 1200), seconds, "saw")
-    return lowpass(out / (3 * len(freqs)), cutoff, 2) * swell(seconds, 0.35)
-
-
-def bass(freq: float, seconds: float, wave: str = "sine") -> Signal:
-    tone = osc(freq, seconds, wave) + 0.4 * osc(freq / 2, seconds)
-    env = np.minimum(1.0, times(seconds) / 0.006) * np.exp(-1.2 * times(seconds))
-    release = np.minimum(1.0, (seconds - times(seconds)) / 0.03)
-    return lowpass(tone, 900) * env * release
-
-
-def crackle(rng: np.random.Generator, seconds: float) -> Signal:
-    """Vinyl: faint hiss and the odd pop."""
-    hiss = lowpass(noise(seconds, rng, "pink"), 4000) * 0.015
-    pops = (rng.random(int(seconds * SR)) > 0.99985) * rng.uniform(-0.25, 0.25, int(seconds * SR))
-    return hiss + lowpass(pops, 3000)
 
 
 # ---------------------------------------------------------------- styles

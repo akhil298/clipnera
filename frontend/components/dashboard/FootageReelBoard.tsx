@@ -8,10 +8,9 @@ import { getAllCaptionStyles } from '@/lib/utils/captionStyles';
 import { EDIT_STATUS, formatSeconds, listWords, planDiff } from '@/lib/utils/footageReels';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusPill } from '@/components/ui/StatusPill';
-import { FootageReelPlanning } from './FootageReelPlanning';
 import { FootageReelReady } from './FootageReelReady';
 import { type ChatMessage, FootageReelReview } from './FootageReelReview';
-import { useReelPick } from './ReelModelPicker';
+import { ReelEditingProgress } from './ReelEditingProgress';
 
 const BUSY: EditResponse['status'][] = ['analyzing', 'rendering'];
 const HISTORY = 20;
@@ -32,7 +31,6 @@ function useStablePreview(edit: EditResponse | null) {
 
 export function FootageReelBoard({ editId, onBack }: { editId: string; onBack: () => void }) {
   const { entitlements } = useEntitlements();
-  const pickModel = useReelPick();
   const [edit, setEdit] = useState<EditResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
@@ -93,7 +91,7 @@ export function FootageReelBoard({ editId, onBack }: { editId: string; onBack: (
     setMessages((prev) => [...prev, { role: 'user', text: message }]);
     setWorking(true);
     try {
-      const next = await editsApi.chat(editId, { message, ...pickModel });
+      const next = await editsApi.chat(editId, { message });
       setEdit(next);
       remember(before);
       const { changed } = before ? planDiff(before, next) : { changed: [] };
@@ -129,7 +127,9 @@ export function FootageReelBoard({ editId, onBack }: { editId: string; onBack: (
     );
   }
 
-  const status = EDIT_STATUS[edit.status];
+  const premium = edit.engine === 'premium';
+  const making = edit.status === 'analyzing' || edit.status === 'rendering';
+  const status = making ? { ...EDIT_STATUS.analyzing, label: 'Editing' } : EDIT_STATUS[edit.status];
   const plan = edit.plan;
   const canEdit = (edit.status === 'planned' || edit.status === 'done') && !working;
   const showReady = edit.status === 'done' && Boolean(edit.output_url) && !editing;
@@ -143,10 +143,8 @@ export function FootageReelBoard({ editId, onBack }: { editId: string; onBack: (
         eyebrow={<StatusPill tone={status.tone}>{status.label}</StatusPill>}
         description={
           <>
-            {edit.status === 'analyzing' && 'Reading your footage and planning the edit.'}
             {edit.status === 'planned' && plan && `${formatSeconds(edit.duration_s)} cut from ${formatSeconds(edit.raw_seconds)} of footage. Changes and previews are free.`}
-            {edit.status === 'rendering' && 'Rendering your reel. This page updates by itself.'}
-            {edit.status === 'done' && `Rendered · ${edit.credits_charged} credits used`}
+            {edit.status === 'done' && `${formatSeconds(edit.duration_s)} reel · ${edit.credits_charged} credits used`}
             {edit.status === 'failed' && (edit.error ?? 'Something went wrong while planning this reel.')}
           </>
         }
@@ -179,14 +177,8 @@ export function FootageReelBoard({ editId, onBack }: { editId: string; onBack: (
 
       {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
       {edit.status !== 'failed' && edit.error && <p className="text-sm text-amber-300">{edit.error}</p>}
-      {edit.status === 'rendering' && (
-        <div className="flex items-center gap-3 rounded-2xl border border-amber-500/25 bg-neutral-900/80 p-4 text-[15px] text-neutral-200">
-          <Loader2 className="w-5 h-5 text-amber-400 animate-spin" /> Rendering your reel. You can leave this page; we'll notify you when it's done.
-        </div>
-      )}
-
-      {edit.status === 'analyzing' && <FootageReelPlanning edit={edit} />}
-      {showReady && <FootageReelReady edit={edit} onEdit={() => setEditing(true)} onNew={onBack} />}
+      {making && <ReelEditingProgress edit={edit} />}
+      {showReady && <FootageReelReady edit={edit} onEdit={premium ? undefined : () => setEditing(true)} onNew={onBack} />}
       {showReview && plan && preview && (
         <FootageReelReview edit={edit} preview={preview} canEdit={canEdit} busy={working} maxOutput={maxOutput}
           captionOptions={captionOptions} change={change} messages={messages} onSend={send} />

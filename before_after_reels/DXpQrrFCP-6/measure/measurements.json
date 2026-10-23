@@ -1,0 +1,310 @@
+{
+ "id": "DXpQrrFCP-6",
+ "duration_s": 10.9,
+ "fps": 30.0,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  1.633,
+  2.0,
+  8.133,
+  10.533
+ ],
+ "shot_count": 5,
+ "median_shot_s": 1.63,
+ "shortest_shot_s": 0.37,
+ "cuts_in_hook": 2,
+ "cuts_on_beat": 0.75,
+ "flashes": [
+  {
+   "at_s": 0.0,
+   "seconds": 0.1
+  },
+  {
+   "at_s": 0.733,
+   "seconds": 0.4
+  },
+  {
+   "at_s": 1.7,
+   "seconds": 0.3
+  },
+  {
+   "at_s": 2.667,
+   "seconds": 0.1
+  },
+  {
+   "at_s": 3.4,
+   "seconds": 0.067
+  },
+  {
+   "at_s": 4.4,
+   "seconds": 0.133
+  },
+  {
+   "at_s": 5.467,
+   "seconds": 2.667
+  },
+  {
+   "at_s": 8.6,
+   "seconds": 1.933
+  }
+ ],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.04,
+  0.03,
+  0.03,
+  0.12,
+  0.02,
+  0.03,
+  0.03,
+  0.03,
+  0.02,
+  0.02,
+  0.01,
+  0.02,
+  0.0,
+  0.02,
+  0.01,
+  0.0,
+  0.02,
+  0.02,
+  0.01,
+  0.0,
+  0.0,
+  0.06
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 117.5,
+  "beats_s": [
+   0.186,
+   0.673,
+   1.161,
+   1.765,
+   2.252,
+   2.763,
+   3.274,
+   3.762,
+   4.226,
+   4.69,
+   5.178,
+   5.712,
+   6.223,
+   6.734,
+   7.198,
+   7.686,
+   8.197,
+   8.684,
+   9.172
+  ],
+  "hits_s": [
+   0.07,
+   0.163,
+   0.302,
+   0.441,
+   0.65,
+   0.72,
+   0.836,
+   0.952,
+   1.138,
+   1.37,
+   1.556,
+   1.765,
+   1.904,
+   2.067,
+   2.183,
+   2.252,
+   2.717,
+   2.763,
+   2.949,
+   3.065,
+   3.669,
+   3.762,
+   3.924,
+   4.063,
+   4.203,
+   4.342,
+   4.69,
+   4.83,
+   5.016,
+   5.085,
+   5.178,
+   5.457,
+   5.712,
+   5.851,
+   5.944,
+   6.107,
+   6.432,
+   6.711,
+   6.873,
+   6.989,
+   7.082,
+   7.198,
+   7.384,
+   7.686,
+   7.988,
+   8.197,
+   8.336,
+   8.452,
+   8.591,
+   8.731,
+   8.847,
+   8.963,
+   9.172,
+   9.358,
+   9.451,
+   9.636,
+   9.892,
+   9.961,
+   10.054,
+   10.24
+  ],
+  "drop_s": null,
+  "loudness_half_seconds": [
+   0.55,
+   0.49,
+   0.67,
+   0.47,
+   0.57,
+   0.46,
+   0.58,
+   0.57,
+   0.43,
+   0.52,
+   0.52,
+   0.41,
+   0.59,
+   0.5,
+   0.46,
+   0.28,
+   0.38,
+   0.56,
+   0.41,
+   0.54,
+   0.28,
+   0.15
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "Here's why posting randomly gets you ignored. No plan, no direction, no results. But with strategy, consistent content. Clear message, real growth.",
+  "words": [
+   {
+    "word": "Here's",
+    "start_s": 0.0,
+    "end_s": 0.32
+   },
+   {
+    "word": "why",
+    "start_s": 0.32,
+    "end_s": 0.5
+   },
+   {
+    "word": "posting",
+    "start_s": 0.5,
+    "end_s": 0.92
+   },
+   {
+    "word": "randomly",
+    "start_s": 0.92,
+    "end_s": 1.42
+   },
+   {
+    "word": "gets",
+    "start_s": 1.42,
+    "end_s": 1.82
+   },
+   {
+    "word": "you",
+    "start_s": 1.82,
+    "end_s": 2.0
+   },
+   {
+    "word": "ignored.",
+    "start_s": 2.0,
+    "end_s": 2.44
+   },
+   {
+    "word": "No",
+    "start_s": 2.72,
+    "end_s": 2.82
+   },
+   {
+    "word": "plan,",
+    "start_s": 2.82,
+    "end_s": 3.2
+   },
+   {
+    "word": "no",
+    "start_s": 3.62,
+    "end_s": 3.82
+   },
+   {
+    "word": "direction,",
+    "start_s": 3.82,
+    "end_s": 4.26
+   },
+   {
+    "word": "no",
+    "start_s": 4.78,
+    "end_s": 4.88
+   },
+   {
+    "word": "results.",
+    "start_s": 4.88,
+    "end_s": 5.4
+   },
+   {
+    "word": "But",
+    "start_s": 5.68,
+    "end_s": 5.74
+   },
+   {
+    "word": "with",
+    "start_s": 5.74,
+    "end_s": 5.9
+   },
+   {
+    "word": "strategy,",
+    "start_s": 5.9,
+    "end_s": 6.44
+   },
+   {
+    "word": "consistent",
+    "start_s": 6.66,
+    "end_s": 7.14
+   },
+   {
+    "word": "content.",
+    "start_s": 7.14,
+    "end_s": 7.78
+   },
+   {
+    "word": "Clear",
+    "start_s": 8.34,
+    "end_s": 8.5
+   },
+   {
+    "word": "message,",
+    "start_s": 8.5,
+    "end_s": 8.94
+   },
+   {
+    "word": "real",
+    "start_s": 9.32,
+    "end_s": 9.64
+   },
+   {
+    "word": "growth.",
+    "start_s": 9.64,
+    "end_s": 10.14
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

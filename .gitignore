@@ -94,3 +94,32 @@ backend/static/motion/previews/
 # Local cleanup report for the gitignored library
 backend/static/motion/cleanup_report.json
 AI Editor/
+# Before/After reference reels (local only)
+before_after_reels/*
+# The analysis and each reel's measurements are kept (the reel engine's style reference); the videos stay local.
+!before_after_reels/ANALYSIS.md
+!before_after_reels/*/
+before_after_reels/*/*
+!before_after_reels/*/reference.json
+!before_after_reels/*/measure/
+before_after_reels/*/measure/*
+!before_after_reels/*/measure/measurements.json
+
+# Clean motion kit: built by backend/scripts/build_motion_kit.py, synced through S3 (--push/--pull)
+backend/static/motion/kit/*
+!backend/static/motion/kit/README.md
+
+# Licensed music tracks: fetched by backend/scripts/build_music_library.py on each host (the manifest is kept).
+!backend/static/motion/music/library/
+backend/static/motion/music/library/*
+!backend/static/motion/music/library/manifest.json
+
+# Sound effects, motion graphics and animated emoji: fetched by backend/scripts/build_asset_libraries.py on each
+# host (the manifests are kept).
+!backend/static/motion/sfx/library/
+backend/static/motion/sfx/library/*
+!backend/static/motion/sfx/library/manifest.json
+backend/static/motion/lottie/*
+!backend/static/motion/lottie/manifest.json
+backend/static/motion/emoji/*
+!backend/static/motion/emoji/manifest.json

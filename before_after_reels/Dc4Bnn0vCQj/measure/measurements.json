@@ -1,0 +1,772 @@
+{
+ "id": "Dc4Bnn0vCQj",
+ "duration_s": 27.027,
+ "fps": 29.97,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  8.242,
+  14.047,
+  17.117,
+  24.658,
+  24.791
+ ],
+ "shot_count": 6,
+ "median_shot_s": 4.44,
+ "shortest_shot_s": 0.13,
+ "cuts_in_hook": 0,
+ "cuts_on_beat": 0.6,
+ "flashes": [
+  {
+   "at_s": 9.576,
+   "seconds": 0.167
+  }
+ ],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.08,
+  0.08,
+  0.08,
+  0.1,
+  0.08,
+  0.09,
+  0.09,
+  0.13,
+  0.3,
+  0.08,
+  0.09,
+  0.06,
+  0.07,
+  0.08,
+  0.09,
+  0.09,
+  0.17,
+  0.04,
+  0.05,
+  0.17,
+  0.06,
+  0.05,
+  0.05,
+  0.06,
+  0.17,
+  0.03,
+  0.04,
+  0.07,
+  0.15,
+  0.03,
+  0.15,
+  0.04,
+  0.04,
+  0.05,
+  0.18,
+  0.04,
+  0.05,
+  0.04,
+  0.04,
+  0.07,
+  0.06,
+  0.07,
+  0.06,
+  0.05,
+  0.06,
+  0.05,
+  0.03,
+  0.04,
+  0.05,
+  0.23,
+  0.07,
+  0.05,
+  0.06,
+  0.05
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 129.2,
+  "beats_s": [
+   0.07,
+   0.511,
+   0.929,
+   1.393,
+   1.834,
+   2.299,
+   2.74,
+   3.158,
+   3.599,
+   4.063,
+   4.528,
+   4.946,
+   5.433,
+   5.875,
+   6.316,
+   6.803,
+   7.245,
+   7.732,
+   8.173,
+   8.638,
+   9.102,
+   9.543,
+   9.985,
+   10.472,
+   10.937,
+   11.331,
+   11.749,
+   12.144,
+   12.516,
+   13.003,
+   13.468,
+   13.909,
+   14.35,
+   14.838,
+   15.302,
+   15.743,
+   16.184,
+   16.579,
+   17.02,
+   17.438,
+   17.833,
+   18.274,
+   18.715,
+   19.18,
+   19.644,
+   20.085,
+   20.526,
+   20.991,
+   21.478,
+   21.943,
+   22.407,
+   22.895,
+   23.313,
+   23.754,
+   24.218,
+   24.683,
+   25.147,
+   25.635,
+   26.122,
+   26.564
+  ],
+  "hits_s": [
+   0.07,
+   0.232,
+   1.022,
+   1.324,
+   1.834,
+   1.997,
+   2.136,
+   2.299,
+   2.461,
+   2.74,
+   2.972,
+   3.158,
+   3.32,
+   3.506,
+   3.762,
+   4.946,
+   5.108,
+   5.201,
+   5.248,
+   5.433,
+   5.666,
+   5.851,
+   6.037,
+   6.293,
+   6.409,
+   6.711,
+   7.036,
+   7.245,
+   7.407,
+   7.872,
+   8.173,
+   8.638,
+   8.87,
+   9.102,
+   9.334,
+   9.567,
+   9.776,
+   9.985,
+   10.24,
+   10.472,
+   10.751,
+   10.937,
+   11.099,
+   11.331,
+   11.633,
+   11.749,
+   11.865,
+   12.074,
+   12.144,
+   12.492,
+   12.632,
+   12.771,
+   13.142,
+   13.282,
+   13.468,
+   13.63,
+   13.909,
+   14.141,
+   14.605,
+   14.838,
+   15.279,
+   15.72,
+   16.184,
+   16.44,
+   16.672,
+   17.02,
+   17.438,
+   17.81,
+   17.972,
+   18.646,
+   19.807,
+   20.108,
+   20.503,
+   21.107,
+   21.362,
+   21.502,
+   21.687,
+   22.129,
+   22.407,
+   22.57,
+   22.732,
+   22.895,
+   23.057,
+   23.29,
+   23.452,
+   24.056,
+   24.218,
+   24.451,
+   24.683,
+   24.729,
+   24.845,
+   25.054,
+   25.333,
+   26.122,
+   26.355,
+   26.54,
+   26.819
+  ],
+  "drop_s": 10.0,
+  "loudness_half_seconds": [
+   0.41,
+   0.41,
+   0.42,
+   0.36,
+   0.39,
+   0.28,
+   0.39,
+   0.47,
+   0.44,
+   0.48,
+   0.31,
+   0.29,
+   0.48,
+   0.45,
+   0.15,
+   0.43,
+   0.38,
+   0.48,
+   0.3,
+   0.11,
+   0.53,
+   0.46,
+   0.41,
+   0.36,
+   0.13,
+   0.41,
+   0.3,
+   0.23,
+   0.36,
+   0.28,
+   0.18,
+   0.3,
+   0.25,
+   0.36,
+   0.32,
+   0.38,
+   0.33,
+   0.39,
+   0.42,
+   0.5,
+   0.28,
+   0.45,
+   0.49,
+   0.34,
+   0.37,
+   0.22,
+   0.45,
+   0.19,
+   0.4,
+   0.28,
+   0.56,
+   0.25,
+   0.35,
+   0.5,
+   0.2
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "Are you looking for a 2080 payment plan or something that is ready to move in? Well, I got your back. No delays in the handover. Stay right now and move into your new home. Well, location is something that gives me the click. It's near to the metro station. Pool is operational and hospital is just near to your home. Well, if you love shopping, you don't have to go anywhere because all the retail outlets are just at of your home. Well, for more details, connect us right now.",
+  "words": [
+   {
+    "word": "Are",
+    "start_s": 0.0,
+    "end_s": 0.34
+   },
+   {
+    "word": "you",
+    "start_s": 0.34,
+    "end_s": 0.54
+   },
+   {
+    "word": "looking",
+    "start_s": 0.54,
+    "end_s": 0.78
+   },
+   {
+    "word": "for",
+    "start_s": 0.78,
+    "end_s": 1.1
+   },
+   {
+    "word": "a",
+    "start_s": 1.1,
+    "end_s": 1.22
+   },
+   {
+    "word": "2080",
+    "start_s": 1.22,
+    "end_s": 1.78
+   },
+   {
+    "word": "payment",
+    "start_s": 1.78,
+    "end_s": 2.06
+   },
+   {
+    "word": "plan",
+    "start_s": 2.06,
+    "end_s": 2.38
+   },
+   {
+    "word": "or",
+    "start_s": 2.38,
+    "end_s": 2.56
+   },
+   {
+    "word": "something",
+    "start_s": 2.56,
+    "end_s": 2.9
+   },
+   {
+    "word": "that",
+    "start_s": 2.9,
+    "end_s": 3.22
+   },
+   {
+    "word": "is",
+    "start_s": 3.22,
+    "end_s": 3.4
+   },
+   {
+    "word": "ready",
+    "start_s": 3.4,
+    "end_s": 3.62
+   },
+   {
+    "word": "to",
+    "start_s": 3.62,
+    "end_s": 3.76
+   },
+   {
+    "word": "move",
+    "start_s": 3.76,
+    "end_s": 3.94
+   },
+   {
+    "word": "in?",
+    "start_s": 3.94,
+    "end_s": 4.08
+   },
+   {
+    "word": "Well,",
+    "start_s": 4.46,
+    "end_s": 4.64
+   },
+   {
+    "word": "I",
+    "start_s": 4.76,
+    "end_s": 4.84
+   },
+   {
+    "word": "got",
+    "start_s": 4.84,
+    "end_s": 5.02
+   },
+   {
+    "word": "your",
+    "start_s": 5.02,
+    "end_s": 5.14
+   },
+   {
+    "word": "back.",
+    "start_s": 5.14,
+    "end_s": 5.36
+   },
+   {
+    "word": "No",
+    "start_s": 5.76,
+    "end_s": 5.92
+   },
+   {
+    "word": "delays",
+    "start_s": 5.92,
+    "end_s": 6.16
+   },
+   {
+    "word": "in",
+    "start_s": 6.16,
+    "end_s": 6.36
+   },
+   {
+    "word": "the",
+    "start_s": 6.36,
+    "end_s": 6.46
+   },
+   {
+    "word": "handover.",
+    "start_s": 6.46,
+    "end_s": 6.86
+   },
+   {
+    "word": "Stay",
+    "start_s": 7.24,
+    "end_s": 7.54
+   },
+   {
+    "word": "right",
+    "start_s": 7.54,
+    "end_s": 7.72
+   },
+   {
+    "word": "now",
+    "start_s": 7.72,
+    "end_s": 7.98
+   },
+   {
+    "word": "and",
+    "start_s": 7.98,
+    "end_s": 8.28
+   },
+   {
+    "word": "move",
+    "start_s": 8.28,
+    "end_s": 8.5
+   },
+   {
+    "word": "into",
+    "start_s": 8.5,
+    "end_s": 8.7
+   },
+   {
+    "word": "your",
+    "start_s": 8.7,
+    "end_s": 8.86
+   },
+   {
+    "word": "new",
+    "start_s": 8.86,
+    "end_s": 9.04
+   },
+   {
+    "word": "home.",
+    "start_s": 9.04,
+    "end_s": 9.38
+   },
+   {
+    "word": "Well,",
+    "start_s": 9.9,
+    "end_s": 10.04
+   },
+   {
+    "word": "location",
+    "start_s": 10.04,
+    "end_s": 10.36
+   },
+   {
+    "word": "is",
+    "start_s": 10.36,
+    "end_s": 10.64
+   },
+   {
+    "word": "something",
+    "start_s": 10.64,
+    "end_s": 10.9
+   },
+   {
+    "word": "that",
+    "start_s": 10.9,
+    "end_s": 11.18
+   },
+   {
+    "word": "gives",
+    "start_s": 11.18,
+    "end_s": 11.42
+   },
+   {
+    "word": "me",
+    "start_s": 11.42,
+    "end_s": 11.64
+   },
+   {
+    "word": "the",
+    "start_s": 11.64,
+    "end_s": 11.76
+   },
+   {
+    "word": "click.",
+    "start_s": 11.76,
+    "end_s": 12.0
+   },
+   {
+    "word": "It's",
+    "start_s": 12.48,
+    "end_s": 12.62
+   },
+   {
+    "word": "near",
+    "start_s": 12.62,
+    "end_s": 12.8
+   },
+   {
+    "word": "to",
+    "start_s": 12.8,
+    "end_s": 12.96
+   },
+   {
+    "word": "the",
+    "start_s": 12.96,
+    "end_s": 13.06
+   },
+   {
+    "word": "metro",
+    "start_s": 13.06,
+    "end_s": 13.24
+   },
+   {
+    "word": "station.",
+    "start_s": 13.24,
+    "end_s": 13.6
+   },
+   {
+    "word": "Pool",
+    "start_s": 13.98,
+    "end_s": 14.24
+   },
+   {
+    "word": "is",
+    "start_s": 14.24,
+    "end_s": 14.4
+   },
+   {
+    "word": "operational",
+    "start_s": 14.4,
+    "end_s": 14.8
+   },
+   {
+    "word": "and",
+    "start_s": 14.8,
+    "end_s": 15.36
+   },
+   {
+    "word": "hospital",
+    "start_s": 15.36,
+    "end_s": 15.72
+   },
+   {
+    "word": "is",
+    "start_s": 15.72,
+    "end_s": 16.04
+   },
+   {
+    "word": "just",
+    "start_s": 16.04,
+    "end_s": 16.3
+   },
+   {
+    "word": "near",
+    "start_s": 16.3,
+    "end_s": 16.52
+   },
+   {
+    "word": "to",
+    "start_s": 16.52,
+    "end_s": 16.72
+   },
+   {
+    "word": "your",
+    "start_s": 16.72,
+    "end_s": 16.86
+   },
+   {
+    "word": "home.",
+    "start_s": 16.86,
+    "end_s": 17.04
+   },
+   {
+    "word": "Well,",
+    "start_s": 17.4,
+    "end_s": 17.54
+   },
+   {
+    "word": "if",
+    "start_s": 17.74,
+    "end_s": 17.92
+   },
+   {
+    "word": "you",
+    "start_s": 17.92,
+    "end_s": 18.06
+   },
+   {
+    "word": "love",
+    "start_s": 18.06,
+    "end_s": 18.26
+   },
+   {
+    "word": "shopping,",
+    "start_s": 18.26,
+    "end_s": 18.64
+   },
+   {
+    "word": "you",
+    "start_s": 18.84,
+    "end_s": 18.9
+   },
+   {
+    "word": "don't",
+    "start_s": 18.9,
+    "end_s": 19.16
+   },
+   {
+    "word": "have",
+    "start_s": 19.16,
+    "end_s": 19.32
+   },
+   {
+    "word": "to",
+    "start_s": 19.32,
+    "end_s": 19.48
+   },
+   {
+    "word": "go",
+    "start_s": 19.48,
+    "end_s": 19.6
+   },
+   {
+    "word": "anywhere",
+    "start_s": 19.6,
+    "end_s": 20.16
+   },
+   {
+    "word": "because",
+    "start_s": 20.16,
+    "end_s": 20.6
+   },
+   {
+    "word": "all",
+    "start_s": 20.6,
+    "end_s": 20.98
+   },
+   {
+    "word": "the",
+    "start_s": 20.98,
+    "end_s": 21.16
+   },
+   {
+    "word": "retail",
+    "start_s": 21.16,
+    "end_s": 21.36
+   },
+   {
+    "word": "outlets",
+    "start_s": 21.36,
+    "end_s": 21.84
+   },
+   {
+    "word": "are",
+    "start_s": 21.84,
+    "end_s": 22.22
+   },
+   {
+    "word": "just",
+    "start_s": 22.22,
+    "end_s": 22.52
+   },
+   {
+    "word": "at",
+    "start_s": 22.52,
+    "end_s": 22.98
+   },
+   {
+    "word": "of",
+    "start_s": 23.58,
+    "end_s": 24.14
+   },
+   {
+    "word": "your",
+    "start_s": 24.14,
+    "end_s": 24.3
+   },
+   {
+    "word": "home.",
+    "start_s": 24.3,
+    "end_s": 24.56
+   },
+   {
+    "word": "Well,",
+    "start_s": 24.78,
+    "end_s": 24.92
+   },
+   {
+    "word": "for",
+    "start_s": 25.06,
+    "end_s": 25.1
+   },
+   {
+    "word": "more",
+    "start_s": 25.1,
+    "end_s": 25.3
+   },
+   {
+    "word": "details,",
+    "start_s": 25.3,
+    "end_s": 25.66
+   },
+   {
+    "word": "connect",
+    "start_s": 25.98,
+    "end_s": 26.22
+   },
+   {
+    "word": "us",
+    "start_s": 26.22,
+    "end_s": 26.44
+   },
+   {
+    "word": "right",
+    "start_s": 26.44,
+    "end_s": 26.62
+   },
+   {
+    "word": "now.",
+    "start_s": 26.62,
+    "end_s": 26.9
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg",
+  "full_2.jpg"
+ ]
+}

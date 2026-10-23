@@ -31,11 +31,12 @@ from edit_engine.music import ALLOWED_LICENCES, MOODS, SOURCES, credit_line, pic
 from edit_engine.perception import probe_media
 from edit_engine.schema import (
     EditChange, EditCreateRequest, EditLimitsResponse, EditLine, EditMusicResponse, EditPicture, EditPlanResponse,
-    EditReferenceResponse, EditResponse, EditSourceResponse, EditSourcesCompleteRequest, EditSourcesInitRequest, EditSourcesInitResponse,
+    EditReelResponse, EditReferenceResponse, EditResponse, EditSourceResponse, EditSourcesCompleteRequest, EditSourcesInitRequest, EditSourcesInitResponse,
     EditChatRequest, EditSourceFile, EditSummary, EditText, EditTimelineMusic, EditTimelineResponse, EditUpload, EditVoicePiece, EditWord,
-    MusicTrackResponse,
+    MusicTrackResponse, PremiumResponse,
 )
 from edit_engine.script import SCRIPT_MODES
+from reel_engine import jobs as premium_jobs
 from feature_flags.registry import REEL_EDITOR_OPUS
 from feature_flags.service import FeatureFlagService
 from jobs.queue import Job, get_queue
@@ -75,6 +76,16 @@ def _credit_text(music_credit: str | None) -> str | None:
     return (json.loads(music_credit).get("credit_text") or None) if music_credit else None
 
 
+_running: set[asyncio.Task] = set()
+
+
+def in_background(work: Any) -> None:
+    """Run ``work`` in this (API) process, keeping a reference so the task is not collected before it ends."""
+    task = asyncio.create_task(work)
+    _running.add(task)
+    task.add_done_callback(_running.discard)
+
+
 class EditService:
     def __init__(self, session: AsyncSession, s3: S3 | None = None) -> None:
         self._session = session
@@ -98,15 +109,23 @@ class EditService:
             raise CustomException(message="Your plan makes reels up to "
                                   f"{limits_for(entitlements).max_output_seconds} seconds long.", code="PRO_REQUIRED", status_code=403)
         self._check_model(entitlements, request.ai_model)
+        if request.engine == "premium" and not entitlements.pro_ai_provider:
+            raise CustomException(message="The premium AI edit is on Pro.", code="PRO_REQUIRED", status_code=403,
+                                  extra={"feature": "premium_edit"})
         if request.reference_url and not reference.is_supported_link(request.reference_url):
             raise CustomException(message="Paste a YouTube or Shorts link, or upload the reference reel instead.",
                                   code="INVALID_BODY", status_code=400)
+        title = request.title.strip()
+        if request.source_url:
+            found = await self._check_source_link(request.source_url, limits_for(entitlements).max_raw_seconds)
+            if title == "Untitled reel" and found:
+                title = found[:300]
         edit = EditProject(
-            user_id=user_id, title=request.title.strip(), script=(request.script or "").strip() or None,
+            user_id=user_id, title=title, script=(request.script or "").strip() or None,
             script_mode=request.script_mode, intent=(request.intent or "").strip() or None, language=request.language.lower(),
             caption_style=request.caption_style, target_seconds=request.target_seconds, autopilot=request.autopilot,
             ai_model=request.ai_model, ai_effort=request.ai_effort if request.ai_model else None,
-            reference_url=request.reference_url,
+            reference_url=request.reference_url, source_url=request.source_url, engine=request.engine,
         )
         self._session.add(edit)
         await self._session.commit()
@@ -169,15 +188,46 @@ class EditService:
         """Analyse the footage and plan the reel in the background; poll until status is planned."""
         edit = await self._edit(user_id, edit_id, statuses=(EditStatus.DRAFT, EditStatus.FAILED))
         sources = [s for s in json.loads(edit.sources) if s.get("uploaded")]
-        if not any(s["kind"] in ("video", "image") for s in sources):
-            raise CustomException(message="Add at least one video or photo", code="INVALID_BODY", status_code=400)
+        if not edit.source_url and not any(s["kind"] in ("video", "image") for s in sources):
+            raise CustomException(message="Add a video, a photo or a YouTube link", code="INVALID_BODY", status_code=400)
         # A retry after a failed analysis is on us: only a new reel counts toward the daily limit.
         if edit.status == EditStatus.DRAFT:
             await self._subscriptions.consume_daily_quota(user_id, "auto_edits")
         edit.sources = json.dumps(sources, ensure_ascii=False)
+        if edit.source_url and not any(s.get("link") for s in sources):
+            # The linked video is fetched in the background first; the edit then starts as if it had been uploaded.
+            edit.status, edit.error = EditStatus.ANALYZING, None
+            if edit.engine == "premium":
+                edit.premium = json.dumps({"progress": [{"stage": "fetch", "note": "Fetching your YouTube video", "at": 0.0}]})
+            else:
+                edit.analysis = json.dumps({"progress": "Fetching your YouTube video"})
+            await self._session.commit()
+            in_background(jobs.fetch_link(edit.id, user_id))
+            return await self.response(edit)
+        return await self.begin(edit, user_id)
+
+    async def begin(self, edit: EditProject, user_id: str) -> EditResponse:
+        """Start editing footage that is all in place: the premium engine in one job, or analysis then a plan."""
+        if edit.engine == "premium":
+            return await self._start_premium(edit, user_id)
         edit.status, edit.error, edit.analysis = EditStatus.ANALYZING, None, json.dumps({"progress": "Waiting to start"})
         await self._session.commit()
         await get_queue().enqueue(Job(jobs.ANALYZE_JOB, {"edit_id": edit.id, "user_id": user_id}))
+        return await self.response(edit)
+
+    async def _start_premium(self, edit: EditProject, user_id: str) -> EditResponse:
+        """The reel engine edits end to end in one job, so its credits are taken now and refunded if it fails."""
+        credits = premium_jobs.price(edit)
+        try:
+            await self._subscriptions.deduct_credits(user_id=user_id, amount=credits, reason=f"Premium reel: {edit.title}"[:200],
+                                                     reference_id=edit.id, reference_type="edit_render")
+        except InsufficientCreditsError:
+            raise CustomException(message=f"A premium edit needs {credits} credits. Top up, or come back when your credits renew.",
+                                  code="INSUFFICIENT_CREDITS", status_code=402, extra={"required": credits})
+        edit.status, edit.error, edit.credits_charged = EditStatus.ANALYZING, None, edit.credits_charged + credits
+        edit.premium = json.dumps({"progress": [{"stage": "queued", "note": "Waiting to start", "at": 0.0}]})
+        await self._session.commit()
+        await get_queue().enqueue(Job(premium_jobs.PREMIUM_JOB, {"edit_id": edit.id, "user_id": user_id, "credits": credits}))
         return await self.response(edit)
 
     async def replan(self, user_id: str, edit_id: str) -> EditResponse:
@@ -330,6 +380,22 @@ class EditService:
                                   extra={"feature": "ai_model"})
 
     @staticmethod
+    async def _check_source_link(url: str, max_seconds: int) -> str:
+        """The linked video's title, after checking it is a YouTube video we can open and short enough for the plan."""
+        from clip.youtube_service import YouTubeService
+
+        if not reference.is_supported_link(url):
+            raise CustomException(message="Paste a YouTube video or Shorts link.", code="INVALID_BODY", status_code=400)
+        found = await YouTubeService().fetch_metadata(url)
+        if found is None:
+            raise CustomException(message="We couldn't open that YouTube video. Check that it's public and try again.",
+                                  code="INVALID_BODY", status_code=400)
+        if found.duration and found.duration > max_seconds:
+            raise CustomException(message=f"That video is {round(found.duration / 60)} minutes long. Your plan edits up to "
+                                          f"{max_seconds // 60} minutes; try a shorter video.", code="FOOTAGE_LIMIT", status_code=403)
+        return found.title
+
+    @staticmethod
     def _check_reference(sources: list[dict[str, Any]], files: list[EditSourceFile]) -> None:
         """One reference reel per reel: a video short enough to study."""
         if not files:
@@ -369,27 +435,37 @@ class EditService:
         entitlements = await self._subscriptions.get_entitlements(edit.user_id)
         limits = limits_for(entitlements)
         has_plan = bool(plan) and bool(timeline)
+        premium = edit.engine == "premium"
+        if premium:
+            estimate = premium_jobs.price(edit) if edit.status == EditStatus.DRAFT else 0
+        else:
+            estimate = jobs.price(edit) if has_plan else 0
         return EditResponse(
             id=edit.id, title=edit.title, status=edit.status.value,
             progress=PROGRESS.get(edit.status) or (analysis.get("progress") if edit.status == EditStatus.ANALYZING else None),
             script=edit.script, script_mode=edit.script_mode, intent=edit.intent, language=edit.language,
             caption_style=edit.caption_style, target_seconds=edit.target_seconds, autopilot=edit.autopilot,
-            ai_model=edit.ai_model, ai_effort=edit.ai_effort, reference_url=edit.reference_url,
+            ai_model=edit.ai_model, ai_effort=edit.ai_effort, reference_url=edit.reference_url, source_url=edit.source_url,
             reference=EditReferenceResponse(**analysis["reference"]) if analysis.get("reference") else None,
-            reference_error=analysis.get("reference_error"),
+            reference_error=analysis.get("reference_error"), engine=edit.engine,
+            premium=PremiumResponse(**premium_jobs.summary(json.loads(edit.premium or "{}"))) if premium else None,
             sources=[self._source_response(s) for s in sources if s.get("uploaded")],
             raw_seconds=edit.raw_seconds, duration_s=edit.duration_s,
             plan=await self._plan_response(plan, analysis, timeline) if has_plan else None,
             timeline=self._timeline_response(timeline) if has_plan else None,
-            credits_estimate=jobs.price(edit) if has_plan else 0, credits_charged=edit.credits_charged, renders=edit.renders,
+            credits_estimate=estimate, credits_charged=edit.credits_charged, renders=edit.renders,
             replans_left=max(0, self._settings.EDIT_MAX_REPLANS - edit.replans),
             chat_edits_left=max(0, limits.max_chat_edits - edit.chat_edits),
-            output_url=self._url(edit.output_key), music_credit=_credit_text(edit.music_credit), error=edit.error,
+            output_url=self._url(edit.output_key),
+            reels=[EditReelResponse(url=self._url(r["key"]), duration_s=float(r.get("duration") or 0), title=r.get("title") or edit.title)
+                   for r in json.loads(edit.reels or "[]")],
+            music_credit=_credit_text(edit.music_credit), error=edit.error,
             created_at=edit.created_at,
         )
 
     def _source_response(self, source: dict[str, Any]) -> EditSourceResponse:
-        playable = source.get("proxy_key") if source["kind"] == "video" else source["key"]
+        # The classic analysis makes a small browser-safe proxy; a premium edit shows the upload itself.
+        playable = (source.get("proxy_key") or source["key"]) if source["kind"] == "video" else source["key"]
         return EditSourceResponse(key=source["key"], kind=source["kind"], name=source.get("name") or "",
                                   duration_s=float(source.get("duration") or 0.0), url=self._url(playable))
 

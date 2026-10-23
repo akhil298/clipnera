@@ -1,0 +1,453 @@
+{
+ "id": "DTK_xqoD4Q7",
+ "duration_s": 12.117,
+ "fps": 29.97,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [],
+ "shot_count": 1,
+ "median_shot_s": 12.12,
+ "shortest_shot_s": 12.12,
+ "cuts_in_hook": 0,
+ "cuts_on_beat": null,
+ "flashes": [],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.27,
+  0.06,
+  0.02,
+  0.05,
+  0.14,
+  0.03,
+  0.11,
+  0.06,
+  0.07,
+  0.06,
+  0.06,
+  0.03,
+  0.13,
+  0.07,
+  0.05,
+  0.12,
+  0.05,
+  0.05,
+  0.05,
+  0.08,
+  0.08,
+  0.11,
+  0.08,
+  0.06
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 117.5,
+  "beats_s": [
+   0.07,
+   0.534,
+   1.068,
+   1.579,
+   2.09,
+   2.601,
+   3.135,
+   3.622,
+   4.11,
+   4.598,
+   5.108,
+   5.619,
+   6.107,
+   6.594,
+   7.105,
+   7.57,
+   8.127,
+   8.661,
+   9.149,
+   9.613,
+   10.101,
+   10.565,
+   11.076,
+   11.61
+  ],
+  "hits_s": [
+   0.07,
+   0.186,
+   0.302,
+   0.534,
+   0.673,
+   0.789,
+   0.859,
+   1.161,
+   1.393,
+   1.486,
+   1.579,
+   1.881,
+   2.067,
+   2.229,
+   2.531,
+   2.601,
+   2.786,
+   2.926,
+   3.019,
+   3.135,
+   3.297,
+   3.437,
+   3.738,
+   3.971,
+   4.11,
+   4.296,
+   4.481,
+   4.598,
+   4.737,
+   4.876,
+   4.923,
+   5.085,
+   5.224,
+   5.364,
+   5.503,
+   5.619,
+   5.782,
+   5.921,
+   6.084,
+   6.269,
+   6.455,
+   6.594,
+   6.78,
+   6.92,
+   7.105,
+   7.338,
+   7.454,
+   7.546,
+   7.755,
+   7.825,
+   8.127,
+   8.29,
+   8.406,
+   8.545,
+   8.731,
+   8.893,
+   9.056,
+   9.149,
+   9.311,
+   9.613,
+   9.822,
+   9.892,
+   10.008,
+   10.24,
+   10.333,
+   10.379,
+   10.542,
+   10.728,
+   10.844,
+   11.076,
+   11.192,
+   11.447,
+   11.61,
+   11.865,
+   11.958,
+   12.028
+  ],
+  "drop_s": null,
+  "loudness_half_seconds": [
+   0.61,
+   0.57,
+   0.45,
+   0.49,
+   0.78,
+   0.42,
+   0.44,
+   0.71,
+   0.52,
+   0.51,
+   0.54,
+   0.39,
+   0.38,
+   0.66,
+   0.56,
+   0.46,
+   0.57,
+   0.69,
+   0.39,
+   0.41,
+   0.34,
+   0.48,
+   0.59,
+   0.51,
+   0.31
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "This is the cleanest editing style that you will see on Instagram. I created a list of presets to go ahead and make these effects effortlessly each and every single time, but I'm going to show you guys how to actually do a couple of these effects so you can do it yourself.",
+  "words": [
+   {
+    "word": "This",
+    "start_s": 0.0,
+    "end_s": 0.38
+   },
+   {
+    "word": "is",
+    "start_s": 0.38,
+    "end_s": 0.58
+   },
+   {
+    "word": "the",
+    "start_s": 0.58,
+    "end_s": 0.7
+   },
+   {
+    "word": "cleanest",
+    "start_s": 0.7,
+    "end_s": 1.08
+   },
+   {
+    "word": "editing",
+    "start_s": 1.08,
+    "end_s": 1.32
+   },
+   {
+    "word": "style",
+    "start_s": 1.32,
+    "end_s": 1.68
+   },
+   {
+    "word": "that",
+    "start_s": 1.68,
+    "end_s": 1.92
+   },
+   {
+    "word": "you",
+    "start_s": 1.92,
+    "end_s": 2.1
+   },
+   {
+    "word": "will",
+    "start_s": 2.1,
+    "end_s": 2.22
+   },
+   {
+    "word": "see",
+    "start_s": 2.22,
+    "end_s": 2.4
+   },
+   {
+    "word": "on",
+    "start_s": 2.4,
+    "end_s": 2.7
+   },
+   {
+    "word": "Instagram.",
+    "start_s": 2.7,
+    "end_s": 3.02
+   },
+   {
+    "word": "I",
+    "start_s": 3.28,
+    "end_s": 3.34
+   },
+   {
+    "word": "created",
+    "start_s": 3.34,
+    "end_s": 3.6
+   },
+   {
+    "word": "a",
+    "start_s": 3.6,
+    "end_s": 3.8
+   },
+   {
+    "word": "list",
+    "start_s": 3.8,
+    "end_s": 4.06
+   },
+   {
+    "word": "of",
+    "start_s": 4.06,
+    "end_s": 4.2
+   },
+   {
+    "word": "presets",
+    "start_s": 4.2,
+    "end_s": 4.54
+   },
+   {
+    "word": "to",
+    "start_s": 4.54,
+    "end_s": 4.94
+   },
+   {
+    "word": "go",
+    "start_s": 4.94,
+    "end_s": 5.16
+   },
+   {
+    "word": "ahead",
+    "start_s": 5.16,
+    "end_s": 5.36
+   },
+   {
+    "word": "and",
+    "start_s": 5.36,
+    "end_s": 5.54
+   },
+   {
+    "word": "make",
+    "start_s": 5.54,
+    "end_s": 5.66
+   },
+   {
+    "word": "these",
+    "start_s": 5.66,
+    "end_s": 5.84
+   },
+   {
+    "word": "effects",
+    "start_s": 5.84,
+    "end_s": 6.22
+   },
+   {
+    "word": "effortlessly",
+    "start_s": 6.22,
+    "end_s": 7.04
+   },
+   {
+    "word": "each",
+    "start_s": 7.04,
+    "end_s": 7.3
+   },
+   {
+    "word": "and",
+    "start_s": 7.3,
+    "end_s": 7.4
+   },
+   {
+    "word": "every",
+    "start_s": 7.4,
+    "end_s": 7.52
+   },
+   {
+    "word": "single",
+    "start_s": 7.52,
+    "end_s": 7.66
+   },
+   {
+    "word": "time,",
+    "start_s": 7.66,
+    "end_s": 7.92
+   },
+   {
+    "word": "but",
+    "start_s": 8.06,
+    "end_s": 8.18
+   },
+   {
+    "word": "I'm",
+    "start_s": 8.18,
+    "end_s": 8.46
+   },
+   {
+    "word": "going",
+    "start_s": 8.46,
+    "end_s": 8.58
+   },
+   {
+    "word": "to",
+    "start_s": 8.58,
+    "end_s": 8.64
+   },
+   {
+    "word": "show",
+    "start_s": 8.64,
+    "end_s": 8.76
+   },
+   {
+    "word": "you",
+    "start_s": 8.76,
+    "end_s": 8.84
+   },
+   {
+    "word": "guys",
+    "start_s": 8.84,
+    "end_s": 9.02
+   },
+   {
+    "word": "how",
+    "start_s": 9.02,
+    "end_s": 9.22
+   },
+   {
+    "word": "to",
+    "start_s": 9.22,
+    "end_s": 9.32
+   },
+   {
+    "word": "actually",
+    "start_s": 9.32,
+    "end_s": 9.44
+   },
+   {
+    "word": "do",
+    "start_s": 9.44,
+    "end_s": 9.64
+   },
+   {
+    "word": "a",
+    "start_s": 9.64,
+    "end_s": 9.76
+   },
+   {
+    "word": "couple",
+    "start_s": 9.76,
+    "end_s": 9.98
+   },
+   {
+    "word": "of",
+    "start_s": 9.98,
+    "end_s": 10.14
+   },
+   {
+    "word": "these",
+    "start_s": 10.14,
+    "end_s": 10.3
+   },
+   {
+    "word": "effects",
+    "start_s": 10.3,
+    "end_s": 10.66
+   },
+   {
+    "word": "so",
+    "start_s": 10.66,
+    "end_s": 11.22
+   },
+   {
+    "word": "you",
+    "start_s": 11.22,
+    "end_s": 11.3
+   },
+   {
+    "word": "can",
+    "start_s": 11.3,
+    "end_s": 11.38
+   },
+   {
+    "word": "do",
+    "start_s": 11.38,
+    "end_s": 11.5
+   },
+   {
+    "word": "it",
+    "start_s": 11.5,
+    "end_s": 11.6
+   },
+   {
+    "word": "yourself.",
+    "start_s": 11.6,
+    "end_s": 11.86
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

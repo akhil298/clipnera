@@ -342,6 +342,28 @@ class YouTubeService:
 
         return await asyncio.to_thread(_download)
 
+    async def download_for_edit(self, url: str, folder: Path, max_seconds: int) -> tuple[Path, str]:
+        """A video to edit (at most ``max_seconds``) at up to 1080p as MP4 in ``folder``, and its title."""
+        import yt_dlp
+
+        def _download() -> tuple[Path, str]:
+            options = {
+                **self._yt_dlp_base_options(),
+                "format": "bv*[height<=1080]+ba/b[height<=1080]/b",
+                "merge_output_format": "mp4",
+                "outtmpl": str(folder / "source.%(ext)s"),
+                "noprogress": True,
+                "match_filter": yt_dlp.utils.match_filter_func(f"duration <= {max_seconds}"),
+            }
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(url, download=True)
+                path = Path(ydl.prepare_filename(info)).with_suffix(".mp4")
+            if not path.exists():
+                raise ValueError(f"the video is longer than {max_seconds // 60} minutes")
+            return path, (info or {}).get("title") or "YouTube video"
+
+        return await asyncio.to_thread(_download)
+
     async def download_and_store(self, url: str, user_id: str, project_id: str, format_id: str | None = None) -> Dict[str, Any]:
         """Download YouTube video to local folder and store in S3."""
         try:

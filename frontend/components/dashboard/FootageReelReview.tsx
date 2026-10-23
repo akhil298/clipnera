@@ -6,7 +6,6 @@ import { EDIT_LOOKS, EDIT_MOODS, EditChange, EditResponse, EditSourceResponse, E
 import type { CaptionStyle } from '@/lib/utils/captionStyles.generated';
 import { CONTENT_TYPE_LABEL, RESOLVED_SCRIPT_LABEL, TARGET_OPTIONS, beatsFrom, formatSeconds, type Beat, type BeatKind } from '@/lib/utils/footageReels';
 import { CaptionStylePreview } from './CaptionStylePreview';
-import { ReelModelSelect } from './ReelModelPicker';
 import { ReelPreviewPlayer } from './ReelPreviewPlayer';
 
 export interface ChatMessage {
@@ -175,7 +174,6 @@ function Chat({ edit, messages, onSend, busy, canEdit }: {
           placeholder={edit.chat_edits_left === 0 ? "You've used this reel's chat changes. Change the plan directly." : 'Tell the editor what to change…'}
           className="w-full resize-none bg-transparent border-0 p-0 text-[15px] text-white placeholder:text-neutral-600 focus:outline-none disabled:opacity-60" />
         <div className="flex flex-wrap items-center gap-1.5">
-          <ReelModelSelect disabled={busy} />
           <button type="submit" disabled={!usable || busy || !draft.trim()} aria-label="Send"
             className="ml-auto w-11 h-11 rounded-[14px] bg-amber-500 hover:bg-amber-400 text-neutral-950 flex items-center justify-center disabled:opacity-40">
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-5 h-5" />}

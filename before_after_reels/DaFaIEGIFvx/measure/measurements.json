@@ -1,0 +1,1412 @@
+{
+ "id": "DaFaIEGIFvx",
+ "duration_s": 45.483,
+ "fps": 29.97,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  11.345,
+  17.451,
+  20.187
+ ],
+ "shot_count": 4,
+ "median_shot_s": 8.73,
+ "shortest_shot_s": 2.74,
+ "cuts_in_hook": 0,
+ "cuts_on_beat": 1.0,
+ "flashes": [],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.11,
+  0.05,
+  0.1,
+  0.2,
+  0.12,
+  0.07,
+  0.04,
+  0.05,
+  0.14,
+  0.08,
+  0.06,
+  0.09,
+  0.03,
+  0.02,
+  0.0,
+  0.13,
+  0.05,
+  0.11,
+  0.22,
+  0.21,
+  0.09,
+  0.05,
+  0.09,
+  0.04,
+  0.04,
+  0.07,
+  0.04,
+  0.03,
+  0.07,
+  0.03,
+  0.03,
+  0.04,
+  0.03,
+  0.03,
+  0.11,
+  0.11,
+  0.06,
+  0.08,
+  0.11,
+  0.06,
+  0.12,
+  0.05,
+  0.02,
+  0.06,
+  0.05,
+  0.07,
+  0.03,
+  0.05,
+  0.01,
+  0.04,
+  0.06,
+  0.03,
+  0.06,
+  0.05,
+  0.08,
+  0.06,
+  0.08,
+  0.03,
+  0.07,
+  0.08,
+  0.08,
+  0.04,
+  0.01,
+  0.02,
+  0.01,
+  0.06,
+  0.04,
+  0.09,
+  0.07,
+  0.04,
+  0.06,
+  0.06,
+  0.06,
+  0.13,
+  0.05,
+  0.06,
+  0.05,
+  0.04,
+  0.05,
+  0.05,
+  0.07,
+  0.09,
+  0.05,
+  0.05,
+  0.08,
+  0.07,
+  0.04,
+  0.04,
+  0.06,
+  0.02,
+  0.12
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 107.7,
+  "beats_s": [
+   0.116,
+   0.72,
+   1.393,
+   1.927,
+   2.485,
+   3.042,
+   3.599,
+   4.133,
+   4.667,
+   5.271,
+   5.805,
+   6.409,
+   6.873,
+   7.43,
+   7.964,
+   8.545,
+   9.102,
+   9.66,
+   10.24,
+   10.704,
+   11.215,
+   11.773,
+   12.33,
+   12.864,
+   13.444,
+   14.002,
+   14.536,
+   15.139,
+   15.766,
+   16.37,
+   16.974,
+   17.508,
+   18.065,
+   18.599,
+   19.18,
+   19.783,
+   20.317,
+   20.828,
+   21.339,
+   21.85,
+   22.361,
+   22.988,
+   23.522,
+   24.079,
+   24.66,
+   25.194,
+   25.704,
+   26.239,
+   26.726,
+   27.237,
+   27.794,
+   28.375,
+   28.862,
+   29.373,
+   29.907,
+   30.441,
+   31.022,
+   31.626,
+   32.229,
+   32.763,
+   33.414,
+   33.994,
+   34.528,
+   35.039,
+   35.573,
+   36.084,
+   36.641,
+   37.175,
+   37.686,
+   38.266,
+   38.777,
+   39.288,
+   39.799,
+   40.356,
+   40.937,
+   41.448,
+   42.028,
+   42.632,
+   43.119,
+   43.7,
+   44.234
+  ],
+  "hits_s": [
+   0.093,
+   0.348,
+   0.441,
+   0.511,
+   0.58,
+   0.72,
+   0.906,
+   1.045,
+   1.115,
+   1.254,
+   1.393,
+   1.556,
+   1.649,
+   1.834,
+   1.95,
+   2.067,
+   2.299,
+   2.485,
+   2.74,
+   3.158,
+   3.274,
+   3.483,
+   3.599,
+   3.715,
+   4.017,
+   4.133,
+   4.342,
+   4.528,
+   4.621,
+   4.667,
+   4.899,
+   5.039,
+   5.155,
+   5.271,
+   5.526,
+   5.666,
+   5.782,
+   5.944,
+   6.084,
+   6.293,
+   6.385,
+   6.525,
+   6.711,
+   6.85,
+   7.105,
+   7.407,
+   7.546,
+   7.686,
+   7.848,
+   7.964,
+   8.104,
+   8.173,
+   8.359,
+   8.615,
+   8.684,
+   8.847,
+   8.963,
+   9.172,
+   9.288,
+   9.451,
+   9.66,
+   9.799,
+   9.892,
+   9.985,
+   10.054,
+   10.24,
+   10.379,
+   10.449,
+   10.519,
+   10.612,
+   10.681,
+   10.82,
+   10.937,
+   11.215,
+   11.331,
+   11.378,
+   11.633,
+   11.773,
+   11.981,
+   12.098,
+   12.237,
+   12.376,
+   12.608,
+   12.841,
+   13.05,
+   13.375,
+   13.769,
+   13.978,
+   14.211,
+   14.373,
+   14.512,
+   14.675,
+   14.861,
+   15.116,
+   15.256,
+   15.464,
+   15.743,
+   15.952,
+   16.115,
+   16.3,
+   16.37,
+   16.625,
+   16.834,
+   16.974,
+   17.09,
+   17.252,
+   17.67,
+   17.786,
+   17.903,
+   18.065,
+   18.228,
+   18.367,
+   18.599,
+   18.855,
+   19.064,
+   19.156,
+   19.319,
+   19.458,
+   19.551,
+   19.621,
+   19.76,
+   19.946,
+   20.132,
+   20.294,
+   20.457,
+   20.573,
+   20.828,
+   21.037,
+   21.269,
+   21.409,
+   21.525,
+   21.711,
+   21.85,
+   22.105,
+   22.198,
+   22.338,
+   22.523,
+   22.639,
+   22.825,
+   22.988,
+   23.104,
+   23.174,
+   23.266,
+   23.429,
+   23.754,
+   23.917,
+   24.056,
+   24.311,
+   24.427,
+   24.66,
+   24.776,
+   25.008,
+   25.194,
+   25.379,
+   25.565,
+   25.681,
+   25.867,
+   26.076,
+   26.239,
+   26.54,
+   26.726,
+   26.773,
+   26.889,
+   26.982,
+   27.214,
+   27.423,
+   27.609,
+   27.771,
+   28.003,
+   28.166,
+   28.352,
+   28.537,
+   28.677,
+   28.839,
+   29.071,
+   29.373,
+   29.489,
+   29.884,
+   30.07,
+   30.279,
+   30.418,
+   30.534,
+   30.674,
+   30.859,
+   30.999,
+   31.045,
+   31.37,
+   31.44,
+   31.602,
+   31.742,
+   31.927,
+   32.067,
+   32.206,
+   32.322,
+   32.438,
+   32.74,
+   32.879,
+   33.065,
+   33.181,
+   33.414,
+   33.599,
+   33.808,
+   33.994,
+   34.157,
+   34.273,
+   34.435,
+   34.528,
+   34.691,
+   34.807,
+   34.946,
+   35.109,
+   35.294,
+   35.434,
+   35.55,
+   35.759,
+   35.898,
+   36.061,
+   36.153,
+   36.339,
+   36.479,
+   36.618,
+   36.78,
+   36.966,
+   37.129,
+   37.175,
+   37.338,
+   37.64,
+   37.895,
+   38.266,
+   38.452,
+   38.615,
+   38.708,
+   38.986,
+   39.056,
+   39.172,
+   39.567,
+   39.776,
+   40.054,
+   40.171,
+   40.31,
+   40.356,
+   40.588,
+   40.705,
+   40.937,
+   41.239,
+   41.424,
+   41.564,
+   41.703,
+   41.889,
+   42.028,
+   42.191,
+   42.307,
+   42.632,
+   42.771,
+   42.91,
+   43.003,
+   43.119,
+   43.236,
+   43.514,
+   43.677,
+   43.909,
+   44.095,
+   44.211,
+   44.513,
+   44.884
+  ],
+  "drop_s": 20.25,
+  "loudness_half_seconds": [
+   0.54,
+   0.43,
+   0.29,
+   0.5,
+   0.44,
+   0.4,
+   0.27,
+   0.36,
+   0.61,
+   0.45,
+   0.24,
+   0.47,
+   0.67,
+   0.37,
+   0.18,
+   0.58,
+   0.41,
+   0.52,
+   0.39,
+   0.26,
+   0.3,
+   0.28,
+   0.22,
+   0.49,
+   0.38,
+   0.46,
+   0.39,
+   0.39,
+   0.35,
+   0.29,
+   0.21,
+   0.4,
+   0.28,
+   0.25,
+   0.35,
+   0.41,
+   0.35,
+   0.24,
+   0.15,
+   0.11,
+   0.36,
+   0.44,
+   0.21,
+   0.36,
+   0.33,
+   0.29,
+   0.32,
+   0.29,
+   0.15,
+   0.38,
+   0.46,
+   0.31,
+   0.26,
+   0.29,
+   0.27,
+   0.27,
+   0.33,
+   0.33,
+   0.27,
+   0.21,
+   0.51,
+   0.58,
+   0.22,
+   0.28,
+   0.21,
+   0.29,
+   0.31,
+   0.43,
+   0.24,
+   0.14,
+   0.32,
+   0.3,
+   0.25,
+   0.46,
+   0.47,
+   0.56,
+   0.42,
+   0.29,
+   0.17,
+   0.58,
+   0.37,
+   0.48,
+   0.38,
+   0.3,
+   0.35,
+   0.25,
+   0.2,
+   0.2,
+   0.19,
+   0.14,
+   0.06
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "If you look at your edits and you think that nothing like what I see on Instagram, it's probably one of these three things. Number one, a lack of direction. To create a good edit, you need to know exactly what you want your scene to look like. So if you don't have an inspiration vault the size of your house or thousands of references of what you want every single thing to look like, then you're going to get lost and your edit is not going to look that good. Number two is bad design. Design is the most important skill for video editors. And having imbalanced scenes, bad contrast or uncommon patterns all signal that you're beginner editor. And lastly, number three, it's poor post -production. Post -production is what brings your animations to life. You need to look into using effects like vignettes, blurs, chromatic aberration, noise posterize time. Now, just make sure to remember these three tips the next time your edit looks boring.",
+  "words": [
+   {
+    "word": "If",
+    "start_s": 0.0,
+    "end_s": 0.18
+   },
+   {
+    "word": "you",
+    "start_s": 0.18,
+    "end_s": 0.26
+   },
+   {
+    "word": "look",
+    "start_s": 0.26,
+    "end_s": 0.38
+   },
+   {
+    "word": "at",
+    "start_s": 0.38,
+    "end_s": 0.5
+   },
+   {
+    "word": "your",
+    "start_s": 0.5,
+    "end_s": 0.62
+   },
+   {
+    "word": "edits",
+    "start_s": 0.62,
+    "end_s": 0.88
+   },
+   {
+    "word": "and",
+    "start_s": 0.88,
+    "end_s": 1.14
+   },
+   {
+    "word": "you",
+    "start_s": 1.14,
+    "end_s": 1.28
+   },
+   {
+    "word": "think",
+    "start_s": 1.28,
+    "end_s": 1.46
+   },
+   {
+    "word": "that",
+    "start_s": 1.46,
+    "end_s": 1.76
+   },
+   {
+    "word": "nothing",
+    "start_s": 1.94,
+    "end_s": 2.18
+   },
+   {
+    "word": "like",
+    "start_s": 2.18,
+    "end_s": 2.56
+   },
+   {
+    "word": "what",
+    "start_s": 2.56,
+    "end_s": 2.74
+   },
+   {
+    "word": "I",
+    "start_s": 2.74,
+    "end_s": 2.88
+   },
+   {
+    "word": "see",
+    "start_s": 2.88,
+    "end_s": 3.1
+   },
+   {
+    "word": "on",
+    "start_s": 3.1,
+    "end_s": 3.28
+   },
+   {
+    "word": "Instagram,",
+    "start_s": 3.28,
+    "end_s": 3.66
+   },
+   {
+    "word": "it's",
+    "start_s": 3.98,
+    "end_s": 4.24
+   },
+   {
+    "word": "probably",
+    "start_s": 4.24,
+    "end_s": 4.58
+   },
+   {
+    "word": "one",
+    "start_s": 4.58,
+    "end_s": 4.84
+   },
+   {
+    "word": "of",
+    "start_s": 4.84,
+    "end_s": 4.94
+   },
+   {
+    "word": "these",
+    "start_s": 4.94,
+    "end_s": 5.16
+   },
+   {
+    "word": "three",
+    "start_s": 5.16,
+    "end_s": 5.36
+   },
+   {
+    "word": "things.",
+    "start_s": 5.36,
+    "end_s": 5.7
+   },
+   {
+    "word": "Number",
+    "start_s": 5.82,
+    "end_s": 5.9
+   },
+   {
+    "word": "one,",
+    "start_s": 5.9,
+    "end_s": 6.2
+   },
+   {
+    "word": "a",
+    "start_s": 6.34,
+    "end_s": 6.46
+   },
+   {
+    "word": "lack",
+    "start_s": 6.46,
+    "end_s": 6.64
+   },
+   {
+    "word": "of",
+    "start_s": 6.64,
+    "end_s": 6.76
+   },
+   {
+    "word": "direction.",
+    "start_s": 6.76,
+    "end_s": 7.16
+   },
+   {
+    "word": "To",
+    "start_s": 7.4,
+    "end_s": 7.46
+   },
+   {
+    "word": "create",
+    "start_s": 7.46,
+    "end_s": 7.74
+   },
+   {
+    "word": "a",
+    "start_s": 7.74,
+    "end_s": 7.92
+   },
+   {
+    "word": "good",
+    "start_s": 7.92,
+    "end_s": 8.02
+   },
+   {
+    "word": "edit,",
+    "start_s": 8.02,
+    "end_s": 8.26
+   },
+   {
+    "word": "you",
+    "start_s": 8.46,
+    "end_s": 8.56
+   },
+   {
+    "word": "need",
+    "start_s": 8.56,
+    "end_s": 8.76
+   },
+   {
+    "word": "to",
+    "start_s": 8.76,
+    "end_s": 8.88
+   },
+   {
+    "word": "know",
+    "start_s": 8.88,
+    "end_s": 9.04
+   },
+   {
+    "word": "exactly",
+    "start_s": 9.04,
+    "end_s": 9.56
+   },
+   {
+    "word": "what",
+    "start_s": 9.56,
+    "end_s": 9.82
+   },
+   {
+    "word": "you",
+    "start_s": 9.82,
+    "end_s": 9.94
+   },
+   {
+    "word": "want",
+    "start_s": 9.94,
+    "end_s": 10.14
+   },
+   {
+    "word": "your",
+    "start_s": 10.14,
+    "end_s": 10.3
+   },
+   {
+    "word": "scene",
+    "start_s": 10.3,
+    "end_s": 10.56
+   },
+   {
+    "word": "to",
+    "start_s": 10.56,
+    "end_s": 10.72
+   },
+   {
+    "word": "look",
+    "start_s": 10.72,
+    "end_s": 10.86
+   },
+   {
+    "word": "like.",
+    "start_s": 10.86,
+    "end_s": 11.14
+   },
+   {
+    "word": "So",
+    "start_s": 11.32,
+    "end_s": 11.38
+   },
+   {
+    "word": "if",
+    "start_s": 11.38,
+    "end_s": 11.48
+   },
+   {
+    "word": "you",
+    "start_s": 11.48,
+    "end_s": 11.56
+   },
+   {
+    "word": "don't",
+    "start_s": 11.56,
+    "end_s": 11.7
+   },
+   {
+    "word": "have",
+    "start_s": 11.7,
+    "end_s": 11.92
+   },
+   {
+    "word": "an",
+    "start_s": 11.92,
+    "end_s": 12.0
+   },
+   {
+    "word": "inspiration",
+    "start_s": 12.0,
+    "end_s": 12.26
+   },
+   {
+    "word": "vault",
+    "start_s": 12.26,
+    "end_s": 12.68
+   },
+   {
+    "word": "the",
+    "start_s": 12.68,
+    "end_s": 12.88
+   },
+   {
+    "word": "size",
+    "start_s": 12.88,
+    "end_s": 13.18
+   },
+   {
+    "word": "of",
+    "start_s": 13.18,
+    "end_s": 13.34
+   },
+   {
+    "word": "your",
+    "start_s": 13.34,
+    "end_s": 13.46
+   },
+   {
+    "word": "house",
+    "start_s": 13.46,
+    "end_s": 13.84
+   },
+   {
+    "word": "or",
+    "start_s": 13.84,
+    "end_s": 14.0
+   },
+   {
+    "word": "thousands",
+    "start_s": 14.0,
+    "end_s": 14.4
+   },
+   {
+    "word": "of",
+    "start_s": 14.4,
+    "end_s": 14.62
+   },
+   {
+    "word": "references",
+    "start_s": 14.62,
+    "end_s": 14.96
+   },
+   {
+    "word": "of",
+    "start_s": 14.96,
+    "end_s": 15.52
+   },
+   {
+    "word": "what",
+    "start_s": 15.52,
+    "end_s": 15.66
+   },
+   {
+    "word": "you",
+    "start_s": 15.66,
+    "end_s": 15.8
+   },
+   {
+    "word": "want",
+    "start_s": 15.8,
+    "end_s": 15.98
+   },
+   {
+    "word": "every",
+    "start_s": 15.98,
+    "end_s": 16.32
+   },
+   {
+    "word": "single",
+    "start_s": 16.32,
+    "end_s": 16.6
+   },
+   {
+    "word": "thing",
+    "start_s": 16.6,
+    "end_s": 16.84
+   },
+   {
+    "word": "to",
+    "start_s": 16.84,
+    "end_s": 16.98
+   },
+   {
+    "word": "look",
+    "start_s": 16.98,
+    "end_s": 17.14
+   },
+   {
+    "word": "like,",
+    "start_s": 17.14,
+    "end_s": 17.38
+   },
+   {
+    "word": "then",
+    "start_s": 17.46,
+    "end_s": 17.7
+   },
+   {
+    "word": "you're",
+    "start_s": 17.7,
+    "end_s": 17.84
+   },
+   {
+    "word": "going",
+    "start_s": 17.84,
+    "end_s": 17.92
+   },
+   {
+    "word": "to",
+    "start_s": 17.92,
+    "end_s": 17.98
+   },
+   {
+    "word": "get",
+    "start_s": 17.98,
+    "end_s": 18.1
+   },
+   {
+    "word": "lost",
+    "start_s": 18.1,
+    "end_s": 18.34
+   },
+   {
+    "word": "and",
+    "start_s": 18.34,
+    "end_s": 18.64
+   },
+   {
+    "word": "your",
+    "start_s": 18.64,
+    "end_s": 18.76
+   },
+   {
+    "word": "edit",
+    "start_s": 18.76,
+    "end_s": 18.98
+   },
+   {
+    "word": "is",
+    "start_s": 18.98,
+    "end_s": 19.22
+   },
+   {
+    "word": "not",
+    "start_s": 19.22,
+    "end_s": 19.36
+   },
+   {
+    "word": "going",
+    "start_s": 19.36,
+    "end_s": 19.5
+   },
+   {
+    "word": "to",
+    "start_s": 19.5,
+    "end_s": 19.54
+   },
+   {
+    "word": "look",
+    "start_s": 19.54,
+    "end_s": 19.68
+   },
+   {
+    "word": "that",
+    "start_s": 19.68,
+    "end_s": 19.84
+   },
+   {
+    "word": "good.",
+    "start_s": 19.84,
+    "end_s": 20.04
+   },
+   {
+    "word": "Number",
+    "start_s": 20.26,
+    "end_s": 20.38
+   },
+   {
+    "word": "two",
+    "start_s": 20.38,
+    "end_s": 20.66
+   },
+   {
+    "word": "is",
+    "start_s": 20.66,
+    "end_s": 20.9
+   },
+   {
+    "word": "bad",
+    "start_s": 20.9,
+    "end_s": 21.14
+   },
+   {
+    "word": "design.",
+    "start_s": 21.14,
+    "end_s": 21.52
+   },
+   {
+    "word": "Design",
+    "start_s": 21.66,
+    "end_s": 21.9
+   },
+   {
+    "word": "is",
+    "start_s": 21.9,
+    "end_s": 22.22
+   },
+   {
+    "word": "the",
+    "start_s": 22.22,
+    "end_s": 22.4
+   },
+   {
+    "word": "most",
+    "start_s": 22.4,
+    "end_s": 22.66
+   },
+   {
+    "word": "important",
+    "start_s": 22.66,
+    "end_s": 23.12
+   },
+   {
+    "word": "skill",
+    "start_s": 23.12,
+    "end_s": 23.48
+   },
+   {
+    "word": "for",
+    "start_s": 23.48,
+    "end_s": 23.78
+   },
+   {
+    "word": "video",
+    "start_s": 23.78,
+    "end_s": 24.04
+   },
+   {
+    "word": "editors.",
+    "start_s": 24.04,
+    "end_s": 24.34
+   },
+   {
+    "word": "And",
+    "start_s": 24.66,
+    "end_s": 24.72
+   },
+   {
+    "word": "having",
+    "start_s": 24.72,
+    "end_s": 25.02
+   },
+   {
+    "word": "imbalanced",
+    "start_s": 25.02,
+    "end_s": 25.52
+   },
+   {
+    "word": "scenes,",
+    "start_s": 25.52,
+    "end_s": 25.96
+   },
+   {
+    "word": "bad",
+    "start_s": 26.24,
+    "end_s": 26.36
+   },
+   {
+    "word": "contrast",
+    "start_s": 26.36,
+    "end_s": 26.76
+   },
+   {
+    "word": "or",
+    "start_s": 26.76,
+    "end_s": 27.04
+   },
+   {
+    "word": "uncommon",
+    "start_s": 27.04,
+    "end_s": 27.54
+   },
+   {
+    "word": "patterns",
+    "start_s": 27.54,
+    "end_s": 28.02
+   },
+   {
+    "word": "all",
+    "start_s": 28.02,
+    "end_s": 28.46
+   },
+   {
+    "word": "signal",
+    "start_s": 28.46,
+    "end_s": 28.8
+   },
+   {
+    "word": "that",
+    "start_s": 28.8,
+    "end_s": 29.04
+   },
+   {
+    "word": "you're",
+    "start_s": 29.04,
+    "end_s": 29.2
+   },
+   {
+    "word": "beginner",
+    "start_s": 29.36,
+    "end_s": 29.6
+   },
+   {
+    "word": "editor.",
+    "start_s": 29.6,
+    "end_s": 30.06
+   },
+   {
+    "word": "And",
+    "start_s": 30.32,
+    "end_s": 30.34
+   },
+   {
+    "word": "lastly,",
+    "start_s": 30.34,
+    "end_s": 30.62
+   },
+   {
+    "word": "number",
+    "start_s": 30.82,
+    "end_s": 30.94
+   },
+   {
+    "word": "three,",
+    "start_s": 30.94,
+    "end_s": 31.22
+   },
+   {
+    "word": "it's",
+    "start_s": 31.38,
+    "end_s": 31.5
+   },
+   {
+    "word": "poor",
+    "start_s": 31.5,
+    "end_s": 31.72
+   },
+   {
+    "word": "post",
+    "start_s": 31.72,
+    "end_s": 32.04
+   },
+   {
+    "word": "-production.",
+    "start_s": 32.04,
+    "end_s": 32.46
+   },
+   {
+    "word": "Post",
+    "start_s": 32.7,
+    "end_s": 32.82
+   },
+   {
+    "word": "-production",
+    "start_s": 32.82,
+    "end_s": 33.14
+   },
+   {
+    "word": "is",
+    "start_s": 33.14,
+    "end_s": 33.46
+   },
+   {
+    "word": "what",
+    "start_s": 33.46,
+    "end_s": 33.62
+   },
+   {
+    "word": "brings",
+    "start_s": 33.62,
+    "end_s": 33.98
+   },
+   {
+    "word": "your",
+    "start_s": 33.98,
+    "end_s": 34.14
+   },
+   {
+    "word": "animations",
+    "start_s": 34.14,
+    "end_s": 34.6
+   },
+   {
+    "word": "to",
+    "start_s": 34.6,
+    "end_s": 34.84
+   },
+   {
+    "word": "life.",
+    "start_s": 34.84,
+    "end_s": 35.06
+   },
+   {
+    "word": "You",
+    "start_s": 35.2,
+    "end_s": 35.32
+   },
+   {
+    "word": "need",
+    "start_s": 35.32,
+    "end_s": 35.46
+   },
+   {
+    "word": "to",
+    "start_s": 35.46,
+    "end_s": 35.6
+   },
+   {
+    "word": "look",
+    "start_s": 35.6,
+    "end_s": 35.7
+   },
+   {
+    "word": "into",
+    "start_s": 35.7,
+    "end_s": 35.88
+   },
+   {
+    "word": "using",
+    "start_s": 35.88,
+    "end_s": 36.18
+   },
+   {
+    "word": "effects",
+    "start_s": 36.18,
+    "end_s": 36.52
+   },
+   {
+    "word": "like",
+    "start_s": 36.52,
+    "end_s": 36.84
+   },
+   {
+    "word": "vignettes,",
+    "start_s": 36.84,
+    "end_s": 37.36
+   },
+   {
+    "word": "blurs,",
+    "start_s": 37.62,
+    "end_s": 37.94
+   },
+   {
+    "word": "chromatic",
+    "start_s": 38.2,
+    "end_s": 38.64
+   },
+   {
+    "word": "aberration,",
+    "start_s": 38.64,
+    "end_s": 39.18
+   },
+   {
+    "word": "noise",
+    "start_s": 39.4,
+    "end_s": 39.68
+   },
+   {
+    "word": "posterize",
+    "start_s": 40.08,
+    "end_s": 40.56
+   },
+   {
+    "word": "time.",
+    "start_s": 40.56,
+    "end_s": 40.78
+   },
+   {
+    "word": "Now,",
+    "start_s": 40.9,
+    "end_s": 41.04
+   },
+   {
+    "word": "just",
+    "start_s": 41.2,
+    "end_s": 41.3
+   },
+   {
+    "word": "make",
+    "start_s": 41.3,
+    "end_s": 41.48
+   },
+   {
+    "word": "sure",
+    "start_s": 41.48,
+    "end_s": 41.62
+   },
+   {
+    "word": "to",
+    "start_s": 41.62,
+    "end_s": 41.72
+   },
+   {
+    "word": "remember",
+    "start_s": 41.72,
+    "end_s": 41.96
+   },
+   {
+    "word": "these",
+    "start_s": 41.96,
+    "end_s": 42.28
+   },
+   {
+    "word": "three",
+    "start_s": 42.28,
+    "end_s": 42.5
+   },
+   {
+    "word": "tips",
+    "start_s": 42.5,
+    "end_s": 42.74
+   },
+   {
+    "word": "the",
+    "start_s": 42.74,
+    "end_s": 42.92
+   },
+   {
+    "word": "next",
+    "start_s": 42.92,
+    "end_s": 43.08
+   },
+   {
+    "word": "time",
+    "start_s": 43.08,
+    "end_s": 43.38
+   },
+   {
+    "word": "your",
+    "start_s": 43.38,
+    "end_s": 43.56
+   },
+   {
+    "word": "edit",
+    "start_s": 43.56,
+    "end_s": 43.84
+   },
+   {
+    "word": "looks",
+    "start_s": 43.84,
+    "end_s": 44.18
+   },
+   {
+    "word": "boring.",
+    "start_s": 44.18,
+    "end_s": 44.66
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg",
+  "full_2.jpg"
+ ]
+}

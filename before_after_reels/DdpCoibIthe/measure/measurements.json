@@ -1,0 +1,667 @@
+{
+ "id": "DdpCoibIthe",
+ "duration_s": 23.787,
+ "fps": 30.0,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  0.067,
+  1.8,
+  3.233,
+  4.433,
+  4.533,
+  5.633,
+  7.133,
+  9.533,
+  11.467,
+  13.167,
+  14.9
+ ],
+ "shot_count": 12,
+ "median_shot_s": 1.6,
+ "shortest_shot_s": 0.07,
+ "cuts_in_hook": 2,
+ "cuts_on_beat": 0.73,
+ "flashes": [],
+ "black_frames": [
+  {
+   "at_s": 23.7,
+   "seconds": 0.067
+  }
+ ],
+ "movement_half_seconds": [
+  0.16,
+  0.1,
+  0.07,
+  0.09,
+  0.04,
+  0.07,
+  0.05,
+  0.09,
+  0.05,
+  0.14,
+  0.02,
+  0.1,
+  0.1,
+  0.03,
+  0.06,
+  0.06,
+  0.1,
+  0.05,
+  0.05,
+  0.06,
+  0.03,
+  0.03,
+  0.09,
+  0.05,
+  0.1,
+  0.05,
+  0.06,
+  0.04,
+  0.03,
+  0.03,
+  0.01,
+  0.02,
+  0.02,
+  0.07,
+  0.04,
+  0.08,
+  0.04,
+  0.02,
+  0.07,
+  0.06,
+  0.03,
+  0.08,
+  0.02,
+  0.08,
+  0.08,
+  0.02,
+  0.07,
+  0.08
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 129.2,
+  "beats_s": [
+   0.07,
+   0.534,
+   0.998,
+   1.44,
+   1.904,
+   2.368,
+   2.833,
+   3.32,
+   3.831,
+   4.365,
+   4.807,
+   5.248,
+   5.735,
+   6.223,
+   6.687,
+   7.198,
+   7.663,
+   8.127,
+   8.568,
+   9.009,
+   9.497,
+   9.961,
+   10.426,
+   10.89,
+   11.378,
+   11.865,
+   12.33,
+   12.771,
+   13.212,
+   13.63,
+   14.071,
+   14.512,
+   14.954,
+   15.372,
+   15.79,
+   16.231,
+   16.672,
+   17.136,
+   17.554,
+   17.995,
+   18.46,
+   18.901,
+   19.319,
+   19.783,
+   20.248,
+   20.735,
+   21.269,
+   21.78,
+   22.314,
+   22.779,
+   23.243
+  ],
+  "hits_s": [
+   0.07,
+   0.209,
+   0.488,
+   1.44,
+   1.556,
+   1.95,
+   2.276,
+   2.345,
+   2.601,
+   3.065,
+   3.297,
+   3.483,
+   3.831,
+   4.11,
+   4.365,
+   4.644,
+   4.807,
+   5.224,
+   5.944,
+   6.107,
+   6.223,
+   6.409,
+   6.525,
+   6.78,
+   6.896,
+   7.082,
+   7.198,
+   7.43,
+   7.918,
+   8.243,
+   8.429,
+   8.545,
+   8.893,
+   9.009,
+   9.218,
+   9.636,
+   9.799,
+   10.426,
+   10.542,
+   10.797,
+   11.215,
+   11.517,
+   11.68,
+   11.865,
+   12.19,
+   12.307,
+   12.539,
+   12.608,
+   12.771,
+   12.957,
+   13.142,
+   13.375,
+   13.514,
+   13.932,
+   14.071,
+   14.164,
+   14.35,
+   14.512,
+   14.675,
+   14.954,
+   15.186,
+   15.79,
+   16.022,
+   16.161,
+   16.393,
+   16.486,
+   16.811,
+   16.997,
+   17.136,
+   17.81,
+   17.995,
+   18.042,
+   18.321,
+   18.46,
+   18.762,
+   18.808,
+   19.296,
+   19.458,
+   19.76,
+   20.016,
+   20.248,
+   20.434,
+   20.619,
+   20.735,
+   20.875,
+   21.13,
+   21.362,
+   21.432,
+   21.78,
+   21.966,
+   22.036,
+   22.105,
+   22.314,
+   22.43,
+   22.639,
+   22.756,
+   23.011,
+   23.568,
+   23.708
+  ],
+  "drop_s": 1.85,
+  "loudness_half_seconds": [
+   0.47,
+   0.33,
+   0.18,
+   0.33,
+   0.41,
+   0.43,
+   0.38,
+   0.54,
+   0.43,
+   0.61,
+   0.46,
+   0.51,
+   0.38,
+   0.55,
+   0.65,
+   0.54,
+   0.55,
+   0.43,
+   0.45,
+   0.52,
+   0.41,
+   0.41,
+   0.28,
+   0.59,
+   0.45,
+   0.52,
+   0.45,
+   0.29,
+   0.33,
+   0.23,
+   0.4,
+   0.32,
+   0.39,
+   0.33,
+   0.34,
+   0.34,
+   0.53,
+   0.5,
+   0.49,
+   0.5,
+   0.34,
+   0.51,
+   0.65,
+   0.62,
+   0.56,
+   0.25,
+   0.4,
+   0.1
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "I'mma hold your hand while I say this. Nobody cares about your logo. They care about the proof. Companies spend 10 on a rebrand, but not enough showing you what they actually do. Your clients buy evidence that you're real, that you deliver, and that people can trust you. Most brands don't need more posts. They need proof. Filmed properly and shown consistently. We turn what you already do into proof. We are",
+  "words": [
+   {
+    "word": "I'mma",
+    "start_s": 0.0,
+    "end_s": 0.26
+   },
+   {
+    "word": "hold",
+    "start_s": 0.26,
+    "end_s": 0.4
+   },
+   {
+    "word": "your",
+    "start_s": 0.4,
+    "end_s": 0.56
+   },
+   {
+    "word": "hand",
+    "start_s": 0.56,
+    "end_s": 0.8
+   },
+   {
+    "word": "while",
+    "start_s": 0.8,
+    "end_s": 0.96
+   },
+   {
+    "word": "I",
+    "start_s": 0.96,
+    "end_s": 1.12
+   },
+   {
+    "word": "say",
+    "start_s": 1.12,
+    "end_s": 1.28
+   },
+   {
+    "word": "this.",
+    "start_s": 1.28,
+    "end_s": 1.62
+   },
+   {
+    "word": "Nobody",
+    "start_s": 1.84,
+    "end_s": 2.04
+   },
+   {
+    "word": "cares",
+    "start_s": 2.04,
+    "end_s": 2.4
+   },
+   {
+    "word": "about",
+    "start_s": 2.4,
+    "end_s": 2.62
+   },
+   {
+    "word": "your",
+    "start_s": 2.62,
+    "end_s": 2.78
+   },
+   {
+    "word": "logo.",
+    "start_s": 2.78,
+    "end_s": 3.06
+   },
+   {
+    "word": "They",
+    "start_s": 3.28,
+    "end_s": 3.38
+   },
+   {
+    "word": "care",
+    "start_s": 3.38,
+    "end_s": 3.66
+   },
+   {
+    "word": "about",
+    "start_s": 3.66,
+    "end_s": 3.88
+   },
+   {
+    "word": "the",
+    "start_s": 3.88,
+    "end_s": 4.06
+   },
+   {
+    "word": "proof.",
+    "start_s": 4.06,
+    "end_s": 4.24
+   },
+   {
+    "word": "Companies",
+    "start_s": 4.52,
+    "end_s": 4.88
+   },
+   {
+    "word": "spend",
+    "start_s": 4.88,
+    "end_s": 5.38
+   },
+   {
+    "word": "10",
+    "start_s": 5.38,
+    "end_s": 5.84
+   },
+   {
+    "word": "on",
+    "start_s": 6.12,
+    "end_s": 6.44
+   },
+   {
+    "word": "a",
+    "start_s": 6.44,
+    "end_s": 6.56
+   },
+   {
+    "word": "rebrand,",
+    "start_s": 6.56,
+    "end_s": 6.92
+   },
+   {
+    "word": "but",
+    "start_s": 7.16,
+    "end_s": 7.22
+   },
+   {
+    "word": "not",
+    "start_s": 7.22,
+    "end_s": 7.44
+   },
+   {
+    "word": "enough",
+    "start_s": 7.44,
+    "end_s": 7.7
+   },
+   {
+    "word": "showing",
+    "start_s": 7.7,
+    "end_s": 8.1
+   },
+   {
+    "word": "you",
+    "start_s": 8.1,
+    "end_s": 8.32
+   },
+   {
+    "word": "what",
+    "start_s": 8.32,
+    "end_s": 8.48
+   },
+   {
+    "word": "they",
+    "start_s": 8.48,
+    "end_s": 8.6
+   },
+   {
+    "word": "actually",
+    "start_s": 8.6,
+    "end_s": 9.0
+   },
+   {
+    "word": "do.",
+    "start_s": 9.0,
+    "end_s": 9.38
+   },
+   {
+    "word": "Your",
+    "start_s": 9.6,
+    "end_s": 9.68
+   },
+   {
+    "word": "clients",
+    "start_s": 9.68,
+    "end_s": 10.16
+   },
+   {
+    "word": "buy",
+    "start_s": 10.16,
+    "end_s": 10.56
+   },
+   {
+    "word": "evidence",
+    "start_s": 10.56,
+    "end_s": 11.1
+   },
+   {
+    "word": "that",
+    "start_s": 11.1,
+    "end_s": 11.6
+   },
+   {
+    "word": "you're",
+    "start_s": 11.6,
+    "end_s": 11.84
+   },
+   {
+    "word": "real,",
+    "start_s": 11.84,
+    "end_s": 12.08
+   },
+   {
+    "word": "that",
+    "start_s": 12.26,
+    "end_s": 12.36
+   },
+   {
+    "word": "you",
+    "start_s": 12.36,
+    "end_s": 12.48
+   },
+   {
+    "word": "deliver,",
+    "start_s": 12.48,
+    "end_s": 12.92
+   },
+   {
+    "word": "and",
+    "start_s": 13.16,
+    "end_s": 13.28
+   },
+   {
+    "word": "that",
+    "start_s": 13.28,
+    "end_s": 13.48
+   },
+   {
+    "word": "people",
+    "start_s": 13.48,
+    "end_s": 13.92
+   },
+   {
+    "word": "can",
+    "start_s": 13.92,
+    "end_s": 14.2
+   },
+   {
+    "word": "trust",
+    "start_s": 14.2,
+    "end_s": 14.54
+   },
+   {
+    "word": "you.",
+    "start_s": 14.54,
+    "end_s": 14.78
+   },
+   {
+    "word": "Most",
+    "start_s": 14.96,
+    "end_s": 15.16
+   },
+   {
+    "word": "brands",
+    "start_s": 15.16,
+    "end_s": 15.52
+   },
+   {
+    "word": "don't",
+    "start_s": 15.52,
+    "end_s": 15.96
+   },
+   {
+    "word": "need",
+    "start_s": 15.96,
+    "end_s": 16.06
+   },
+   {
+    "word": "more",
+    "start_s": 16.06,
+    "end_s": 16.24
+   },
+   {
+    "word": "posts.",
+    "start_s": 16.24,
+    "end_s": 16.56
+   },
+   {
+    "word": "They",
+    "start_s": 16.92,
+    "end_s": 17.04
+   },
+   {
+    "word": "need",
+    "start_s": 17.04,
+    "end_s": 17.3
+   },
+   {
+    "word": "proof.",
+    "start_s": 17.3,
+    "end_s": 17.6
+   },
+   {
+    "word": "Filmed",
+    "start_s": 17.94,
+    "end_s": 18.36
+   },
+   {
+    "word": "properly",
+    "start_s": 18.36,
+    "end_s": 18.78
+   },
+   {
+    "word": "and",
+    "start_s": 18.78,
+    "end_s": 19.24
+   },
+   {
+    "word": "shown",
+    "start_s": 19.24,
+    "end_s": 19.58
+   },
+   {
+    "word": "consistently.",
+    "start_s": 19.58,
+    "end_s": 20.4
+   },
+   {
+    "word": "We",
+    "start_s": 20.6,
+    "end_s": 20.74
+   },
+   {
+    "word": "turn",
+    "start_s": 20.74,
+    "end_s": 21.1
+   },
+   {
+    "word": "what",
+    "start_s": 21.1,
+    "end_s": 21.4
+   },
+   {
+    "word": "you",
+    "start_s": 21.4,
+    "end_s": 21.62
+   },
+   {
+    "word": "already",
+    "start_s": 21.62,
+    "end_s": 22.08
+   },
+   {
+    "word": "do",
+    "start_s": 22.08,
+    "end_s": 22.38
+   },
+   {
+    "word": "into",
+    "start_s": 22.38,
+    "end_s": 22.62
+   },
+   {
+    "word": "proof.",
+    "start_s": 22.62,
+    "end_s": 22.92
+   },
+   {
+    "word": "We",
+    "start_s": 23.18,
+    "end_s": 23.32
+   },
+   {
+    "word": "are",
+    "start_s": 23.32,
+    "end_s": 23.46
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

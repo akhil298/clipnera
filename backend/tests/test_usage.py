@@ -12,6 +12,9 @@ class TestPricing:
         # 1M in at $5, 1M out at $25
         assert token_cost("anthropic", "claude-opus-5", 1_000_000, 1_000_000) == pytest.approx(30.0)
 
+    def test_astra_is_priced_under_the_name_azure_reports(self):
+        assert token_cost("openai", "gpt-6-astra", 1_000_000, 1_000_000) == pytest.approx(60.0)
+
     def test_cache_multipliers(self):
         cost = token_cost("anthropic", "claude-sonnet-5", 0, 0, cache_read_tokens=1_000_000, cache_write_tokens=1_000_000)
         assert cost == pytest.approx(2.0 * 0.1 + 2.0 * 1.25)

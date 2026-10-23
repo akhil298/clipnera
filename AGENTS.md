@@ -33,6 +33,8 @@ backend/          FastAPI app — routes, services, schemas, DB models
   brain/          AI editor: router, refs, modifiers, director, PlanIR, solvers/, compile, rulebook/,
                   score, plans + execution, verify/repair, critic, credits, style memory, metrics
   understanding/  Per-asset Media Understanding Documents (MUD), LCV text view, media tools
+  beats/          Pro clips' graphic beats: planner (word ids -> proven beats), kit (clean assets), compose
+                  (grade, zoom rhythm, Chrome-rendered beats, mattes, SFX), renderer/ (no-npm Chrome driver)
   agent_runtime/  Provider-neutral tool loop and typed tool boxes
   clients/ai/     AI clients; roles.py picks a model per role (LLM_PROFILE), cassette.py for evals
   evals/          Golden set + injection cases (python -m evals.runner)
@@ -81,6 +83,23 @@ backend/.env      Environment secrets (IGNORED)
 - Environment files: `.env` is gitignored; use `.env.example` as template
 - Generated files (clips, transcriptions) are gitignored
 
+## Reel engine notes
+- The premium footage reel (`engine = "premium"` on `edit_projects`, Pro) is edited end to end by `backend/reel_engine` in one job (`edits.premium`): listen (voice/music separation with Hybrid Demucs, audio kind from stem levels AND the transcript), watch (shots, face track, contact sheets), one director call (recipe from `reel_engine/data/recipes.json`, hooks, story, sections, beats, captions, music), verify (best hook, labels against frames), compile, assets, picture, layout, graphics, sound, review (up to 2 passes, keeps the best).
+- Everything is written into one Edit Plan (`reel_engine/plan.py`); the reels board shows it through `PremiumResponse` (`reel_engine/jobs.summary`).
+- Agents ask for assets; `reel_engine/assets.Scout` searches the user's assets, the kit, made assets and the packs, makes what is missing (sounds, scores) and stores it in `reel_assets` (scope global or user) so later reels reuse it.
+- A voice is never cut inside a word or sped up; a song never becomes captions; one story graphic on screen at a time; graphics never cover a face (real face detection) and avoid busy detail (food, hands).
+- Run it on local files: `cd backend && venv/bin/python -m reel_engine clip.mp4 --out out/reel.mp4` (writes the plan beside the reel).
+- Credits are taken when it starts and refunded if it fails. Migration `20261022010000_add_reel_engine`.
+- Synthesis (SFX pack, music beds, scores, on-demand foley) lives in `backend/motion/synth.py`; footage graphic templates in `backend/beats/renderer/footage.js`.
+- The reel maker is one screen (`FootageReelForm.tsx`): videos, photos, one voiceover and/or a YouTube link (`source_url`), at least one of them; no model picker (GPT-Astra edits every plan); language `auto`. Pro gets `premium`, others `classic` with autopilot. A link is checked at create (`_check_source_link`: YouTube, plan length) and fetched at 1080p in the API process (`jobs.fetch_link` via `in_background`, like the clips flow: only the API machine has fresh YouTube cookies), then the edit starts as if uploaded. Migration `20261023010000_add_edit_source_url`.
+- Signature effects (Orbit, Headline Wall, Framebreak, Vertigo, Green Screen...) are a catalog the director picks from: `reel_engine/data/effects.json` + `reel_engine/effects.py` + `beats/renderer/effects.js`. Preview them: `scripts/effects_gallery.py talking_head.mp4 out/`.
+- Sound effects, Lottie motion graphics and animated emoji libraries: `scripts/build_asset_libraries.py` (files gitignored, manifests tracked; deploys build them on the worker).
+- One reel per strong moment: `reel_engine/moments.py` ranks self-contained moments from the transcript (light model); `pipeline.run_many` analyses once and edits each moment with the director limited to that window (dense frames, open on its hook, end on its payoff). The premium job charges each extra reel before making it (`allow`) and stops when credits run out; reels land in `edit_projects.reels` (migration `20261023020000_add_edit_reels`), `REEL_MAX_REELS_FREE/PRO`.
+- Framing (`reel_engine/track.py` + `render.framing`): every face 4×/s with lip motion; the camera follows the speaker, stacks two people trading lines, and frames detail/movement (focus track) when nobody is on screen — never a blind centre crop.
+- Editing styles (`reel_engine/data/styles.json` + `styles.py`): the director picks one; it caps and favours effects, caption looks, caption styles, moods and pacing.
+- Related pictures: Wikimedia Commons PD/CC0 photos (User-Agent must carry a contact URL), kit 3D-object cards when no photo fits, generated photos behind `REEL_IMAGE_PROVIDER` (`gemini` needs billing on the Google project; `openai` needs an `IMAGE_MODEL` deployment).
+- The beats renderer must exit when done (Chrome in its own process group; `process.exit`); a hang there once shipped reels without captions. A reel is never shipped without its captions (`pipeline.draw`).
+
 ## AI editor notes
 - The studio (`/studio/[id]`, OpenCut) saves every edit to the backend as Timeline ops (`frontend/opencut/src/clipnera/backend-sync.ts`); mapping in `frontend/opencut/BRIDGE.md`.
 - The AI chat is the studio's right-hand column (`clipnera/ai-panel.tsx`). Files dropped there or on the Editor home go to the media library; `clipnera/footage.ts` follows each one (upload → analysis step → ready), posts what the AI found (`understanding/findings.py`), and holds a prompt until the files are understood.
@@ -94,6 +113,12 @@ backend/.env      Environment secrets (IGNORED)
 - Agent edits go through `EditorService.apply` with an `Actor`: human ownership, op budgets and the never-do list (`brain/invariants.py`) apply there.
 - Feature flag `agent_editor` gates it all; it can be on for named test users only (`/admin/features`).
 - Design docs: `AI Editor/BLUEPRINT.md`, build list `AI Editor/TODO.md`.
+
+## Graphic beats (YouTube-link clips, Pro)
+- After clip generation, `beats/service.plan_project_beats` asks one model (step `beat_planning`) which word gets which graphic; `beats/planner.prove` keeps only beats whose words were said (figures digit for digit). Stored in `analysis_json["beats"]`; a clip with beats does not draw its old `motion` cues.
+- Exports run `beats.compose.with_finish` after `with_broll` and before captions: theme LUT (`beats/grade.py`), punch-in every other sentence on follow layouts, each beat rendered by `beats/renderer/render.mjs` (headless Chrome, `CHROME_PATH`) to a transparent MOV, text behind the speaker via a MODNet matte, SFX from `static/motion/sfx`. Captions step aside under cards (`MotionSource.quiet`).
+- Assets only from `static/motion/kit/manifest.json` (built by `scripts/build_motion_kit.py`, made images by `scripts/generate_kit_images.py`, synced through S3); never from `static/motion/library/`. Brief: `docs/motion_kit/ASSET_KIT.md`; reel study: `before_after_reels/ANALYSIS.md`; benchmark: `scripts/beats_benchmark.py`.
+- Pro judgement steps run on GPT-6 Astra through `LLM_PRO_STEP_MODELS`.
 
 ## Notes
 - `.vscode/` is fully gitignored — do not commit VSCode files

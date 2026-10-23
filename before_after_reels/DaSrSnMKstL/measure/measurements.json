@@ -1,0 +1,404 @@
+{
+ "id": "DaSrSnMKstL",
+ "duration_s": 14.485,
+ "fps": 60.0,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  3.467,
+  6.467,
+  14.467
+ ],
+ "shot_count": 4,
+ "median_shot_s": 3.23,
+ "shortest_shot_s": 0.02,
+ "cuts_in_hook": 0,
+ "cuts_on_beat": 0.33,
+ "flashes": [],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.03,
+  0.03,
+  0.03,
+  0.02,
+  0.02,
+  0.02,
+  0.04,
+  0.01,
+  0.01,
+  0.01,
+  0.01,
+  0.0,
+  0.04,
+  0.01,
+  0.01,
+  0.01,
+  0.02,
+  0.04,
+  0.02,
+  0.01,
+  0.03,
+  0.02,
+  0.02,
+  0.01,
+  0.02,
+  0.0,
+  0.02,
+  0.02,
+  0.03
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 123.0,
+  "beats_s": [
+   0.07,
+   0.488,
+   0.975,
+   1.416,
+   1.904,
+   2.392,
+   2.879,
+   3.367,
+   3.831,
+   4.365,
+   4.876,
+   5.41,
+   5.898,
+   6.385,
+   6.92,
+   7.384,
+   7.848,
+   8.313,
+   8.777,
+   9.218,
+   9.706,
+   10.147,
+   10.588,
+   11.076,
+   11.61,
+   12.074,
+   12.585,
+   13.096,
+   13.584,
+   14.025
+  ],
+  "hits_s": [
+   0.07,
+   0.209,
+   0.348,
+   0.488,
+   0.604,
+   0.766,
+   0.975,
+   1.115,
+   1.277,
+   1.416,
+   1.533,
+   1.625,
+   1.904,
+   2.508,
+   2.67,
+   2.74,
+   3.669,
+   3.762,
+   3.831,
+   3.971,
+   4.11,
+   4.365,
+   4.505,
+   4.69,
+   4.946,
+   5.248,
+   5.41,
+   5.712,
+   5.898,
+   6.037,
+   6.2,
+   6.385,
+   6.571,
+   6.711,
+   6.827,
+   6.896,
+   7.036,
+   7.105,
+   7.198,
+   7.384,
+   7.523,
+   7.686,
+   7.918,
+   8.313,
+   8.406,
+   8.568,
+   8.754,
+   8.963,
+   9.149,
+   9.358,
+   9.404,
+   9.706,
+   9.868,
+   10.077,
+   10.147,
+   10.217,
+   10.286,
+   10.449,
+   10.565,
+   10.774,
+   10.82,
+   10.913,
+   11.053,
+   11.308,
+   11.587,
+   11.796,
+   11.981,
+   12.051,
+   12.167,
+   12.307,
+   12.492,
+   12.725,
+   12.771,
+   12.91,
+   13.189,
+   13.305,
+   13.421,
+   13.468,
+   13.584,
+   13.677,
+   13.723,
+   13.839,
+   14.025
+  ],
+  "drop_s": 8.05,
+  "loudness_half_seconds": [
+   0.69,
+   0.22,
+   0.13,
+   0.14,
+   0.11,
+   0.17,
+   0.38,
+   0.49,
+   0.47,
+   0.11,
+   0.08,
+   0.05,
+   0.1,
+   0.06,
+   0.13,
+   0.07,
+   0.62,
+   0.25,
+   0.17,
+   0.08,
+   0.18,
+   0.14,
+   0.04,
+   0.12,
+   0.25,
+   0.25,
+   0.69,
+   0.19,
+   0.1
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "One of the best ways to start getting more views on YouTube is by writing better YouTube titles, which can boost the click rate on your videos and ultimately help you trigger the algorithm and potentially go viral.",
+  "words": [
+   {
+    "word": "One",
+    "start_s": 0.0,
+    "end_s": 0.18
+   },
+   {
+    "word": "of",
+    "start_s": 0.18,
+    "end_s": 0.3
+   },
+   {
+    "word": "the",
+    "start_s": 0.3,
+    "end_s": 0.4
+   },
+   {
+    "word": "best",
+    "start_s": 0.4,
+    "end_s": 0.78
+   },
+   {
+    "word": "ways",
+    "start_s": 0.78,
+    "end_s": 1.08
+   },
+   {
+    "word": "to",
+    "start_s": 1.08,
+    "end_s": 1.34
+   },
+   {
+    "word": "start",
+    "start_s": 1.34,
+    "end_s": 1.72
+   },
+   {
+    "word": "getting",
+    "start_s": 1.72,
+    "end_s": 2.0
+   },
+   {
+    "word": "more",
+    "start_s": 2.0,
+    "end_s": 2.34
+   },
+   {
+    "word": "views",
+    "start_s": 2.34,
+    "end_s": 2.58
+   },
+   {
+    "word": "on",
+    "start_s": 2.58,
+    "end_s": 2.84
+   },
+   {
+    "word": "YouTube",
+    "start_s": 2.84,
+    "end_s": 3.2
+   },
+   {
+    "word": "is",
+    "start_s": 3.2,
+    "end_s": 3.68
+   },
+   {
+    "word": "by",
+    "start_s": 3.68,
+    "end_s": 3.88
+   },
+   {
+    "word": "writing",
+    "start_s": 3.88,
+    "end_s": 4.32
+   },
+   {
+    "word": "better",
+    "start_s": 4.32,
+    "end_s": 4.86
+   },
+   {
+    "word": "YouTube",
+    "start_s": 4.86,
+    "end_s": 5.52
+   },
+   {
+    "word": "titles,",
+    "start_s": 5.52,
+    "end_s": 6.16
+   },
+   {
+    "word": "which",
+    "start_s": 6.3,
+    "end_s": 6.94
+   },
+   {
+    "word": "can",
+    "start_s": 6.94,
+    "end_s": 7.18
+   },
+   {
+    "word": "boost",
+    "start_s": 7.18,
+    "end_s": 7.58
+   },
+   {
+    "word": "the",
+    "start_s": 7.58,
+    "end_s": 8.06
+   },
+   {
+    "word": "click",
+    "start_s": 8.06,
+    "end_s": 8.76
+   },
+   {
+    "word": "rate",
+    "start_s": 9.02,
+    "end_s": 9.24
+   },
+   {
+    "word": "on",
+    "start_s": 9.24,
+    "end_s": 9.48
+   },
+   {
+    "word": "your",
+    "start_s": 9.48,
+    "end_s": 9.6
+   },
+   {
+    "word": "videos",
+    "start_s": 9.6,
+    "end_s": 9.98
+   },
+   {
+    "word": "and",
+    "start_s": 9.98,
+    "end_s": 10.32
+   },
+   {
+    "word": "ultimately",
+    "start_s": 10.32,
+    "end_s": 10.94
+   },
+   {
+    "word": "help",
+    "start_s": 10.94,
+    "end_s": 11.66
+   },
+   {
+    "word": "you",
+    "start_s": 11.66,
+    "end_s": 11.9
+   },
+   {
+    "word": "trigger",
+    "start_s": 11.9,
+    "end_s": 12.22
+   },
+   {
+    "word": "the",
+    "start_s": 12.22,
+    "end_s": 12.42
+   },
+   {
+    "word": "algorithm",
+    "start_s": 12.42,
+    "end_s": 12.94
+   },
+   {
+    "word": "and",
+    "start_s": 12.94,
+    "end_s": 13.22
+   },
+   {
+    "word": "potentially",
+    "start_s": 13.22,
+    "end_s": 13.58
+   },
+   {
+    "word": "go",
+    "start_s": 13.58,
+    "end_s": 13.88
+   },
+   {
+    "word": "viral.",
+    "start_s": 13.88,
+    "end_s": 14.18
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

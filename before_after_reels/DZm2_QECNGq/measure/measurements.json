@@ -1,0 +1,382 @@
+{
+ "id": "DZm2_QECNGq",
+ "duration_s": 11.887,
+ "fps": 25.0,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  6.0,
+  7.84
+ ],
+ "shot_count": 3,
+ "median_shot_s": 4.05,
+ "shortest_shot_s": 1.84,
+ "cuts_in_hook": 0,
+ "cuts_on_beat": 1.0,
+ "flashes": [],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.06,
+  0.01,
+  0.14,
+  0.09,
+  0.19,
+  0.24,
+  0.17,
+  0.28,
+  0.12,
+  0.04,
+  0.03,
+  0.24,
+  0.05,
+  0.02,
+  0.01,
+  0.12,
+  0.08,
+  0.01,
+  0.02,
+  0.17,
+  0.05,
+  0.08,
+  0.03,
+  0.01
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 129.2,
+  "beats_s": [
+   0.697,
+   1.161,
+   1.649,
+   2.113,
+   2.624,
+   3.135,
+   3.622,
+   4.087,
+   4.551,
+   5.039,
+   5.48,
+   5.921,
+   6.362,
+   6.803,
+   7.268,
+   7.732,
+   8.197,
+   8.615,
+   9.079,
+   9.543,
+   9.985,
+   10.426
+  ],
+  "hits_s": [
+   0.07,
+   0.232,
+   0.395,
+   0.673,
+   0.906,
+   0.952,
+   1.138,
+   1.416,
+   2.02,
+   2.09,
+   2.763,
+   2.81,
+   2.902,
+   3.088,
+   3.135,
+   3.599,
+   3.855,
+   4.319,
+   4.551,
+   4.69,
+   4.83,
+   4.876,
+   5.039,
+   5.201,
+   5.341,
+   5.48,
+   5.573,
+   5.712,
+   5.851,
+   6.037,
+   6.269,
+   6.362,
+   6.548,
+   6.687,
+   6.803,
+   6.943,
+   7.198,
+   7.268,
+   7.384,
+   7.523,
+   7.732,
+   7.895,
+   7.964,
+   8.081,
+   8.197,
+   8.336,
+   8.615,
+   8.824,
+   8.963,
+   9.056,
+   9.218,
+   9.381,
+   9.543,
+   9.776,
+   10.054,
+   10.147,
+   10.286,
+   10.403,
+   10.704,
+   10.89,
+   11.053,
+   11.238,
+   11.355,
+   11.471,
+   11.656
+  ],
+  "drop_s": 5.75,
+  "loudness_half_seconds": [
+   0.76,
+   0.14,
+   0.18,
+   0.12,
+   0.25,
+   0.09,
+   0.19,
+   0.18,
+   0.11,
+   0.08,
+   0.1,
+   0.41,
+   0.57,
+   0.21,
+   0.13,
+   0.21,
+   0.17,
+   0.15,
+   0.06,
+   0.14,
+   0.08,
+   0.13,
+   0.13,
+   0.1
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "I've written for television, film, radio, print ads, I've written all kinds of stuff. When did you start making money of doing content? When I was 19, there was like a and a half rupee paycheck that came in every month.",
+  "words": [
+   {
+    "word": "I've",
+    "start_s": 0.0,
+    "end_s": 0.18
+   },
+   {
+    "word": "written",
+    "start_s": 0.18,
+    "end_s": 0.4
+   },
+   {
+    "word": "for",
+    "start_s": 0.4,
+    "end_s": 0.98
+   },
+   {
+    "word": "television,",
+    "start_s": 0.98,
+    "end_s": 1.42
+   },
+   {
+    "word": "film,",
+    "start_s": 1.9,
+    "end_s": 2.3
+   },
+   {
+    "word": "radio,",
+    "start_s": 2.7,
+    "end_s": 3.16
+   },
+   {
+    "word": "print",
+    "start_s": 3.56,
+    "end_s": 3.76
+   },
+   {
+    "word": "ads,",
+    "start_s": 3.76,
+    "end_s": 4.22
+   },
+   {
+    "word": "I've",
+    "start_s": 4.54,
+    "end_s": 4.62
+   },
+   {
+    "word": "written",
+    "start_s": 4.62,
+    "end_s": 4.74
+   },
+   {
+    "word": "all",
+    "start_s": 4.74,
+    "end_s": 5.06
+   },
+   {
+    "word": "kinds",
+    "start_s": 5.06,
+    "end_s": 5.24
+   },
+   {
+    "word": "of",
+    "start_s": 5.24,
+    "end_s": 5.42
+   },
+   {
+    "word": "stuff.",
+    "start_s": 5.42,
+    "end_s": 5.76
+   },
+   {
+    "word": "When",
+    "start_s": 5.98,
+    "end_s": 6.1
+   },
+   {
+    "word": "did",
+    "start_s": 6.1,
+    "end_s": 6.18
+   },
+   {
+    "word": "you",
+    "start_s": 6.18,
+    "end_s": 6.26
+   },
+   {
+    "word": "start",
+    "start_s": 6.26,
+    "end_s": 6.4
+   },
+   {
+    "word": "making",
+    "start_s": 6.4,
+    "end_s": 6.6
+   },
+   {
+    "word": "money",
+    "start_s": 6.6,
+    "end_s": 6.9
+   },
+   {
+    "word": "of",
+    "start_s": 6.9,
+    "end_s": 7.16
+   },
+   {
+    "word": "doing",
+    "start_s": 7.16,
+    "end_s": 7.36
+   },
+   {
+    "word": "content?",
+    "start_s": 7.36,
+    "end_s": 7.74
+   },
+   {
+    "word": "When",
+    "start_s": 7.88,
+    "end_s": 8.0
+   },
+   {
+    "word": "I",
+    "start_s": 8.0,
+    "end_s": 8.1
+   },
+   {
+    "word": "was",
+    "start_s": 8.1,
+    "end_s": 8.22
+   },
+   {
+    "word": "19,",
+    "start_s": 8.22,
+    "end_s": 8.62
+   },
+   {
+    "word": "there",
+    "start_s": 8.76,
+    "end_s": 8.86
+   },
+   {
+    "word": "was",
+    "start_s": 8.86,
+    "end_s": 8.96
+   },
+   {
+    "word": "like",
+    "start_s": 8.96,
+    "end_s": 9.16
+   },
+   {
+    "word": "a",
+    "start_s": 9.16,
+    "end_s": 9.36
+   },
+   {
+    "word": "and",
+    "start_s": 9.72,
+    "end_s": 9.8
+   },
+   {
+    "word": "a",
+    "start_s": 9.8,
+    "end_s": 9.9
+   },
+   {
+    "word": "half",
+    "start_s": 9.9,
+    "end_s": 10.04
+   },
+   {
+    "word": "rupee",
+    "start_s": 10.16,
+    "end_s": 10.44
+   },
+   {
+    "word": "paycheck",
+    "start_s": 10.44,
+    "end_s": 10.72
+   },
+   {
+    "word": "that",
+    "start_s": 10.72,
+    "end_s": 10.94
+   },
+   {
+    "word": "came",
+    "start_s": 10.94,
+    "end_s": 11.14
+   },
+   {
+    "word": "in",
+    "start_s": 11.14,
+    "end_s": 11.3
+   },
+   {
+    "word": "every",
+    "start_s": 11.3,
+    "end_s": 11.48
+   },
+   {
+    "word": "month.",
+    "start_s": 11.48,
+    "end_s": 11.72
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

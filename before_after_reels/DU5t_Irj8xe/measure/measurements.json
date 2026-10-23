@@ -1,0 +1,337 @@
+{
+ "id": "DU5t_Irj8xe",
+ "duration_s": 12.864,
+ "fps": 23.976,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  7.758,
+  11.553
+ ],
+ "shot_count": 3,
+ "median_shot_s": 3.8,
+ "shortest_shot_s": 1.31,
+ "cuts_in_hook": 0,
+ "cuts_on_beat": 1.0,
+ "flashes": [],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.07,
+  0.03,
+  0.04,
+  0.04,
+  0.03,
+  0.12,
+  0.02,
+  0.02,
+  0.05,
+  0.04,
+  0.02,
+  0.13,
+  0.03,
+  0.16,
+  0.04,
+  0.08,
+  0.01,
+  0.02,
+  0.07,
+  0.06,
+  0.07,
+  0.02,
+  0.06,
+  0.17,
+  0.03,
+  0.04
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 123.0,
+  "beats_s": [
+   0.163,
+   0.627,
+   1.115,
+   1.625,
+   2.136,
+   2.67,
+   3.181,
+   3.715,
+   4.226,
+   4.714,
+   5.178,
+   5.689,
+   6.2,
+   6.687,
+   7.175,
+   7.663,
+   8.127,
+   8.638,
+   9.149,
+   9.613,
+   10.054,
+   10.495,
+   10.913,
+   11.355,
+   11.842,
+   12.33
+  ],
+  "hits_s": [
+   0.07,
+   0.139,
+   0.348,
+   0.395,
+   0.488,
+   0.72,
+   0.813,
+   0.952,
+   1.091,
+   1.277,
+   1.416,
+   1.533,
+   1.834,
+   2.276,
+   2.508,
+   2.81,
+   3.019,
+   3.158,
+   3.483,
+   3.715,
+   3.831,
+   3.947,
+   4.133,
+   4.226,
+   4.412,
+   4.783,
+   4.83,
+   4.899,
+   5.016,
+   5.178,
+   5.387,
+   5.689,
+   5.805,
+   6.037,
+   6.13,
+   6.432,
+   6.571,
+   6.687,
+   6.827,
+   7.036,
+   7.129,
+   7.175,
+   7.291,
+   7.338,
+   7.546,
+   7.663,
+   7.825,
+   7.941,
+   8.081,
+   8.29,
+   8.406,
+   8.545,
+   8.731,
+   8.8,
+   8.916,
+   9.125,
+   9.288,
+   9.613,
+   9.706,
+   9.822,
+   9.961,
+   10.077,
+   10.31,
+   10.495,
+   10.635,
+   10.704,
+   10.867,
+   11.099,
+   11.355,
+   11.587,
+   11.819,
+   11.958,
+   12.098,
+   12.33,
+   12.492,
+   12.585,
+   12.841
+  ],
+  "drop_s": null,
+  "loudness_half_seconds": [
+   0.81,
+   0.8,
+   0.73,
+   0.63,
+   0.61,
+   0.54,
+   0.57,
+   0.53,
+   0.42,
+   0.54,
+   0.33,
+   0.5,
+   0.54,
+   0.52,
+   0.58,
+   0.4,
+   0.44,
+   0.45,
+   0.39,
+   0.56,
+   0.51,
+   0.44,
+   0.35,
+   0.48,
+   0.32,
+   0.35
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "Plastoculture is lying to realtors. Working harder doesn't fix this organization. More hours, same chaos? from structure, not grinds. When systems work, you finally get your evening's back.",
+  "words": [
+   {
+    "word": "Plastoculture",
+    "start_s": 0.0,
+    "end_s": 0.78
+   },
+   {
+    "word": "is",
+    "start_s": 0.78,
+    "end_s": 1.2
+   },
+   {
+    "word": "lying",
+    "start_s": 1.2,
+    "end_s": 1.6
+   },
+   {
+    "word": "to",
+    "start_s": 1.6,
+    "end_s": 1.9
+   },
+   {
+    "word": "realtors.",
+    "start_s": 1.9,
+    "end_s": 2.46
+   },
+   {
+    "word": "Working",
+    "start_s": 2.72,
+    "end_s": 3.0
+   },
+   {
+    "word": "harder",
+    "start_s": 3.0,
+    "end_s": 3.46
+   },
+   {
+    "word": "doesn't",
+    "start_s": 3.46,
+    "end_s": 4.14
+   },
+   {
+    "word": "fix",
+    "start_s": 4.14,
+    "end_s": 4.38
+   },
+   {
+    "word": "this",
+    "start_s": 4.38,
+    "end_s": 4.6
+   },
+   {
+    "word": "organization.",
+    "start_s": 4.6,
+    "end_s": 5.32
+   },
+   {
+    "word": "More",
+    "start_s": 5.7,
+    "end_s": 5.88
+   },
+   {
+    "word": "hours,",
+    "start_s": 5.88,
+    "end_s": 6.3
+   },
+   {
+    "word": "same",
+    "start_s": 6.7,
+    "end_s": 6.92
+   },
+   {
+    "word": "chaos?",
+    "start_s": 6.92,
+    "end_s": 7.42
+   },
+   {
+    "word": "from",
+    "start_s": 8.16,
+    "end_s": 8.36
+   },
+   {
+    "word": "structure,",
+    "start_s": 8.36,
+    "end_s": 8.78
+   },
+   {
+    "word": "not",
+    "start_s": 9.12,
+    "end_s": 9.36
+   },
+   {
+    "word": "grinds.",
+    "start_s": 9.36,
+    "end_s": 9.98
+   },
+   {
+    "word": "When",
+    "start_s": 10.02,
+    "end_s": 10.12
+   },
+   {
+    "word": "systems",
+    "start_s": 10.12,
+    "end_s": 10.46
+   },
+   {
+    "word": "work,",
+    "start_s": 10.46,
+    "end_s": 10.86
+   },
+   {
+    "word": "you",
+    "start_s": 11.24,
+    "end_s": 11.4
+   },
+   {
+    "word": "finally",
+    "start_s": 11.4,
+    "end_s": 11.74
+   },
+   {
+    "word": "get",
+    "start_s": 11.74,
+    "end_s": 12.0
+   },
+   {
+    "word": "your",
+    "start_s": 12.0,
+    "end_s": 12.2
+   },
+   {
+    "word": "evening's",
+    "start_s": 12.2,
+    "end_s": 12.54
+   },
+   {
+    "word": "back.",
+    "start_s": 12.54,
+    "end_s": 12.7
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

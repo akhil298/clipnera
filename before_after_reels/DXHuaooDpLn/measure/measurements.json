@@ -1,0 +1,305 @@
+{
+ "id": "DXHuaooDpLn",
+ "duration_s": 11.267,
+ "fps": 30.0,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  3.6,
+  6.233,
+  11.233
+ ],
+ "shot_count": 4,
+ "median_shot_s": 3.12,
+ "shortest_shot_s": 0.03,
+ "cuts_in_hook": 0,
+ "cuts_on_beat": 0.0,
+ "flashes": [],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.01,
+  0.0,
+  0.0,
+  0.01,
+  0.0,
+  0.01,
+  0.02,
+  0.02,
+  0.01,
+  0.01,
+  0.01,
+  0.0,
+  0.02,
+  0.01,
+  0.01,
+  0.01,
+  0.0,
+  0.01,
+  0.01,
+  0.01,
+  0.02,
+  0.02,
+  0.08
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 107.7,
+  "beats_s": [
+   0.186,
+   0.72,
+   1.3,
+   1.811,
+   2.322,
+   2.856,
+   3.367,
+   3.878,
+   4.389,
+   4.992,
+   5.573,
+   6.107,
+   6.641,
+   7.175,
+   7.732,
+   8.266,
+   8.8,
+   9.358,
+   9.915,
+   10.472,
+   11.006
+  ],
+  "hits_s": [
+   0.093,
+   0.186,
+   0.464,
+   0.72,
+   1.045,
+   1.115,
+   1.3,
+   1.533,
+   1.811,
+   1.997,
+   2.136,
+   2.322,
+   2.554,
+   2.694,
+   2.926,
+   3.715,
+   3.878,
+   4.063,
+   4.203,
+   4.365,
+   4.505,
+   4.644,
+   4.76,
+   4.992,
+   5.271,
+   5.573,
+   6.385,
+   6.641,
+   6.873,
+   7.175,
+   7.338,
+   7.477,
+   7.546,
+   7.895,
+   8.034,
+   8.266,
+   8.429,
+   8.475,
+   8.615,
+   8.8,
+   8.963,
+   9.079,
+   9.288,
+   9.358,
+   9.427,
+   9.636,
+   9.776,
+   9.892,
+   10.194,
+   10.333,
+   10.449,
+   10.635,
+   10.751,
+   10.89,
+   11.006
+  ],
+  "drop_s": 3.85,
+  "loudness_half_seconds": [
+   0.44,
+   0.4,
+   0.57,
+   0.52,
+   0.27,
+   0.44,
+   0.29,
+   0.22,
+   0.66,
+   0.37,
+   0.42,
+   0.36,
+   0.28,
+   0.36,
+   0.08,
+   0.32,
+   0.23,
+   0.32,
+   0.38,
+   0.34,
+   0.19,
+   0.36,
+   0.19
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "Hot take, people spend lakhs on interiors and ignore the bathroom completely. You walk in half awake and the first thing that you reach for is the basin.",
+  "words": [
+   {
+    "word": "Hot",
+    "start_s": 0.0,
+    "end_s": 0.36
+   },
+   {
+    "word": "take,",
+    "start_s": 0.36,
+    "end_s": 0.64
+   },
+   {
+    "word": "people",
+    "start_s": 1.0,
+    "end_s": 1.28
+   },
+   {
+    "word": "spend",
+    "start_s": 1.28,
+    "end_s": 1.6
+   },
+   {
+    "word": "lakhs",
+    "start_s": 1.6,
+    "end_s": 2.5
+   },
+   {
+    "word": "on",
+    "start_s": 2.5,
+    "end_s": 2.62
+   },
+   {
+    "word": "interiors",
+    "start_s": 2.62,
+    "end_s": 3.4
+   },
+   {
+    "word": "and",
+    "start_s": 3.4,
+    "end_s": 3.94
+   },
+   {
+    "word": "ignore",
+    "start_s": 3.94,
+    "end_s": 4.46
+   },
+   {
+    "word": "the",
+    "start_s": 4.46,
+    "end_s": 4.68
+   },
+   {
+    "word": "bathroom",
+    "start_s": 4.68,
+    "end_s": 5.12
+   },
+   {
+    "word": "completely.",
+    "start_s": 5.12,
+    "end_s": 5.68
+   },
+   {
+    "word": "You",
+    "start_s": 6.4,
+    "end_s": 6.56
+   },
+   {
+    "word": "walk",
+    "start_s": 6.56,
+    "end_s": 6.84
+   },
+   {
+    "word": "in",
+    "start_s": 6.84,
+    "end_s": 7.08
+   },
+   {
+    "word": "half",
+    "start_s": 7.08,
+    "end_s": 7.76
+   },
+   {
+    "word": "awake",
+    "start_s": 7.76,
+    "end_s": 8.12
+   },
+   {
+    "word": "and",
+    "start_s": 8.12,
+    "end_s": 8.52
+   },
+   {
+    "word": "the",
+    "start_s": 8.52,
+    "end_s": 8.64
+   },
+   {
+    "word": "first",
+    "start_s": 8.64,
+    "end_s": 8.94
+   },
+   {
+    "word": "thing",
+    "start_s": 8.94,
+    "end_s": 9.16
+   },
+   {
+    "word": "that",
+    "start_s": 9.16,
+    "end_s": 9.36
+   },
+   {
+    "word": "you",
+    "start_s": 9.36,
+    "end_s": 9.5
+   },
+   {
+    "word": "reach",
+    "start_s": 9.5,
+    "end_s": 9.76
+   },
+   {
+    "word": "for",
+    "start_s": 9.76,
+    "end_s": 10.02
+   },
+   {
+    "word": "is",
+    "start_s": 10.02,
+    "end_s": 10.54
+   },
+   {
+    "word": "the",
+    "start_s": 10.54,
+    "end_s": 10.68
+   },
+   {
+    "word": "basin.",
+    "start_s": 10.68,
+    "end_s": 10.94
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

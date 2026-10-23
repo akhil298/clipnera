@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Callable
 
 from clients.services.s3 import S3
+from beats.compose import with_finish
 from broll.cutaways import with_broll
 from motion.overlay import MotionSource
 from motion.service import motion_source
@@ -356,7 +357,12 @@ class ClipService:
         if transcript_segments is None:
             transcript_segments = self._loads(clip.transcript, [])
 
-        async with clip_source(clip) as cut_path, with_broll(cut_path, clip, Hook.from_values(clip.hook_start, clip.hook_end)) as video_path:
+        hook = Hook.from_values(clip.hook_start, clip.hook_end)
+        async with (
+            clip_source(clip) as cut_path,
+            with_broll(cut_path, clip, hook) as broll_path,
+            with_finish(broll_path, clip, hook) as video_path,
+        ):
             # No words on record burned an empty caption track; transcribe the cut.
             if not transcript_segments and not burn_request.get("subtitles"):
                 transcript_segments = await self._transcribe_clip_cut(clip, video_path, user_id)
@@ -726,7 +732,7 @@ class ClipService:
             clip_end = min(clip_end, clip.start_time + max_duration)
             spans = trim_spans(spans, max_duration)
 
-        async with with_broll(cut_path, clip, hook) as source_path:
+        async with with_broll(cut_path, clip, hook) as broll_path, with_finish(broll_path, clip, hook, ratio) as source_path:
             return await self._render_export_from(
                 clip, source_path, styling, hook, spans, clip_end, style_type, caption_config,
                 burn_subtitles, show_title, watermark_enabled, enable_emoji, transcript, transition,

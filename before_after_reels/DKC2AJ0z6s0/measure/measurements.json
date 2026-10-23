@@ -1,0 +1,509 @@
+{
+ "id": "DKC2AJ0z6s0",
+ "duration_s": 16.068,
+ "fps": 30.0,
+ "width": 1080,
+ "height": 1920,
+ "orientation": "portrait",
+ "cuts_s": [
+  10.867
+ ],
+ "shot_count": 2,
+ "median_shot_s": 8.03,
+ "shortest_shot_s": 5.2,
+ "cuts_in_hook": 0,
+ "cuts_on_beat": 1.0,
+ "flashes": [],
+ "black_frames": [],
+ "movement_half_seconds": [
+  0.07,
+  0.01,
+  0.03,
+  0.01,
+  0.02,
+  0.02,
+  0.02,
+  0.01,
+  0.08,
+  0.04,
+  0.02,
+  0.04,
+  0.01,
+  0.02,
+  0.05,
+  0.03,
+  0.01,
+  0.01,
+  0.01,
+  0.01,
+  0.0,
+  0.08,
+  0.02,
+  0.05,
+  0.01,
+  0.04,
+  0.04,
+  0.02,
+  0.02,
+  0.03,
+  0.01,
+  0.01
+ ],
+ "sound": {
+  "silent": false,
+  "bpm": 136.0,
+  "beats_s": [
+   0.209,
+   0.604,
+   1.022,
+   1.463,
+   1.904,
+   2.322,
+   2.786,
+   3.251,
+   3.692,
+   4.156,
+   4.598,
+   5.039,
+   5.48,
+   5.898,
+   6.339,
+   6.757,
+   7.198,
+   7.616,
+   8.034,
+   8.452,
+   8.916,
+   9.358,
+   9.799,
+   10.17,
+   10.612,
+   11.076,
+   11.587,
+   12.028,
+   12.492,
+   12.957,
+   13.398,
+   13.839,
+   14.28,
+   14.745,
+   15.186,
+   15.627
+  ],
+  "hits_s": [
+   0.209,
+   0.348,
+   0.557,
+   0.813,
+   0.906,
+   0.998,
+   1.254,
+   1.463,
+   1.602,
+   1.834,
+   1.927,
+   2.043,
+   2.276,
+   2.461,
+   2.577,
+   2.995,
+   3.042,
+   3.111,
+   3.251,
+   3.483,
+   3.878,
+   4.226,
+   4.412,
+   4.598,
+   4.783,
+   5.039,
+   5.294,
+   5.387,
+   5.48,
+   5.759,
+   5.828,
+   5.898,
+   6.107,
+   6.246,
+   6.339,
+   6.478,
+   6.664,
+   6.85,
+   6.966,
+   7.198,
+   7.361,
+   7.616,
+   7.755,
+   7.872,
+   8.057,
+   8.429,
+   8.638,
+   8.847,
+   9.056,
+   9.172,
+   9.334,
+   9.567,
+   9.799,
+   10.147,
+   10.565,
+   10.867,
+   11.053,
+   11.285,
+   11.494,
+   11.587,
+   11.842,
+   12.028,
+   12.19,
+   12.307,
+   12.399,
+   12.585,
+   12.817,
+   13.212,
+   13.816,
+   14.025,
+   14.42,
+   14.745,
+   14.814,
+   15.0,
+   15.325,
+   15.511,
+   15.79
+  ],
+  "drop_s": 11.0,
+  "loudness_half_seconds": [
+   0.48,
+   0.46,
+   0.32,
+   0.29,
+   0.14,
+   0.41,
+   0.3,
+   0.22,
+   0.38,
+   0.33,
+   0.24,
+   0.25,
+   0.49,
+   0.38,
+   0.38,
+   0.33,
+   0.28,
+   0.16,
+   0.27,
+   0.21,
+   0.21,
+   0.19,
+   0.46,
+   0.35,
+   0.38,
+   0.33,
+   0.41,
+   0.17,
+   0.44,
+   0.3,
+   0.34,
+   0.28,
+   0.06
+  ]
+ },
+ "speech": {
+  "language": "en",
+  "text": "If you don't want to be like everyone else then you have to make the sacrifices others aren't willing to make. That's what my mental told me when I was in my early 20s and it stuck with me ever since. I started out with no qualifications and no money but still managed to become a multi -millionaire.",
+  "words": [
+   {
+    "word": "If",
+    "start_s": 0.0,
+    "end_s": 0.3
+   },
+   {
+    "word": "you",
+    "start_s": 0.3,
+    "end_s": 0.48
+   },
+   {
+    "word": "don't",
+    "start_s": 0.48,
+    "end_s": 0.72
+   },
+   {
+    "word": "want",
+    "start_s": 0.72,
+    "end_s": 0.82
+   },
+   {
+    "word": "to",
+    "start_s": 0.82,
+    "end_s": 0.94
+   },
+   {
+    "word": "be",
+    "start_s": 0.94,
+    "end_s": 1.1
+   },
+   {
+    "word": "like",
+    "start_s": 1.1,
+    "end_s": 1.38
+   },
+   {
+    "word": "everyone",
+    "start_s": 1.38,
+    "end_s": 1.9
+   },
+   {
+    "word": "else",
+    "start_s": 1.9,
+    "end_s": 2.26
+   },
+   {
+    "word": "then",
+    "start_s": 2.26,
+    "end_s": 2.6
+   },
+   {
+    "word": "you",
+    "start_s": 2.6,
+    "end_s": 2.76
+   },
+   {
+    "word": "have",
+    "start_s": 2.76,
+    "end_s": 2.9
+   },
+   {
+    "word": "to",
+    "start_s": 2.9,
+    "end_s": 3.02
+   },
+   {
+    "word": "make",
+    "start_s": 3.02,
+    "end_s": 3.14
+   },
+   {
+    "word": "the",
+    "start_s": 3.14,
+    "end_s": 3.28
+   },
+   {
+    "word": "sacrifices",
+    "start_s": 3.28,
+    "end_s": 4.1
+   },
+   {
+    "word": "others",
+    "start_s": 4.1,
+    "end_s": 4.58
+   },
+   {
+    "word": "aren't",
+    "start_s": 4.58,
+    "end_s": 5.0
+   },
+   {
+    "word": "willing",
+    "start_s": 5.0,
+    "end_s": 5.12
+   },
+   {
+    "word": "to",
+    "start_s": 5.12,
+    "end_s": 5.38
+   },
+   {
+    "word": "make.",
+    "start_s": 5.38,
+    "end_s": 5.64
+   },
+   {
+    "word": "That's",
+    "start_s": 5.84,
+    "end_s": 6.04
+   },
+   {
+    "word": "what",
+    "start_s": 6.04,
+    "end_s": 6.16
+   },
+   {
+    "word": "my",
+    "start_s": 6.16,
+    "end_s": 6.34
+   },
+   {
+    "word": "mental",
+    "start_s": 6.34,
+    "end_s": 6.64
+   },
+   {
+    "word": "told",
+    "start_s": 6.64,
+    "end_s": 7.02
+   },
+   {
+    "word": "me",
+    "start_s": 7.02,
+    "end_s": 7.22
+   },
+   {
+    "word": "when",
+    "start_s": 7.22,
+    "end_s": 7.4
+   },
+   {
+    "word": "I",
+    "start_s": 7.4,
+    "end_s": 7.54
+   },
+   {
+    "word": "was",
+    "start_s": 7.54,
+    "end_s": 7.66
+   },
+   {
+    "word": "in",
+    "start_s": 7.66,
+    "end_s": 7.8
+   },
+   {
+    "word": "my",
+    "start_s": 7.8,
+    "end_s": 7.96
+   },
+   {
+    "word": "early",
+    "start_s": 7.96,
+    "end_s": 8.16
+   },
+   {
+    "word": "20s",
+    "start_s": 8.16,
+    "end_s": 8.9
+   },
+   {
+    "word": "and",
+    "start_s": 8.9,
+    "end_s": 9.02
+   },
+   {
+    "word": "it",
+    "start_s": 9.02,
+    "end_s": 9.12
+   },
+   {
+    "word": "stuck",
+    "start_s": 9.12,
+    "end_s": 9.4
+   },
+   {
+    "word": "with",
+    "start_s": 9.4,
+    "end_s": 9.68
+   },
+   {
+    "word": "me",
+    "start_s": 9.68,
+    "end_s": 9.88
+   },
+   {
+    "word": "ever",
+    "start_s": 9.88,
+    "end_s": 10.3
+   },
+   {
+    "word": "since.",
+    "start_s": 10.3,
+    "end_s": 10.68
+   },
+   {
+    "word": "I",
+    "start_s": 11.0,
+    "end_s": 11.12
+   },
+   {
+    "word": "started",
+    "start_s": 11.12,
+    "end_s": 11.48
+   },
+   {
+    "word": "out",
+    "start_s": 11.48,
+    "end_s": 11.7
+   },
+   {
+    "word": "with",
+    "start_s": 11.7,
+    "end_s": 11.86
+   },
+   {
+    "word": "no",
+    "start_s": 11.86,
+    "end_s": 12.1
+   },
+   {
+    "word": "qualifications",
+    "start_s": 12.1,
+    "end_s": 12.6
+   },
+   {
+    "word": "and",
+    "start_s": 12.6,
+    "end_s": 13.08
+   },
+   {
+    "word": "no",
+    "start_s": 13.08,
+    "end_s": 13.3
+   },
+   {
+    "word": "money",
+    "start_s": 13.3,
+    "end_s": 13.6
+   },
+   {
+    "word": "but",
+    "start_s": 13.6,
+    "end_s": 13.84
+   },
+   {
+    "word": "still",
+    "start_s": 13.84,
+    "end_s": 14.08
+   },
+   {
+    "word": "managed",
+    "start_s": 14.08,
+    "end_s": 14.42
+   },
+   {
+    "word": "to",
+    "start_s": 14.42,
+    "end_s": 14.64
+   },
+   {
+    "word": "become",
+    "start_s": 14.64,
+    "end_s": 14.86
+   },
+   {
+    "word": "a",
+    "start_s": 14.86,
+    "end_s": 15.0
+   },
+   {
+    "word": "multi",
+    "start_s": 15.0,
+    "end_s": 15.3
+   },
+   {
+    "word": "-millionaire.",
+    "start_s": 15.3,
+    "end_s": 15.96
+   }
+  ]
+ },
+ "sheets": [
+  "hook.jpg",
+  "full_1.jpg"
+ ]
+}

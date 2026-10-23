@@ -2423,6 +2423,8 @@ export type EditScriptMode = 'auto' | 'spoken' | 'voiceover' | 'onscreen' | 'dir
 export type EditResolvedScriptMode = 'none' | 'spoken' | 'voiceover' | 'onscreen' | 'direction';
 export type EditTargetSeconds = 0 | 15 | 30 | 45 | 60 | 90;
 export type EditStatus = 'draft' | 'analyzing' | 'planned' | 'rendering' | 'done' | 'failed';
+/** 'premium': the reel engine edits end to end (Pro). 'classic': plan, review, then render. */
+export type EditEngine = 'classic' | 'premium';
 export type EditLayout = 'talking' | 'voiceover' | 'montage';
 export type EditSourceType =
   | 'video/mp4' | 'video/quicktime' | 'video/webm'
@@ -2446,6 +2448,9 @@ export interface EditCreateRequest {
   ai_effort?: AiEffort | null;
   /** A YouTube or Shorts link to a reel whose editing style to copy. */
   reference_url?: string | null;
+  /** A YouTube video to edit; fetched as footage when the edit starts. */
+  source_url?: string | null;
+  engine?: EditEngine;
 }
 
 export interface EditSourceFile {
@@ -2574,6 +2579,56 @@ export interface EditTimelineResponse {
   music: EditTimelineMusic | null;
 }
 
+/** One stage the reel engine reported (backend reel_engine/pipeline.py STAGES). */
+export interface PremiumStage {
+  stage: string;
+  note: string;
+  at: number;
+}
+
+export interface PremiumLayer {
+  layer: string;
+  score: number;
+  note: string;
+}
+
+export interface PremiumAsset {
+  kind: string;
+  source: string;
+  made: boolean;
+}
+
+/** What the reel engine did: where it is, what it decided, how the review scored it. */
+export interface PremiumResponse {
+  stage: string;
+  stages: PremiumStage[];
+  path: string | null;
+  recipe: string | null;
+  audio_kind: string | null;
+  audio_why: string | null;
+  title: string | null;
+  hooks: string[];
+  sections: string[];
+  shots: number;
+  graphics: number;
+  captions: number;
+  scores: PremiumLayer[];
+  overall: number;
+  fixes: string[];
+  passes: number;
+  assets: PremiumAsset[];
+  ai_calls: number;
+  /** The track under the reel and where it is from, e.g. "Island Beat · Mixkit". */
+  music: string | null;
+}
+
+/** One reel cut from the footage (backend EditReelResponse). */
+export interface EditReel {
+  url: string | null;
+  duration_s: number;
+  title: string;
+}
+
 export interface EditResponse {
   id: string;
   title: string;
@@ -2589,9 +2644,12 @@ export interface EditResponse {
   ai_model: string | null;
   ai_effort: AiEffort | null;
   reference_url: string | null;
+  source_url: string | null;
   reference: EditReferenceResponse | null;
   /** Why the reference reel was skipped, when it was. */
   reference_error: string | null;
+  engine: EditEngine;
+  premium: PremiumResponse | null;
   sources: EditSourceResponse[];
   raw_seconds: number;
   duration_s: number;
@@ -2603,6 +2661,8 @@ export interface EditResponse {
   replans_left: number;
   chat_edits_left: number;
   output_url: string | null;
+  /** Every reel cut from the footage, best first. */
+  reels: EditReel[];
   music_credit: string | null;
   error: string | null;
   created_at: string;

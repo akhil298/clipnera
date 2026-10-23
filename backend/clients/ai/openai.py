@@ -11,7 +11,7 @@ import time
 from typing import Any, AsyncIterator
 
 import httpx
-from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt
+from tenacity import AsyncRetrying, retry_if_exception
 
 from core.config import get_settings
 from core.logging_config import get_logger
@@ -203,6 +203,11 @@ def _function(tool: ToolSpec) -> dict[str, Any]:
     if _strict_compatible(tool.schema):
         function["strict"] = True
     return function
+
+
+def _rate_limited(state) -> bool:
+    exc = state.outcome.exception() if state.outcome else None
+    return isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429
 
 
 def _is_retryable_openai_error(exc: BaseException) -> bool:
@@ -400,7 +405,8 @@ class OpenAI(BaseAI):
 
     async def _post(self, path: str, payload: dict[str, Any], *, mode: str) -> dict[str, Any]:
         async for attempt in AsyncRetrying(
-            stop=stop_after_attempt(4),
+            # Rate limits clear within a minute, so they get more tries than server errors do.
+            stop=lambda state: state.attempt_number >= (6 if _rate_limited(state) else 3),
             wait=_retry_wait,
             retry=retry_if_exception(_is_retryable_openai_error),
             reraise=True,

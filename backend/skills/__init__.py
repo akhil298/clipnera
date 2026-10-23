@@ -17,6 +17,7 @@ HOOKS = "hooks"
 STANDALONE_SHORTS = "standalone_shorts"
 TITLES = "titles"
 MOTION_GRAPHICS = "motion_graphics"
+GRAPHIC_BEATS = "graphic_beats"
 
 
 @lru_cache(maxsize=None)

@@ -880,6 +880,20 @@ class PipelineOrchestrator:
             self._notify(f"Motion graphics planned for {count} clip(s)", 99)
         except Exception as exc:
             log.warning("Motion planning failed: project=%s error=%s", self.project_id, exc)
+        if self.is_pro and get_settings().BEATS_ENABLED:
+            await self._plan_beats()
+
+    async def _plan_beats(self) -> None:
+        """Graphic beats for Pro clips (backend/beats). Never fails the run: the clip keeps its motion graphics."""
+        from beats.service import plan_project_beats
+
+        try:
+            count = await plan_project_beats(
+                self.project_id, self.user_id, notify=lambda message, percent: self._notify(message, 96 + percent // 34),
+            )
+            self._notify(f"Graphics designed for {count} clip(s)", 99)
+        except Exception as exc:
+            log.warning("Beat planning failed: project=%s error=%s", self.project_id, exc)
 
     async def _project_video_path(self) -> str | None:
         async with AsyncSessionLocal() as session:

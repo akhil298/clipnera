@@ -7,7 +7,8 @@ from typing import Any, Protocol
 
 import httpx
 
-USER_AGENT = "Clipnera-Broll-Ingest/1.0 (video editing; contact via clipnera support)"
+# Wikimedia's robot policy turns away clients whose User-Agent gives no way to reach the operator.
+USER_AGENT = "Clipnera/1.0 (https://clipnera.d3e8f5t1cqmtz2.amplifyapp.com; video editing, public-domain media)"
 TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 
 
