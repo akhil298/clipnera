@@ -110,7 +110,8 @@ def zoom_expr(kind: str, frames: int) -> str:
 
 
 def shake(kind: str, rate: float) -> str:
-    return f"+28*exp(-on/5)*sin(on*{rate})" if kind == "punch" else ""
+    """No camera shake: on a talking reel it reads as a glitch, so punch-ins are a clean zoom."""
+    return ""
 
 
 def segment_cmd(source: Source, item: VideoItem, track: list[list[float]], wb: str, gamma: float, grade: Path, shaky: bool,

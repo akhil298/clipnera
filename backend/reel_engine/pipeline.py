@@ -18,7 +18,7 @@ from pathlib import Path
 from core.logging_config import get_logger
 from reel_engine import layout, sound
 from reel_engine.assets import AssetStore, Scout
-from reel_engine import inserts, tracks
+from reel_engine import icons, inserts, tracks
 from reel_engine.compile import BEAT, brief_of, captions_track, graphics_track, to_output, video_track
 from reel_engine.director import direct, recipe
 from reel_engine.listen import listen
@@ -133,13 +133,16 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
 
     await stage("assets", "searching the library, making what is missing")
     scout = Scout(store, owner, work)
-    for g in plan.graphics:
-        query = g.data.get("icon_query", "")
-        if query:
-            g.asset = await scout.icon(query)
-    for c in plan.captions:
-        if c.icon_query:
-            c.icon = await scout.icon(c.icon_query)
+    wanting = [g for g in plan.graphics if g.data.get("icon_query")] + [c for c in plan.captions if c.icon_query]
+    picked = await icons.choose([(item.data["icon_query"], " ".join(str(item.data.get(k, "")) for k in ("lead", "text", "label")) + " " + item.why)
+                                 if hasattr(item, "data") else (item.icon_query, " ".join(w["text"] for w in item.words))
+                                 for item in wanting])
+    plan.ai_calls += 1 if wanting else 0
+    for item, asset in zip(wanting, picked):
+        if hasattr(item, "data"):
+            item.asset = asset
+        else:
+            item.icon = asset
 
     if d.inserts and plan.brief.path == "voice":
         await stage("assets", f"finding {len(d.inserts)} cutaways and photos")

@@ -3,8 +3,8 @@
 - Voice: the kept words, cut from the source with 10 ms fades at every join; separated from any music
   under it first (voice_song), then cleaned (rumble cut, noise reduced, levelled).
 - Music: a bed from the library ducked under the voice, or a score composed to the cuts (picture reels).
-- Effects: a sound on every graphic (pop, whoosh, ding, tick), whooshes on framing changes, the foley the
-  director asked for (sizzle, chop, pour, sparkle), all through the asset loop so made sounds are kept.
+- Effects: only soft whooshes on real transitions (a chapter, a full card, a photo, a cutaway), spaced out; no
+  synthesised beeps or foley over real music.
 - Mix: voice on top, music sidechained under it, effects on their frames, loudness -14 LUFS, peak -1 dB.
 """
 
@@ -22,11 +22,11 @@ from reel_engine.plan import AssetRef, AudioItem, EditPlan
 
 log = get_logger(__name__)
 
-# Only motivated accents: an entrance, a reveal, a count landing. Captions, small labels and framing stay quiet.
-GRAPHIC_SOUNDS = {"photocard": ["whoosh_short"], "chapter": ["whoosh"], "two": [], "tag": ["pop"], "keyword": ["boom"],
-                  "statement": ["whoosh"], "list": ["whoosh_short"], "flow": ["whoosh_short"], "count_up": ["ding"], "chart": ["riser"],
-                  "name": [], "cta": ["pop"], "wash": [], "progress": [], "flicker": []}
-MIN_SPACING = 2.5
+# Only soft whooshes on real transitions (a new chapter, a full card, a photo, a cutaway). No dings, ticks or pops:
+# beeping accents read as noise over a voice and over music.
+GRAPHIC_SOUNDS = {"photocard": ["whoosh_short"], "chapter": ["whoosh_short"], "statement": ["whoosh_short"]}
+MIN_SPACING = 3.0
+EFFECT_GAIN = 0.32
 
 
 def structure(plan: EditPlan) -> Structure:
@@ -47,20 +47,10 @@ async def effects(plan: EditPlan, scout: Scout) -> list[tuple[float, AssetRef]]:
     """(output second, sound) for every graphic, caption payoff and framing change, spaced so none smear."""
     wanted: list[tuple[float, str]] = []
     for g in plan.graphics:
-        for k, name in enumerate(GRAPHIC_SOUNDS.get(g.kind, ["pop"])):
+        for k, name in enumerate(GRAPHIC_SOUNDS.get(g.kind, [])):
             wanted.append((g.start + (0.3 * k if name != "ding" else 0.35), name))
-    for c in plan.captions:
-        if c.payoff:
-            wanted.append((c.start + 0.3, "ding"))
     for item in plan.inserts:
         wanted.append((max(0.0, item.start - 0.06), "whoosh_short"))
-    montage = [i for i in plan.video if i.role == "montage"]
-    if montage:
-        wanted.append((montage[0].out0, "riser"))
-    if plan.brief and plan.brief.path == "voice":
-        for item in plan.video:
-            if item.sound in ("sizzle", "chop", "pour", "sparkle"):
-                wanted.append((item.out0, item.sound))
     out, last = [], -1.0
     cache: dict[str, AssetRef | None] = {}
     for at, name in sorted(wanted):
@@ -159,9 +149,9 @@ async def mix(plan: EditPlan, scout: Scout, work: Path) -> Path:
     for n, (at, ref) in enumerate(sfx):
         inputs += ["-i", ref.path]
         k = len(inputs) // 2 - 1
-        chains.append(f"[{k}:a]aresample=48000,aformat=channel_layouts=stereo,volume=0.55,adelay={round(at * 1000)}:all=1[s{n}]")
+        chains.append(f"[{k}:a]aresample=48000,aformat=channel_layouts=stereo,volume={EFFECT_GAIN},adelay={round(at * 1000)}:all=1[s{n}]")
         layers.append(f"[s{n}]")
-        plan.audio_items.append(AudioItem(id=f"s{n}", kind="sfx", start=at, end=at + 0.5, asset=ref, gain=0.55))
+        plan.audio_items.append(AudioItem(id=f"s{n}", kind="sfx", start=at, end=at + 0.5, asset=ref, gain=EFFECT_GAIN))
     chains.append("".join(layers) + f"amix=inputs={len(layers)}:duration=first:normalize=0,"
                   f"loudnorm=I=-14:TP=-1:LRA=11,atrim=0:{total:.3f}[out]")
     out = work / "mix.wav"
