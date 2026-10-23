@@ -275,7 +275,8 @@
   }
 
   T.statement = (s, root) => {
-    const page = el('div', 'full page', root);
+    // A dark see-through scrim over the footage, not a blank page: the speaker stays on screen behind the words.
+    const page = el('div', 'full scrim', root);
     const drift = ambient(page, s.id || s.data.text);
     const g = boxed(el('div', 'g', root), s.box);
     Object.assign(g.style, { display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '0.4em', textAlign: 'center' });
@@ -286,7 +287,8 @@
       label.style.letterSpacing = '0.12em';
     }
     const text = el('div', 'head', g);
-    Object.assign(text.style, { fontWeight: 800, lineHeight: 1.08, fontSize: `${s.box[2] * 0.12}px` });
+    Object.assign(text.style, { fontWeight: 800, lineHeight: 1.08, fontSize: `${s.box[2] * 0.12}px`, color: '#fff',
+      textShadow: '0 4px 24px rgba(0,0,0,.5)' });
     const words = s.data.text.split(/\s+/).map((w, i, all) => {
       const node = el('span', i === all.length - 1 ? 'accent' : '', text, w);
       node.style.display = 'inline-block';

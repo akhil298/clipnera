@@ -41,6 +41,7 @@ Progress_ = Callable[[EditPlan], Awaitable[None]] | None
 
 
 CAPTIONS_NEEDED = 0.9
+MOMENT_MIN_REEL, MOMENT_MAX_REEL = 25, 55
 
 
 async def draw(plan: EditPlan, pass_dir: Path) -> list:
@@ -177,7 +178,9 @@ async def run_many(inputs: list[Path], work: Path, out_dir: Path, store: AssetSt
             line = lambda k: " ".join(w.text for w in found.audio.words[spans[k][0]:spans[k][1] + 1]) if 0 <= k < len(spans) else ""  # noqa: E731
             note = (f"{brief}\nEDIT THIS ONE MOMENT: '{m.title}'. Open with the line: \"{line(m.hook)}\". "
                     f"End on the payoff: \"{line(m.payoff)}\".").strip()
-        plan = await edit(found, plan, reel_stage, work / f"reel{n}", out_dir / f"reel{n + 1}.mp4", store, owner, note, target_seconds,
+        # A moment's reel runs about three quarters of the moment (25-55 s) unless a length was asked for.
+        length = target_seconds or (round(min(MOMENT_MAX_REEL, max(MOMENT_MIN_REEL, (moment[2] - moment[1]) * 0.75))) if moment else 0.0)
+        plan = await edit(found, plan, reel_stage, work / f"reel{n}", out_dir / f"reel{n + 1}.mp4", store, owner, note, length,
                           passes, window=window)
         plans.append(plan)
         if on_reel:

@@ -87,3 +87,6 @@
 .couch-wall { background: var(--accent); }
 .wall-row { position: absolute; left: 0; white-space: nowrap; font: 400 150px "Anton", "Archivo Black", sans-serif; color: #111; line-height: 1; }
 .wall-row.outline { color: transparent; -webkit-text-stroke: 4px #111; }
+
+/* Statement scrim (beats.js T.statement): darkens the footage so big words read, without hiding the speaker. */
+.scrim { overflow: hidden; background: radial-gradient(120% 80% at 50% 45%, rgba(8,8,12,.55) 0%, rgba(8,8,12,.78) 100%); }
