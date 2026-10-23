@@ -34,7 +34,7 @@ export function FootageReelReady({ edit, onEdit, onNew }: { edit: EditResponse; 
           <p className="text-[17px] text-neutral-400 max-w-xl">
             {onEdit
               ? 'Download it and post it. Want a change? Go back to the plan; a re-render costs a quarter of the first one.'
-              : 'Download it and post it. Below is how the AI edited it and how its review scored it.'}
+              : `Download it and post it.${caption ? ' The caption below is ready to paste.' : ''}`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2.5">

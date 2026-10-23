@@ -8,11 +8,9 @@ import { getAllCaptionStyles } from '@/lib/utils/captionStyles';
 import { EDIT_STATUS, formatSeconds, listWords, planDiff } from '@/lib/utils/footageReels';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatusPill } from '@/components/ui/StatusPill';
-import { FootageReelPlanning } from './FootageReelPlanning';
 import { FootageReelReady } from './FootageReelReady';
-import { PremiumReelProgress } from './PremiumReelProgress';
-import { PremiumReelReport } from './PremiumReelReport';
 import { type ChatMessage, FootageReelReview } from './FootageReelReview';
+import { ReelEditingProgress } from './ReelEditingProgress';
 
 const BUSY: EditResponse['status'][] = ['analyzing', 'rendering'];
 const HISTORY = 20;
@@ -130,7 +128,8 @@ export function FootageReelBoard({ editId, onBack }: { editId: string; onBack: (
   }
 
   const premium = edit.engine === 'premium';
-  const status = premium && edit.status === 'analyzing' ? { ...EDIT_STATUS.analyzing, label: 'Editing' } : EDIT_STATUS[edit.status];
+  const making = edit.status === 'analyzing' || edit.status === 'rendering';
+  const status = making ? { ...EDIT_STATUS.analyzing, label: 'Editing' } : EDIT_STATUS[edit.status];
   const plan = edit.plan;
   const canEdit = (edit.status === 'planned' || edit.status === 'done') && !working;
   const showReady = edit.status === 'done' && Boolean(edit.output_url) && !editing;
@@ -144,12 +143,8 @@ export function FootageReelBoard({ editId, onBack }: { editId: string; onBack: (
         eyebrow={<StatusPill tone={status.tone}>{status.label}</StatusPill>}
         description={
           <>
-            {edit.status === 'analyzing' && (premium ? 'The AI is editing your footage end to end.' : 'Reading your footage and planning the edit.')}
             {edit.status === 'planned' && plan && `${formatSeconds(edit.duration_s)} cut from ${formatSeconds(edit.raw_seconds)} of footage. Changes and previews are free.`}
-            {edit.status === 'rendering' && 'Rendering your reel. This page updates by itself.'}
-            {edit.status === 'done' && (premium && edit.premium
-              ? `Edited by the AI · review ${edit.premium.overall.toFixed(1)}/10 · ${edit.credits_charged} credits used`
-              : `Rendered · ${edit.credits_charged} credits used`)}
+            {edit.status === 'done' && `${formatSeconds(edit.duration_s)} reel · ${edit.credits_charged} credits used`}
             {edit.status === 'failed' && (edit.error ?? 'Something went wrong while planning this reel.')}
           </>
         }
@@ -182,15 +177,8 @@ export function FootageReelBoard({ editId, onBack }: { editId: string; onBack: (
 
       {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
       {edit.status !== 'failed' && edit.error && <p className="text-sm text-amber-300">{edit.error}</p>}
-      {edit.status === 'rendering' && (
-        <div className="flex items-center gap-3 rounded-2xl border border-amber-500/25 bg-neutral-900/80 p-4 text-[15px] text-neutral-200">
-          <Loader2 className="w-5 h-5 text-amber-400 animate-spin" /> Rendering your reel. You can leave this page; we'll notify you when it's done.
-        </div>
-      )}
-
-      {edit.status === 'analyzing' && (premium ? <PremiumReelProgress edit={edit} /> : <FootageReelPlanning edit={edit} />)}
+      {making && <ReelEditingProgress edit={edit} />}
       {showReady && <FootageReelReady edit={edit} onEdit={premium ? undefined : () => setEditing(true)} onNew={onBack} />}
-      {showReady && premium && edit.premium && <PremiumReelReport premium={edit.premium} />}
       {showReview && plan && preview && (
         <FootageReelReview edit={edit} preview={preview} canEdit={canEdit} busy={working} maxOutput={maxOutput}
           captionOptions={captionOptions} change={change} messages={messages} onSend={send} />
