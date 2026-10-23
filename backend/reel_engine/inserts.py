@@ -100,10 +100,12 @@ def _preview(path: Path, kind: str) -> bytes:
 
 
 async def resolve(requests: list, items: list[VideoItem], words: list[Word], scout: Scout, work: Path,
-                  sources: dict[int, str]) -> tuple[list[InsertItem], int]:
+                  sources: dict[int, str], shots_per_source: dict[int, int] | None = None) -> tuple[list[InsertItem], int]:
     """Inserts placed on the cut, with their assets; and how many vision calls it took."""
     from clients.ai import get_text_client
 
+    # The user's own footage only helps when it holds other shots; a single take would cut to the same picture.
+    requests = [r for r in requests if r.kind != "footage" or (shots_per_source or {}).get(r.src, 0) >= 3]
     work = work / "inserts"
     work.mkdir(exist_ok=True)
     placed: list[tuple[float, float, object]] = []

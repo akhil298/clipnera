@@ -148,3 +148,9 @@ html, body { background: transparent; overflow: hidden; }
 .style-minimal .key.alt { text-decoration-color: #7fd3ff; }
 .style-minimal .lead { font-weight: 700; text-transform: lowercase; color: rgba(255,255,255,.92); }
 .style-minimal .tag-pill { background: rgba(255,255,255,.18); color: #fff; backdrop-filter: blur(10px); }
+
+/* Captions on busy footage: a soft dark plate behind the styles that have no box of their own. */
+.caption { position: absolute; }
+.caption::before { content: ""; position: absolute; inset: -18% -6%; z-index: -1; border-radius: 40px;
+  background: radial-gradient(closest-side, rgba(0,0,0,.42), rgba(0,0,0,.22) 70%, transparent); }
+.style-highlight .caption::before, .style-bubble .caption::before { display: none; }

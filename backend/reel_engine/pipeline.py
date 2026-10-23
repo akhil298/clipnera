@@ -144,7 +144,8 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
     if d.inserts and plan.brief.path == "voice":
         await stage("assets", f"finding {len(d.inserts)} cutaways and photos")
         plan.inserts, calls = await inserts.resolve(d.inserts, plan.video, words, scout, work,
-                                                    {s.index: s.path for s in plan.sources if s.kind == "video"})
+                                                    {s.index: s.path for s in plan.sources if s.kind == "video"},
+                                                    {s.index: sum(1 for sh in plan.shots if sh.src == s.index) for s in plan.sources})
         plan.ai_calls += calls
         add_photo_cards(plan)
     grade = recipe(plan.brief.recipe).get("grade", "teal_orange")

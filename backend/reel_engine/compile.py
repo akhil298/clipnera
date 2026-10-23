@@ -26,7 +26,8 @@ MONTAGE_SECONDS = round(BEAT / 2 * FPS) / FPS
 MIN_GRAPHIC, MAX_GRAPHIC = 1.2, 3.5
 CARD_KINDS = {"statement", "list", "chart", "flow", "count_up"}
 VOICE_KINDS = ("voice", "voice_song")
-LINE_WORDS = 4
+LINE_WORDS = 5
+MIN_LINE_WORDS = 3
 CARD_EVERY = 10.0
 # Titles and chapters in a style that contrasts with the captions' (still one family).
 TITLE_PAIR = {"punch": "editorial", "editorial": "editorial", "neon": "neon", "highlight": "punch", "bubble": "script",
@@ -323,7 +324,10 @@ def captions_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
         w, a, _ = entry
         if lines:
             prev = lines[-1][-1]
-            if len(lines[-1]) < LINE_WORDS and a - prev[2] < 0.45 and not prev[0].text.rstrip().endswith((".", "?", "!", ",")):
+            sentence_end = prev[0].text.rstrip().endswith((".", "?", "!"))
+            short = len(lines[-1]) < MIN_LINE_WORDS
+            # Lines of 3-5 words, broken at sentence ends or a long pause, never left as a one-word fragment.
+            if len(lines[-1]) < LINE_WORDS and a - prev[2] < 0.8 and (short or not sentence_end):
                 lines[-1].append(entry)
                 continue
         lines.append([entry])

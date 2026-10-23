@@ -167,7 +167,8 @@ domain video exists mainly for space, science, nature, cities' landmarks and his
 everyday things like food, products, gadgets or people's activities) with
 query = 3-6 concrete English search words for a real photo or clip (e.g. "international space station exterior
 earth", "fresh croissants bakery tray"); label = 0-3 words to print on a photo card, or "". kind "footage" = a
-moment of the user's OWN footage that shows what is said (src + at in source seconds) - prefer it when it exists.
+moment of the user's OWN footage that shows what is said (src + at in source seconds) - only when that footage
+has OTHER shots (B-roll, a different scene); a single talking take has nothing to cut to, so ask for photos then.
 Anchor on word ids w0..w1 (src = -1, at = -1) or for footage give src + at too. No inserts on the hook or when
 the speaker's face IS the point (a reaction, a punchline). Picture-only reels: inserts = [] (the clips are the
 pictures). Never ask for logos of real brands or photos of private people.
