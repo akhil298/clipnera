@@ -35,7 +35,7 @@ IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
 AUDIO_TYPES = {".mp3", ".wav", ".m4a", ".aac", ".ogg"}
 IMAGE_SECONDS = 3.0
 # A first pass at this score ships as it is: a second pass costs a redraw and a re-encode for a few tenths at most.
-SHIP_SCORE = 7.0
+SHIP_SCORE = 6.0  # a second review pass (sound, encode, review again) only for a reel with real problems
 STAGES = ("ingest", "listen", "watch", "direct", "verify", "compile", "assets", "picture", "layout", "graphics", "sound",
           "compose", "review", "done")
 Progress_ = Callable[[EditPlan], Awaitable[None]] | None
@@ -300,6 +300,8 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
 
     await stage("verify", "checking hooks and labels against the footage")
     hook, hook_why, changes = await verify(d, plan.sources, words)
+    if window:  # a moment opens on the line the moment finder chose; the director put it first
+        hook = 0
     plan.ai_calls += 1
     plan.hooks = [f"{'*' if n == hook else ' '} {h.why}" for n, h in enumerate(d.hooks)]
 

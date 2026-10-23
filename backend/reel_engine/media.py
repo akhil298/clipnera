@@ -59,7 +59,9 @@ def frame(path: str | Path, t: float, width: int = 540) -> np.ndarray | None:
     if not info["width"]:
         return None
     height = int(round(width * info["height"] / info["width"] / 2) * 2)
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{max(0.0, t):.3f}", "-i", str(path), "-frames:v", "1",
+    # A still image has no timeline: seeking it, even to 0, returns no frame.
+    seek = ["-ss", f"{t:.3f}"] if t > 0 else []
+    raw = subprocess.run(["ffmpeg", "-v", "error", *seek, "-i", str(path), "-frames:v", "1",
                           "-vf", f"scale={width}:{height}", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"], capture_output=True).stdout
     return np.frombuffer(raw, np.uint8).reshape(height, width, 3) if len(raw) == width * height * 3 else None
 

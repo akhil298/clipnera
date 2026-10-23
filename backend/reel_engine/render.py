@@ -222,6 +222,8 @@ def segment_cmd(source: Source, item: VideoItem, track: list[list[float]], wb: s
     length = item.out1 - item.out0
     count = max(1, round(length * FPS))
     cw, ch = ZOOM_CANVAS
+    colour = (["hqdn3d=2:1.5:3:3"] if dark else []) + ([wb] if wb else []) + ([f"eq=gamma={gamma:.3f}"] if abs(gamma - 1.0) > 0.02 else [])
+    colour += [f"lut3d=file='{str(grade).replace(':', chr(92) + ':')}'", "eq=contrast=1.04:saturation=1.1"]
     chain = []
     if source.kind == "image":
         inputs = ["-loop", "1", "-t", f"{length + 0.2:.3f}", "-i", source.path]
@@ -236,20 +238,17 @@ def segment_cmd(source: Source, item: VideoItem, track: list[list[float]], wb: s
         crop, upscale = framing(source, item, track, focus)
         if crop:
             chain.append(crop)
+        if upscale >= 1.0:
+            # The grade costs per pixel: on the window before it is scaled up it does a third of the work (3x faster).
+            chain += colour
+            colour = []
         chain.append(f"scale={cw}:{ch}:flags=lanczos:force_original_aspect_ratio=increase,crop={cw}:{ch}")
         if upscale > 2.0:
             chain.append("unsharp=5:5:0.6:5:5:0.0")
     chain.append(f"fps={FPS}")
     chain.append(f"zoompan=z='{zoom_expr(item.zoom, count)}':x='iw/2-(iw/zoom/2){shake(item.zoom, 2.3)}'"
                  f":y='ih/2-(ih/zoom/2){shake(item.zoom, 3.1)}':d=1:s={W}x{H}:fps={FPS}")
-    if dark:
-        chain.append("hqdn3d=2:1.5:3:3")
-    if wb:
-        chain.append(wb)
-    if abs(gamma - 1.0) > 0.02:
-        chain.append(f"eq=gamma={gamma:.3f}")
-    chain += [f"lut3d=file='{str(grade).replace(':', chr(92) + ':')}'", "eq=contrast=1.04:saturation=1.1", "vignette=PI/9",
-              "noise=alls=4:allf=t", "format=yuv420p"]
+    chain += [*colour, "vignette=PI/9", "noise=alls=4:allf=t", "format=yuv420p"]
     return ["ffmpeg", "-v", "error", "-y", *inputs, "-an", "-vf", ",".join(chain), "-frames:v", str(count),
             "-c:v", "libx264", "-preset", INTERMEDIATE_PRESET, "-crf", "17", str(out)]
 

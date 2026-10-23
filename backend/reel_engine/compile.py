@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 from reel_engine import styles, typekits
-from reel_engine.director import DirectorPlan, recipe
+from reel_engine.director import DClip, DirectorPlan, recipe
 from reel_engine.plan import AudioReport, Brief, CaptionLine, GraphicItem, Section, Shot, VideoItem, Word
 
 SCORE_BPM = 112
@@ -111,13 +111,29 @@ def _beats(seconds: float, beat: float = BEAT) -> float:
     return max(0.5, round(seconds / beat * 2) / 2)
 
 
+def _without(clips: list[DClip], hook: DClip) -> list[DClip]:
+    """The story minus the hook's words: the line that opens the reel is not said a second time."""
+    if hook.w0 < 0:
+        return clips
+    out = []
+    for c in clips:
+        if c.w0 < 0 or c.w1 < hook.w0 or c.w0 > hook.w1:
+            out.append(c)
+            continue
+        if c.w0 < hook.w0:
+            out.append(c.model_copy(update={"w1": hook.w0 - 1}))
+        if c.w1 > hook.w1:
+            out.append(c.model_copy(update={"w0": hook.w1 + 1}))
+    return out
+
+
 def video_track(d: DirectorPlan, brief: Brief, words: list[Word], shots: list[Shot], src_len: dict[int, float],
                 hook_index: int = 0, beat: float = BEAT) -> list[VideoItem]:
     """The video track; picture clips are cut to whole half-beats of ``beat`` (the music's) from the start."""
     clips = list(d.story)
     if d.hooks:
         hook = d.hooks[min(hook_index, len(d.hooks) - 1)].clip
-        clips = [hook.model_copy(update={"role": "hook", "zoom": "punch"})] + [c for c in clips if c.role != "hook"]
+        clips = [hook.model_copy(update={"role": "hook", "zoom": "punch"})] + _without([c for c in clips if c.role != "hook"], hook)
     shot_seconds = recipe(brief.recipe)["shot_seconds"]
     items: list[VideoItem] = []
     flip = False

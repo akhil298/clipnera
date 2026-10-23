@@ -241,6 +241,27 @@ def test_hook_option_goes_first():
     assert items[0].role == "hook" and items[0].t0 >= words[4].t0 - 0.1
 
 
+def test_the_hook_line_is_not_said_twice():
+    words = words_of("one two three four five six seven eight nine ten")
+    d = director(story=[clip(w0=0, w1=9)], hooks=[DHook(clip=clip(w0=3, w1=5), word="FOUR", why="mid")])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0)
+    items = comp.video_track(d, brief, words, [], {0: 10.0})
+    said = sorted(w.i for w in words for i in items if i.t0 - 0.01 <= w.t0 and w.t1 <= i.t1 + 0.01)
+    assert said == list(range(10))
+    assert items[0].role == "hook" and items[0].t0 >= words[3].t0 - 0.1
+
+
+def test_a_still_photo_gives_its_frame(tmp_path):
+    import cv2
+    import numpy as np
+
+    from reel_engine.media import frame
+
+    path = tmp_path / "photo.jpg"
+    cv2.imwrite(str(path), np.full((100, 160, 3), 200, np.uint8))
+    assert frame(path, 0.0, 80) is not None
+
+
 def test_chapters_open_with_a_wash_and_a_chaptered_reel_opens_on_its_title():
     d = director(audio_view="silent", recipe="recipe_process", title_lead="Three ways to", title_text="breakfast",
                  hooks=[DHook(clip=clip(start=50, end=52, money=True), word="BRIGHT", why="hero")],

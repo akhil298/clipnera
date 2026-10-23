@@ -267,6 +267,11 @@ Environment=AWS_DEFAULT_REGION=${REGION}
 # glibc gives every thread its own malloc arena and rarely returns them; with
 # FFmpeg, ONNX and asyncio's thread pool that held hundreds of MB idle.
 Environment=MALLOC_ARENA_MAX=2
+# /tmp is a RAM disk (half the memory) on Amazon Linux: a few edits filled it and
+# took memory from the jobs. Scratch goes on the disk, one folder per service,
+# emptied at each start because a process killed mid-job never cleans up.
+Environment=TMPDIR=${HOME}/.cache/clipnera-tmp/$1
+ExecStartPre=/bin/bash -c 'rm -rf "${HOME}/.cache/clipnera-tmp/$1" && mkdir -p "${HOME}/.cache/clipnera-tmp/$1"'
 ExecStart=${VENV_DIR}/bin/python $4
 Restart=on-failure
 RestartSec=5
