@@ -539,3 +539,12 @@ def test_a_style_caps_its_effects():
             [fx(name="glass_type", w0=k, w1=k + 3, texts=["Stay calm"]) for k in (45, 65)]
     assert len(effects.compile_effects(picks, words, items, most=1)) == 1
     assert len({(g.data["effect"], g.start) for g in effects.compile_effects(picks, words, items, most=4)}) == 4
+
+
+def test_the_reviewer_can_enlarge_an_item_inside_the_frame():
+    from reel_engine.review import Action, apply
+
+    plan = EditPlan(duration=10, graphics=[GraphicItem(id="g1", kind="two", start=1, end=3, box=[900, 100, 170, 80])])
+    assert apply(plan, [Action(id="g1", action="enlarge", why="too small")]) == 1
+    x, y, w, h = plan.graphics[0].box
+    assert w == 204 and h == 96 and x + w <= 1080 and y >= 0

@@ -34,7 +34,7 @@ class Score(_M):
 
 class Action(_M):
     id: str
-    action: Literal["keep", "move", "drop", "shorten"]
+    action: Literal["keep", "move", "drop", "shorten", "enlarge", "shrink"]
     why: str
 
 
@@ -50,9 +50,17 @@ ships, against the best $120 human edits. Score each of the ten layers 1-10 ({',
 the subject, stable, graded, exposure matched), rhythm (framing changes, pace), captions (readable, accurate,
 well placed; 'none' is right when nobody talks - score it 8 then), graphics (fit what is said or shown, taste,
 variety, pacing), depth (text behind the person, inserts), sound (judge from the measurements), finish (title,
-CTA, clean end). Be strict: 9-10 only for work a top editor would sign.
+CTA, clean end).
+Score against fixed anchors, the same for every reel: 3 = broken (missing captions, faces cut off, text off screen);
+5 = a creator's own quick amateur edit; 7 = a competent freelance editor's work (clean, framed on the subject,
+accurate captions, fitting graphics); 8 = a strong agency edit; 9 = among the best reels in its niche; 10 =
+flawless. A reel that is clean, correct and well framed with accurate captions is at least 7 on those layers;
+reserve 9-10 for work a top editor would sign. Sound: loudness between -16 and -12 LUFS with the voice clearly over
+the music is 8 or more. Item frames are stills: one may catch a graphic entering or leaving; judge what it means to
+show, not the half-drawn moment.
 For every item frame, decide: keep; move (it covers a face, the product or the action, or sits badly); drop
-(wrong, redundant or cluttering); shorten (stays too long). fixes = at most 5 concrete changes. JSON only."""
+(wrong, redundant or cluttering); shorten (stays too long); enlarge (too small to read on a phone); shrink (too big,
+crowds the frame). fixes = at most 5 concrete changes. JSON only."""
 
 
 def _item_frames(plan: EditPlan, video: str) -> tuple[list[bytes], list[str]]:
@@ -123,6 +131,15 @@ def apply(plan: EditPlan, actions: list[Action]) -> int:
             continue
         if action.action == "shorten" and hasattr(item, "end"):
             item.end = round(item.start + max(0.8, (item.end - item.start) * 0.6), 3)
+            changed += 1
+        elif action.action in ("enlarge", "shrink") and getattr(item, "box", None):
+            # Grown or shrunk about its centre, kept inside the frame; the next pass draws it at the new size.
+            from reel_engine.media import H, W
+
+            k = 1.2 if action.action == "enlarge" else 0.8
+            x, y, w, h = item.box
+            nw, nh = min(W, round(w * k)), min(H, round(h * k))
+            item.box = [max(0, min(W - nw, round(x + (w - nw) / 2))), max(0, min(H - nh, round(y + (h - nh) / 2))), nw, nh]
             changed += 1
         elif action.action == "move" and hasattr(item, "box"):
             # Re-laid from scratch next pass, starting from the opposite third of the frame.
