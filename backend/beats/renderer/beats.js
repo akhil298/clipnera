@@ -468,12 +468,13 @@
     const g = boxed(el('div', 'g', root), s.box);
     Object.assign(g.style, { display: 'flex', alignItems: 'center', justifyContent: 'center' });
     const pill = el('div', 'pill', g);
-    // The last thing the viewer reads: big, bold, never clipped (two lines when it needs them).
-    Object.assign(pill.style, { background: 'var(--accent)', color: 'var(--accent-ink)', textAlign: 'center', lineHeight: '1.1',
-      padding: '0.35em 0.8em', boxShadow: '0 18px 50px rgba(0,0,0,.45)', fontWeight: 800 });
+    // The last thing the viewer reads: big, bold, never clipped, set on two balanced lines and kept well inside the edges.
+    Object.assign(pill.style, { display: 'inline-block', background: 'var(--accent)', color: 'var(--accent-ink)', textAlign: 'center',
+      lineHeight: '1.08', padding: '0.4em 0.75em', borderRadius: '0.6em', boxShadow: '0 18px 50px rgba(0,0,0,.45)', fontWeight: 800,
+      textWrap: 'balance' });
     el('span', '', pill, s.data.verb || 'COMMENT');
-    if (s.data.text) el('span', '', pill, `“${s.data.text}”`);
-    fitText(pill, s.box[2] * 0.95, s.box[3] * 0.34, 28, { wrap: true, maxHeight: s.box[3] * 0.92 });
+    if (s.data.text) el('span', '', pill, ` “${s.data.text}”`);
+    fitText(pill, s.box[2] * 0.9, s.box[3] * 0.3, 40, { wrap: true, maxHeight: s.box[3] * 0.92 });
     return {
       seek(t) {
         envelope(g, t, s.dur, { from: 0.3, blur: 0 });

@@ -172,19 +172,19 @@ def place_on_faces(plan: EditPlan, picture: Path) -> None:
     plan.graphics = keep
 
 
-PANEL_H = 380
+PANEL_H, PANEL_X = 300, 130
 SAFE_TOP, SAFE_BOTTOM = 260, 1640
 
 
 def panel_box(face: list[int] | None) -> list[int]:
     """Where a text panel (glass, paper) goes: clear of the face, in the half of the frame it is not in."""
     if not face:
-        return [90, 1180, W - 180, PANEL_H]
+        return [PANEL_X, 1180, W - 2 * PANEL_X, PANEL_H]
     if (face[1] + face[3]) / 2 < H * 0.55:
         top = min(max(face[3] + 40, 1080), SAFE_BOTTOM - PANEL_H)
     else:
         top = max(SAFE_TOP, min(330, face[1] - 40 - PANEL_H))
-    return [90, top, W - 180, PANEL_H]
+    return [PANEL_X, top, W - 2 * PANEL_X, PANEL_H]
 
 
 PHONE = (600, 1066)
@@ -193,6 +193,24 @@ PHONE = (600, 1066)
 def phone_screen() -> list[int]:
     w, h = PHONE
     return [(W - w) // 2, (H - h) // 2 + 40, w, h]
+
+
+PHONE_PHOTO_NEAR = 3.0  # seconds: a photo card this close to a phone mockup goes on the phone's screen instead
+
+
+def photo_on_phone(plan: EditPlan) -> None:
+    """A phone mockup near a photo of what is said shows that photo on its screen (the card it came from goes):
+    a phone replaying the interview adds nothing, a phone showing the thing does."""
+    for g in plan.graphics:
+        if g.kind != "effect" or g.data.get("effect") != "phone_mockup" or g.data.get("part") == "back":
+            continue
+        # Photos only: a kit object is a cut-out made for a card, not a screen.
+        cards = [c for c in plan.graphics if c.kind == "photocard" and c.asset and c.asset.kind != "icon" and Path(c.asset.path).is_file()
+                 and c.start < g.end + PHONE_PHOTO_NEAR and g.start - PHONE_PHOTO_NEAR < c.end]
+        if cards:
+            card = min(cards, key=lambda c: abs(c.start - g.start))
+            g.data["screen_image"] = card.asset.path
+            plan.graphics = [c for c in plan.graphics if c is not card]
 
 
 # ------------------------------------------------------------------ picture effects
@@ -241,8 +259,12 @@ def picture_filter(g: GraphicItem, dur: float, has_matte: bool) -> str | None:
                 f"[fs][m]alphamerge[fg];[v1][fg]overlay={ox}:{oy}[out]")
     if name == "phone_mockup":
         x, y, w, h = phone_screen()
-        return (f"[0:v]split[s1][s2];[s1]boxblur=30:4,eq=brightness=-0.2:saturation=0.7[bg];"
-                f"[s2]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}[scr];[bg][scr]overlay={x}:{y}[out]")
+        # The screen shows the related photo when one was found ([1:v], slowly pushing in), else the footage itself.
+        screen = (f"[1:v]scale={w * 2}:{h * 2}:force_original_aspect_ratio=increase,crop={w * 2}:{h * 2},"
+                  f"zoompan=z='1+0.0009*on':d=1:s={w}x{h}:fps={FPS}[scr]" if g.data.get("screen_image")
+                  else f"[s2]scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h}[scr]")
+        return (f"[0:v]split[s1][s2];[s1]boxblur=30:4,eq=brightness=-0.2:saturation=0.7[bg];{screen};"
+                f"[bg][scr]overlay={x}:{y}:shortest=1[out]")
     if name == "glass_type":
         x, y, w, h = g.data["panel"]
         return (f"[0:v]split[s1][s2];[s2]crop={w}:{h}:{x}:{y},gblur=sigma=26,eq=brightness=0.06:saturation=1.1[glass];"
@@ -258,10 +280,12 @@ async def apply_picture(plan: EditPlan, picture: Path, work: Path) -> Path:
     parts, at, n = [], 0.0, 0
     frame = 1 / FPS
 
-    def cut(start: float, end: float, out: Path, graph: str | None = None, matte: Path | None = None) -> None:
+    def cut(start: float, end: float, out: Path, graph: str | None = None, matte: Path | None = None, still: str = "") -> None:
         cmd = ["ffmpeg", "-v", "error", "-y", "-ss", f"{start:.3f}", "-t", f"{end - start:.3f}", "-i", str(picture)]
         if matte:
             cmd += ["-i", str(matte)]
+        elif still:
+            cmd += ["-loop", "1", "-t", f"{end - start:.3f}", "-i", still]
         cmd += (["-filter_complex", graph, "-map", "[out]"] if graph else []) + [
             "-an", "-r", str(FPS), "-c:v", "libx264", "-preset", "veryfast", "-crf", "17", "-pix_fmt", "yuv420p", str(out)]
         run(cmd)
@@ -285,7 +309,7 @@ async def apply_picture(plan: EditPlan, picture: Path, work: Path) -> Path:
             await asyncio.to_thread(cut, at, start, parts[-1])
         parts.append(work / f"fx_{g.id}.mp4")
         try:
-            await asyncio.to_thread(cut, start, end, parts[-1], graph, matte)
+            await asyncio.to_thread(cut, start, end, parts[-1], graph, matte, g.data.get("screen_image", ""))
         except Exception as exc:  # a picture effect that fails leaves the footage as it was
             log.warning("Effect %s failed, footage kept: %s", g.data["effect"], exc)
             g.data["skipped"] = True

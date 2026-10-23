@@ -97,6 +97,8 @@ class Brief(_Model):
     title_lead: str = ""
     title_text: str = ""
     hook_word: str = ""
+    # The on-screen hook over a talking reel's first seconds: a specific question or claim, 3-7 words.
+    hook_text: str = ""
     caption_mode: CaptionMode = "every_word"
     text_style: str = "punch"
     title_style: str = "punch"

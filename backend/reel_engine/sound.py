@@ -33,6 +33,7 @@ LIBRARY_ROLE = {"whoosh_short": "whoosh"}
 ACCENT_SOUNDS = {"follow": "click", "burst": "impact"}
 MIN_SPACING = 3.0
 EFFECT_GAIN = 0.32
+SFX_PEAK = 0.35  # linear peak ceiling of the effects bus (about -9 dBFS) before the final loudness pass
 
 
 def structure(plan: EditPlan) -> Structure:
@@ -168,12 +169,18 @@ async def mix(plan: EditPlan, scout: Scout, work: Path) -> Path:
                                           asset=AssetRef(id="voice", kind="voice", path=str(voice), licence="user footage", source="user")))
     elif music_ref:
         layers.append("[music]")
+    hits = []
     for n, (at, ref, gain) in enumerate(sfx):
         inputs += ["-i", ref.path]
         k = len(inputs) // 2 - 1
         chains.append(f"[{k}:a]aresample=48000,aformat=channel_layouts=stereo,volume={gain},adelay={round(at * 1000)}:all=1[s{n}]")
-        layers.append(f"[s{n}]")
+        hits.append(f"[s{n}]")
         plan.audio_items.append(AudioItem(id=f"s{n}", kind="sfx", start=at, end=at + 0.5, asset=ref, gain=gain))
+    if hits:
+        # Effects share one bus with a peak limiter: a loud library whoosh never jumps out over the voice.
+        chains.append("".join(hits) + (f"amix=inputs={len(hits)}:normalize=0," if len(hits) > 1 else "")
+                      + f"alimiter=limit={SFX_PEAK}:level=false[sfx]")
+        layers.append("[sfx]")
     chains.append("".join(layers) + f"amix=inputs={len(layers)}:duration=first:normalize=0,"
                   f"loudnorm=I=-14:TP=-1:LRA=11,atrim=0:{total:.3f}[out]")
     out = work / "mix.wav"

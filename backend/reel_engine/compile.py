@@ -25,6 +25,7 @@ MIN_SPEED, MAX_SPEED = 0.55, 2.8
 MONEY_SPEED = 0.65
 MONTAGE_SECONDS = round(BEAT / 2 * FPS) / FPS
 MIN_GRAPHIC, MAX_GRAPHIC = 1.2, 3.5
+HOOK_SECONDS = 3.2
 CARD_KINDS = {"statement", "list", "chart", "flow", "count_up"}
 VOICE_KINDS = ("voice", "voice_song")
 MIN_LINE_WORDS = 3
@@ -49,7 +50,19 @@ WEAK = {"a", "an", "the", "and", "but", "or", "so", "to", "of", "in", "on", "at"
 
 # ------------------------------------------------------------------ brief
 
-def brief_of(d: DirectorPlan, audio: AudioReport, target: float) -> tuple[Brief, str]:
+HOOK_WORDS = (3, 9)
+
+
+def hook_text(*options: str) -> str:
+    """The first option that reads as a hook headline (a few words, not one topic word), tidied; else ""."""
+    for text in options:
+        text = " ".join((text or "").split())
+        if HOOK_WORDS[0] <= len(text.split()) <= HOOK_WORDS[1]:
+            return text[:70]
+    return ""
+
+
+def brief_of(d: DirectorPlan, audio: AudioReport, target: float, headline: str = "") -> tuple[Brief, str]:
     """The path follows the measured audio; when the director disagrees, the safer reading wins and is noted."""
     measured = audio.kind
     note = ""
@@ -70,6 +83,7 @@ def brief_of(d: DirectorPlan, audio: AudioReport, target: float) -> tuple[Brief,
                   caption_looks=style["caption_looks"],
                   title_lead=d.title_lead, title_text=d.title_text,
                   hook_word=(d.hooks[0].word if d.hooks else "").upper()[:12],
+                  hook_text=hook_text(headline, d.hook_text) if path == "voice" else "",
                   caption_mode=caption_mode, music=music, mood=mood, accent=r["accent"],
                   sections=[Section(**sec.model_dump()) for sec in d.sections[:5]], cta=d.cta[:34], notes=(d.notes + (" " + note if note else "")).strip())
     return brief, note
@@ -232,9 +246,13 @@ def graphics_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
                                place=place, behind=place == "behind", shot=shot.id if shot else "", why=why, by=by))
 
     hook = next((i for i in items if i.role == "hook"), None)
-    # A reel in chapters (three recipes, five tips) opens on its title; a single idea opens on one huge word.
-    title_first = bool(hook and brief.title_text and len(brief.sections) >= 2)
-    if hook and title_first:
+    # A talking reel opens on its hook headline (the question it answers); a reel in chapters (three recipes, five tips)
+    # opens on its title; a picture-only reel on one huge word.
+    title_first = bool(hook and brief.title_text and len(brief.sections) >= 2 and not brief.hook_text)
+    if hook and brief.hook_text:
+        add("hook", hook.out0 + 0.05, min(max(hook.out1, hook.out0 + 2.2), hook.out0 + HOOK_SECONDS), {"text": brief.hook_text},
+            place="top", why="hook word", by="finish")
+    elif hook and title_first:
         add("two", hook.out0 + 0.15, min(hook.out1 + 0.4, hook.out0 + 2.6), {"lead": brief.title_lead, "text": brief.title_text},
             why="hook word", by="finish")
     elif hook and brief.hook_word:

@@ -100,6 +100,7 @@ class DirectorPlan(_M):
     target_seconds: float
     title_lead: str
     title_text: str
+    hook_text: str
     cta: str
     caption_mode: Literal["every_word", "keyword", "none"]
     burned_captions: bool
@@ -147,8 +148,15 @@ STORY (story: the clips in output order):
 - section: index into sections for step clips, else -1. sound: foley the picture calls for (sizzle when food hits
   a hot pan, chop on knife work, pour, sparkle on a beauty shot), else none.
 
-HOOKS: give 3 hook options (different moments or lines); code picks the best and puts it first. hook word = one
-English word to set huge behind the person over the hook.
+HOOKS: give 3 hook options (different moments or lines); code picks the best and puts it first. Each must be a
+complete thought a stranger understands cold (never a line starting "and", "so", "because", or a reply to an unheard
+question). hook word = one English word to set huge behind the person (used only when nobody talks).
+hook_text = the on-screen hook over the first seconds when someone talks: 3-7 words, a specific question or bold
+claim this reel answers ("Athletes body hair kyun hatate hain?", "Your rent is making you poor"), in the speaker's
+language as spoken (romanized Hindi stays romanized), never one generic topic word ("HAIR", "ENERGY", "MONEY").
+
+LENGTH AND SELECTION: a reel makes ONE point. Cut the warm-up, small talk, the host's long setup and any line that
+repeats a point already made; 35-45 s beats 55 s unless the story truly needs more.
 
 SECTIONS: 0-5 chapters (recipe steps, points of an argument): lead (1-3 small words) + text (1-2 words) + short
 (<= 8 chars, for a progress bar) + icon (search words for a 3D icon, e.g. "fried egg").
@@ -156,7 +164,9 @@ SECTIONS: 0-5 chapters (recipe steps, points of an argument): lead (1-3 small wo
 GRAPHICS (beats): about one every {graphic_every} s of output, never two at once. Choose the kind by the
 sentence's SHAPE, not by keyword spotting:
 - a number said -> count_up (number, prefix like "$" or "₹", suffix like "%" or "k", text = what it counts)
-- a list said ("X, Y and Z", "first... second...") -> list (items said, mark "check"; a "not X, not Y" list -> mark "cross")
+- a list said ("X, Y and Z", "first... second...") -> list (items said; mark "check" only for good things, steps or
+  benefits, "cross" for mistakes, risks, bad outcomes or "not X, not Y", "none" for neutral facts - a green tick
+  beside a bad outcome reads as a mistake)
 - a change or trend -> chart (trend up/down, text = what changes)
 - a process or sequence -> flow (items)
 - the reveal / turning point line -> keyword (text = 1-2 words, shown huge)

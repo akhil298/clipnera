@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from core.logging_config import get_logger
-from reel_engine import accents, effects, icons, inserts, layout, moments, sound, styles, tracks
+from reel_engine import accents, effects, icons, inserts, layout, moments, proof, sound, styles, tracks
 from reel_engine.assets import AssetStore, Scout
 from reel_engine.compile import BEAT, brief_of, captions_track, graphics_track, to_output, video_track
 from reel_engine.director import direct, recipe
@@ -25,7 +25,7 @@ from reel_engine.listen import listen
 from reel_engine.media import probe
 from reel_engine.plan import AudioReport, EditPlan, MusicChoice, Progress, Shot, Source
 from reel_engine.render import compose, render_graphics, render_inserts, render_picture, resolve_behind
-from reel_engine.review import apply, review
+from reel_engine.review import apply, review, since
 from reel_engine.verify import verify
 from reel_engine.watch import director_sheets, watch
 
@@ -41,7 +41,8 @@ Progress_ = Callable[[EditPlan], Awaitable[None]] | None
 
 
 CAPTIONS_NEEDED = 0.9
-MOMENT_MIN_REEL, MOMENT_MAX_REEL = 25, 55
+# Reviews kept asking for 40-45 s: setup and repeats cut, one point made.
+MOMENT_MIN_REEL, MOMENT_MAX_REEL = 25, 45
 
 
 async def draw(plan: EditPlan, pass_dir: Path) -> list:
@@ -153,49 +154,79 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
 async def run_many(inputs: list[Path], work: Path, out_dir: Path, store: AssetStore, owner: str = "", brief: str = "",
                    target_seconds: float = 0.0, passes: int = 2, on_progress: Progress_ = None, most: int = 1,
                    on_reel: Callable[[int, EditPlan], Awaitable[None]] | None = None,
-                   allow: Callable[[int], Awaitable[bool]] | None = None) -> list[EditPlan]:
-    """Up to ``most`` reels: the footage is analysed once, its moments ranked, and each strong moment edited on its own.
-    A video with one good moment gives one reel. ``allow`` is asked before each reel (it may charge for it, or stop);
-    ``on_reel`` hears about each reel as it is finished."""
+                   allow: Callable[[int], Awaitable[bool]] | None = None,
+                   on_fail: Callable[[int, Exception], Awaitable[None]] | None = None, parallel: int = 1) -> list[EditPlan]:
+    """Up to ``most`` reels: the footage is analysed once, its moments ranked, and each strong moment edited on its own,
+    ``parallel`` at a time. A long video gives about one reel per four minutes of speech, a video with one good moment
+    one reel. ``allow`` is asked before each reel (it may charge for it, or stop); ``on_reel`` hears about each reel as
+    it is finished; a reel that fails is reported to ``on_fail`` and the others carry on (only when every reel fails
+    does the edit fail)."""
     work.mkdir(parents=True, exist_ok=True)
     tracker = EditPlan()
     stage = _stager(tracker, on_progress)
     found = await analyze(inputs, work, stage)
-    chosen = moments.worth_a_reel(await moments.find(found.audio.words, brief), most) if most > 1 else []
+    count = moments.reels_for(found.audio.words, most)
+    chosen = moments.worth_a_reel(await moments.find(found.audio.words, brief), count) if count > 1 else []
     await stage("moments", f"{len(chosen) or 1} reel(s)")
     windows = chosen or [None]
-    plans = []
-    for n, moment in enumerate(windows):
-        if allow and not await allow(n):
-            break
-        plan = EditPlan(progress=list(tracker.progress))
-        reel_stage = _stager(plan, on_progress)
-        window = (moment[3], moment[1], moment[2]) if moment else None
-        note = brief
-        if moment:
-            m = moment[0]
-            spans = moments.sentences(found.audio.words)
-            line = lambda k: " ".join(w.text for w in found.audio.words[spans[k][0]:spans[k][1] + 1]) if 0 <= k < len(spans) else ""  # noqa: E731
-            note = (f"{brief}\nEDIT THIS ONE MOMENT: '{m.title}'. Open with the line: \"{line(m.hook)}\". "
-                    f"End on the payoff: \"{line(m.payoff)}\".").strip()
-        # A moment's reel runs about three quarters of the moment (25-55 s) unless a length was asked for.
-        length = target_seconds or (round(min(MOMENT_MAX_REEL, max(MOMENT_MIN_REEL, (moment[2] - moment[1]) * 0.75))) if moment else 0.0)
-        plan = await edit(found, plan, reel_stage, work / f"reel{n}", out_dir / f"reel{n + 1}.mp4", store, owner, note, length,
-                          passes, window=window)
-        plans.append(plan)
-        if on_reel:
-            await on_reel(n, plan)
+    gate = asyncio.Semaphore(max(1, parallel))
+    stopped = False
+
+    async def one(n: int, moment) -> EditPlan | None:
+        nonlocal stopped
+        async with gate:
+            if stopped or (allow and not await allow(n)):
+                stopped = True
+                return None
+            plan = EditPlan(progress=list(tracker.progress))
+            window = (moment[3], moment[1], moment[2]) if moment else None
+            note, headline = brief, ""
+            if moment:
+                m = moment[0]
+                headline = m.headline
+                note = (f"{brief}\nEDIT THIS ONE MOMENT: '{m.title}'. Open with the line: \"{moment_line(found, m.hook)}\". "
+                        f"End on the payoff: \"{moment_line(found, m.payoff)}\". Hook headline: \"{m.headline}\".").strip()
+            length = target_seconds or (moment_length(moment[2] - moment[1]) if moment else 0.0)
+            try:
+                plan = await edit(found, plan, _stager(plan, on_progress), work / f"reel{n}", out_dir / f"reel{n + 1}.mp4", store,
+                                  owner, note, length, passes, window=window, headline=headline)
+            except Exception as exc:
+                if len(windows) == 1:
+                    raise
+                log.exception("Reel %d of %d failed", n + 1, len(windows))
+                if on_fail:
+                    await on_fail(n, exc)
+                return None
+            if on_reel:
+                await on_reel(n, plan)
+            return plan
+
+    plans = [p for p in await asyncio.gather(*(one(n, m) for n, m in enumerate(windows))) if p is not None]
+    if not plans:
+        raise RuntimeError("no reel could be made from this footage")
     return plans
+
+
+def moment_line(found: Analysis, k: int) -> str:
+    spans = moments.sentences(found.audio.words)
+    return " ".join(w.text for w in found.audio.words[spans[k][0]:spans[k][1] + 1]) if 0 <= k < len(spans) else ""
+
+
+def moment_length(seconds: float) -> float:
+    """A moment's reel runs about three quarters of the moment, within MOMENT_MIN_REEL..MOMENT_MAX_REEL seconds."""
+    return round(min(MOMENT_MAX_REEL, max(MOMENT_MIN_REEL, seconds * 0.75)))
 
 
 async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awaitable[None]], work: Path, out: Path,
                store: AssetStore, owner: str, brief: str, target_seconds: float, passes: int,
-               window: tuple[int, float, float] | None = None) -> EditPlan:
-    """One reel from analysed footage; ``window`` keeps the director to one moment and shows it that stretch closely."""
+               window: tuple[int, float, float] | None = None, headline: str = "") -> EditPlan:
+    """One reel from analysed footage; ``window`` keeps the director to one moment and shows it that stretch closely,
+    ``headline`` is the moment finder's hook text (the director's own is used when it has none)."""
     work.mkdir(parents=True, exist_ok=True)
-    plan.sources, plan.audio, plan.shots = found.sources, found.audio, found.shots
+    # Each reel has its own copy of the words: spelling fixes from one reel's director never leak into another's.
+    plan.sources, plan.audio, plan.shots = found.sources, found.audio.model_copy(deep=True), found.shots
     plan.face_track, plan.focus_track = found.face_track, found.focus_track
-    audio, shots = found.audio, found.shots
+    audio, shots = plan.audio, found.shots
     jpegs, how = found.jpegs, found.how
     if window:
         src, t0, t1 = window
@@ -209,6 +240,10 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
     for fix in d.spelling:
         if 0 <= fix.id < len(words) and fix.word.strip():
             words[fix.id].text = fix.word.strip()
+    kept = sorted({i for c in [*d.story, *(h.clip for h in d.hooks)] if c.w0 >= 0 for i in range(c.w0, min(c.w1, len(words) - 1) + 1)})
+    if kept:
+        await proof.proofread([words[i] for i in kept], audio.language)
+        plan.ai_calls += 1
 
     await stage("verify", "checking hooks and labels against the footage")
     hook, hook_why, changes = await verify(d, plan.sources, words)
@@ -216,7 +251,7 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
     plan.hooks = [f"{'*' if n == hook else ' '} {h.why}" for n, h in enumerate(d.hooks)]
 
     await stage("compile", "; ".join(changes[:4]) or "labels verified")
-    plan.brief, _ = brief_of(d, audio, target_seconds)
+    plan.brief, _ = brief_of(d, audio, target_seconds, headline)
     src_len = {s.index: s.duration for s in plan.sources}
     picture = plan.brief.path == "visual"
     track = tracks.pick(plan.brief.mood, target_seconds or plan.brief.target_seconds or 40, picture) if picture else None
@@ -259,6 +294,7 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
     await stage("picture", f"{len(plan.video)} shots, {len(plan.inserts)} cutaways, {plan.duration:.1f} s")
     picture = await render_picture(plan, grade, work)
     picture = await render_inserts(plan, picture, grade, work)
+    effects.photo_on_phone(plan)
     effects.place_on_faces(plan, picture)
     picture = await effects.apply_picture(plan, picture, work)
     await resolve_behind(plan, picture, work)
@@ -267,6 +303,7 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
     accents.add(plan)
 
     best: tuple[float, Path, EditPlan] | None = None
+    history = ""
     for n in range(max(1, passes)):
         pass_dir = work / f"pass{n}"
         pass_dir.mkdir(exist_ok=True)
@@ -279,7 +316,7 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
         final = await compose(plan, picture, placed, mix, pass_dir, pass_dir / "reel.mp4")
         await stage("review", f"pass {n + 1}")
         try:
-            result, actions = await review(plan, str(final))
+            result, actions = await review(plan, str(final), history)
         except Exception as exc:
             # A review that fails never fails the edit: ship the best pass so far, or this one unreviewed.
             log.warning("Review pass %d failed, shipping without it: %s", n + 1, exc)
@@ -297,6 +334,7 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
             break
         if not apply(plan, actions):
             break
+        history = since(result, actions)
         await asyncio.to_thread(layout.place, plan.graphics, plan.captions, str(picture))
 
     _, final, plan_best = best

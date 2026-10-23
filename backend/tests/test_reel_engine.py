@@ -41,7 +41,7 @@ def beat(**kw) -> DBeat:
 
 
 def director(**kw) -> DirectorPlan:
-    base = dict(audio_view="voice", recipe="creator_advice", target_seconds=30, title_lead="", title_text="", cta="",
+    base = dict(audio_view="voice", recipe="creator_advice", target_seconds=30, title_lead="", title_text="", hook_text="", cta="",
                 caption_mode="every_word", music="bed", text_style="punch", mood="upbeat", sections=[], hooks=[], story=[], beats=[],
                 inserts=[], keywords=[], burned_captions=False,
                 drop_word=-1, spelling=[], style="podcast", effects=[], notes="")
@@ -548,3 +548,85 @@ def test_the_reviewer_can_enlarge_an_item_inside_the_frame():
     assert apply(plan, [Action(id="g1", action="enlarge", why="too small")]) == 1
     x, y, w, h = plan.graphics[0].box
     assert w == 204 and h == 96 and x + w <= 1080 and y >= 0
+
+
+def test_a_split_screen_that_would_lose_a_face_cuts_to_the_talker():
+    from reel_engine import render
+
+    # The right-hand person leans far out of their half for most of the shot.
+    rows = [[k * 0.25, x, 0.4, 0.09, 0.15, talk] for k in range(12)
+            for x, talk in ((0.3, 0.03), (0.72 if k < 3 else 0.98, 0.025))]
+    crop, _ = render.framing(_src(), _item(), rows)
+    assert "vstack" not in crop
+
+
+# ------------------------------------------------------------------ several reels, hooks, proofreading, review history
+
+def test_a_long_video_gives_a_reel_per_four_minutes_of_speech_within_the_cap():
+    from reel_engine import moments
+
+    minute = [Word(i=k, src=0, t0=k * 0.5, t1=k * 0.5 + 0.45, text="word") for k in range(120)]
+    hour = [Word(i=k, src=0, t0=k * 0.5, t1=k * 0.5 + 0.45, text="word") for k in range(7200)]
+    assert moments.reels_for(minute, 8) == 1
+    assert moments.reels_for(hour, 8) == 8 and moments.reels_for(hour, 2) == 2
+    assert moments.reels_for([], 8) == 1
+
+
+def test_the_best_moment_always_makes_a_reel_and_weak_ones_do_not():
+    from reel_engine.moments import Moment, worth_a_reel
+
+    def m(score: float) -> Moment:
+        return Moment(start=0, end=1, hook=0, payoff=1, title="t", headline="Why does this work?", hook_score=score,
+                      payoff_score=score, standalone_score=score, why="")
+
+    found = [(m(8), 0, 30, 0), (m(6.8), 40, 70, 0), (m(5), 80, 110, 0), (m(7), 120, 150, 0)]
+    assert [f[1] for f in worth_a_reel(found, 8)] == [0, 40, 120]
+    assert [f[1] for f in worth_a_reel(found, 2)] == [0, 40]
+    assert worth_a_reel([(m(3), 0, 30, 0)], 8)  # one weak moment still gives the one reel
+
+
+def test_a_talking_reel_opens_on_a_hook_headline_not_one_word():
+    words = words_of("athletes remove body hair for two reasons and the second one surprised me a lot")
+    d = director(hooks=[DHook(clip=clip(w0=0, w1=4), word="HAIR", why="")], hook_text="HAIR",
+                 story=[clip(w0=5, w1=len(words) - 1)])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0, "Athletes body hair kyun hatate hain?")
+    assert brief.hook_text == "Athletes body hair kyun hatate hain?"
+    items = comp.video_track(d, brief, words, [], {0: 60.0})
+    hooks = [g for g in comp.graphics_track(d, brief, words, items, []) if g.why == "hook word"]
+    assert len(hooks) == 1 and hooks[0].kind == "hook" and hooks[0].data["text"] == brief.hook_text
+    # One generic word is never a headline: the director's own (if it reads as one) or none.
+    assert comp.hook_text("HAIR", "Why athletes shave their legs") == "Why athletes shave their legs"
+    assert comp.hook_text("HAIR", "ENERGY") == ""
+
+
+def test_proofreading_fixes_misheard_words_one_for_one(monkeypatch):
+    from clients import ai
+    from reel_engine import proof
+
+    words = words_of("what the hell is this world the has happened to my pointy basis plan today")
+
+    class Fake:
+        async def chat_json(self, messages, schema, **kw):
+            return schema(fixes=[proof.Fix(id=5, word="hell"), proof.Fix(id=11, word="day to day"), proof.Fix(id=99, word="x")])
+
+    monkeypatch.setattr(ai, "get_text_client", lambda **kw: Fake())
+    assert asyncio.run(proof.proofread(words, "hi")) == 1
+    assert words[5].text == "hell" and words[11].text == "pointy"  # a multi-word fix would shift timing: refused
+
+
+def test_a_later_review_hears_its_last_scores_and_the_changes():
+    from reel_engine.plan import LayerScore, Review
+    from reel_engine.review import Action, since
+
+    note = since(Review(scores=[LayerScore(layer="hook", score=5)], overall=5.0),
+                 [Action(id="c3", action="move", why=""), Action(id="c4", action="keep", why="")])
+    assert "hook 5" in note and "c3: move" in note and "c4" not in note
+
+
+def test_captions_keep_to_their_lanes():
+    from reel_engine.layout import CAPTION_LANES
+
+    detail = np.zeros((170, 96), np.float32)
+    detail[110:150, :] = 1.0  # hands moving across the low lane
+    top = free_top([80, 1360, 920, 210], [], detail, 1360, CAPTION_LANES)
+    assert top in CAPTION_LANES and top != 1360

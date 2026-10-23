@@ -108,16 +108,20 @@ async def test_premium_needs_pro(world):
     assert caught.value.code == "PRO_REQUIRED"
 
 
-def _fake_many(reels: int, seen: dict):
-    """A stand-in for the engine: ``reels`` reels (each asked for with ``allow`` first), handed over with ``on_reel``."""
+def _fake_many(reels: int, seen: dict, fail: int = -1):
+    """A stand-in for the engine: ``reels`` reels (each asked for with ``allow`` first), handed over with ``on_reel``;
+    reel ``fail`` breaks and is reported with ``on_fail``."""
     async def fake_run_many(inputs, work, out_dir, store, owner="", brief="", target_seconds=0.0, passes=2, on_progress=None,
-                            most=1, on_reel=None, allow=None):
-        seen.update(inputs=inputs, brief=brief, owner=owner, store=store, most=most)
+                            most=1, on_reel=None, allow=None, on_fail=None, parallel=1):
+        seen.update(inputs=inputs, brief=brief, owner=owner, store=store, most=most, parallel=parallel)
         out_dir.mkdir(parents=True, exist_ok=True)
         plans = []
         for n in range(min(reels, most)):
             if allow and not await allow(n):
                 break
+            if n == fail:
+                await on_fail(n, RuntimeError("renderer crashed"))
+                continue
             plan = EditPlan(brief=Brief(path="visual", audio_kind="silent", recipe="recipe_process", target_seconds=0,
                                         title_lead="Sunday", title_text=f"pancakes {n + 1}" if n else "pancakes"),
                             video=[VideoItem(id="v0", src=0, t0=0, t1=2, out0=0, out1=2)], duration=2.0 + n,
@@ -169,6 +173,22 @@ async def test_a_long_video_gives_a_reel_per_strong_moment_each_charged(world, m
     assert edit.status == "done" and [r.title for r in edit.reels] == ["Sunday pancakes", "Sunday pancakes 2", "Sunday pancakes 3"]
     assert all(r.url for r in edit.reels) and edit.output_url == edit.reels[0].url
     assert before - await _balance(world, user_id) == 3 * per_reel == edit.credits_charged
+
+
+async def test_one_failed_reel_is_refunded_and_the_others_kept(world, monkeypatch):
+    user_id = await _user(world, pro=True, email="onefail@example.com")
+    before = await _balance(world, user_id)
+    seen = {}
+    monkeypatch.setattr(premium_jobs.pipeline, "run_many", _fake_many(3, seen, fail=1))
+    edit_id = await _premium_edit(world, user_id)
+    job = world["queued"].pop()
+    per_reel = job.payload["credits"]
+    await premium_jobs.premium_edit(job)
+    async with world["db"]() as session:
+        edit = await EditService(session, FakeS3()).get(user_id, edit_id)
+    assert edit.status == "done" and [r.title for r in edit.reels] == ["Sunday pancakes", "Sunday pancakes 3"]
+    assert before - await _balance(world, user_id) == 2 * per_reel == edit.credits_charged
+    assert seen["parallel"] == premium_jobs.get_settings().REEL_PARALLEL
 
 
 async def test_reels_stop_when_the_credits_do(world, monkeypatch):

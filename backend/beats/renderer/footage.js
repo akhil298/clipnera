@@ -114,8 +114,11 @@
     }
     // look: how this line moves - pop (words rise in), stack (the big word on its own line), slide (words glide in
     // from the left), punch (the line lands at once and the big word slams in over an accent bar).
-    const look = s.data.look || 'pop';
-    const words = (s.data.words || []).map((wd) => {
+    // stack puts the big word on a line of its own, which only reads in spoken order when it starts or ends the line.
+    const said = s.data.words || [];
+    const keyAt = said.findIndex((wd) => wd.key);
+    const look = s.data.look === 'stack' && keyAt > 0 && keyAt < said.length - 1 ? 'pop' : (s.data.look || 'pop');
+    const words = said.map((wd) => {
       const node = el('span', wd.key ? `figure key look-${look}${s.data.alt ? ' alt' : ''}` : 'head lead', g, wd.text);
       node.style.display = 'inline-block';
       node.style.fontSize = `${h * (wd.key ? (look === 'stack' ? 0.56 : 0.44) : 0.26)}px`;
@@ -155,6 +158,37 @@
         });
         if (icon) icon.style.transform = `scale(${ease.back(span(t, 0.05, 0.3))})`;
         if (pose) pose(t);
+      },
+    };
+  };
+
+  // Hook headline: the question or claim the reel answers, over its first seconds. Words wrap into balanced lines
+  // and land one after another; the strongest word (the longest) takes the accent. A soft shade keeps it readable
+  // over any footage.
+  T.hook = (s, root) => {
+    const [x, y, w, h] = s.box;
+    const fade = shade(root, (y / s.H) * 100 - 4, (h / s.H) * 100 + 8, s.dur);
+    const g = boxed(el('div', 'g', root), s.box);
+    Object.assign(g.style, { display: 'flex', alignItems: 'center', justifyContent: 'center' });
+    const line = el('div', 'hook-line', g);
+    Object.assign(line.style, { textAlign: 'center', lineHeight: '1.04', textWrap: 'balance' });
+    const parts = String(s.data.text || '').split(/\s+/).filter(Boolean);
+    const strongest = parts.reduce((a, b, i) => (b.replace(/[^\p{L}\p{N}]/gu, '').length > parts[a].replace(/[^\p{L}\p{N}]/gu, '').length ? i : a), 0);
+    const words = parts.map((text, i) => {
+      const node = el('span', i === strongest ? 'figure key' : 'figure hook-word', line, text);
+      Object.assign(node.style, { display: 'inline-block', margin: '0 0.12em', whiteSpace: 'nowrap' });
+      return node;
+    });
+    fitText(line, w * 0.94, h * 0.34, 30, { wrap: true, maxHeight: h * 0.96 });
+    return {
+      seek(t) {
+        fade(t);
+        envelope(g, t, s.dur, { from: 0.94, blur: 0, rise: 0 });
+        words.forEach((node, i) => {
+          const p = ease.back(span(t, 0.04 + i * 0.07, 0.28));
+          node.style.opacity = clamp(span(t, 0.04 + i * 0.07, 0.1));
+          node.style.transform = `translateY(${(1 - p) * 40}%) scale(${0.8 + 0.2 * p})`;
+        });
       },
     };
   };

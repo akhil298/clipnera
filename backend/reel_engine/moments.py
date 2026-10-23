@@ -1,13 +1,16 @@
 """Moments: the self-contained ideas in a long video, ranked, so each reel is cut from the best of them.
 
-One text call (the plan's light model) reads the transcript sentence by sentence and returns the moments that would
-stand alone as a reel: where each starts and ends, the line that hooks hardest, the line that pays it off, and
-scores for hook, payoff and standing alone. The editor then works on one moment at a time with a close look at just
+One text call (the strong model: choosing what is worth a reel decides the score more than any effect) reads the
+transcript sentence by sentence and returns the moments that would stand alone as a reel: where each starts and
+ends, the line that hooks hardest, the line that pays it off, an on-screen hook headline, and scores for hook,
+payoff and standing alone. The editor then works on one moment at a time with a close look at just
 that stretch, instead of judging a whole hour from a few dozen frames, and a video with several strong moments
 gives several reels.
 """
 
 from __future__ import annotations
+
+import math
 
 from pydantic import BaseModel, ConfigDict
 
@@ -18,8 +21,9 @@ from reel_engine.plan import Word
 log = get_logger(__name__)
 
 MIN_SECONDS, MAX_SECONDS = 18.0, 75.0
-GOOD_ENOUGH = 7.0       # a moment worth its own reel scores at least this (average of the three scores)
+GOOD_ENOUGH = 6.5       # a moment worth its own reel scores at least this (average of the three scores)
 PAD = 0.3
+SPEECH_PER_REEL = 240.0  # one reel for about every four minutes of speech
 
 
 class _M(BaseModel):
@@ -32,6 +36,7 @@ class Moment(_M):
     hook: int           # the sentence that hooks hardest (may be anywhere inside)
     payoff: int         # the sentence that pays it off
     title: str
+    headline: str       # the hook as on-screen text: a specific question or claim from the moment, 3-7 words
     hook_score: float
     payoff_score: float
     standalone_score: float
@@ -46,10 +51,16 @@ SYSTEM = """You find the moments in a long video that would each make a great sh
 transcript (sentences with ids and times). A moment is a stretch of consecutive sentences, 20-70 seconds, that
 makes ONE complete point: a strong opening, a reason to keep watching, and a payoff (an answer, a twist, a lesson,
 a punchline). Never stitch unrelated parts. Prefer moments a stranger understands without the rest of the video.
+Start each moment on a complete sentence that makes sense cold - never on "and", "so", "because" or a reply to a
+question the viewer did not hear; leave out the warm-up, small talk and lines that repeat a point already made.
 For each: start and end sentence ids, hook = the single sentence that would stop a scroller (it may sit inside the
-moment and be moved to the front), payoff = the sentence that lands it, title (2-6 words), scores 0-10 for hook,
-payoff and standalone (be strict: 9+ only for a moment that would go viral), and why in one line. Return the best
-moments first, at most 8, never overlapping. If nothing stands alone, return the single best stretch. JSON only."""
+moment and be moved to the front), payoff = the sentence that lands it, title (2-6 words), headline = the hook as
+on-screen text, 3-7 words, a specific question or bold claim this moment answers, in the speaker's language and
+script as spoken (romanized Hindi stays romanized, e.g. "Athletes body hair kyun hatate hain?"), never one generic
+word like "ENERGY" or "HAIR"; scores 0-10 for hook, payoff and standalone (be strict: 9+ only for a moment that
+would go viral), and why in one line. Return the best moments first, as many distinct topics as the video truly
+has (up to 12), never overlapping, never two on the same point. If nothing stands alone, return the single best
+stretch. JSON only."""
 
 
 def listing(words: list[Word]) -> tuple[str, list[tuple[int, int]]]:
@@ -70,7 +81,7 @@ async def find(words: list[Word], brief: str = "") -> list[tuple[Moment, float, 
     if len(words) < 30:
         return []
     text, spans = listing(words)
-    client = get_text_client(is_pro=False, step="moment_finder")
+    client = get_text_client(is_pro=True, step="director")
     try:
         found = await client.chat_json([{"role": "system", "content": SYSTEM},
                                         {"role": "user", "content": f"User brief: {brief or '(none)'}\n\nTranscript:\n{text}\n\nJSON only."}],
@@ -86,12 +97,19 @@ async def find(words: list[Word], brief: str = "") -> list[tuple[Moment, float, 
         if words[a].src != words[b].src:
             continue
         t0, t1 = max(0.0, words[a].t0 - PAD), words[b].t1 + PAD
-        if t1 - t0 < MIN_SECONDS or t1 - t0 > MAX_SECONDS * 1.3 or any(t0 < z and y < t1 for y, z, _ in taken):
+        src = words[a].src
+        if t1 - t0 < MIN_SECONDS or t1 - t0 > MAX_SECONDS * 1.3 or any(s == src and t0 < z and y < t1 for y, z, s in taken):
             continue
-        taken.append((t0, t1, words[a].src))
-        out.append((m, t0, t1, words[a].src))
+        taken.append((t0, t1, src))
+        out.append((m, t0, t1, src))
     log.info("Moments: %s", ", ".join(f"{m.title} {score(m)} [{t0:.0f}-{t1:.0f}s]" for m, t0, t1, _ in out) or "none")
     return out
+
+
+def reels_for(words: list[Word], cap: int) -> int:
+    """How many reels the footage can give: one per SPEECH_PER_REEL seconds of speech, at least one, at most ``cap``."""
+    speech = sum(w.t1 - w.t0 for w in words if not w.filler)
+    return max(1, min(cap, math.ceil(speech / SPEECH_PER_REEL)))
 
 
 def worth_a_reel(found: list[tuple[Moment, float, float, int]], most: int) -> list[tuple[Moment, float, float, int]]:

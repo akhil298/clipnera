@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -53,12 +54,25 @@ TIMED_KINDS = {"list", "flow", "ui"}
 
 # ------------------------------------------------------------------ picture
 
-def white_balance(source: Source) -> str:
-    """Grey-world gains for the whole source, clamped: removes a colour cast before the grade."""
+def _grey_world(rgb: np.ndarray) -> np.ndarray:
+    return np.clip(rgb.mean() / np.maximum(rgb, 1), *WB_LIMIT)
+
+
+@lru_cache(maxsize=16)
+def _source_gains(path: str, duration: float) -> np.ndarray:
+    return _grey_world(mean_rgb(path, [duration * k / 6 for k in range(1, 6)]))
+
+
+def white_balance(source: Source, item: VideoItem | None = None) -> str:
+    """Grey-world gains, clamped: removes a colour cast before the grade. With ``item``, the source's gains are blended
+    half and half with the shot's own, so a shot that drifts warmer or cooler (a lamp, a window) matches its neighbours
+    without flattening the source's look."""
     if source.kind != "video" or source.duration <= 0:
         return ""
-    rgb = mean_rgb(source.path, [source.duration * k / 6 for k in range(1, 6)])
-    gains = np.clip(rgb.mean() / np.maximum(rgb, 1), *WB_LIMIT)
+    gains = _source_gains(source.path, source.duration)
+    if item is not None:
+        gains = np.clip((gains + _grey_world(mean_rgb(source.path, [item.t0 + (item.t1 - item.t0) * k for k in (0.25, 0.75)]))) / 2,
+                        *WB_LIMIT)
     return f"colorchannelmixer=rr={gains[0]:.3f}:gg={gains[1]:.3f}:bb={gains[2]:.3f}"
 
 
@@ -73,6 +87,7 @@ PERSON_GAP = 0.12        # faces further apart than this (share of the width) ar
 TALK_MIN = 0.012         # mouth motion under this is someone listening
 SPLIT_MIN_SECONDS = 2.0  # a split screen only for an exchange long enough to read
 SPLIT_FACE_SHARE = 0.34  # a face's height as a share of its half of a split screen
+NEAREST_FACE = 1.5  # seconds a face seen outside a shot still frames it
 
 
 def people(rows: list[list[float]]) -> list[dict]:
@@ -110,8 +125,12 @@ def pick_people(found: list[dict], seconds: float) -> tuple[dict | None, tuple[d
     return max(candidates, key=lambda p: p["presence"] * (0.5 + p["size"])), None
 
 
-def _split(source: Source, pair: tuple[dict, dict]) -> tuple[str, float]:
-    """Two people stacked, each in a half of the frame (9:8), sized on their own face."""
+SPLIT_INSIDE = 0.85  # share of a person's sightings whose face must sit inside their half, or no split
+
+
+def _split(source: Source, pair: tuple[dict, dict]) -> tuple[str, float] | None:
+    """Two people stacked, each in a half of the frame (9:8), sized on their own face; None when a half would lose its
+    face for much of the shot (someone leaning out, a face found only now and then): cut to the talker instead."""
     aspect = source.width / max(1, source.height)
     parts, widths = [], []
     for person in pair:
@@ -124,6 +143,9 @@ def _split(source: Source, pair: tuple[dict, dict]) -> tuple[str, float]:
             width, height = 1.0, aspect * 8 / 9
         top = float(np.clip(face_y - 0.42 * height, 0.0, 1.0 - height))
         left = float(np.clip(person["x"] - width / 2, 0.0, 1.0 - width))
+        inside = sum(1 for r in rows if left + 0.3 * r[3] <= r[1] <= left + width - 0.3 * r[3] and top <= r[2] <= top + height)
+        if inside < SPLIT_INSIDE * len(rows):
+            return None
         parts.append(f"crop=iw*{width:.4f}:ih*{height:.4f}:iw*{left:.4f}:ih*{top:.4f},scale={W}:{H // 2}")
         widths.append(width)
     upscale = W / max(1.0, min(widths) * source.width)
@@ -142,13 +164,17 @@ def framing(source: Source, item: VideoItem, track: list[list[float]], focus: li
     rows = [r for r in track if item.t0 - 0.5 <= r[0] <= item.t1 + 0.5]
     if not rows and track:
         nearest = min(track, key=lambda p: abs(p[0] - (item.t0 + item.t1) / 2))
-        rows = [r for r in track if r[0] == nearest[0]] if abs(nearest[0] - item.t0) < 6 else []
+        # A face seen just before the shot still frames it; one from seconds away (someone stood up) would frame the wall.
+        rows = [r for r in track if r[0] == nearest[0]] if abs(nearest[0] - item.t0) < NEAREST_FACE else []
     found = people(rows)
     if aspect <= 9 / 16 + 0.01 and not found:
         return None, 1.0
     chosen, pair = pick_people(found, (item.t1 - item.t0) / item.speed)
     if pair:
-        return _split(source, pair)
+        split = _split(source, pair)
+        if split:
+            return split
+        chosen = max(pair, key=lambda p: p["talk"])
     points = [[r[0], r[1], r[2], r[3]] for r in chosen["rows"]] if chosen else []
     height = 1.0
     top = 0.0
@@ -227,7 +253,6 @@ def segment_cmd(source: Source, item: VideoItem, track: list[list[float]], wb: s
 
 async def render_picture(plan: EditPlan, grade_name: str, work: Path) -> Path:
     sources = {s.index: s for s in plan.sources}
-    wbs = {s.index: white_balance(s) for s in plan.sources}
     target = float(np.median([mean_rgb(sources[i.src].path, [(i.t0 + i.t1) / 2]).mean() / 255 for i in plan.video
                               if sources[i.src].kind == "video"] or [0.45]))
     # Match toward the brighter of the median and a bright floor: dim shots are lifted, bright ones kept.
@@ -240,7 +265,7 @@ async def render_picture(plan: EditPlan, grade_name: str, work: Path) -> Path:
         source = sources[item.src]
         shot = next((s for (src, _), s in shots.items() if src == item.src and s.t0 <= item.t0 < s.t1), None)
         out = work / f"seg{n:03d}.mp4"
-        cmd = segment_cmd(source, item, plan.face_track.get(str(item.src), []), wbs[item.src],
+        cmd = segment_cmd(source, item, plan.face_track.get(str(item.src), []), white_balance(source, item),
                           exposure(source, item, target) if source.kind == "video" else 1.0, grade,
                           bool(shot and shot.motion >= SHAKY_MOTION and not shot.faces), bool(shot and shot.dark), out,
                           plan.focus_track.get(str(item.src), []))
@@ -353,7 +378,8 @@ def graphic_specs(plan: EditPlan) -> list[dict]:
         data = {k: v for k, v in g.data.items() if k not in ("icon_query", "matte") and not (timed and k == "steps")}
         if g.kind == "map" and g.asset:
             data["svg"] = Path(g.asset.path).read_text(encoding="utf-8")
-        style = title_style if g.kind in TITLE_KINDS or g.by == "finish" or g.why == "hook word" else text_style
+        # The hook headline is read like the captions (their bold style); other titles take the contrasting title style.
+        style = text_style if g.kind == "hook" else title_style if g.kind in TITLE_KINDS or g.by == "finish" or g.why == "hook word" else text_style
         specs.append({"id": g.id, "kind": g.kind, "theme": "clean", "style": style, "place": g.place, "dur": round(g.end - g.start, 3),
                       "box": g.box, "data": data, "steps": g.data.get("steps", []) if timed else [], "lottie": _lottie(g.asset),
                       "asset": _uri(g.asset.path) if g.asset and not g.asset.path.endswith(".json") else "",

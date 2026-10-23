@@ -1,7 +1,8 @@
 """Accents: motion graphics from the Lottie library on the moments that call for one, and varied transition sounds.
 
-An accent is never decoration for its own sake: the call to action gets a follow button, the payoff line a short
-burst, a number counting up a money or growth animation. Each is placed from the box of the item it serves (so it
+An accent is never decoration for its own sake: a call to action that asks for a follow gets a follow button, the
+payoff line a short burst, a number counting up a money or growth animation only when it counts money or growth
+(a temperature or an age gets none: reviews read a growth chart there as noise). Each is placed from the box of the item it serves (so it
 runs after layout) and picked by the reel's own seed, so two reels rarely share one. Sounds come from the sound
 library by role (whoosh, impact, click), rotated so a reel never repeats the same whoosh.
 """
@@ -18,7 +19,8 @@ from reel_engine.plan import AssetRef, EditPlan, GraphicItem
 
 MOTION = Path(__file__).resolve().parents[1] / "static" / "motion"
 CURRENCY = ("$", "₹", "€", "£", "rs", "rupee", "dollar", "money", "cash", "lakh", "crore", "salary", "income", "profit")
-ACCENT_SIZE = 300
+GROWTH = ("grow", "growth", "increase", "double", "triple", "up", "more", "gain", "rise", "badh", "zyada", "jyada", "followers", "views")
+ACCENT_SIZE = 220
 BURST_SECONDS = 1.6
 # The longest sound a role may use here: a long swell under a one-second card smears.
 SOUND_MAX_SECONDS = {"whoosh": 1.6, "transition": 1.6, "impact": 1.8, "click": 0.6, "riser": 4.0}
@@ -70,11 +72,13 @@ def add(plan: EditPlan) -> int:
         if not g.box:
             continue
         if g.kind == "cta":
-            wanted.append(("follow", g.start + 0.15, g.end, _around(g.box, ACCENT_SIZE, above=True)))
+            if "FOLLOW" in str(g.data.get("verb", "")).upper():
+                wanted.append(("follow", g.start + 0.15, g.end, _around(g.box, ACCENT_SIZE, above=True)))
         elif g.kind == "count_up":
             said = f"{g.data.get('prefix', '')} {g.data.get('suffix', '')} {g.data.get('label', '')}".lower()
-            role = "money" if any(c in said for c in CURRENCY) else "growth"
-            wanted.append((role, g.start + 0.2, g.end, _around(g.box, ACCENT_SIZE, above=True)))
+            role = "money" if any(c in said for c in CURRENCY) else "growth" if any(w in said.split() for w in GROWTH) else ""
+            if role:
+                wanted.append((role, g.start + 0.2, g.end, _around(g.box, ACCENT_SIZE, above=True)))
     payoff = next((c for c in plan.captions if c.payoff and c.box), None)
     if payoff:
         wanted.append(("burst", payoff.start, min(payoff.end, payoff.start + BURST_SECONDS), _around(payoff.box, ACCENT_SIZE * 2, above=False)))

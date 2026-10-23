@@ -88,6 +88,7 @@ html, body { background: transparent; overflow: hidden; }
    Templates mark text as .lead (small words), .key (the big word), .flick, .tag-pill; each style restyles them. */
 .lead { color: #fff; font-weight: 700; text-shadow: 0 2px 4px rgba(0,0,0,.8), 0 3px 18px rgba(0,0,0,.7); }
 .lead-caps { letter-spacing: .18em; text-transform: uppercase; }
+.hook-word { color: #fff; text-transform: uppercase; text-shadow: 0 3px 6px rgba(0,0,0,.75), 0 6px 26px rgba(0,0,0,.6); }
 .key { color: var(--accent); text-transform: uppercase; }
 .key.alt { color: #fff; }
 .flick { text-transform: uppercase; color: #fff; text-shadow: 0 6px 0 rgba(0,0,0,.35), 0 0 40px color-mix(in srgb, var(--accent) 80%, transparent); }

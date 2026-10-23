@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Check, Sparkles } from 'lucide-react';
+import { Check, Download, Sparkles } from 'lucide-react';
 import type { EditResponse } from '@/lib/api';
 import { editPhase } from '@/lib/utils/footageReels';
 
@@ -75,6 +75,25 @@ export function ReelEditingProgress({ edit }: { edit: EditResponse }) {
             );
           })}
         </ol>
+
+        {many > 1 && edit.reels.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-[13px] font-bold tracking-[0.14em] text-emerald-300">READY NOW</p>
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
+              {edit.reels.map((reel, i) => (
+                <li key={reel.url ?? i} className="relative rounded-2xl overflow-hidden border border-neutral-800 bg-black">
+                  <video src={reel.url ?? undefined} controls playsInline preload="metadata" className="w-full aspect-[9/16]" />
+                  {reel.url && (
+                    <a href={reel.url} download aria-label={`Download reel ${i + 1}`}
+                      className="absolute top-2 right-2 w-9 h-9 rounded-xl bg-amber-500 hover:bg-amber-400 text-neutral-950 flex items-center justify-center">
+                      <Download className="w-4 h-4" />
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
     </div>
   );

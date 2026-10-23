@@ -67,7 +67,9 @@ def _item_frames(plan: EditPlan, video: str) -> tuple[list[bytes], list[str]]:
     items = [(g.id, f"effect {g.data['effect']}" if g.kind == "effect" else g.kind, g.start, g.end,
               " / ".join(g.data.get("texts") or []) if g.kind == "effect" else g.data.get("text") or g.data.get("label") or g.data.get("lead") or "")
              for g in plan.graphics if g.kind not in ("wash", "progress") and not (g.kind == "effect" and g.data.get("part") == "back")]
-    items += [(c.id, "caption", c.start, c.end, f"{c.lead} {c.keyword}") for c in plan.captions]
+    # A caption's words in the order they are said, its big word in capitals (lead and keyword apart read as scrambled).
+    items += [(c.id, "caption", c.start, c.end, " ".join(w["text"].upper() if w.get("key") else w["text"] for w in c.words)
+               or f"{c.lead} {c.keyword}") for c in plan.captions]
     items.sort(key=lambda i: i[2])
     if len(items) > MAX_ITEM_FRAMES:
         step = len(items) / MAX_ITEM_FRAMES
@@ -78,7 +80,7 @@ def _item_frames(plan: EditPlan, video: str) -> tuple[list[bytes], list[str]]:
         if image is None:
             continue
         jpegs.append(jpeg(stamp(image, f"{item_id} {start:.1f}s")))
-        notes.append(f"{item_id} {kind} at {start:.1f}s: {str(text)[:60]}")
+        notes.append(f"{item_id} {kind} at {start:.1f}s: {str(text)[:80]}")
     return jpegs, notes
 
 
@@ -92,18 +94,29 @@ def _overview(plan: EditPlan, video: str, count: int = 6) -> list[bytes]:
     return out
 
 
-async def review(plan: EditPlan, video: str) -> tuple[Review, list[Action]]:
+def since(previous: Review, actions: list[Action]) -> str:
+    """What the reviewer is told on a later pass: its last scores and the changes made since, so it re-judges the same
+    reel against the same bar and checks its own fixes, instead of starting from a blank page."""
+    done = [f"{a.id}: {a.action}" for a in actions if a.action != "keep"]
+    return (f"This is a revision. Your last scores: {', '.join(f'{s.layer} {s.score}' for s in previous.scores)} "
+            f"(overall {previous.overall}). Changed since: {'; '.join(done) or 'nothing'}. Score what you see now on the "
+            "same anchors; a layer whose problems were fixed should rise, an untouched layer keeps its score unless you "
+            "see something new.\n\n")
+
+
+async def review(plan: EditPlan, video: str, history: str = "") -> tuple[Review, list[Action]]:
     item_jpegs, notes = _item_frames(plan, video)
     overview = _overview(plan, video)
     lufs = loudness(video)
     talking = sum(i.out1 - i.out0 for i in plan.video if i.keeps_voice)
     facts = (f"Length {plan.duration:.1f} s, {len(plan.video)} shots, {len(plan.graphics)} graphics, {len(plan.captions)} caption lines. "
              f"Audio: {plan.audio.kind}; voice in {talking / max(plan.duration, 0.1):.0%} of the reel; music "
-             f"{plan.brief.music if plan.brief else 'none'}; integrated loudness {lufs:.1f} LUFS (target -14); "
+             f"{plan.brief.music if plan.brief else 'none'}{' (side-chain ducked 8:1 under the voice)' if talking else ''}; "
+             f"integrated loudness {lufs:.1f} LUFS (target -14); effects peak-limited on their own bus; "
              f"{sum(1 for a in plan.audio_items if a.kind == 'sfx')} sound effects. Recipe: {plan.brief.recipe if plan.brief else ''}."
              + (f" Spoken language: {plan.audio.language}; captions are that speech written in Roman letters (Hinglish/Tenglish "
                 "style), so judge them as that language, not as English." if plan.audio.language not in ("", "en", "english") else ""))
-    message_text = (f"Measurements: {facts}\n\nFirst {len(overview)} images: frames across the reel. Then one image per item:\n"
+    message_text = (f"{history}Measurements: {facts}\n\nFirst {len(overview)} images: frames across the reel. Then one image per item:\n"
                     + "\n".join(notes) + "\n\nReview it. JSON only.")
     try:
         verdict = await vision_json(SYSTEM, message_text, overview + item_jpegs, Verdict, max_tokens=4000)

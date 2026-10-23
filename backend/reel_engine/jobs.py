@@ -87,8 +87,9 @@ async def premium_edit(job: Job) -> None:
         async with AsyncSessionLocal() as session:
             edit = await session.get(EditProject, edit_id)
             made = json.loads(edit.reels or "[]")
-            # Reels already made are kept; only what was paid for and not delivered goes back.
-            refund = charged["per_reel"] if made else charged["total"]
+            # Reels already made are kept; everything paid for and not delivered (reels made side by side may be
+            # several) goes back.
+            refund = max(0, charged["total"] - charged["per_reel"] * len(made))
             if made:
                 edit.status, edit.error = EditStatus.DONE, None
             else:
@@ -96,10 +97,11 @@ async def premium_edit(job: Job) -> None:
                 edit.error = "The edit failed and your credits were refunded. Please try again."
             edit.credits_charged = max(0, edit.credits_charged - refund)
             await session.commit()
-            await SubscriptionService.for_session(session).refund_credits(
-                user_id=user_id, amount=refund, reason=f"Premium reel failed, refund for {edit_id}",
-                reference_id=edit_id, reference_type="edit_render_refund",
-            )
+            if refund:
+                await SubscriptionService.for_session(session).refund_credits(
+                    user_id=user_id, amount=refund, reason=f"Premium reel failed, refund for {edit_id}",
+                    reference_id=edit_id, reference_type="edit_render_refund",
+                )
         await notify_reel_outcome(user_id, "your reel", success=bool(made))
         log.warning("Premium edit refunded %d credits: edit=%s (%s)", refund, edit_id, exc)
 
@@ -142,7 +144,21 @@ async def _run(edit_id: str, user_id: str, charged: dict[str, int]) -> None:
         await asyncio.to_thread(s3.upload_file, settings.S3_BUCKET_NAME, key, str(path), "video/mp4")
         named = f"{plan.brief.title_lead} {plan.brief.title_text}".strip() if plan.brief else ""
         made.append({"key": key, "duration": round(plan.duration, 2), "title": (named or title)[:300]})
+        # Reels finish out of order when made side by side; they are listed in the order of their moments.
+        made.sort(key=lambda r: int(r["key"].rsplit("reel", 1)[1].split(".")[0]))
         await _save(edit_id, reels=json.dumps(made, ensure_ascii=False))
+
+    async def lost(n: int, exc: Exception) -> None:
+        """One reel of several failed: the others carry on and this reel's charge goes back."""
+        async with AsyncSessionLocal() as session:
+            edit = await session.get(EditProject, edit_id)
+            edit.credits_charged = max(0, edit.credits_charged - charged["per_reel"])
+            await session.commit()
+            await SubscriptionService.for_session(session).refund_credits(
+                user_id=user_id, amount=charged["per_reel"], reason=f"Premium reel {n + 1} failed, refund for {edit_id}",
+                reference_id=edit_id, reference_type="edit_render_refund")
+        charged["total"] -= charged["per_reel"]
+        log.warning("Premium edit %s: reel %d failed and was refunded (%s)", edit_id, n + 1, exc)
 
     with tempfile.TemporaryDirectory() as workdir:
         work = Path(workdir)
@@ -153,7 +169,8 @@ async def _run(edit_id: str, user_id: str, charged: dict[str, int]) -> None:
             paths.append(local)
         plans = await pipeline.run_many(paths, work / "engine", work / "reels", DbAssetStore(s3), owner=user_id, brief=brief,
                                         target_seconds=target, passes=REVIEW_PASSES, on_progress=report, most=most_reels(is_pro),
-                                        allow=allow, on_reel=lambda n, plan: keep(n, plan, Path(plan.output)))
+                                        allow=allow, on_reel=lambda n, plan: keep(n, plan, Path(plan.output)), on_fail=lost,
+                                        parallel=settings.REEL_PARALLEL)
     plan = plans[0]
     named = plan.brief and plan.brief.title_text and title in ("", "Untitled reel")
     await _save(edit_id, status=EditStatus.DONE, output_key=made[0]["key"], duration_s=plan.duration, renders=len(made), error=None,
