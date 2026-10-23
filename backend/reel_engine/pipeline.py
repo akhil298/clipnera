@@ -16,7 +16,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from core.logging_config import get_logger
-from reel_engine import accents, icons, inserts, layout, sound, tracks
+from reel_engine import accents, effects, icons, inserts, layout, sound, tracks
 from reel_engine.assets import AssetStore, Scout
 from reel_engine.compile import BEAT, brief_of, captions_track, graphics_track, to_output, video_track
 from reel_engine.director import direct, recipe
@@ -128,6 +128,8 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
                                  offset=tracks.offset(track, reveal_at(plan, d, words), plan.duration),
                                  licence=track.licence, source=track.source)
     plan.graphics = graphics_track(d, plan.brief, words, plan.video, shots)
+    picked = effects.compile_effects(d.effects, words, plan.video)
+    plan.graphics = sorted(effects.clear_under(plan.graphics, picked) + picked, key=lambda g: g.start)
     plan.captions, plan.graphics = captions_track(d, plan.brief, words, plan.video, plan.graphics)
 
     await stage("assets", "searching the library, making what is missing")
@@ -155,6 +157,8 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
     await stage("picture", f"{len(plan.video)} shots, {len(plan.inserts)} cutaways, {plan.duration:.1f} s")
     picture = await render_picture(plan, grade, work)
     picture = await render_inserts(plan, picture, grade, work)
+    effects.place_on_faces(plan, picture)
+    picture = await effects.apply_picture(plan, picture, work)
     await resolve_behind(plan, picture, work)
     await stage("layout", "placing every graphic off faces and the action")
     await asyncio.to_thread(layout.place, plan.graphics, plan.captions, str(picture))

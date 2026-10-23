@@ -1,0 +1,89 @@
+/* Signature effects (effects.js). The accent comes from the reel (--accent); everything else is drawn here. */
+
+/* Orbit */
+.orbit-word { background: var(--accent); color: #111; font-family: "Archivo Black", sans-serif; padding: .18em .6em; border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+
+/* Glass Type: the footage under the panel is blurred in the picture; this is the pane, its edge and its shine. */
+.glass-panel { border-radius: 40px; overflow: hidden; background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.06));
+  border: 2px solid rgba(255,255,255,.55); box-shadow: inset 0 1px 0 rgba(255,255,255,.7), 0 20px 60px rgba(0,0,0,.35); }
+.glass-text { color: #fff; font-family: "Montserrat", sans-serif; font-weight: 800; line-height: 1.05; text-shadow: 0 2px 18px rgba(0,0,0,.35); }
+.glass-shine { position: absolute; top: 0; bottom: 0; width: 30%; left: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); }
+
+/* Paper Cut */
+.paper-card { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .1em;
+  background: #f7f1e3; box-shadow: 0 18px 40px rgba(0,0,0,.4);
+  background-image: radial-gradient(rgba(120,90,40,.08) 1px, transparent 1px), radial-gradient(rgba(120,90,40,.06) 1px, transparent 1px);
+  background-size: 7px 7px, 11px 11px; background-position: 0 0, 3px 5px; }
+.paper-line { font-family: "Marker", cursive; color: #1d1a16; line-height: 1.05; text-align: center; }
+.paper-tape { position: absolute; top: -26px; left: 50%; width: 200px; height: 56px; margin-left: -100px; rotate: -4deg;
+  background: rgba(255,236,170,.75); box-shadow: 0 2px 6px rgba(0,0,0,.15); }
+
+/* Phone Mockup: the body around the footage screen, and its app chrome */
+.phone-body { border: 22px solid #111; border-radius: 76px; box-shadow: 0 30px 80px rgba(0,0,0,.55), inset 0 0 0 2px #2b2b2b; }
+.phone-island { position: absolute; top: 18px; left: 50%; width: 190px; height: 52px; margin-left: -95px; background: #000; border-radius: 30px; }
+.phone-status { position: absolute; top: 24px; left: 46px; color: #fff; font: 700 34px "Montserrat", sans-serif; text-shadow: 0 1px 4px rgba(0,0,0,.5); }
+.phone-ui { position: absolute; left: 24px; right: 24px; bottom: 40px; font-family: "Montserrat", sans-serif; }
+.phone-bubble { display: inline-block; max-width: 85%; background: #1f8bff; color: #fff; font-size: 38px; font-weight: 700; padding: 22px 30px;
+  border-radius: 34px 34px 34px 8px; box-shadow: 0 8px 20px rgba(0,0,0,.3); }
+.phone-search { background: rgba(255,255,255,.95); color: #111; font-size: 36px; font-weight: 700; padding: 22px 30px; border-radius: 999px;
+  min-height: 44px; box-shadow: 0 8px 20px rgba(0,0,0,.3); }
+.phone-notes-head { color: #f5c400; font-size: 40px; font-weight: 800; margin-bottom: 8px; }
+.phone-notes { background: rgba(255,250,230,.96); color: #222; font-size: 36px; font-weight: 600; padding: 24px; border-radius: 22px; }
+.phone-feed-icons { color: #fff; font-size: 46px; margin-bottom: 10px; text-shadow: 0 2px 8px rgba(0,0,0,.5); }
+.phone-caption { color: #fff; font-size: 34px; font-weight: 700; text-shadow: 0 2px 8px rgba(0,0,0,.6); }
+
+/* Cover Story */
+.cover-mast { font-family: "DM Serif Display", serif; color: #fff; line-height: .9; letter-spacing: -.02em; text-shadow: 0 6px 30px rgba(0,0,0,.35); }
+.cover-frame { box-shadow: inset 0 0 0 18px rgba(255,255,255,.92); }
+.cover-issue { position: absolute; top: 70px; left: 0; right: 0; text-align: center; color: #fff; font: 700 30px "Montserrat", sans-serif;
+  letter-spacing: .3em; text-shadow: 0 2px 8px rgba(0,0,0,.5); }
+.cover-line { position: absolute; width: 470px; color: #fff; text-shadow: 0 3px 12px rgba(0,0,0,.6); }
+.cover-line.left { left: 60px; } .cover-line.right { right: 60px; text-align: right; }
+.cover-kicker { display: inline-block; background: var(--accent); color: #111; font: 800 26px "Montserrat", sans-serif; letter-spacing: .12em;
+  padding: 4px 12px; margin-bottom: 8px; }
+.cover-text { font: 400 58px "Anton", "Archivo Black", sans-serif; line-height: 1.02; text-transform: uppercase; }
+.cover-barcode { position: absolute; right: 60px; bottom: 60px; width: 170px; height: 110px; background:
+  repeating-linear-gradient(90deg, #111 0 4px, #fff 4px 7px, #111 7px 9px, #fff 9px 14px); border: 10px solid #fff; }
+
+/* UI World */
+.ui-card { display: flex; align-items: center; gap: 22px; width: 480px; padding: 24px 28px; border-radius: 30px; background: rgba(255,255,255,.94);
+  box-shadow: 0 20px 50px rgba(0,0,0,.35); font-family: "Montserrat", sans-serif; }
+.ui-icon { flex: none; width: 76px; height: 76px; border-radius: 22px; background: var(--accent); display: flex; align-items: center;
+  justify-content: center; font-size: 42px; }
+.ui-text { color: #111; font-size: 34px; font-weight: 700; line-height: 1.15; }
+
+/* Framebreak label */
+.framebreak-tag { background: var(--accent); color: #111; font-family: "Archivo Black", sans-serif; padding: .2em .7em; }
+
+/* Green Screen worlds (opaque: they replace the background behind the speaker) */
+.world { background: #222; }
+.world-studio { background: radial-gradient(ellipse at 50% 35%, #5b6b82 0%, #2a3342 55%, #151a22 100%); }
+.world-brand { background: linear-gradient(160deg, var(--accent) 0%, #ff6a3d 60%, #3a1c6e 100%); }
+.world-space { background: radial-gradient(ellipse at 30% 30%, #2b1a55 0%, #0b0820 50%, #000 100%); }
+.world-city { background: linear-gradient(180deg, #0b1030 0%, #2a1748 55%, #5b2a4e 100%); }
+.world-nature { background: linear-gradient(180deg, #8fd3ff 0%, #c9ecff 55%, #e9f7ff 100%); }
+.world-stage { background: radial-gradient(ellipse at 50% 20%, #3a1010 0%, #120404 70%); }
+.world-neon { background: linear-gradient(180deg, #05020f 0%, #12052a 55%, #2a0838 100%); }
+.star-dot { position: absolute; border-radius: 50%; background: #fff; }
+.bokeh { position: absolute; border-radius: 50%; background: rgba(255,200,120,.35); filter: blur(4px); }
+.soft-blob { position: absolute; border-radius: 50%; background: rgba(255,255,255,.18); filter: blur(60px); }
+.city-block { position: absolute; bottom: 0; background: #0a0a18;
+  background-image: repeating-linear-gradient(0deg, transparent 0 26px, rgba(255,214,120,.55) 26px 34px), repeating-linear-gradient(90deg, #0a0a18 0 14px, transparent 14px 26px); }
+.stage-light { position: absolute; left: 50%; top: -10%; width: 900px; height: 130%; margin-left: -450px;
+  background: radial-gradient(ellipse at 50% 0%, rgba(255,240,200,.55), transparent 65%); }
+.curtain { position: absolute; top: 0; bottom: 0; width: 22%; background: repeating-linear-gradient(90deg, #6d0b12 0 40px, #4a060b 40px 80px); }
+.curtain.left { left: 0; } .curtain.right { right: 0; }
+.sun { position: absolute; left: 62%; top: 12%; width: 220px; height: 220px; border-radius: 50%; background: #ffd66b; box-shadow: 0 0 120px #ffd66b; }
+.hill { position: absolute; left: -20%; right: -20%; border-radius: 50% 50% 0 0; }
+.hill.far { bottom: 18%; height: 40%; background: #7fbf7a; } .hill.near { bottom: -10%; height: 42%; background: #3f8f4a; }
+.neon-grid { position: absolute; left: -50%; right: -50%; bottom: -10%; height: 60%; transform: perspective(600px) rotateX(62deg);
+  transform-origin: bottom; background-image: linear-gradient(rgba(255,60,220,.8) 3px, transparent 3px), linear-gradient(90deg, rgba(60,230,255,.7) 3px, transparent 3px);
+  background-size: 120px 120px; }
+.neon-horizon { position: absolute; left: 0; right: 0; top: 46%; height: 6px; background: #ff4fd8; box-shadow: 0 0 40px 10px #ff4fd8; }
+
+/* Couch Wall */
+.couch-wall { background: var(--accent); }
+.wall-row { position: absolute; left: 0; white-space: nowrap; font: 400 150px "Anton", "Archivo Black", sans-serif; color: #111; line-height: 1; }
+.wall-row.outline { color: transparent; -webkit-text-stroke: 4px #111; }

@@ -1,0 +1,106 @@
+{
+ "about": "The effect catalog. The director picks effects from here and writes their words; reel_engine/effects.py checks them against these limits and the renderer draws them. Adding an effect = an entry here + its look (renderer/effects.js and, for picture effects, effects.PICTURE). layer: front (over everything), behind (under the speaker's cut-out; opaque = background replaced), picture (changes the footage itself), split (one part behind the speaker, one in front). fields: what the AI fills - texts (count and words per text), choice (one of a list), target (where on the speaker). captions: keep or hide while the effect is up.",
+ "max_per_reel": 2,
+ "min_gap": 4.0,
+ "effects": {
+  "doodle": {
+   "title": "Doodle Boy",
+   "use_when": "a playful or emphatic line about the speaker themself or something they point at: a crown on 'I was the best', an arrow at the hand holding the thing, sparkles on 'magic', a question mark on doubt",
+   "avoid_when": "serious, sad or medical moments",
+   "layer": "front", "seconds": [1.2, 2.6], "max": 2, "captions": "keep", "needs": ["face"], "sound": "whoosh",
+   "fields": {"choice": ["crown", "arrow", "circle", "sparkles", "underline", "heart", "question", "exclaim", "stars", "lightning"],
+              "target": ["face_top", "face_around", "point_left", "point_right", "below_face"]}
+  },
+  "headline_wall": {
+   "title": "Headline Wall",
+   "use_when": "the speaker names something that is everywhere or blew up: news, a trend, a scandal, 'everyone is talking about it'",
+   "avoid_when": "quiet personal moments",
+   "layer": "behind", "opaque": true, "seconds": [1.6, 3.2], "max": 1, "captions": "hide", "needs": ["matte"], "sound": "impact",
+   "fields": {"texts": {"count": [3, 6], "words": 6, "meaning": "news-style headlines about what is said, in the reel's language"}}
+  },
+  "orbit": {
+   "title": "Orbit",
+   "use_when": "the speaker lists several things that surround them or that they juggle: skills, roles, worries, tools",
+   "avoid_when": "fewer than three things are named",
+   "layer": "split", "seconds": [2.0, 3.6], "max": 1, "captions": "keep", "needs": ["face", "matte"], "sound": "whoosh",
+   "fields": {"texts": {"count": [3, 6], "words": 2, "meaning": "the things named, one or two words each"}}
+  },
+  "glass_type": {
+   "title": "Glass Type",
+   "use_when": "a calm, premium statement worth framing: a principle, a definition, a quote",
+   "avoid_when": "fast hype moments",
+   "layer": "picture", "seconds": [1.4, 3.0], "max": 2, "captions": "hide", "needs": [], "sound": "whoosh",
+   "fields": {"texts": {"count": [1, 1], "words": 5, "meaning": "the statement"}}
+  },
+  "paper_cut": {
+   "title": "Paper Cut",
+   "use_when": "a homely, crafty or storytelling line: a tip, a memory, a step in a process",
+   "avoid_when": "tech or luxury topics",
+   "layer": "front", "seconds": [1.4, 3.0], "max": 2, "captions": "hide", "needs": [], "sound": "click",
+   "fields": {"texts": {"count": [1, 2], "words": 5, "meaning": "the label, one or two short lines"}}
+  },
+  "phone_mockup": {
+   "title": "Phone Mockup",
+   "use_when": "the speaker talks about an app, a message, a post, a search, going viral or what people see on their phones",
+   "avoid_when": "nothing about phones, apps or social media is said",
+   "layer": "picture", "seconds": [1.6, 3.4], "max": 1, "captions": "keep", "needs": [], "sound": "click",
+   "fields": {"choice": ["chat", "feed", "search", "notes"], "texts": {"count": [0, 1], "words": 6, "meaning": "the text on the phone screen bar"}}
+  },
+  "cover_story": {
+   "title": "Cover Story",
+   "use_when": "a big reveal about the speaker or a person: an achievement, a transformation, 'this changed my life'",
+   "avoid_when": "the speaker is not on screen",
+   "layer": "split", "seconds": [2.0, 3.4], "max": 1, "captions": "hide", "needs": ["face", "matte"], "sound": "impact",
+   "fields": {"texts": {"count": [2, 4], "words": 5, "meaning": "first the magazine name (one or two words), then up to three cover lines"}}
+  },
+  "ui_world": {
+   "title": "UI World",
+   "use_when": "notifications, messages, likes, followers, emails, money coming in, a busy online life",
+   "avoid_when": "nothing digital or social is said",
+   "layer": "split", "seconds": [2.0, 3.6], "max": 1, "captions": "keep", "needs": ["face", "matte"], "sound": "click",
+   "fields": {"texts": {"count": [3, 5], "words": 6, "meaning": "the text on each floating card: a notification, a message, a like count"}}
+  },
+  "framebreak": {
+   "title": "Framebreak",
+   "use_when": "the speaker breaks out of something or a big moment lands: escaping a rut, 'I quit', a bold claim",
+   "avoid_when": "the speaker is not on screen or the shot is wide",
+   "layer": "picture", "seconds": [1.6, 3.2], "max": 1, "captions": "keep", "needs": ["face", "matte"], "sound": "impact",
+   "fields": {"texts": {"count": [0, 1], "words": 4, "meaning": "an optional label on the frame"}}
+  },
+  "pullback": {
+   "title": "Pullback Reveal",
+   "use_when": "a reveal: the camera starts tight on the face and pulls back as the point lands",
+   "avoid_when": "the shot is already tight",
+   "layer": "picture", "seconds": [1.0, 2.4], "max": 1, "captions": "keep", "needs": ["face"], "sound": "whoosh",
+   "fields": {"target": ["face", "center"]}
+  },
+  "zoom_through": {
+   "title": "Zoom Through Cut",
+   "use_when": "a jump to a new idea or place at a cut: the camera rushes into the frame and out into the next shot. Mark the first word after the cut",
+   "avoid_when": "there is no cut there",
+   "layer": "picture", "seconds": [0.5, 0.7], "max": 2, "captions": "keep", "needs": ["cut"], "sound": "transition",
+   "fields": {}
+  },
+  "vertigo": {
+   "title": "Vertigo",
+   "use_when": "a shock or realisation: 'and then it hit me', 'I couldn't believe it'",
+   "avoid_when": "light or funny moments",
+   "layer": "picture", "seconds": [1.4, 2.6], "max": 1, "captions": "keep", "needs": ["face", "matte"], "sound": "riser",
+   "fields": {}
+  },
+  "green_screen": {
+   "title": "Green Screen",
+   "use_when": "the speaker talks about a place or a world they are in or imagine: space, the city, nature, a stage, the office",
+   "avoid_when": "the real background already shows it",
+   "layer": "behind", "opaque": true, "seconds": [1.8, 3.6], "max": 1, "captions": "keep", "needs": ["matte"], "sound": "whoosh",
+   "fields": {"choice": ["studio", "neon", "city", "nature", "space", "stage", "brand"]}
+  },
+  "couch_wall": {
+   "title": "Couch Wall",
+   "use_when": "a phrase the reel is built around: the speaker sits in front of a wall covered in that phrase",
+   "avoid_when": "the phrase is longer than three words",
+   "layer": "behind", "opaque": true, "seconds": [1.8, 3.4], "max": 1, "captions": "hide", "needs": ["matte"], "sound": "impact",
+   "fields": {"texts": {"count": [1, 1], "words": 3, "meaning": "the phrase on the wall"}}
+  }
+ }
+}

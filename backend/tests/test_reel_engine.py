@@ -44,7 +44,7 @@ def director(**kw) -> DirectorPlan:
     base = dict(audio_view="voice", recipe="creator_advice", target_seconds=30, title_lead="", title_text="", cta="",
                 caption_mode="every_word", music="bed", text_style="punch", mood="upbeat", sections=[], hooks=[], story=[], beats=[],
                 inserts=[], keywords=[], burned_captions=False,
-                drop_word=-1, spelling=[], notes="")
+                drop_word=-1, spelling=[], effects=[], notes="")
     return DirectorPlan(**{**base, **kw})
 
 
@@ -369,3 +369,84 @@ def test_each_checklist_item_gets_a_quiet_click():
     out = asyncio.run(sound.effects(plan, S()))
     clicks = [at for at, ref, gain in out if ref.id == sound.STEP_SOUND]
     assert clicks == [2.2, 3.0, 3.8] and all(gain < sound.EFFECT_GAIN for _, ref, gain in out if ref.id == sound.STEP_SOUND)
+
+
+# ------------------------------------------------------------------ effects
+
+def fx(**kw):
+    from reel_engine.effects import DEffect
+
+    return DEffect(**{**dict(name="orbit", w0=2, w1=8, texts=[], choice="", target="", why=""), **kw})
+
+
+def test_effect_picks_are_held_to_the_catalog():
+    from reel_engine import effects
+
+    words = words_of("so many things design code marketing sales hiring and then everyone was talking about it online today "
+                     "and i felt like the king of the whole world for one single day", gap=0.4)
+    d = director(story=[clip(w0=0, w1=len(words) - 1)])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0)
+    items = comp.video_track(d, brief, words, [], {0: 60.0})
+    picks = [fx(name="orbit", w0=3, w1=7, texts=["Design", "Code", "Marketing and growth hacking", "Sales"]),
+             fx(name="orbit", w0=8, w1=9, texts=["a", "b", "c"]),                                  # a second orbit: over the limit
+             fx(name="headline_wall", w0=11, w1=15, texts=["Only one headline"]),                    # too few texts
+             fx(name="nonsense", w0=12, w1=13),                                                      # not in the catalog
+             fx(name="doodle", w0=27, w1=29, choice="crown", target="moon")]                         # bad target -> first allowed
+    made = effects.compile_effects(picks, words, items)
+    names = [g.data["effect"] for g in made]
+    assert names.count("orbit") == 2 and {g.data["part"] for g in made if g.data["effect"] == "orbit"} == {"back", "front"}
+    orbit = next(g for g in made if g.data["effect"] == "orbit")
+    assert orbit.data["texts"][2] == "Marketing and" and next(g for g in made if g.data["part"] == "back").behind
+    assert "headline_wall" not in names and "nonsense" not in names
+    doodle = next(g for g in made if g.data["effect"] == "doodle")
+    assert doodle.data["target"] == "face_top" and doodle.start - orbit.end >= effects.catalog()["min_gap"]
+
+
+def test_zoom_through_snaps_to_a_cut_or_is_dropped():
+    from reel_engine import effects
+
+    words = words_of("first idea here and now a whole new idea starts right here")
+    d = director(story=[clip(w0=0, w1=4), clip(w0=6, w1=len(words) - 1)])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0)
+    items = comp.video_track(d, brief, words, [], {0: 60.0})
+    cut = items[1].out0
+    made = effects.compile_effects([fx(name="zoom_through", w0=6, w1=6)], words, items)
+    assert len(made) == 1 and abs((made[0].start + made[0].end) / 2 - cut) < 0.01
+    single = comp.video_track(director(story=[clip(w0=0, w1=len(words) - 1)]), brief, words, [], {0: 60.0})
+    assert effects.compile_effects([fx(name="zoom_through", w0=6, w1=6)], words, single) == []
+
+
+def test_story_graphics_and_captions_make_way_for_an_effect():
+    from reel_engine import effects
+
+    words = words_of("this was all over the news and every paper had it on the front page that week", gap=0.3)
+    d = director(story=[clip(w0=0, w1=len(words) - 1)], beats=[beat(kind="two", w0=5, w1=6, lead="every", text="paper")])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0)
+    items = comp.video_track(d, brief, words, [], {0: 60.0})
+    graphics = comp.graphics_track(d, brief, words, items, [])
+    wall = effects.compile_effects([fx(name="headline_wall", w0=4, w1=9, texts=["All over the news", "Every paper had it", "Front page"])],
+                                   words, items)
+    graphics = effects.clear_under(graphics, wall) + wall
+    assert not any(g.kind == "two" for g in graphics)
+    captions, _ = comp.captions_track(d, brief, words, items, graphics)
+    assert all(not (wall[0].start < c.end and c.start < wall[0].end) for c in captions)
+
+
+def test_director_prompt_lists_every_catalog_effect():
+    from reel_engine import effects
+
+    text = effects.prompt()
+    assert all(name in text for name in effects.catalog()["effects"])
+    assert "at most 2 per reel" in text
+
+
+def test_picture_effects_build_a_filter_and_need_a_matte_where_said():
+    from reel_engine import effects
+
+    for name in ("pullback", "zoom_through", "glass_type", "phone_mockup"):
+        g = effects.make_items("x", name, 1.0, 2.5, ["Values never change"] if name == "glass_type" else [])[0]
+        g.data["face"], g.data["panel"] = [400, 300, 700, 650], effects.panel_box([400, 300, 700, 650])
+        assert "[out]" in effects.picture_filter(g, 1.5, False)
+    vertigo = effects.make_items("v", "vertigo", 1.0, 2.5, [])[0]
+    vertigo.data["face"] = [400, 300, 700, 650]
+    assert effects.picture_filter(vertigo, 1.5, False) is None and "alphamerge" in effects.picture_filter(vertigo, 1.5, True)

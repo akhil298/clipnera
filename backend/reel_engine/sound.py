@@ -63,6 +63,8 @@ async def effects(plan: EditPlan, scout: Scout) -> list[tuple[float, AssetRef, f
     for g in plan.graphics:
         if g.kind == "accent" and g.data.get("role") in ACCENT_SOUNDS:
             wanted.append((g.start, ACCENT_SOUNDS[g.data["role"]]))
+        elif g.kind == "effect" and g.data.get("part") != "back":
+            wanted.append((max(0.0, g.start - (0.15 if g.data["effect"] == "zoom_through" else 0.0)), g.data["sound"]))
     out, last = [], -1.0
     cache: dict[str, AssetRef | None] = {}
     seed = accents.seed_of(plan)

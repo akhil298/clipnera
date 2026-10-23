@@ -120,6 +120,8 @@ async function renderBeat(cdp, beat, { W, H, fps }, out) {
 
 // A beat gets this long to render (plus its own length); a hung page is replaced and the next beat goes on.
 const BEAT_TIMEOUT_MS = 30000;
+// Plus this much per frame: a full-frame background (Green Screen, Headline Wall) takes far longer to paint than a caption.
+const FRAME_MS = 600;
 
 async function openPage(W, H) {
   const chrome = await launchChrome();
@@ -149,7 +151,7 @@ async function main() {
     for (const beat of spec.beats) {
       const out = path.join(outDir, `${beat.id}.mov`);
       try {
-        const frames = await withTimeout(renderBeat(chrome.cdp, beat, { W, H, fps }, out), BEAT_TIMEOUT_MS + beat.dur * 4000, `beat ${beat.id}`);
+        const frames = await withTimeout(renderBeat(chrome.cdp, beat, { W, H, fps }, out), BEAT_TIMEOUT_MS + beat.dur * fps * FRAME_MS, `beat ${beat.id}`);
         rendered.push({ id: beat.id, file: out, frames });
       } catch (err) {
         // One broken beat is left out; a page that stopped answering is replaced so the rest still render.

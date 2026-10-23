@@ -26,6 +26,7 @@ from beats.plan import Beat
 from broll.renditions import probe as probe_av
 from core.config import get_settings
 from core.logging_config import get_logger
+from reel_engine import effects
 from reel_engine.media import FPS, H, W, mean_rgb, run
 from reel_engine.plan import EditPlan, Source, VideoItem
 
@@ -208,10 +209,17 @@ async def render_inserts(plan: EditPlan, picture: Path, grade_name: str, work: P
 async def resolve_behind(plan: EditPlan, picture: Path, work: Path) -> None:
     """Words behind the person: a matte and a readable band, or drawn big in front when no full band clears them."""
     info = await probe_av(str(picture))
+    dropped = set()
     for g in plan.graphics:
         if not g.behind:
             continue
         matte = work / f"matte_{g.id}.mkv"
+        if g.kind == "effect":
+            if await cutout.matte_video(str(picture), g.start, g.end, W, H, FPS, str(matte)):
+                g.data["matte"] = str(matte)
+            else:
+                dropped.add(g.id)
+            continue
         band = None
         box = tuple(g.box or [20, 300, 1040, 520])
         if await cutout.matte_video(str(picture), g.start, g.end, W, H, FPS, str(matte)):
@@ -220,6 +228,11 @@ async def resolve_behind(plan: EditPlan, picture: Path, work: Path) -> None:
             g.box, g.data["matte"] = list(band), str(matte)
         else:
             g.behind, g.place, g.box = False, "beside", []
+    if dropped:
+        # Without the speaker's matte an effect meant to sit behind them goes, with its front half.
+        gone = {g.data.get("effect") + str(g.start) for g in plan.graphics if g.id in dropped}
+        plan.graphics = [g for g in plan.graphics if not (g.kind == "effect" and g.data.get("effect") + str(g.start) in gone)]
+        log.info("Effects dropped without a speaker matte: %s", ", ".join(sorted(gone)))
 
 
 def _uri(path: str) -> str:
@@ -255,6 +268,12 @@ def graphic_specs(plan: EditPlan) -> list[dict]:
     text_style = plan.brief.text_style if plan.brief else "punch"
     title_style = plan.brief.title_style if plan.brief else "punch"
     for g in plan.graphics:
+        if g.kind == "effect":
+            if effects.drawn(g):
+                specs.append({"id": g.id, "kind": "effect", "theme": "clean", "style": title_style, "place": "effect",
+                              "dur": round(g.end - g.start, 3), "box": g.box, "data": effects.spec_data(g), "steps": [], "asset": "",
+                              "lottie": None, "accent": plan.brief.accent if plan.brief else "#ffb020"})
+            continue
         timed = g.kind in TIMED_KINDS
         data = {k: v for k, v in g.data.items() if k not in ("icon_query", "matte") and not (timed and k == "steps")}
         if g.kind == "map" and g.asset:

@@ -56,8 +56,9 @@ For every item frame, decide: keep; move (it covers a face, the product or the a
 
 
 def _item_frames(plan: EditPlan, video: str) -> tuple[list[bytes], list[str]]:
-    items = [(g.id, g.kind, g.start, g.end, g.data.get("text") or g.data.get("label") or g.data.get("lead") or "") for g in plan.graphics
-             if g.kind not in ("wash", "progress")]
+    items = [(g.id, f"effect {g.data['effect']}" if g.kind == "effect" else g.kind, g.start, g.end,
+              " / ".join(g.data.get("texts") or []) if g.kind == "effect" else g.data.get("text") or g.data.get("label") or g.data.get("lead") or "")
+             for g in plan.graphics if g.kind not in ("wash", "progress") and not (g.kind == "effect" and g.data.get("part") == "back")]
     items += [(c.id, "caption", c.start, c.end, f"{c.lead} {c.keyword}") for c in plan.captions]
     items.sort(key=lambda i: i[2])
     if len(items) > MAX_ITEM_FRAMES:
@@ -108,7 +109,8 @@ STRUCTURE = {"chapter", "progress", "wash", "flicker", "cta"}
 def apply(plan: EditPlan, actions: list[Action]) -> int:
     """Make the reviewer's item changes; returns how many items changed."""
     changed = 0
-    structural = {g.id for g in plan.graphics if g.kind in STRUCTURE or g.why == "hook word" or g.by == "finish"}
+    structural = {g.id for g in plan.graphics if g.kind in STRUCTURE or g.why == "hook word" or g.by == "finish"
+                  or (g.kind == "effect" and g.data.get("layer") == "picture")}
     if plan.brief and plan.brief.caption_mode == "every_word":
         # Every-word captions are what a talking reel is read by: moved or shortened, never removed.
         structural |= {c.id for c in plan.captions}

@@ -375,11 +375,12 @@ def captions_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
         lines.append([entry])
     def blocking() -> list[tuple[float, float, set[str] | None]]:
         """(start, end, words it shows) of each graphic a caption gives way to; None hides every word."""
+        hiding = [(g.start, g.end, None) for g in graphics if g.kind == "effect" and g.data.get("captions") == "hide"]
         if brief.caption_mode == "every_word":
-            return [(g.start, g.end, None if g.kind in FULL_FRAME else _spoken(" ".join(
+            return hiding + [(g.start, g.end, None if g.kind in FULL_FRAME else _spoken(" ".join(
                         [str(g.data.get(k, "")) for k in ("lead", "text", "title")] + [str(i) for i in g.data.get("items", [])])))
                     for g in graphics if g.kind in FULL_FRAME | WORD_GRAPHICS]
-        return [(g.start, g.end, None) for g in graphics if g.kind in CARD_KINDS or g.place == "card" or g.kind in CAPTION_YIELDS_TO]
+        return hiding + [(g.start, g.end, None) for g in graphics if g.kind in CARD_KINDS or g.place == "card" or g.kind in CAPTION_YIELDS_TO]
 
     cards = blocking()
     tags = [g for g in graphics if g.kind == "tag"]
