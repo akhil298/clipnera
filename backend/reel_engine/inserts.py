@@ -17,7 +17,10 @@ import httpx
 from pydantic import BaseModel, ConfigDict
 
 from beats import kit
+from broll.sources.base import USER_AGENT
+from core.config import get_settings
 from core.logging_config import get_logger
+from reel_engine import imagery
 from reel_engine.ai import vision_json
 from reel_engine.assets import AssetRecord, Scout
 from reel_engine.compile import to_output
@@ -54,7 +57,7 @@ class Picks(_M):
 async def _download(url: str, target: Path, limit: int) -> Path | None:
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0), follow_redirects=True,
-                                     headers={"User-Agent": "Clipnera-Reel-Engine/1.0"}) as client:
+                                     headers={"User-Agent": USER_AGENT}) as client:
             async with client.stream("GET", url) as response:
                 if response.status_code != 200 or int(response.headers.get("content-length") or 0) > limit:
                     return None
@@ -74,10 +77,10 @@ async def _download(url: str, target: Path, limit: int) -> Path | None:
 async def _candidates(kind: str, query: str, work: Path, n: int) -> list[tuple[Path, dict]]:
     """Downloaded candidates (file, licence record) for a photo or B-roll request."""
     from broll.sources.nasa import NasaSource
-    from broll.sources.photos import NasaPhotos, OpenversePhotos
+    from broll.sources.photos import NasaPhotos, OpenversePhotos, WikimediaPhotos
     from broll.sources.wikimedia import WikimediaSource
 
-    sources = [OpenversePhotos(), NasaPhotos()] if kind == "photo" else [NasaSource(), WikimediaSource()]
+    sources = [WikimediaPhotos(), OpenversePhotos(), NasaPhotos()] if kind == "photo" else [NasaSource(), WikimediaSource()]
     found = []
     for result in await asyncio.gather(*(s.search(query, CANDIDATES) for s in sources), return_exceptions=True):
         if isinstance(result, Exception):
@@ -171,6 +174,29 @@ async def resolve(requests: list, items: list[VideoItem], words: list[Word], sco
                                  description=licence["title"][:300], licence=licence["licence"], source=licence["source"],
                                  made_by={"found_for": request.query, **licence})
             found[n] = await scout._keep(record, path)
+    # Nothing free shows it: a generated photo (when switched on, a few per reel), then a 3D object from the kit
+    # that literally shows it (or nothing), shown as a card.
+    unresolved = [n for n, (_, _, request) in enumerate(placed) if request.kind != "footage" and n not in found]
+    if unresolved and imagery.enabled():
+        for n in unresolved[:get_settings().REEL_MAX_GENERATED_IMAGES]:
+            request = placed[n][2]
+            made = await imagery.generate(request.query, work / f"made_{n}.jpg")
+            if made:
+                record = AssetRecord(kind="photo", scope="global", words=sorted(kit.words_of(request.query)),
+                                     description=f"Generated: {request.query}"[:300], source=get_settings().REEL_IMAGE_PROVIDER,
+                                     made_by={"generated_for": request.query})
+                found[n] = await scout._keep(record, made)
+                placed[n] = (placed[n][0], placed[n][1], request.model_copy(update={"kind": "photo"}))
+        unresolved = [n for n in unresolved if n not in found]
+    if unresolved:
+        from reel_engine import icons
+
+        objects = await icons.choose([(placed[n][2].query, placed[n][2].why) for n in unresolved], kinds=("object3d",))
+        calls += 1
+        for n, asset in zip(unresolved, objects):
+            if asset:
+                found[n] = asset
+                placed[n] = (placed[n][0], placed[n][1], placed[n][2].model_copy(update={"kind": "photo"}))
     out = []
     for n, (start, end, request) in enumerate(placed):
         if request.kind == "footage":
@@ -181,7 +207,8 @@ async def resolve(requests: list, items: list[VideoItem], words: list[Word], sco
             asset = found.get(n)
             if asset is None:
                 continue
-        style = "card" if request.kind == "photo" and len(out) % 2 == 1 else "full"
+        # A kit object is a cut-out, so it always sits on a card; photos alternate full frame and card.
+        style = "card" if asset.kind == "icon" or (request.kind == "photo" and len(out) % 2 == 1) else "full"
         out.append(InsertItem(id=f"i{len(out)}", kind=request.kind, start=round(start, 3), end=round(end, 3), asset=asset,
                               label=request.label[:28], query=request.query, src_t0=max(0.0, request.at) if request.kind == "footage" else 0.0,
                               style=style))

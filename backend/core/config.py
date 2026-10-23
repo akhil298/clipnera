@@ -234,6 +234,12 @@ class BaseConfig(BaseSettings):
     VEO_SECONDS: Literal[4, 6, 8] = 8
     # 8 s of Lite 720p costs $0.40; 120 credits keeps ~60% margin at $0.0079 a credit.
     VEO_SCENE_CREDITS: int = 120
+    # Generated photos for reel inserts when no public-domain photo shows the thing said: "" (off), "gemini" (the
+    # Gemini image model on GEMINI_API_KEY; needs billing on that Google project) or "openai" (IMAGE_MODEL at
+    # OPENAI_ENDPOINT). Every image made is kept in the asset registry and reused.
+    REEL_IMAGE_PROVIDER: Literal["", "gemini", "openai"] = ""
+    GEMINI_IMAGE_MODEL: str = "gemini-2.5-flash-image"
+    REEL_MAX_GENERATED_IMAGES: int = 3
 
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""

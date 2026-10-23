@@ -48,14 +48,14 @@ metaphorical or decorative match. Animated emoji (ids starting e_) are fine when
 thing or the feeling said; prefer them for feelings and simple objects. JSON only."""
 
 
-def candidates(query: str, n: int = CANDIDATES) -> list[dict]:
+def candidates(query: str, n: int = CANDIDATES, kinds: tuple[str, ...] = KINDS) -> list[dict]:
     """Kit icons whose trigger words overlap the query's, best first."""
     asked = kit.words_of(query)
     if not asked:
         return []
     scored = []
     for entry in kit.manifest():
-        if entry.get("kind") not in KINDS:
+        if entry.get("kind") not in kinds:
             continue
         triggers = {w.lower() for w in entry.get("words") or []}
         hits = asked & triggers
@@ -86,12 +86,13 @@ def label(entry: dict) -> str:
     return f"{entry['id']}: {', '.join((entry.get('words') or [])[:6])}"
 
 
-async def choose(requests: list[tuple[str, str]], animated: frozenset[int] = frozenset()) -> list[AssetRef | None]:
+async def choose(requests: list[tuple[str, str]], animated: frozenset[int] = frozenset(),
+                 kinds: tuple[str, ...] = KINDS) -> list[AssetRef | None]:
     """For each (query, context), the kit icon that truly shows it, or None. Requests numbered in ``animated``
     (caption lines) may also get an animated emoji."""
     from clients.ai import get_text_client
 
-    pools = [[] if not q or kit.words_of(q) <= DECORATIVE else candidates(q) + (emoji_candidates(q) if n in animated else [])
+    pools = [[] if not q or kit.words_of(q) <= DECORATIVE else candidates(q, kinds=kinds) + (emoji_candidates(q) if n in animated else [])
              for n, (q, _) in enumerate(requests)]
     asked = [(n, q, ctx, pool) for n, ((q, ctx), pool) in enumerate(zip(requests, pools)) if pool]
     result: list[AssetRef | None] = [None] * len(requests)

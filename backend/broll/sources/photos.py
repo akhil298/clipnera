@@ -55,3 +55,36 @@ class NasaPhotos:
                 if len(out) >= per_page:
                     break
             return out
+
+
+class WikimediaPhotos:
+    """Wikimedia Commons photos, public domain and CC0 only (most of Commons is share-alike, which we never take)."""
+
+    name = "wikimedia_photos"
+
+    async def search(self, query: str, per_page: int) -> list[StockClip]:
+        from broll.sources.wikimedia import API_URL, accepted_license
+
+        params = {
+            "action": "query", "format": "json", "generator": "search", "gsrsearch": f"{query} filetype:bitmap",
+            "gsrnamespace": 6, "gsrlimit": min(50, per_page * 5), "prop": "imageinfo", "iiprop": "url|size|mime|extmetadata",
+            "iiurlwidth": 1280, "iiextmetadatafilter": "LicenseShortName|LicenseUrl|Artist",
+        }
+        async with http_client() as client:
+            response = await client.get(API_URL, params=params)
+            response.raise_for_status()
+            out = []
+            for page in (response.json().get("query") or {}).get("pages", {}).values():
+                info = (page.get("imageinfo") or [{}])[0]
+                meta = {k: v.get("value", "") for k, v in (info.get("extmetadata") or {}).items()}
+                code = accepted_license(str(meta.get("LicenseShortName", "")))
+                if code not in ("cc0", "public_domain") or not str(info.get("mime", "")).startswith("image/"):
+                    continue
+                title = str(page.get("title", "")).removeprefix("File:").rsplit(".", 1)[0].replace("_", " ")
+                out.append(StockClip(source="wikimedia", source_id=str(page.get("pageid")), source_url=str(info.get("descriptionurl") or ""),
+                                     download_url=str(info.get("thumburl") or info.get("url", "")), title=title,
+                                     tags=split_tags(title.replace(" ", ",")), width=int(info.get("thumbwidth") or info.get("width") or 0),
+                                     height=int(info.get("thumbheight") or info.get("height") or 0), duration_s=0.0, license_code=code,
+                                     license_url=str(meta.get("LicenseUrl") or "") or None, author=str(meta.get("Artist") or "")[:200] or None,
+                                     record={"page": page.get("title"), "license": meta.get("LicenseShortName")}))
+            return out[:per_page]
