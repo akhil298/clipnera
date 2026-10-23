@@ -162,7 +162,9 @@ to src + at..until source seconds (w0 = w1 = -1). Every text must match what is 
 
 INSERTS (what the viewer SEES while someone talks; premium edits cut away every few seconds): when a person
 talks, add an insert about every 4-7 s of output on the words that name something showable - a place, object,
-food, product, animal, event, person's work, a number made visual. kind "photo" or "broll" (a short video) with
+food, product, animal, event, person's work, a number made visual. kind "photo" or "broll" (a short video; public-
+domain video exists mainly for space, science, nature, cities' landmarks and history - ask for a photo for
+everyday things like food, products, gadgets or people's activities) with
 query = 3-6 concrete English search words for a real photo or clip (e.g. "international space station exterior
 earth", "fresh croissants bakery tray"); label = 0-3 words to print on a photo card, or "". kind "footage" = a
 moment of the user's OWN footage that shows what is said (src + at in source seconds) - prefer it when it exists.

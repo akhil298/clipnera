@@ -29,7 +29,7 @@ MAX_INSERTS = 10
 CANDIDATES = 3
 MIN_SECONDS, MAX_SECONDS = 1.2, 3.2
 MAX_VIDEO_BYTES = 80 * 1024 * 1024
-FREE_LICENCES = {"public_domain", "cc0"}
+FREE_LICENCES = {"public_domain", "pd_us_gov", "cc0"}
 CHOOSER = """You pick the pictures a premium editor cuts to while someone talks. For each request you get what is
 being said and 1-3 candidate images (photos, or a frame of a video clip). Pick the candidate that clearly shows the
 requested thing in a way that looks good full screen in a vertical reel; pick -1 when none does (wrong subject,
@@ -83,17 +83,15 @@ async def _candidates(kind: str, query: str, work: Path, n: int) -> list[tuple[P
             log.info("Insert search failed for %r: %s", query, result)
             continue
         found += [c for c in result if c.license_code in FREE_LICENCES]
-    out = []
-    for c in found[: n + 2]:
+    async def fetch(c) -> tuple[Path, dict] | None:
         suffix = Path(c.download_url.split("?")[0]).suffix.lower() or (".jpg" if kind == "photo" else ".mp4")
         target = work / f"cand_{abs(hash(c.download_url)) % 10**9}{suffix}"
         got = await _download(c.download_url, target, 15 * 1024 * 1024 if kind == "photo" else MAX_VIDEO_BYTES)
-        if got:
-            out.append((got, {"source": c.source, "source_url": c.source_url, "licence": c.license_code, "title": c.title,
-                              "author": c.author or "", "license_url": c.license_url or ""}))
-        if len(out) >= n:
-            break
-    return out
+        return (got, {"source": c.source, "source_url": c.source_url, "licence": c.license_code, "title": c.title,
+                      "author": c.author or "", "license_url": c.license_url or ""}) if got else None
+
+    fetched = await asyncio.gather(*(fetch(c) for c in found[: n + 1]))
+    return [f for f in fetched if f][:n]
 
 
 def _preview(path: Path, kind: str) -> bytes:
@@ -128,18 +126,24 @@ async def resolve(requests: list, items: list[VideoItem], words: list[Word], sco
     # Look up every request: the registry first, else download candidates.
     found: dict[int, AssetRef] = {}
     pending: list[tuple[int, list[tuple[Path, dict]]]] = []
-    for n, (_, _, request) in enumerate(placed):
-        if request.kind == "footage":
-            continue
+    async def look(n: int, request) -> None:
         reuse = await scout.store.search(request.kind, kit.words_of(request.query), scout.owner)
         if reuse:
             found[n] = await scout._reuse(reuse[0])
-            continue
+            return
         cands = await _candidates(request.kind, request.query, work, CANDIDATES)
+        if not cands and request.kind == "broll":
+            # Public-domain video covers space, science, nature and history; everyday things fall back to a photo.
+            cands = await _candidates("photo", request.query, work, CANDIDATES)
+            if cands:
+                placed[n] = (placed[n][0], placed[n][1], request.model_copy(update={"kind": "photo"}))
         if cands:
             pending.append((n, cands))
         else:
             scout.misses.append(f"{request.kind}: {request.query}")
+
+    await asyncio.gather(*(look(n, request) for n, (_, _, request) in enumerate(placed) if request.kind != "footage"))
+    pending.sort(key=lambda p: p[0])
     calls = 0
     if pending:
         jpegs, lines = [], []

@@ -156,6 +156,8 @@ class CaptionLine(_Model):
     end: float
     lead: str
     keyword: str
+    # The line's words in spoken order, each with its second within the line and whether it is the keyword.
+    words: list[dict] = Field(default_factory=list)
     icon_query: str = ""
     icon: AssetRef | None = None
     payoff: bool = False

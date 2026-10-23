@@ -43,6 +43,7 @@ FACE_SHARE, FACE_SHARE_TIGHT = 0.2, 0.26
 MIN_WINDOW = 0.4
 MAX_UPSCALE = 4.0
 PARALLEL_SEGMENTS = 3
+GRAPHICS_TIMEOUT = 300
 # Graphics whose parts land on given seconds (``steps``); others may use a ``steps`` field of their own (progress labels).
 TIMED_KINDS = {"list", "flow", "ui"}
 
@@ -243,8 +244,9 @@ def graphic_specs(plan: EditPlan) -> list[dict]:
                       "box": g.box, "data": data, "steps": g.data.get("steps", []) if timed else [], "asset": _uri(g.asset.path) if g.asset else "",
                       "accent": (plan.brief.accent if plan.brief else "#ffb020") if style in ACCENT_STYLES else ""})
     for n, c in enumerate(plan.captions):
-        specs.append({"id": c.id, "kind": "two", "theme": "clean", "style": text_style, "place": "beside", "dur": round(c.end - c.start, 3),
-                      "box": c.box, "data": {"lead": c.lead, "text": c.keyword, "alt": n % 3 == 2}, "steps": [],
+        words = [{**w, "text": w["text"].strip(",.")} for w in c.words] or [{"text": c.lead, "key": False, "at": 0}, {"text": c.keyword, "key": True, "at": 0.1}]
+        specs.append({"id": c.id, "kind": "caption", "theme": "clean", "style": text_style, "place": "beside", "dur": round(c.end - c.start, 3),
+                      "box": c.box, "data": {"words": words, "alt": n % 3 == 2}, "steps": [],
                       "asset": _uri(c.icon.path) if c.icon else "",
                       "accent": (plan.brief.accent if plan.brief else "#ffb020") if text_style in ACCENT_STYLES else ""})
     return specs
@@ -264,7 +266,11 @@ async def render_graphics(plan: EditPlan, work: Path) -> list[Placed]:
         env["CHROME_PATH"] = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     proc = await asyncio.create_subprocess_exec("node", str(RENDERER), str(spec_file), str(work), env=env,
                                                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-    _, err = await proc.communicate()
+    try:
+        _, err = await asyncio.wait_for(proc.communicate(), GRAPHICS_TIMEOUT + 6 * len(specs))
+    except TimeoutError:
+        proc.kill()
+        raise RuntimeError("graphics renderer timed out")
     if proc.returncode != 0:
         raise RuntimeError(f"graphics renderer failed: {err.decode('utf-8', 'ignore')[-500:]}")
     rendered = {r["id"]: r for r in json.loads((work / "rendered.json").read_text())}

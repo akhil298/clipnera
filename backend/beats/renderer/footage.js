@@ -94,6 +94,44 @@
     };
   };
 
+  // Caption line: the words in the order they are said, each popping in on its word, the keyword bigger in the
+  // style's accent (2-tier), an optional icon before it.
+  T.caption = (s, root) => {
+    const [x, y, w, h] = s.box;
+    const g = boxed(el('div', 'g caption', root), s.box);
+    Object.assign(g.style, { display: 'flex', flexWrap: 'wrap', alignItems: 'center', alignContent: 'center', justifyContent: 'center',
+      columnGap: `${h * 0.07}px`, rowGap: `${h * 0.02}px`, textAlign: 'center' });
+    let icon = null;
+    if (s.asset) {
+      icon = el('img', 'lift', g);
+      icon.src = s.asset;
+      Object.assign(icon.style, { width: `${h * 0.42}px`, height: `${h * 0.42}px`, objectFit: 'contain' });
+    }
+    const words = (s.data.words || []).map((wd) => {
+      const node = el('span', wd.key ? `figure key${s.data.alt ? ' alt' : ''}` : 'head lead', g, wd.text);
+      node.style.display = 'inline-block';
+      node.style.fontSize = `${h * (wd.key ? 0.44 : 0.26)}px`;
+      node.style.lineHeight = '1.05';
+      return { node, at: wd.at || 0 };
+    });
+    let scale = 1;
+    while ((g.scrollHeight > h * 1.02 || g.scrollWidth > w * 1.02) && scale > 0.45) {
+      scale *= 0.92;
+      words.forEach(({ node }) => { node.style.fontSize = `${parseFloat(node.style.fontSize) * 0.92}px`; });
+    }
+    return {
+      seek(t) {
+        envelope(g, t, s.dur, { from: 0.96, blur: 0, rise: 8 });
+        words.forEach(({ node, at }) => {
+          const p = ease.back(span(t, at, 0.22));
+          node.style.opacity = clamp(span(t, at, 0.1));
+          node.style.transform = `translateY(${(1 - p) * 30}%) scale(${0.85 + 0.15 * p})`;
+        });
+        if (icon) icon.style.transform = `scale(${ease.back(span(t, 0.05, 0.3))})`;
+      },
+    };
+  };
+
   // Ingredient tag: a pill with a 3D icon, popped beside the thing it names.
   T.tag = (s, root) => {
     const [x, y, w, h] = s.box;

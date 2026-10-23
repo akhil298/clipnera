@@ -160,7 +160,12 @@ async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owne
         pass_dir = work / f"pass{n}"
         pass_dir.mkdir(exist_ok=True)
         await stage("graphics", f"pass {n + 1}: {len(plan.graphics)} graphics, {len(plan.captions)} captions")
-        placed = await render_graphics(plan, pass_dir)
+        try:
+            placed = await render_graphics(plan, pass_dir)
+        except Exception as exc:  # graphics that will not render never fail the edit
+            log.warning("Graphics pass failed, continuing without them: %s", exc)
+            await stage("graphics", "graphics unavailable for this pass")
+            placed = []
         await stage("sound", "voice, music and effects")
         plan.audio_items = []
         mix = await sound.mix(plan, scout, pass_dir)

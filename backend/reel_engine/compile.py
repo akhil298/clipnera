@@ -36,7 +36,9 @@ CAPTION_YIELDS_TO = {"two", "keyword", "count_up", "statement", "list", "flow", 
 # Never the big word of a caption line.
 WEAK = {"a", "an", "the", "and", "but", "or", "so", "to", "of", "in", "on", "at", "it", "is", "was", "be", "we", "we've", "i",
         "i'm", "you", "your", "they", "he", "she", "this", "that", "with", "for", "do", "did", "not", "just", "very", "really",
-        "um", "uh", "like", "have", "has", "had", "are", "were", "our", "my", "me", "up", "all", "any", "going"}
+        "um", "uh", "like", "have", "has", "had", "are", "were", "our", "my", "me", "up", "all", "any", "going", "as", "you're",
+        "that's", "it's", "get", "got", "try", "think", "what", "will", "can", "would", "could", "should", "there", "here", "then",
+        "than", "about", "into", "from", "by", "if", "when", "how", "kind", "lot", "thing", "things", "actually", "first", "ago"}
 
 
 # ------------------------------------------------------------------ brief
@@ -314,6 +316,8 @@ def captions_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
         for w in words:
             if w.src == item.src and not w.filler and item.t0 <= w.t0 < item.t1:
                 kept.append((w, round(item.out0 + (w.t0 - item.t0), 3), round(item.out0 + (min(w.t1, item.t1) - item.t0), 3)))
+    # A stutter ("and and") shows once.
+    kept = [e for k, e in enumerate(kept) if k == 0 or e[0].text.lower().strip(",.") != kept[k - 1][0].text.lower().strip(",.")]
     lines: list[list[tuple[Word, float, float]]] = []
     for entry in kept:
         w, a, _ = entry
@@ -341,9 +345,11 @@ def captions_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
             continue
         if brief.caption_mode == "keyword" and not (ids & keywords) and d.drop_word not in ids:
             continue
-        strong = [w for w, _, _ in line if w.text.lower().strip(".,!?'\"") not in WEAK] or [w for w, _, _ in line]
-        key = next((w for w, _, _ in line if w.i in keywords), None) or max(strong, key=lambda w: len(w.text))
+        strong = [w for w, _, _ in line if w.text.lower().strip(".,!?'\"") not in WEAK]
+        # A line of only small words ("up here") gets no big word at all.
+        key = next((w for w, _, _ in line if w.i in keywords), None) or (max(strong, key=lambda w: len(w.text)) if strong else None)
         lead = " ".join(w.text for w, _, _ in line if w is not key)
+        spoken = [{"text": w.text, "key": w is key, "at": round(max(0.0, a - start), 3)} for w, a, _ in line]
         tag = next((t for t in tags if t.start < end and start < t.end and t.id not in used_tags), None)
         icon_query = ""
         if tag:
@@ -352,7 +358,7 @@ def captions_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
         payoff = d.drop_word in ids
         if payoff and not icon_query:
             icon_query = "sparkles"
-        out.append(CaptionLine(id=f"c{len(out)}", start=round(start, 3), end=round(end, 3), lead=lead, keyword=key.text,
-                               icon_query=icon_query, payoff=payoff))
+        out.append(CaptionLine(id=f"c{len(out)}", start=round(start, 3), end=round(end, 3), lead=lead, keyword=key.text if key else "",
+                               words=spoken, icon_query=icon_query, payoff=payoff))
     graphics = [g for g in graphics if g.id not in used_tags]
     return out, graphics

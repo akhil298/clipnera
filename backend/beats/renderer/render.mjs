@@ -72,7 +72,13 @@ async function launchChrome() {
     cdp,
     async close() {
       cdp.close();
-      await new Promise(r => { proc.once('exit', r); proc.kill(); });
+      if (proc.exitCode === null && proc.signalCode === null) {
+        await new Promise(r => {
+          const force = setTimeout(() => { proc.kill('SIGKILL'); r(); }, 3000);
+          proc.once('exit', () => { clearTimeout(force); r(); });
+          proc.kill();
+        });
+      }
       await rm(profile, { recursive: true, force: true });
     },
   };
@@ -112,31 +118,48 @@ async function renderBeat(cdp, beat, { W, H, fps }, out) {
   return frames;
 }
 
+// A beat gets this long to render (plus its own length); a hung page is replaced and the next beat goes on.
+const BEAT_TIMEOUT_MS = 30000;
+
+async function openPage(W, H) {
+  const chrome = await launchChrome();
+  const { cdp } = chrome;
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: false });
+  await cdp.send('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: 0 } });
+  await cdp.send('Page.navigate', { url: pathToFileURL(path.join(HERE, 'page.html')).href });
+  for (let i = 0; i < 100 && !(await evaluate(cdp, 'window.Beats?.ready === true')); i++) await new Promise(r => setTimeout(r, 100));
+  await evaluate(cdp, 'document.fonts.ready.then(() => true)');
+  return chrome;
+}
+
+function withTimeout(promise, ms, what) {
+  let timer;
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${what} timed out after ${ms} ms`)), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 async function main() {
   const [specPath, outDir] = process.argv.slice(2);
   if (!specPath || !outDir) throw new Error('usage: node render.mjs <spec.json> <out-dir>');
   const spec = JSON.parse(await readFile(specPath, 'utf8'));
   const { W, H } = spec, fps = spec.fps || 30;
-  const chrome = await launchChrome();
+  let chrome = await openPage(W, H);
   const rendered = [];
   try {
-    const { cdp } = chrome;
-    await cdp.send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: false });
-    await cdp.send('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: 0 } });
-    await cdp.send('Page.navigate', { url: pathToFileURL(path.join(HERE, 'page.html')).href });
-    for (let i = 0; i < 100 && !(await evaluate(cdp, 'window.Beats?.ready === true')); i++) await new Promise(r => setTimeout(r, 100));
-    await evaluate(cdp, 'document.fonts.ready.then(() => true)');
     for (const beat of spec.beats) {
       const out = path.join(outDir, `${beat.id}.mov`);
       try {
-        rendered.push({ id: beat.id, file: out, frames: await renderBeat(cdp, beat, { W, H, fps }, out) });
+        const frames = await withTimeout(renderBeat(chrome.cdp, beat, { W, H, fps }, out), BEAT_TIMEOUT_MS + beat.dur * 4000, `beat ${beat.id}`);
+        rendered.push({ id: beat.id, file: out, frames });
       } catch (err) {
-        // One broken beat is left out; the rest of the clip's graphics still render.
+        // One broken beat is left out; a page that stopped answering is replaced so the rest still render.
         rendered.push({ id: beat.id, error: String(err.message || err) });
+        await chrome.close().catch(() => undefined);
+        chrome = await openPage(W, H);
       }
     }
   } finally {
-    await chrome.close();
+    await chrome.close().catch(() => undefined);
   }
   await writeFile(path.join(outDir, 'rendered.json'), JSON.stringify(rendered, null, 2));
 }
