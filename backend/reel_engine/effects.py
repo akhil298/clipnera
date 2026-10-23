@@ -157,25 +157,34 @@ def place_on_faces(plan: EditPlan, picture: Path) -> None:
     keep = []
     seen: dict[tuple[float, float], list[int] | None] = {}
     for g in plan.graphics:
-        if g.kind == "effect" and "face" in g.data["needs"]:
+        if g.kind == "effect":
+            # Every effect looks for the face: those that need one are dropped without it, text panels just avoid it.
             key = (g.start, g.end)
             if key not in seen:
                 faces, _ = layout.look(str(picture), g.start, g.end)
                 seen[key] = list(max(faces, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]))) if faces else None
-            if seen[key] is None:
+            if seen[key] is None and "face" in g.data["needs"]:
                 log.info("Effect %s dropped: no face on screen", g.data["effect"])
                 continue
             g.data["face"] = seen[key]
-        if g.kind == "effect":
-            g.data["panel"] = panel_box(g.data.get("face"))
+            g.data["panel"] = panel_box(seen[key])
         keep.append(g)
     plan.graphics = keep
 
 
+PANEL_H = 380
+SAFE_TOP, SAFE_BOTTOM = 260, 1640
+
+
 def panel_box(face: list[int] | None) -> list[int]:
-    """Where a text panel (glass, paper) goes: the half of the frame the face is not in."""
-    top = 1180 if not face or (face[1] + face[3]) / 2 < H * 0.55 else 330
-    return [90, top, W - 180, 380]
+    """Where a text panel (glass, paper) goes: clear of the face, in the half of the frame it is not in."""
+    if not face:
+        return [90, 1180, W - 180, PANEL_H]
+    if (face[1] + face[3]) / 2 < H * 0.55:
+        top = min(max(face[3] + 40, 1080), SAFE_BOTTOM - PANEL_H)
+    else:
+        top = max(SAFE_TOP, min(330, face[1] - 40 - PANEL_H))
+    return [90, top, W - 180, PANEL_H]
 
 
 PHONE = (600, 1066)
