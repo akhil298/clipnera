@@ -100,8 +100,11 @@ class Brief(_Model):
     # The on-screen hook over a talking reel's first seconds: a specific question or claim, 3-7 words.
     hook_text: str = ""
     caption_mode: CaptionMode = "every_word"
-    text_style: str = "punch"
-    title_style: str = "punch"
+    # The reel's type kit (data/type_kits.json). text_style/title_style are the looks before kits, kept so older saved
+    # plans still load.
+    type_kit: str = ""
+    text_style: str = ""
+    title_style: str = ""
     music: MusicMode = "bed"
     mood: str = "upbeat"
     accent: str = "#ffb020"

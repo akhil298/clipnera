@@ -1,0 +1,34 @@
+/* Type kit fonts (reel_engine/data/type_kits.json), all SIL OFL; licences beside the files. Static fonts are declared
+   over a weight range so a kit asking for another weight still gets the one face there is. */
+@font-face { font-family: "Inter"; font-weight: 100 900; src: url("../../static/motion/fonts/Inter-Variable.ttf"); }
+@font-face { font-family: "Oswald"; font-weight: 200 700; src: url("../../static/motion/fonts/Oswald-Variable.ttf"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 800; src: url("../../static/motion/fonts/BarlowCondensed-ExtraBold.ttf"); }
+@font-face { font-family: "Teko"; font-weight: 300 700; src: url("../../static/motion/fonts/Teko-Variable.ttf"); }
+@font-face { font-family: "Sora"; font-weight: 100 800; src: url("../../static/motion/fonts/Sora-Variable.ttf"); }
+@font-face { font-family: "Outfit"; font-weight: 100 900; src: url("../../static/motion/fonts/Outfit-Variable.ttf"); }
+@font-face { font-family: "Lexend"; font-weight: 100 900; src: url("../../static/motion/fonts/Lexend-Variable.ttf"); }
+@font-face { font-family: "Unbounded"; font-weight: 200 900; src: url("../../static/motion/fonts/Unbounded-Variable.ttf"); }
+@font-face { font-family: "Syne"; font-weight: 400 800; src: url("../../static/motion/fonts/Syne-Variable.ttf"); }
+@font-face { font-family: "Bricolage"; font-weight: 200 800; src: url("../../static/motion/fonts/BricolageGrotesque-Variable.ttf"); }
+@font-face { font-family: "Space Grotesk"; font-weight: 300 700; src: url("../../static/motion/fonts/SpaceGrotesk-Variable.ttf"); }
+@font-face { font-family: "Righteous"; font-weight: 400; src: url("../../static/motion/fonts/Righteous-Regular.ttf"); }
+@font-face { font-family: "Bungee"; font-weight: 400; src: url("../../static/motion/fonts/Bungee-Regular.ttf"); }
+@font-face { font-family: "Rubik Mono"; font-weight: 400; src: url("../../static/motion/fonts/RubikMonoOne-Regular.ttf"); }
+@font-face { font-family: "Playfair"; font-weight: 400 900; src: url("../../static/motion/fonts/PlayfairDisplay-Variable.ttf"); }
+@font-face { font-family: "Abril"; font-weight: 400; src: url("../../static/motion/fonts/AbrilFatface-Regular.ttf"); }
+@font-face { font-family: "Fraunces"; font-weight: 100 900; src: url("../../static/motion/fonts/Fraunces-Variable.ttf"); }
+@font-face { font-family: "Caveat"; font-weight: 400 700; src: url("../../static/motion/fonts/Caveat-Variable.ttf"); }
+@font-face { font-family: "Kalam"; font-weight: 700; src: url("../../static/motion/fonts/Kalam-Bold.ttf"); }
+@font-face { font-family: "Pacifico"; font-weight: 400; src: url("../../static/motion/fonts/Pacifico-Regular.ttf"); }
+@font-face { font-family: "Fredoka"; font-weight: 300 700; src: url("../../static/motion/fonts/Fredoka-Variable.ttf"); }
+@font-face { font-family: "Shrikhand"; font-weight: 400; src: url("../../static/motion/fonts/Shrikhand-Regular.ttf"); }
+@font-face { font-family: "Lobster"; font-weight: 400; src: url("../../static/motion/fonts/Lobster-Regular.ttf"); }
+@font-face { font-family: "Baloo"; font-weight: 400 800; src: url("../../static/motion/fonts/Baloo2-Variable.ttf"); }
+@font-face { font-family: "Mukta"; font-weight: 400 800; src: url("../../static/motion/fonts/Mukta-ExtraBold.ttf"); }
+@font-face { font-family: "Hind"; font-weight: 400 700; src: url("../../static/motion/fonts/Hind-Bold.ttf"); }
+@font-face { font-family: "Archivo"; font-weight: 100 900; src: url("../../static/motion/fonts/Archivo-Variable.ttf"); }
+@font-face { font-family: "Big Shoulders"; font-weight: 100 900; src: url("../../static/motion/fonts/BigShouldersDisplay-Variable.ttf"); }
+@font-face { font-family: "Titan One"; font-weight: 400; src: url("../../static/motion/fonts/TitanOne-Regular.ttf"); }
+@font-face { font-family: "Dela Gothic"; font-weight: 400; src: url("../../static/motion/fonts/DelaGothicOne-Regular.ttf"); }
+@font-face { font-family: "Bowlby"; font-weight: 400; src: url("../../static/motion/fonts/BowlbyOne-Regular.ttf"); }
+@font-face { font-family: "Rubik"; font-weight: 300 900; src: url("../../static/motion/fonts/Rubik-Variable.ttf"); }

@@ -16,7 +16,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from core.logging_config import get_logger
-from reel_engine import styles
+from reel_engine import styles, typekits
 from reel_engine.ai import vision_json
 from reel_engine.effects import DEffect
 from reel_engine.effects import prompt as effects_prompt
@@ -106,7 +106,7 @@ class DirectorPlan(_M):
     caption_mode: Literal["every_word", "keyword", "none"]
     burned_captions: bool
     music: Literal["bed", "score", "none"]
-    text_style: Literal["punch", "editorial", "neon", "highlight", "bubble", "script", "comic", "minimal"]
+    type_kit: str
     mood: Literal["upbeat", "energetic", "chill", "lofi", "cinematic", "inspiring", "dramatic", "corporate", "funny", "urban"]
     sections: list[DSection]
     hooks: list[DHook]
@@ -195,13 +195,6 @@ Anchor on word ids w0..w1 (src = -1, at = -1) or for footage give src + at too. 
 the speaker's face IS the point (a reaction, a punchline). Picture-only reels: inserts = [] (the clips are the
 pictures). Never ask for logos of real brands or photos of private people.
 
-TEXT STYLE (text_style, the look of every caption and label, like the reference editors' type systems):
-punch (condensed bold amber, energy: advice, hype, sport), editorial (serif, cream and red: lifestyle, interviews,
-stories, fashion), neon (glowing: tech, night, gaming, urban), highlight (black on an amber block: explainers,
-tips, business), bubble (bold words on white bubbles: food, vlogs, everyday, friendly), script (marker pen: food,
-travel, warm and personal), comic (bold outlined, tilted: funny, kids, reactions), minimal (clean lowercase:
-beauty, premium, calm). Pick the one that fits the footage's colours and mood, not always the same.
-
 BURNED CAPTIONS: set burned_captions = true when the footage already shows subtitles or captions burned into the
 picture (text along the bottom that follows the speech); then caption_mode must be "none" - two caption tracks
 read as a mistake.
@@ -281,7 +274,8 @@ async def direct(sources: list[Source], audio: AudioReport, shots: list[Shot], j
             f"Shots:\n{shot_listing(shots)}\n\n"
             f"Words (id:word, ~ = filler, [take] = earlier take):\n{word_listing(words, takes) if words else '(nobody speaks)'}\n\n"
             f"Frames: {how}.\n\nPlan the reel. JSON only.")
-    plan = await vision_json(system + "\n\n" + styles.prompt() + "\n\n" + effects_prompt(), user, jpegs, DirectorPlan, max_tokens=16000)
+    plan = await vision_json(system + "\n\n" + styles.prompt() + "\n\n" + typekits.prompt() + "\n\n" + effects_prompt(), user, jpegs,
+                             DirectorPlan, max_tokens=16000)
     log.info("Director: recipe=%s audio=%s %d clips %d beats %d sections %d effects", plan.recipe, plan.audio_view,
              len(plan.story), len(plan.beats), len(plan.sections), len(plan.effects))
     return plan

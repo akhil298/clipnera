@@ -12,7 +12,7 @@
 
 from __future__ import annotations
 
-from reel_engine import styles
+from reel_engine import styles, typekits
 from reel_engine.director import DirectorPlan, recipe
 from reel_engine.plan import AudioReport, Brief, CaptionLine, GraphicItem, Section, Shot, VideoItem, Word
 
@@ -31,9 +31,6 @@ VOICE_KINDS = ("voice", "voice_song")
 MIN_LINE_WORDS = 3
 CARD_EVERY = 8.0
 EMOJI_EVERY = 3
-# Titles and chapters in a style that contrasts with the captions' (still one family).
-TITLE_PAIR = {"punch": "editorial", "editorial": "editorial", "neon": "neon", "highlight": "punch", "bubble": "script",
-              "script": "bubble", "comic": "comic", "minimal": "editorial"}
 # Graphics that hold the eye: a keyword caption steps aside while one is on screen.
 CAPTION_YIELDS_TO = {"two", "keyword", "count_up", "statement", "list", "flow", "chart", "cta", "flicker", "photocard"}
 # Every-word captions carry the speech: they give way to graphics that take the whole frame, and under a word
@@ -62,8 +59,11 @@ def hook_text(*options: str) -> str:
     return ""
 
 
-def brief_of(d: DirectorPlan, audio: AudioReport, target: float, headline: str = "") -> tuple[Brief, str]:
-    """The path follows the measured audio; when the director disagrees, the safer reading wins and is noted."""
+def brief_of(d: DirectorPlan, audio: AudioReport, target: float, headline: str = "", taken: set[str] | None = None,
+             footage_accent: str = "", seed: str = "") -> tuple[Brief, str]:
+    """The path follows the measured audio; when the director disagrees, the safer reading wins and is noted. The
+    type kit is the director's when its style allows it and no reel in ``taken`` (sibling reels, the creator's recent
+    ones) has it; the kit chosen is added to ``taken``."""
     measured = audio.kind
     note = ""
     if (measured in VOICE_KINDS) != (d.audio_view in VOICE_KINDS):
@@ -77,14 +77,17 @@ def brief_of(d: DirectorPlan, audio: AudioReport, target: float, headline: str =
     if path == "visual":
         music = "score"
     style = styles.get(d.style)
-    text_style, mood = styles.hold(style, d.text_style, d.mood)
+    mood = styles.hold(style, d.mood)
+    taken = taken if taken is not None else set()
+    kit = typekits.choose(d.type_kit, style["name"], taken, seed or d.notes)
+    taken.add(kit)
+    accent = typekits.spec(kit, "text", footage_accent)["vars"]["--accent"]
     brief = Brief(path=path, audio_kind=measured, recipe=r["id"], target_seconds=target or d.target_seconds,
-                  text_style=text_style, title_style=TITLE_PAIR.get(text_style, text_style), style=style["name"],
-                  caption_looks=style["caption_looks"],
+                  type_kit=kit, style=style["name"], caption_looks=style["caption_looks"],
                   title_lead=d.title_lead, title_text=d.title_text,
                   hook_word=(d.hooks[0].word if d.hooks else "").upper()[:12],
                   hook_text=hook_text(headline, d.hook_text) if path == "voice" else "",
-                  caption_mode=caption_mode, music=music, mood=mood, accent=r["accent"],
+                  caption_mode=caption_mode, music=music, mood=mood, accent=accent,
                   sections=[Section(**sec.model_dump()) for sec in d.sections[:5]], cta=d.cta[:34], notes=(d.notes + (" " + note if note else "")).strip())
     return brief, note
 

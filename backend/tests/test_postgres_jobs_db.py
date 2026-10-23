@@ -162,3 +162,18 @@ async def test_a_retry_in_backoff_keeps_the_worker_up(db, monkeypatch):
     await asyncio.sleep(0.6)
     worker.stop()
     await task
+
+
+async def test_a_draining_worker_finishes_its_jobs_takes_no_new_ones_and_stops(db):
+    await pg.PostgresQueue().enqueue(Job("test.pg_ok", {"name": "running"}))
+    worker = pg.PostgresWorker(concurrency=1, stale_seconds=60, max_attempts=3)
+    task = asyncio.create_task(worker.run())
+    async with asyncio.timeout(5):
+        while not worker._running:
+            await asyncio.sleep(0.01)
+    worker.drain()  # a deploy: the running job must finish, not be cut off
+    await pg.PostgresQueue().enqueue(Job("test.pg_ok", {"name": "later"}))
+    async with asyncio.timeout(5):
+        await task
+    assert worker.drained and [name for name, _ in seen] == ["running"]
+    assert sorted(row.status for row in await _rows(db)) == ["done", "queued"]

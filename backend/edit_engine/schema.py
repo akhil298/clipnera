@@ -222,6 +222,15 @@ class PremiumAsset(BaseModel):
     made: bool
 
 
+class PremiumPlannedReel(BaseModel):
+    """One reel the engine is making from the video: its hook, a thumbnail from its moment, and where it is."""
+
+    title: str
+    seconds: int
+    thumb_url: str | None
+    status: Literal["queued", "editing", "ready", "failed"]
+
+
 class PremiumResponse(BaseModel):
     """What the reel engine did, for the reels board: where it is, what it decided, how the review scored it."""
 
@@ -244,6 +253,9 @@ class PremiumResponse(BaseModel):
     assets: list[PremiumAsset]
     ai_calls: int
     music: str | None
+    # Thumbnails from across the footage (shown while it is read) and the reels being made from it.
+    frames: list[str] = []
+    planned: list[PremiumPlannedReel] = []
 
 
 class EditReelResponse(BaseModel):

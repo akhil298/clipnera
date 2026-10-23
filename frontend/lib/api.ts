@@ -2620,6 +2620,18 @@ export interface PremiumResponse {
   ai_calls: number;
   /** The track under the reel and where it is from, e.g. "Island Beat · Mixkit". */
   music: string | null;
+  /** Thumbnails from across the footage, shown while it is read. */
+  frames: string[];
+  /** The reels being made from the video (backend PremiumPlannedReel). */
+  planned: PremiumPlannedReel[];
+}
+
+/** One reel the engine is making: its hook, a thumbnail from its moment and its status (backend PremiumPlannedReel). */
+export interface PremiumPlannedReel {
+  title: string;
+  seconds: number;
+  thumb_url: string | null;
+  status: 'queued' | 'editing' | 'ready' | 'failed';
 }
 
 /** One reel cut from the footage (backend EditReelResponse). */

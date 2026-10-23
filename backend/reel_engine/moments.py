@@ -117,3 +117,12 @@ def worth_a_reel(found: list[tuple[Moment, float, float, int]], most: int) -> li
     if not found:
         return []
     return [found[0]] + [f for f in found[1:] if score(f[0]) >= GOOD_ENOUGH][:max(0, most - 1)]
+
+
+def dump(found: list[tuple[Moment, float, float, int]]) -> list:
+    """Moments as JSON (kept on the edit, so a resumed job makes the same reels)."""
+    return [[m.model_dump(), t0, t1, src] for m, t0, t1, src in found]
+
+
+def load(saved: list) -> list[tuple[Moment, float, float, int]]:
+    return [(Moment(**m), float(t0), float(t1), int(src)) for m, t0, t1, src in saved]

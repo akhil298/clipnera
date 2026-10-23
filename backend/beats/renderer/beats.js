@@ -535,8 +535,15 @@
     ready: true,
     mount(spec) {
       stage.innerHTML = '';
-      stage.className = `theme-${spec.theme || 'clean'} style-${spec.style || 'punch'}`;
-      if (spec.accent) stage.style.setProperty('--accent', spec.accent);
+      stage.removeAttribute('style');
+      if (spec.kit) {
+        // A type kit (kits.css): its classes, and its fonts, case and colours as variables.
+        stage.className = `theme-${spec.theme || 'clean'} kit ${spec.kit.classes}`;
+        Object.entries(spec.kit.vars).forEach(([name, value]) => stage.style.setProperty(name, value));
+      } else {
+        stage.className = `theme-${spec.theme || 'clean'} style-${spec.style || 'punch'}`;
+        if (spec.accent) stage.style.setProperty('--accent', spec.accent);
+      }
       const make = T[spec.kind];
       if (!make) throw new Error(`No template for ${spec.kind}`);
       current = make({ steps: [], data: {}, ...spec }, stage);

@@ -22,7 +22,7 @@ from pydantic import BaseModel, ConfigDict
 
 from beats import cutout
 from core.logging_config import get_logger
-from reel_engine.media import FPS, H, W, run
+from reel_engine.media import FPS, INTERMEDIATE_PRESET, H, W, run
 from reel_engine.plan import EditPlan, GraphicItem, VideoItem, Word
 
 log = get_logger(__name__)
@@ -292,7 +292,7 @@ async def apply_picture(plan: EditPlan, picture: Path, work: Path) -> Path:
         elif still:
             cmd += ["-loop", "1", "-t", f"{end - start:.3f}", "-i", still]
         cmd += (["-filter_complex", graph, "-map", "[out]"] if graph else []) + [
-            "-an", "-r", str(FPS), "-c:v", "libx264", "-preset", "veryfast", "-crf", "17", "-pix_fmt", "yuv420p", str(out)]
+            "-an", "-r", str(FPS), "-c:v", "libx264", "-preset", INTERMEDIATE_PRESET, "-crf", "17", "-pix_fmt", "yuv420p", str(out)]
         run(cmd)
 
     for g in fx:

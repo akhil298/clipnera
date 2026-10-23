@@ -24,7 +24,7 @@ from reel_engine import imagery
 from reel_engine.ai import vision_json
 from reel_engine.assets import AssetRecord, Scout
 from reel_engine.compile import to_output
-from reel_engine.media import frame, jpeg
+from reel_engine.media import INTERMEDIATE_PRESET, frame, jpeg
 from reel_engine.plan import AssetRef, InsertItem, VideoItem, Word
 
 log = get_logger(__name__)
@@ -232,7 +232,7 @@ def cutaway_cmd(item: InsertItem, out: Path, grade: Path, fps: int, width: int, 
         chain = [f"fps={fps}", f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"]
     chain += [f"lut3d=file='{lut}'", "eq=contrast=1.04:saturation=1.08", "format=yuv420p"]
     return ["ffmpeg", "-v", "error", "-y", *inputs, "-an", "-vf", ",".join(chain), "-frames:v", str(frames),
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "17", str(out)]
+            "-c:v", "libx264", "-preset", INTERMEDIATE_PRESET, "-crf", "17", str(out)]
 
 
 def overlay_cmd(picture: Path, cuts: list[tuple[InsertItem, Path]], out: Path) -> list[str]:
@@ -242,5 +242,5 @@ def overlay_cmd(picture: Path, cuts: list[tuple[InsertItem, Path]], out: Path) -
         chains.append(f"[{current}][c{k}]overlay=0:0:enable='between(t,{item.start:.3f},{item.end:.3f})':eof_action=pass[v{k}]")
         current = f"v{k}"
     return ["ffmpeg", "-v", "error", "-y", "-i", str(picture), *[a for _, p in cuts for a in ("-i", str(p))],
-            "-filter_complex", ";".join(chains), "-map", f"[{current}]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "17", str(out)]
+            "-filter_complex", ";".join(chains), "-map", f"[{current}]", "-c:v", "libx264", "-preset", INTERMEDIATE_PRESET, "-crf", "17", str(out)]
 

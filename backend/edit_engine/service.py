@@ -448,7 +448,7 @@ class EditService:
             ai_model=edit.ai_model, ai_effort=edit.ai_effort, reference_url=edit.reference_url, source_url=edit.source_url,
             reference=EditReferenceResponse(**analysis["reference"]) if analysis.get("reference") else None,
             reference_error=analysis.get("reference_error"), engine=edit.engine,
-            premium=PremiumResponse(**premium_jobs.summary(json.loads(edit.premium or "{}"))) if premium else None,
+            premium=self._premium_response(edit) if premium else None,
             sources=[self._source_response(s) for s in sources if s.get("uploaded")],
             raw_seconds=edit.raw_seconds, duration_s=edit.duration_s,
             plan=await self._plan_response(plan, analysis, timeline) if has_plan else None,
@@ -462,6 +462,12 @@ class EditService:
             music_credit=_credit_text(edit.music_credit), error=edit.error,
             created_at=edit.created_at,
         )
+
+    def _premium_response(self, edit: EditProject) -> PremiumResponse:
+        found = premium_jobs.summary(json.loads(edit.premium or "{}"))
+        found["frames"] = [self._url(key) for key in found["frames"]]
+        found["planned"] = [{**r, "thumb_url": self._url(r["thumb_url"])} for r in found["planned"]]
+        return PremiumResponse(**found)
 
     def _source_response(self, source: dict[str, Any]) -> EditSourceResponse:
         # The classic analysis makes a small browser-safe proxy; a premium edit shows the upload itself.

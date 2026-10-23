@@ -137,7 +137,9 @@ async function openPage(W, H) {
   await cdp.send('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: 0 } });
   await cdp.send('Page.navigate', { url: pathToFileURL(path.join(HERE, 'page.html')).href });
   for (let i = 0; i < 100 && !(await evaluate(cdp, 'window.Beats?.ready === true')); i++) await new Promise(r => setTimeout(r, 100));
-  await evaluate(cdp, 'document.fonts.ready.then(() => true)');
+  // Every declared font is loaded before the first graphic: a font that arrived after text was fitted (fonts load on
+  // first use) drew wider than measured and ran off the frame.
+  await evaluate(cdp, 'Promise.all([...document.fonts].map((f) => f.load().catch(() => null))).then(() => true)');
   return chrome;
 }
 

@@ -66,18 +66,45 @@ def _focus(small: np.ndarray, before: np.ndarray | None, aspect: float) -> float
     return (best + window / 2) / width
 
 
-async def track(source: Source) -> tuple[list[list[float]], list[list[float]]]:
-    """(face rows, focus rows [t, centre x]) for a video source; ([], []) when it cannot be read."""
+async def track(source: Source, spans: list[tuple[float, float]] | None = None) -> tuple[list[list[float]], list[list[float]]]:
+    """(face rows, focus rows [t, centre x]) for a video source; ([], []) when it cannot be read. With ``spans``
+    (source seconds) only those stretches are tracked: a long video's reels use a few minutes of it, and tracking
+    every frame of an hour was the slowest step of an edit."""
+    if source.kind != "video" or not source.width:
+        return [], []
+    faces: list[list[float]] = []
+    focus: list[list[float]] = []
+    for start, end in merge(spans) if spans else [(0.0, 0.0)]:
+        f, p = await _track_span(source, start, end - start if spans else 0.0)
+        faces += f
+        focus += p
+    log.info("Track: src%d %s, %d face sightings, %d focus points", source.index,
+             f"{sum(b - a for a, b in merge(spans)):.0f} s in {len(merge(spans))} stretch(es)" if spans else "whole", len(faces), len(focus))
+    return faces, focus
+
+
+def merge(spans: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Overlapping or touching stretches joined, in order."""
+    out: list[list[float]] = []
+    for a, b in sorted(spans):
+        if out and a <= out[-1][1] + 1.0:
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([max(0.0, a), b])
+    return [(a, b) for a, b in out]
+
+
+async def _track_span(source: Source, start: float, length: float) -> tuple[list[list[float]], list[list[float]]]:
+    """Track ``length`` seconds from ``start`` (0 = to the end); times are source seconds."""
     import cv2
 
     from video_processor.face_detection import FaceDetector
 
-    if source.kind != "video" or not source.width:
-        return [], []
     width = TRACK_WIDTH if source.width >= source.height else int(TRACK_WIDTH * source.width / source.height) // 2 * 2
     height = int(round(width * source.height / source.width / 2) * 2)
+    window = (["-ss", f"{start:.3f}"] if start > 0 else []) + (["-t", f"{length:.3f}"] if length > 0 else [])
     proc = await asyncio.create_subprocess_exec(
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-i", source.path,
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", *window, "-i", source.path,
         "-vf", f"fps={TRACK_FPS},scale={width}:{height}", "-an", "-f", "rawvideo", "-pix_fmt", "bgr24", "pipe:1",
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
     detector = FaceDetector()
@@ -93,7 +120,7 @@ async def track(source: Source) -> tuple[list[list[float]], list[list[float]]]:
             raw = await proc.stdout.readexactly(size)
         except asyncio.IncompleteReadError:
             break
-        t = round(n / TRACK_FPS, 3)
+        t = round(start + n / TRACK_FPS, 3)
         image = np.frombuffer(raw, np.uint8).reshape(height, width, 3)
         grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         found = await asyncio.to_thread(detector.detect, image)
@@ -118,5 +145,4 @@ async def track(source: Source) -> tuple[list[list[float]], list[list[float]]]:
             before_small = small
         n += 1
     await proc.wait()
-    log.info("Track: src%d %d frames, %d face sightings, %d focus points", source.index, n, len(faces), len(focus))
     return faces, focus

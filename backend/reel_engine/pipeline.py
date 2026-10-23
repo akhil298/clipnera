@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from core.logging_config import get_logger
-from reel_engine import accents, effects, icons, inserts, layout, moments, proof, sound, styles, tracks
+from reel_engine import accents, effects, icons, inserts, layout, moments, proof, sound, styles, tracks, typekits
 from reel_engine.assets import AssetStore, Scout
 from reel_engine.compile import BEAT, brief_of, captions_track, graphics_track, to_output, video_track
 from reel_engine.director import direct, recipe
@@ -34,7 +34,8 @@ log = get_logger(__name__)
 IMAGE_TYPES = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
 AUDIO_TYPES = {".mp3", ".wav", ".m4a", ".aac", ".ogg"}
 IMAGE_SECONDS = 3.0
-SHIP_SCORE = 8.0
+# A first pass at this score ships as it is: a second pass costs a redraw and a re-encode for a few tenths at most.
+SHIP_SCORE = 7.0
 STAGES = ("ingest", "listen", "watch", "direct", "verify", "compile", "assets", "picture", "layout", "graphics", "sound",
           "compose", "review", "done")
 Progress_ = Callable[[EditPlan], Awaitable[None]] | None
@@ -137,13 +138,32 @@ def _stager(plan: EditPlan, on_progress: Progress_) -> Callable[[str, str], Awai
     return stage
 
 
-async def analyze(inputs: list[Path], work: Path, stage: Callable[[str, str], Awaitable[None]]) -> Analysis:
+async def analyze(inputs: list[Path], work: Path, stage: Callable[[str, str], Awaitable[None]], track: bool = True) -> Analysis:
+    """Listen and watch; with ``track=False`` faces are not tracked yet (add_tracks does it for the reels' stretches)."""
     await stage("ingest", f"{len(inputs)} file(s)")
     sources = ingest(inputs)
     await stage("listen", "voice, music and words; shots and faces")
-    audio, (shots, face_track, focus_track, jpegs, how, frames) = await asyncio.gather(listen(sources, work), watch(sources))
+    audio, (shots, face_track, focus_track, jpegs, how, frames) = await asyncio.gather(listen(sources, work), watch(sources, track))
     await stage("watch", f"{audio.kind}: {audio.why}; {len(shots)} shots")
     return Analysis(sources, audio, shots, face_track, focus_track, jpegs, how, frames)
+
+
+TRACK_PAD = 2.0  # seconds tracked either side of a moment, for the framing's look-around
+
+
+async def add_tracks(found: Analysis, windows: list[tuple[int, float, float]] | None) -> None:
+    """Face and focus tracks for the stretches the reels use (``windows`` as (source, start, end)), or for every video
+    when the director chooses from the whole footage (``None``)."""
+    from reel_engine import track as tracking
+
+    videos = [s for s in found.sources if s.kind == "video"]
+    spans = {s.index: [(max(0.0, a - TRACK_PAD), min(s.duration, b + TRACK_PAD)) for src, a, b in windows or [] if src == s.index]
+             for s in videos}
+    wanted = [s for s in videos if windows is None or spans[s.index]]
+    results = await asyncio.gather(*(tracking.track(s, spans[s.index] if windows is not None else None) for s in wanted))
+    for source, (faces, focus) in zip(wanted, results):
+        found.face_track[str(source.index)] = faces
+        found.focus_track[str(source.index)] = focus
 
 
 async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owner: str = "", brief: str = "",
@@ -160,22 +180,42 @@ async def run_many(inputs: list[Path], work: Path, out_dir: Path, store: AssetSt
                    target_seconds: float = 0.0, passes: int = 2, on_progress: Progress_ = None, most: int = 1,
                    on_reel: Callable[[int, EditPlan], Awaitable[None]] | None = None,
                    allow: Callable[[int], Awaitable[bool]] | None = None,
-                   on_fail: Callable[[int, Exception], Awaitable[None]] | None = None, parallel: int = 1) -> list[EditPlan]:
+                   on_fail: Callable[[int, Exception], Awaitable[None]] | None = None, parallel: int = 1,
+                   known: list | None = None, skip: frozenset[int] = frozenset(),
+                   on_analysed: Callable[[Analysis], Awaitable[None]] | None = None,
+                   on_moments: Callable[[Analysis, list], Awaitable[None]] | None = None,
+                   on_status: Callable[[int, str], Awaitable[None]] | None = None,
+                   avoid_kits: frozenset[str] = frozenset()) -> list[EditPlan]:
     """Up to ``most`` reels: the footage is analysed once, its moments ranked, and each strong moment edited on its own,
     ``parallel`` at a time. A long video gives about one reel per four minutes of speech, a video with one good moment
     one reel. ``allow`` is asked before each reel (it may charge for it, or stop); ``on_reel`` hears about each reel as
     it is finished; a reel that fails is reported to ``on_fail`` and the others carry on (only when every reel fails
-    does the edit fail)."""
+    does the edit fail).
+
+    A job resumed after a restart passes the moments it found before (``known``, as ``moments.dump`` wrote them) and the
+    reels it already delivered (``skip``): the same reels are made, none twice. ``on_analysed`` hears when the footage
+    is read, ``on_moments`` which reels will be made, ``on_status`` each reel's "editing" / "ready" / "failed"."""
     work.mkdir(parents=True, exist_ok=True)
     tracker = EditPlan()
     stage = _stager(tracker, on_progress)
-    found = await analyze(inputs, work, stage)
-    count = moments.reels_for(found.audio.words, most)
-    chosen = moments.worth_a_reel(await moments.find(found.audio.words, brief), count) if count > 1 else []
+    found = await analyze(inputs, work, stage, track=False)
+    if on_analysed:
+        await on_analysed(found)
+    if known is not None:
+        chosen = moments.load(known)
+    else:
+        count = moments.reels_for(found.audio.words, most)
+        chosen = moments.worth_a_reel(await moments.find(found.audio.words, brief), count) if count > 1 else []
     await stage("moments", f"{len(chosen) or 1} reel(s)")
     windows = chosen or [None]
+    if on_moments:
+        await on_moments(found, windows)
+    todo = [n for n in range(len(windows)) if n not in skip]
+    await add_tracks(found, [(windows[n][3], windows[n][1], windows[n][2]) for n in todo] if chosen else None)
     gate = asyncio.Semaphore(max(1, parallel))
     stopped = False
+    # Type kits already in use: the creator's recent reels, then each reel's own as it is chosen (no two alike).
+    kits = set(avoid_kits)
 
     async def one(n: int, moment) -> EditPlan | None:
         nonlocal stopped
@@ -183,6 +223,8 @@ async def run_many(inputs: list[Path], work: Path, out_dir: Path, store: AssetSt
             if stopped or (allow and not await allow(n)):
                 stopped = True
                 return None
+            if on_status:
+                await on_status(n, "editing")
             plan = EditPlan(progress=list(tracker.progress))
             window = (moment[3], moment[1], moment[2]) if moment else None
             note, headline = brief, ""
@@ -196,20 +238,24 @@ async def run_many(inputs: list[Path], work: Path, out_dir: Path, store: AssetSt
             length = target_seconds or (moment_length(moment[2] - moment[1]) if moment else 0.0)
             try:
                 plan = await edit(found, plan, _stager(plan, on_progress), work / f"reel{n}", out_dir / f"reel{n + 1}.mp4", store,
-                                  owner, note, length, passes, window=window, headline=headline)
+                                  owner, note, length, passes, window=window, headline=headline, kits=kits)
             except Exception as exc:
                 if len(windows) == 1:
                     raise
                 log.exception("Reel %d of %d failed", n + 1, len(windows))
+                if on_status:
+                    await on_status(n, "failed")
                 if on_fail:
                     await on_fail(n, exc)
                 return None
             if on_reel:
                 await on_reel(n, plan)
+            if on_status:
+                await on_status(n, "ready")
             return plan
 
-    plans = [p for p in await asyncio.gather(*(one(n, m) for n, m in enumerate(windows))) if p is not None]
-    if not plans:
+    plans = [p for p in await asyncio.gather(*(one(n, windows[n]) for n in todo)) if p is not None]
+    if not plans and not skip:
         raise RuntimeError("no reel could be made from this footage")
     return plans
 
@@ -226,7 +272,7 @@ def moment_length(seconds: float) -> float:
 
 async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awaitable[None]], work: Path, out: Path,
                store: AssetStore, owner: str, brief: str, target_seconds: float, passes: int,
-               window: tuple[int, float, float] | None = None, headline: str = "") -> EditPlan:
+               window: tuple[int, float, float] | None = None, headline: str = "", kits: set[str] | None = None) -> EditPlan:
     """One reel from analysed footage; ``window`` keeps the director to one moment and shows it that stretch closely,
     ``headline`` is the moment finder's hook text (the director's own is used when it has none)."""
     work.mkdir(parents=True, exist_ok=True)
@@ -258,7 +304,10 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
     plan.hooks = [f"{'*' if n == hook else ' '} {h.why}" for n, h in enumerate(d.hooks)]
 
     await stage("compile", "; ".join(changes[:4]) or "labels verified")
-    plan.brief, _ = brief_of(d, audio, target_seconds, headline)
+    near = [image for src, frames in found.frames.items() for t, image in frames
+            if not window or (src == window[0] and window[1] <= t <= window[2])]
+    plan.brief, _ = brief_of(d, audio, target_seconds, headline, kits, typekits.palette_accent(near[:: max(1, len(near) // 24)]),
+                             seed=str(out))
     src_len = {s.index: s.duration for s in plan.sources}
     picture = plan.brief.path == "visual"
     track = tracks.pick(plan.brief.mood, target_seconds or plan.brief.target_seconds or 40, picture) if picture else None

@@ -10,6 +10,8 @@ big in front instead.
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 import numpy as np
 
 from core.logging_config import get_logger
@@ -37,29 +39,47 @@ FIXED = {"statement", "progress", "wash", "flicker", "accent", "effect"}
 _detector = None
 
 
-def look(video: str, start: float, end: float) -> tuple[list[tuple[int, int, int, int]], np.ndarray]:
-    """Padded face boxes (output pixels) seen anywhere in ``start``..``end``, and the stretch's detail map."""
+LOOK_GRID = 0.5  # seconds: frames are read on this grid and reused by every item that samples the same moment
+
+
+@lru_cache(maxsize=1024)
+def _frame_facts(video: str, t: float) -> tuple[tuple[tuple[int, int, int, int], ...], np.ndarray | None, np.ndarray | None]:
+    """Padded face boxes, detail map and small grey frame at second ``t`` (read once, shared by every item)."""
     import cv2
 
     from video_processor.face_detection import FaceDetector
 
     global _detector
+    image = frame(video, t, 540)
+    if image is None:
+        return (), None, None
     _detector = _detector or FaceDetector()
+    grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    edges = np.hypot(cv2.Sobel(grey, cv2.CV_32F, 1, 0), cv2.Sobel(grey, cv2.CV_32F, 0, 1))
+    sat = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)[..., 1].astype(np.float32) / 255
+    detail = cv2.GaussianBlur(cv2.resize(np.clip(edges / 120, 0, 1) * 0.6 + sat * 0.4, (DETAIL_W, DETAIL_H), interpolation=cv2.INTER_AREA),
+                              (0, 0), 2)
+    boxes = []
+    for face in _detector.detect(image):
+        b = face.box
+        px, py = b.width * FACE_PAD, b.height * FACE_PAD
+        boxes.append((round((b.x - px) * W), round((b.y - py) * H), round((b.x + b.width + px) * W), round((b.y + b.height + py) * H)))
+    return tuple(boxes), detail, cv2.resize(grey, (DETAIL_W, DETAIL_H), interpolation=cv2.INTER_AREA)
+
+
+def look(video: str, start: float, end: float) -> tuple[list[tuple[int, int, int, int]], np.ndarray]:
+    """Padded face boxes (output pixels) seen anywhere in ``start``..``end``, and the stretch's detail map."""
+    import cv2
+
     boxes, maps, greys = [], [], []
     for share in (0.15, 0.5, 0.85):
-        image = frame(video, start + (end - start) * share, 540)
-        if image is None:
+        t = round((start + (end - start) * share) / LOOK_GRID) * LOOK_GRID
+        found, detail, grey = _frame_facts(video, t)
+        if detail is None:
             continue
-        grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(np.float32)
-        greys.append(cv2.resize(grey, (DETAIL_W, DETAIL_H), interpolation=cv2.INTER_AREA))
-        edges = np.hypot(cv2.Sobel(grey, cv2.CV_32F, 1, 0), cv2.Sobel(grey, cv2.CV_32F, 0, 1))
-        sat = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)[..., 1].astype(np.float32) / 255
-        detail = cv2.resize(np.clip(edges / 120, 0, 1) * 0.6 + sat * 0.4, (DETAIL_W, DETAIL_H), interpolation=cv2.INTER_AREA)
-        maps.append(cv2.GaussianBlur(detail, (0, 0), 2))
-        for face in _detector.detect(image):
-            b = face.box
-            px, py = b.width * FACE_PAD, b.height * FACE_PAD
-            boxes.append((round((b.x - px) * W), round((b.y - py) * H), round((b.x + b.width + px) * W), round((b.y + b.height + py) * H)))
+        boxes += list(found)
+        maps.append(detail)
+        greys.append(grey)
     detail = np.max(maps, axis=0) if maps else np.zeros((DETAIL_H, DETAIL_W), np.float32)
     if len(greys) > 1:
         # What changes across the stretch (hands, a demonstration) is busier than anything still.

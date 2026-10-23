@@ -1,0 +1,1176 @@
+{
+ "about": "Type kits: complete type designs for a reel (caption, big-word and title fonts, case, colours and how the big word is set off). The director picks one that fits the reel's editing style, content and footage; code keeps reels of one video, and a creator's recent reels, from repeating a kit. Fonts are SIL OFL (licences beside them in static/motion/fonts). accent 'footage' takes the accent from the footage's own colours.",
+ "kits": [
+  {
+   "id": "amber_block",
+   "about": "bold black words, the big word on an amber block; confident explainer",
+   "styles": [
+    "podcast",
+    "education",
+    "business"
+   ],
+   "moods": [
+    "confident",
+    "clear"
+   ],
+   "lead": {
+    "font": "Archivo Black",
+    "weight": 400,
+    "case": "none"
+   },
+   "key": {
+    "font": "Archivo Black",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Anton",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "treatment": "block",
+   "lead_treatment": "stroke",
+   "accent": "#ffb020",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "clean_underline",
+   "about": "clean lowercase, the big word underlined; calm, premium, beauty",
+   "styles": [
+    "calm",
+    "podcast",
+    "education",
+    "vlog"
+   ],
+   "moods": [
+    "calm",
+    "premium"
+   ],
+   "lead": {
+    "font": "Montserrat",
+    "weight": 700,
+    "case": "lowercase"
+   },
+   "key": {
+    "font": "Montserrat",
+    "weight": 800,
+    "case": "lowercase"
+   },
+   "title": {
+    "font": "DM Serif Display",
+    "weight": 400,
+    "case": "none"
+   },
+   "treatment": "underline",
+   "lead_treatment": "shadow",
+   "accent": "footage",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "punch_outline",
+   "about": "condensed amber big word with a dark outline; energy, advice, sport",
+   "styles": [
+    "hype",
+    "business",
+    "podcast"
+   ],
+   "moods": [
+    "energetic",
+    "bold"
+   ],
+   "lead": {
+    "font": "Montserrat",
+    "weight": 800,
+    "case": "none"
+   },
+   "key": {
+    "font": "Anton",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "DM Serif Display",
+    "weight": 400,
+    "case": "none"
+   },
+   "treatment": "outline",
+   "lead_treatment": "stroke",
+   "accent": "#ffb020",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "neon_night",
+   "about": "glowing pink/cyan tube letters; tech, night, gaming, urban",
+   "styles": [
+    "hype",
+    "vlog"
+   ],
+   "moods": [
+    "night",
+    "techy"
+   ],
+   "lead": {
+    "font": "Space Grotesk",
+    "weight": 600,
+    "case": "uppercase"
+   },
+   "key": {
+    "font": "Bebas",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Bebas",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "treatment": "glow",
+   "lead_treatment": "glow",
+   "accent": "#ff4fd8",
+   "alt": "#3ff3ff",
+   "ink": "#ffffff"
+  },
+  {
+   "id": "bubble_pop",
+   "about": "chunky words on white speech bubbles; food, everyday, friendly",
+   "styles": [
+    "food",
+    "vlog"
+   ],
+   "moods": [
+    "playful",
+    "warm"
+   ],
+   "lead": {
+    "font": "Poppins",
+    "weight": 900,
+    "case": "none"
+   },
+   "key": {
+    "font": "Poppins",
+    "weight": 900,
+    "case": "none"
+   },
+   "title": {
+    "font": "Marker",
+    "weight": 400,
+    "case": "none"
+   },
+   "treatment": "bubble",
+   "lead_treatment": "stroke",
+   "accent": "#ffb020",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "marker_warm",
+   "about": "hand-written marker big word; travel, food, personal stories",
+   "styles": [
+    "food",
+    "vlog"
+   ],
+   "moods": [
+    "warm",
+    "personal"
+   ],
+   "lead": {
+    "font": "Montserrat",
+    "weight": 700,
+    "case": "none"
+   },
+   "key": {
+    "font": "Marker",
+    "weight": 400,
+    "case": "none"
+   },
+   "title": {
+    "font": "Poppins",
+    "weight": 900,
+    "case": "none"
+   },
+   "treatment": "tilt",
+   "lead_treatment": "stroke",
+   "accent": "#ff7a59",
+   "alt": "#ffe066",
+   "ink": "#111111"
+  },
+  {
+   "id": "comic_burst",
+   "about": "comic-book outlined letters, tilted; funny, reactions, kids",
+   "styles": [
+    "hype",
+    "food"
+   ],
+   "moods": [
+    "funny",
+    "loud"
+   ],
+   "lead": {
+    "font": "Luckiest",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "key": {
+    "font": "Bangers",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Bangers",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "treatment": "comic",
+   "lead_treatment": "stroke",
+   "accent": "#ffd400",
+   "alt": "#4fd1ff",
+   "ink": "#111111"
+  },
+  {
+   "id": "serif_editorial",
+   "about": "spaced small caps with an elegant serif big word; interviews, fashion, stories",
+   "styles": [
+    "podcast",
+    "calm",
+    "business",
+    "vlog"
+   ],
+   "moods": [
+    "premium",
+    "story"
+   ],
+   "lead": {
+    "font": "Montserrat",
+    "weight": 700,
+    "case": "uppercase"
+   },
+   "key": {
+    "font": "DM Serif Display",
+    "weight": 400,
+    "case": "none"
+   },
+   "title": {
+    "font": "DM Serif Display",
+    "weight": 400,
+    "case": "none"
+   },
+   "treatment": "shadow",
+   "lead_treatment": "spaced",
+   "accent": "#e0362c",
+   "alt": "#ffd9a8",
+   "ink": "#111111"
+  },
+  {
+   "id": "inter_plate",
+   "about": "modern Inter on a dark rounded plate; clean tech and explainers",
+   "styles": [
+    "education",
+    "business",
+    "podcast"
+   ],
+   "moods": [
+    "clear",
+    "modern"
+   ],
+   "lead": {
+    "font": "Inter",
+    "weight": 700,
+    "case": "none"
+   },
+   "key": {
+    "font": "Inter",
+    "weight": 900,
+    "case": "none"
+   },
+   "title": {
+    "font": "Inter",
+    "weight": 900,
+    "case": "none"
+   },
+   "treatment": "plate",
+   "lead_treatment": "plain",
+   "accent": "footage",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "oswald_red",
+   "about": "tall condensed caps, the big word on a red bar; news, money, hard truths",
+   "styles": [
+    "business",
+    "hype",
+    "podcast"
+   ],
+   "moods": [
+    "urgent",
+    "bold"
+   ],
+   "lead": {
+    "font": "Oswald",
+    "weight": 500,
+    "case": "uppercase"
+   },
+   "key": {
+    "font": "Oswald",
+    "weight": 700,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Oswald",
+    "weight": 700,
+    "case": "uppercase"
+   },
+   "treatment": "block",
+   "lead_treatment": "stroke",
+   "accent": "#ff3b30",
+   "alt": "#ffffff",
+   "ink": "#ffffff"
+  },
+  {
+   "id": "stadium_cyan",
+   "about": "sports-broadcast condensed caps with a cyan outline; fitness, sport, competition",
+   "styles": [
+    "hype"
+   ],
+   "moods": [
+    "energetic",
+    "sport"
+   ],
+   "lead": {
+    "font": "Barlow Condensed",
+    "weight": 800,
+    "case": "uppercase"
+   },
+   "key": {
+    "font": "Teko",
+    "weight": 700,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Teko",
+    "weight": 700,
+    "case": "uppercase"
+   },
+   "treatment": "outline",
+   "lead_treatment": "stroke",
+   "accent": "#00e0ff",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "sora_gradient",
+   "about": "soft geometric type, the big word in a colour gradient; startups, productivity",
+   "styles": [
+    "education",
+    "business",
+    "vlog"
+   ],
+   "moods": [
+    "modern",
+    "optimistic"
+   ],
+   "lead": {
+    "font": "Sora",
+    "weight": 600,
+    "case": "none"
+   },
+   "key": {
+    "font": "Sora",
+    "weight": 800,
+    "case": "none"
+   },
+   "title": {
+    "font": "Sora",
+    "weight": 800,
+    "case": "none"
+   },
+   "treatment": "gradient",
+   "lead_treatment": "stroke",
+   "accent": "footage",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "outfit_green",
+   "about": "rounded friendly type on bright green bubbles; tips, health, everyday",
+   "styles": [
+    "education",
+    "vlog",
+    "food"
+   ],
+   "moods": [
+    "friendly",
+    "fresh"
+   ],
+   "lead": {
+    "font": "Outfit",
+    "weight": 600,
+    "case": "none"
+   },
+   "key": {
+    "font": "Outfit",
+    "weight": 900,
+    "case": "none"
+   },
+   "title": {
+    "font": "Outfit",
+    "weight": 900,
+    "case": "none"
+   },
+   "treatment": "bubble",
+   "lead_treatment": "stroke",
+   "accent": "#7cff6b",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "lexend_blue",
+   "about": "very readable type with a blue underline; teaching, learning, how-to",
+   "styles": [
+    "education",
+    "calm"
+   ],
+   "moods": [
+    "clear",
+    "calm"
+   ],
+   "lead": {
+    "font": "Lexend",
+    "weight": 600,
+    "case": "none"
+   },
+   "key": {
+    "font": "Lexend",
+    "weight": 800,
+    "case": "none"
+   },
+   "title": {
+    "font": "Lexend",
+    "weight": 800,
+    "case": "none"
+   },
+   "treatment": "underline",
+   "lead_treatment": "shadow",
+   "accent": "#4da3ff",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "unbounded_lime",
+   "about": "wide bold caps with a lime shadow; Gen-Z, hype, bold opinions",
+   "styles": [
+    "hype",
+    "business"
+   ],
+   "moods": [
+    "bold",
+    "young"
+   ],
+   "lead": {
+    "font": "Unbounded",
+    "weight": 500,
+    "case": "none"
+   },
+   "key": {
+    "font": "Unbounded",
+    "weight": 800,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Unbounded",
+    "weight": 800,
+    "case": "uppercase"
+   },
+   "treatment": "shadow",
+   "lead_treatment": "stroke",
+   "accent": "#c6ff00",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "syne_art",
+   "about": "art-school display type with a pink-to-gold gradient; creative, design, lifestyle",
+   "styles": [
+    "vlog",
+    "podcast"
+   ],
+   "moods": [
+    "creative",
+    "stylish"
+   ],
+   "lead": {
+    "font": "Syne",
+    "weight": 600,
+    "case": "none"
+   },
+   "key": {
+    "font": "Syne",
+    "weight": 800,
+    "case": "none"
+   },
+   "title": {
+    "font": "Syne",
+    "weight": 800,
+    "case": "none"
+   },
+   "treatment": "gradient",
+   "lead_treatment": "stroke",
+   "accent": "#ff7ad9",
+   "alt": "#ffd36e",
+   "ink": "#111111"
+  },
+  {
+   "id": "bricolage_yellow",
+   "about": "quirky creator grotesque on a yellow block; creator tips, podcasts",
+   "styles": [
+    "podcast",
+    "education",
+    "vlog"
+   ],
+   "moods": [
+    "friendly",
+    "smart"
+   ],
+   "lead": {
+    "font": "Bricolage",
+    "weight": 600,
+    "case": "none"
+   },
+   "key": {
+    "font": "Bricolage",
+    "weight": 800,
+    "case": "none"
+   },
+   "title": {
+    "font": "Bricolage",
+    "weight": 800,
+    "case": "none"
+   },
+   "treatment": "block",
+   "lead_treatment": "stroke",
+   "accent": "#ffe14d",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "righteous_sticker",
+   "about": "retro rounded letters cut out like a sticker; travel, food, fun",
+   "styles": [
+    "vlog",
+    "food",
+    "hype"
+   ],
+   "moods": [
+    "retro",
+    "fun"
+   ],
+   "lead": {
+    "font": "Righteous",
+    "weight": 400,
+    "case": "none"
+   },
+   "key": {
+    "font": "Righteous",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Righteous",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "treatment": "sticker",
+   "lead_treatment": "stroke",
+   "accent": "#ff8a00",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "bungee_signal",
+   "about": "signage caps on a mint block; tech launches, gadgets, announcements",
+   "styles": [
+    "hype",
+    "business"
+   ],
+   "moods": [
+    "techy",
+    "loud"
+   ],
+   "lead": {
+    "font": "Space Grotesk",
+    "weight": 700,
+    "case": "none"
+   },
+   "key": {
+    "font": "Bungee",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Bungee",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "treatment": "block",
+   "lead_treatment": "stroke",
+   "accent": "#00ffa3",
+   "alt": "#ffffff",
+   "ink": "#002018"
+  },
+  {
+   "id": "mono_terminal",
+   "about": "terminal mono letters glowing green; coding, AI, finance data",
+   "styles": [
+    "business",
+    "education"
+   ],
+   "moods": [
+    "techy",
+    "nerdy"
+   ],
+   "lead": {
+    "font": "Rubik",
+    "weight": 600,
+    "case": "none"
+   },
+   "key": {
+    "font": "Rubik Mono",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Rubik Mono",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "treatment": "glow",
+   "lead_treatment": "stroke",
+   "accent": "#39ff88",
+   "alt": "#9dffcb",
+   "ink": "#001a0a"
+  },
+  {
+   "id": "playfair_gold",
+   "about": "spaced caps with a luxurious serif big word underlined in gold; luxury, real estate, wisdom",
+   "styles": [
+    "calm",
+    "business",
+    "podcast"
+   ],
+   "moods": [
+    "premium",
+    "wise"
+   ],
+   "lead": {
+    "font": "Inter",
+    "weight": 500,
+    "case": "uppercase"
+   },
+   "key": {
+    "font": "Playfair",
+    "weight": 800,
+    "case": "none"
+   },
+   "title": {
+    "font": "Playfair",
+    "weight": 800,
+    "case": "none"
+   },
+   "treatment": "underline",
+   "lead_treatment": "spaced",
+   "accent": "#d4af37",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "abril_magazine",
+   "about": "magazine-cover fat serif with a red accent; drama, stories, interviews",
+   "styles": [
+    "podcast",
+    "vlog"
+   ],
+   "moods": [
+    "dramatic",
+    "story"
+   ],
+   "lead": {
+    "font": "Montserrat",
+    "weight": 700,
+    "case": "uppercase"
+   },
+   "key": {
+    "font": "Abril",
+    "weight": 400,
+    "case": "none"
+   },
+   "title": {
+    "font": "Abril",
+    "weight": 400,
+    "case": "none"
+   },
+   "treatment": "shadow",
+   "lead_treatment": "spaced",
+   "accent": "#ff4d4d",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "fraunces_soft",
+   "about": "soft warm serif in peach; reflection, relationships, slow talks",
+   "styles": [
+    "calm",
+    "podcast"
+   ],
+   "moods": [
+    "warm",
+    "gentle"
+   ],
+   "lead": {
+    "font": "Outfit",
+    "weight": 500,
+    "case": "none"
+   },
+   "key": {
+    "font": "Fraunces",
+    "weight": 800,
+    "case": "none"
+   },
+   "title": {
+    "font": "Fraunces",
+    "weight": 800,
+    "case": "none"
+   },
+   "treatment": "shadow",
+   "lead_treatment": "shadow",
+   "accent": "#ffb4a2",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "caveat_note",
+   "about": "handwritten note big word, slightly tilted; study tips, journaling, recipes",
+   "styles": [
+    "vlog",
+    "food",
+    "education"
+   ],
+   "moods": [
+    "personal",
+    "light"
+   ],
+   "lead": {
+    "font": "Lexend",
+    "weight": 600,
+    "case": "none"
+   },
+   "key": {
+    "font": "Caveat",
+    "weight": 700,
+    "case": "none"
+   },
+   "title": {
+    "font": "Caveat",
+    "weight": 700,
+    "case": "none"
+   },
+   "treatment": "tilt",
+   "lead_treatment": "stroke",
+   "accent": "#ffe066",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "kalam_desi",
+   "about": "Indian handwritten letters as a saffron sticker; home cooking, family, desi stories",
+   "styles": [
+    "food",
+    "vlog",
+    "calm"
+   ],
+   "moods": [
+    "warm",
+    "desi"
+   ],
+   "lead": {
+    "font": "Baloo",
+    "weight": 700,
+    "case": "none"
+   },
+   "key": {
+    "font": "Kalam",
+    "weight": 700,
+    "case": "none"
+   },
+   "title": {
+    "font": "Kalam",
+    "weight": 700,
+    "case": "none"
+   },
+   "treatment": "sticker",
+   "lead_treatment": "stroke",
+   "accent": "#ff9933",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "pacifico_sunny",
+   "about": "sunny brush script; cafes, desserts, holidays",
+   "styles": [
+    "food",
+    "vlog"
+   ],
+   "moods": [
+    "sunny",
+    "sweet"
+   ],
+   "lead": {
+    "font": "Fredoka",
+    "weight": 600,
+    "case": "none"
+   },
+   "key": {
+    "font": "Pacifico",
+    "weight": 400,
+    "case": "none"
+   },
+   "title": {
+    "font": "Pacifico",
+    "weight": 400,
+    "case": "none"
+   },
+   "treatment": "shadow",
+   "lead_treatment": "stroke",
+   "accent": "#ffd166",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "fredoka_candy",
+   "about": "soft round letters on pink bubbles; kids, pets, cute and playful",
+   "styles": [
+    "food",
+    "vlog",
+    "hype"
+   ],
+   "moods": [
+    "cute",
+    "playful"
+   ],
+   "lead": {
+    "font": "Fredoka",
+    "weight": 600,
+    "case": "none"
+   },
+   "key": {
+    "font": "Fredoka",
+    "weight": 700,
+    "case": "none"
+   },
+   "title": {
+    "font": "Fredoka",
+    "weight": 700,
+    "case": "none"
+   },
+   "treatment": "bubble",
+   "lead_treatment": "stroke",
+   "accent": "#ff6fb5",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "shrikhand_spice",
+   "about": "heavy italic display with an orange outline; street food, spicy takes",
+   "styles": [
+    "food",
+    "hype"
+   ],
+   "moods": [
+    "spicy",
+    "bold"
+   ],
+   "lead": {
+    "font": "Baloo",
+    "weight": 800,
+    "case": "none"
+   },
+   "key": {
+    "font": "Shrikhand",
+    "weight": 400,
+    "case": "none"
+   },
+   "title": {
+    "font": "Shrikhand",
+    "weight": 400,
+    "case": "none"
+   },
+   "treatment": "outline",
+   "lead_treatment": "stroke",
+   "accent": "#ff5e3a",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "baloo_block",
+   "about": "rounded Indian-made sans with a yellow block; desi podcasts, everyday advice",
+   "styles": [
+    "podcast",
+    "education",
+    "food",
+    "calm"
+   ],
+   "moods": [
+    "friendly",
+    "desi"
+   ],
+   "lead": {
+    "font": "Baloo",
+    "weight": 700,
+    "case": "none"
+   },
+   "key": {
+    "font": "Baloo",
+    "weight": 800,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Baloo",
+    "weight": 800,
+    "case": "uppercase"
+   },
+   "treatment": "block",
+   "lead_treatment": "stroke",
+   "accent": "#ffcc00",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "mukta_news",
+   "about": "news-ticker caps on a red bar, white letters; current affairs, finance, explainers",
+   "styles": [
+    "business",
+    "podcast",
+    "education"
+   ],
+   "moods": [
+    "urgent",
+    "serious"
+   ],
+   "lead": {
+    "font": "Mukta",
+    "weight": 800,
+    "case": "none"
+   },
+   "key": {
+    "font": "Mukta",
+    "weight": 800,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Mukta",
+    "weight": 800,
+    "case": "uppercase"
+   },
+   "treatment": "block",
+   "lead_treatment": "stroke",
+   "accent": "#e10600",
+   "alt": "#ffffff",
+   "ink": "#ffffff"
+  },
+  {
+   "id": "stadium_gold",
+   "about": "towering stadium caps with a gold outline; motivation, gym, sport",
+   "styles": [
+    "hype",
+    "business"
+   ],
+   "moods": [
+    "powerful",
+    "sport"
+   ],
+   "lead": {
+    "font": "Big Shoulders",
+    "weight": 700,
+    "case": "uppercase"
+   },
+   "key": {
+    "font": "Big Shoulders",
+    "weight": 900,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Big Shoulders",
+    "weight": 900,
+    "case": "uppercase"
+   },
+   "treatment": "outline",
+   "lead_treatment": "stroke",
+   "accent": "#ffcf00",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "titan_toy",
+   "about": "toy-like heavy rounded caps cut out as stickers; gaming, kids, challenges",
+   "styles": [
+    "hype",
+    "food",
+    "vlog"
+   ],
+   "moods": [
+    "fun",
+    "loud"
+   ],
+   "lead": {
+    "font": "Fredoka",
+    "weight": 600,
+    "case": "none"
+   },
+   "key": {
+    "font": "Titan One",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Titan One",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "treatment": "sticker",
+   "lead_treatment": "stroke",
+   "accent": "#4dd0ff",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "dela_impact",
+   "about": "ultra-heavy Japanese-style display on a hot-pink block; bold claims, viral takes",
+   "styles": [
+    "hype",
+    "business"
+   ],
+   "moods": [
+    "bold",
+    "viral"
+   ],
+   "lead": {
+    "font": "Hind",
+    "weight": 700,
+    "case": "none"
+   },
+   "key": {
+    "font": "Dela Gothic",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Dela Gothic",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "treatment": "block",
+   "lead_treatment": "stroke",
+   "accent": "#ff2d55",
+   "alt": "#ffffff",
+   "ink": "#ffffff"
+  },
+  {
+   "id": "bowlby_loud",
+   "about": "fat poster caps with a yellow outline; rants, hot takes, comedy",
+   "styles": [
+    "hype",
+    "podcast"
+   ],
+   "moods": [
+    "loud",
+    "funny"
+   ],
+   "lead": {
+    "font": "Archivo",
+    "weight": 700,
+    "case": "none"
+   },
+   "key": {
+    "font": "Bowlby",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "title": {
+    "font": "Bowlby",
+    "weight": 400,
+    "case": "uppercase"
+   },
+   "treatment": "outline",
+   "lead_treatment": "stroke",
+   "accent": "#ffe600",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "lobster_vintage",
+   "about": "vintage script in cream; old recipes, nostalgia, slow living",
+   "styles": [
+    "food",
+    "calm",
+    "vlog"
+   ],
+   "moods": [
+    "nostalgic",
+    "warm"
+   ],
+   "lead": {
+    "font": "Hind",
+    "weight": 600,
+    "case": "none"
+   },
+   "key": {
+    "font": "Lobster",
+    "weight": 400,
+    "case": "none"
+   },
+   "title": {
+    "font": "Lobster",
+    "weight": 400,
+    "case": "none"
+   },
+   "treatment": "shadow",
+   "lead_treatment": "stroke",
+   "accent": "#ffefc2",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  },
+  {
+   "id": "devotional_glow",
+   "about": "gentle serif with a soft golden glow; spiritual talks, meditation, poetry",
+   "styles": [
+    "calm"
+   ],
+   "moods": [
+    "serene",
+    "spiritual"
+   ],
+   "lead": {
+    "font": "Mukta",
+    "weight": 600,
+    "case": "none"
+   },
+   "key": {
+    "font": "Playfair",
+    "weight": 700,
+    "case": "none"
+   },
+   "title": {
+    "font": "Playfair",
+    "weight": 700,
+    "case": "none"
+   },
+   "treatment": "softglow",
+   "lead_treatment": "shadow",
+   "accent": "#ffd27a",
+   "alt": "#ffffff",
+   "ink": "#111111"
+  }
+ ]
+}

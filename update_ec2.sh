@@ -303,7 +303,13 @@ if [[ "${ROLE}" == "worker" ]]; then
         $'KillMode=mixed\nTimeoutStopSec=60'
     sudo systemctl daemon-reload
     sudo systemctl enable --quiet clipnera-jobs
-    sudo systemctl restart clipnera-jobs
+    if systemctl is-active --quiet clipnera-jobs; then
+        # Never cut a running edit off: the worker finishes what it is doing, exits, and systemd starts the new code.
+        sudo systemctl kill -s USR1 --kill-who=main clipnera-jobs
+        echo "Job worker running; it switches to the new code once its running jobs finish."
+        exit 0
+    fi
+    sudo systemctl start clipnera-jobs
     sleep 5
     if systemctl is-active --quiet clipnera-jobs; then
         echo "Job worker running."

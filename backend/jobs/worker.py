@@ -131,7 +131,16 @@ async def main() -> None:
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, worker.stop)
+    if hasattr(worker, "drain"):
+        # A deploy sends SIGUSR1: running jobs finish, then the worker exits with DRAINED_EXIT and systemd starts the
+        # new code (Restart=on-failure treats the non-zero exit as a restart).
+        loop.add_signal_handler(signal.SIGUSR1, worker.drain)
     await worker.run()
+    if getattr(worker, "drained", False):
+        raise SystemExit(DRAINED_EXIT)
+
+
+DRAINED_EXIT = 75
 
 
 if __name__ == "__main__":

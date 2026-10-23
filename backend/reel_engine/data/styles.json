@@ -1,5 +1,5 @@
 {
- "about": "Editing styles: the house rules a reel is cut by. The director picks the one that fits the creator and the content; code holds the reel to it. effects = the signature effects this style reaches for (data/effects.json names), max_effects = how many one reel may use; caption_looks = the caption looks it rotates (render.CAPTION_LOOKS); text_styles = caption styles it allows (first is its default); moods = music moods it allows (first is its default); graphic_every = seconds of output per story graphic. Caption styles are the ones read while someone talks, so the thin editorial look is kept for titles only.",
+ "about": "Editing styles: the house rules a reel is cut by. The director picks the one that fits the creator and the content; code holds the reel to it. effects = the signature effects this style reaches for (data/effects.json names), max_effects = how many one reel may use; caption_looks = the caption looks it rotates (render.CAPTION_LOOKS); moods = music moods it allows (first is its default); graphic_every = seconds of output per story graphic. Type kits list the styles they suit (data/type_kits.json).",
  "default": "podcast",
  "styles": {
   "podcast": {
@@ -20,11 +20,6 @@
     "slide",
     "pop",
     "punch"
-   ],
-   "text_styles": [
-    "highlight",
-    "punch",
-    "minimal"
    ],
    "moods": [
     "cinematic",
@@ -54,12 +49,6 @@
     "punch",
     "slide"
    ],
-   "text_styles": [
-    "punch",
-    "comic",
-    "neon",
-    "bubble"
-   ],
    "moods": [
     "energetic",
     "urban",
@@ -87,12 +76,6 @@
     "slide",
     "pop"
    ],
-   "text_styles": [
-    "highlight",
-    "bubble",
-    "minimal",
-    "punch"
-   ],
    "moods": [
     "corporate",
     "inspiring",
@@ -119,11 +102,6 @@
     "punch",
     "pop"
    ],
-   "text_styles": [
-    "punch",
-    "highlight",
-    "minimal"
-   ],
    "moods": [
     "corporate",
     "inspiring",
@@ -149,12 +127,6 @@
     "punch",
     "pop"
    ],
-   "text_styles": [
-    "script",
-    "bubble",
-    "punch",
-    "minimal"
-   ],
    "moods": [
     "upbeat",
     "lofi",
@@ -179,12 +151,6 @@
     "pop",
     "punch"
    ],
-   "text_styles": [
-    "bubble",
-    "script",
-    "comic",
-    "punch"
-   ],
    "moods": [
     "upbeat",
     "funny",
@@ -205,11 +171,6 @@
    "caption_looks": [
     "slide",
     "pop"
-   ],
-   "text_styles": [
-    "minimal",
-    "highlight",
-    "script"
    ],
    "moods": [
     "cinematic",

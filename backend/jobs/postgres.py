@@ -102,9 +102,17 @@ class PostgresWorker:
         self._stopping = asyncio.Event()
         self._running: set[asyncio.Task] = set()
         self._last_prune = 0.0
+        self._draining = False
+        self.drained = False
 
     def stop(self) -> None:
         self._stopping.set()
+
+    def drain(self) -> None:
+        """Take no new jobs, finish the running ones, then stop: how a deploy switches to new code without cutting an
+        edit off (a cut-off edit started again from the beginning)."""
+        log.info("Draining: %d job(s) running; no new jobs until they finish", len(self._running))
+        self._draining = True
 
     async def run(self) -> None:
         log.info("Worker started: postgres queue, %d at once, name=%s", self._concurrency, self._name)
@@ -121,6 +129,14 @@ class PostgresWorker:
             await asyncio.gather(*self._running, return_exceptions=True)
 
     async def poll_once(self) -> None:
+        if self._draining:
+            if self._running:
+                await asyncio.wait(self._running, timeout=POLL_SECONDS)
+                return
+            log.info("Drained; stopping so the new code starts")
+            self.drained = True
+            self.stop()
+            return
         if len(self._running) >= self._concurrency:
             await asyncio.wait(self._running, return_when=asyncio.FIRST_COMPLETED)
             return

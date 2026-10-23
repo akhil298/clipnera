@@ -13,8 +13,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
+import shutil
 from functools import lru_cache
 from pathlib import Path
 
@@ -27,8 +29,8 @@ from beats.plan import Beat
 from broll.renditions import probe as probe_av
 from core.config import get_settings
 from core.logging_config import get_logger
-from reel_engine import effects
-from reel_engine.media import FPS, H, W, mean_rgb, run
+from reel_engine import effects, typekits
+from reel_engine.media import FPS, INTERMEDIATE_PRESET, H, W, mean_rgb, run
 from reel_engine.plan import EditPlan, Source, VideoItem
 
 log = get_logger(__name__)
@@ -44,10 +46,11 @@ SHAKY_MOTION = 25.0
 FACE_SHARE, FACE_SHARE_TIGHT = 0.2, 0.26
 MIN_WINDOW = 0.4
 MAX_UPSCALE = 4.0
-PARALLEL_SEGMENTS = 3
+# Work side by side only as far as the machine has cores (the worker has two).
+PARALLEL_SEGMENTS = min(3, os.cpu_count() or 1)
 GRAPHICS_TIMEOUT = 300
 # Pages the renderer draws on side by side, and the time each frame may take on a busy machine (shared by the pages).
-RENDER_WORKERS, FRAME_SECONDS = 3, 0.5
+RENDER_WORKERS, FRAME_SECONDS = min(3, os.cpu_count() or 1), 0.5
 # Graphics whose parts land on given seconds (``steps``); others may use a ``steps`` field of their own (progress labels).
 TIMED_KINDS = {"list", "flow", "ui"}
 
@@ -248,7 +251,7 @@ def segment_cmd(source: Source, item: VideoItem, track: list[list[float]], wb: s
     chain += [f"lut3d=file='{str(grade).replace(':', chr(92) + ':')}'", "eq=contrast=1.04:saturation=1.1", "vignette=PI/9",
               "noise=alls=4:allf=t", "format=yuv420p"]
     return ["ffmpeg", "-v", "error", "-y", *inputs, "-an", "-vf", ",".join(chain), "-frames:v", str(count),
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "17", str(out)]
+            "-c:v", "libx264", "-preset", INTERMEDIATE_PRESET, "-crf", "17", str(out)]
 
 
 async def render_picture(plan: EditPlan, grade_name: str, work: Path) -> Path:
@@ -343,7 +346,6 @@ TITLE_KINDS = {"chapter", "cta", "flicker", "progress", "statement"}
 CAPTION_LOOKS = ("pop", "slide", "stack", "pop", "punch")
 LINES_PER_LOOK = 2
 # Styles drawn in the brand accent; the others carry their own palette (neon magenta, comic yellow...).
-ACCENT_STYLES = {"punch", "highlight", "bubble"}
 
 
 def _lottie(asset) -> dict | None:
@@ -354,49 +356,93 @@ def _lottie(asset) -> dict | None:
 
 
 def caption_look(plan: EditPlan, n: int) -> str:
-    """The opening and payoff lines punch; the rest rotate through the looks, starting where this reel's style says."""
+    """The opening and payoff lines punch; the rest rotate through the looks, starting where this reel's kit says."""
     c = plan.captions[n]
     if n == 0 or c.payoff:
         return "punch"
     looks = (plan.brief.caption_looks if plan.brief and plan.brief.caption_looks else None) or CAPTION_LOOKS
-    first = sum(map(ord, plan.brief.text_style if plan.brief else "")) % len(looks)
+    first = sum(map(ord, plan.brief.type_kit if plan.brief else "")) % len(looks)
     return looks[(first + n // LINES_PER_LOOK) % len(looks)]
+
+
+def _kit(plan: EditPlan, role: str) -> dict:
+    """The reel's type kit for a graphic (typekits.spec); the accent is the one the brief settled on."""
+    kit = typekits.spec(plan.brief.type_kit if plan.brief else "", role)
+    if plan.brief and plan.brief.accent:
+        kit["vars"]["--accent"] = plan.brief.accent
+    return kit
 
 
 def graphic_specs(plan: EditPlan) -> list[dict]:
     specs = []
-    text_style = plan.brief.text_style if plan.brief else "punch"
-    title_style = plan.brief.title_style if plan.brief else "punch"
+    text_kit, title_kit = _kit(plan, "text"), _kit(plan, "title")
+    accent = plan.brief.accent if plan.brief and plan.brief.accent else typekits.FALLBACK_ACCENT
     for g in plan.graphics:
         if g.kind == "effect":
             if effects.drawn(g):
-                specs.append({"id": g.id, "kind": "effect", "theme": "clean", "style": title_style, "place": "effect",
+                specs.append({"id": g.id, "kind": "effect", "theme": "clean", "kit": title_kit, "place": "effect",
                               "dur": round(g.end - g.start, 3), "box": g.box, "data": effects.spec_data(g), "steps": [], "asset": "",
-                              "lottie": None, "accent": plan.brief.accent if plan.brief else "#ffb020"})
+                              "lottie": None, "accent": accent})
             continue
         timed = g.kind in TIMED_KINDS
         data = {k: v for k, v in g.data.items() if k not in ("icon_query", "matte") and not (timed and k == "steps")}
         if g.kind == "map" and g.asset:
             data["svg"] = Path(g.asset.path).read_text(encoding="utf-8")
-        # The hook headline is read like the captions (their bold style); other titles take the contrasting title style.
-        style = text_style if g.kind == "hook" else title_style if g.kind in TITLE_KINDS or g.by == "finish" or g.why == "hook word" else text_style
-        specs.append({"id": g.id, "kind": g.kind, "theme": "clean", "style": style, "place": g.place, "dur": round(g.end - g.start, 3),
-                      "box": g.box, "data": data, "steps": g.data.get("steps", []) if timed else [], "lottie": _lottie(g.asset),
-                      "asset": _uri(g.asset.path) if g.asset and not g.asset.path.endswith(".json") else "",
-                      "accent": (plan.brief.accent if plan.brief else "#ffb020") if style in ACCENT_STYLES else ""})
+        # The hook headline is read like the captions; other titles take the kit's title font.
+        title = g.kind != "hook" and (g.kind in TITLE_KINDS or g.by == "finish" or g.why == "hook word")
+        specs.append({"id": g.id, "kind": g.kind, "theme": "clean", "kit": title_kit if title else text_kit, "place": g.place,
+                      "dur": round(g.end - g.start, 3), "box": g.box, "data": data, "steps": g.data.get("steps", []) if timed else [],
+                      "lottie": _lottie(g.asset), "asset": _uri(g.asset.path) if g.asset and not g.asset.path.endswith(".json") else "",
+                      "accent": accent})
     for n, c in enumerate(plan.captions):
         words = [{**w, "text": w["text"].strip(",.")} for w in c.words] or [{"text": c.lead, "key": False, "at": 0}, {"text": c.keyword, "key": True, "at": 0.1}]
-        specs.append({"id": c.id, "kind": "caption", "theme": "clean", "style": text_style, "place": "beside", "dur": round(c.end - c.start, 3),
+        specs.append({"id": c.id, "kind": "caption", "theme": "clean", "kit": text_kit, "place": "beside", "dur": round(c.end - c.start, 3),
                       "box": c.box, "data": {"words": words, "alt": n % 3 == 2, "look": caption_look(plan, n)}, "steps": [],
                       "lottie": _lottie(c.icon), "asset": _uri(c.icon.path) if c.icon and not c.icon.path.endswith(".json") else "",
-                      "accent": (plan.brief.accent if plan.brief else "#ffb020") if text_style in ACCENT_STYLES else ""})
+                      "accent": accent})
     return specs
 
 
+def _spec_key(spec: dict) -> str:
+    """What a graphic looks like (everything but its id): two passes that draw the same thing share one render."""
+    return hashlib.sha1(json.dumps({k: v for k, v in spec.items() if k != "id"}, sort_keys=True).encode()).hexdigest()
+
+
 async def render_graphics(plan: EditPlan, work: Path, captions_only: bool = False) -> list[Placed]:
+    """Every graphic and caption drawn to a clip. Renders are kept in the reel's cache (beside the pass folders), so
+    a later review pass draws only the items it changed."""
     specs = [s for s in graphic_specs(plan) if not captions_only or s["kind"] == "caption"]
     if not specs:
         return []
+    cache = work.parent / "graphics_cache"
+    cache.mkdir(exist_ok=True)
+    keys = {s["id"]: _spec_key(s) for s in specs}
+    cached = {i: str(cache / f"{k}.mov") for i, k in keys.items() if (cache / f"{k}.mov").exists()}
+    rendered = {i: {"id": i, "file": f} for i, f in cached.items()}
+    todo = [s for s in specs if s["id"] not in cached]
+    if todo:
+        rendered.update(await _draw(todo, work))
+        for i, entry in rendered.items():
+            if i not in cached and entry.get("file"):
+                shutil.copyfile(entry["file"], cache / f"{keys[i]}.mov")
+    log.info("Graphics: %d drawn, %d reused", len(todo), len(cached))
+    timing = {g.id: (g.start, g.end, g.data.get("matte", "")) for g in plan.graphics}
+    timing.update({c.id: (c.start, c.end, "") for c in plan.captions})
+    placed = []
+    for spec in specs:
+        entry = rendered.get(spec["id"], {})
+        if not entry.get("file"):
+            log.warning("Graphic %s (%s) did not render: %s", spec["id"], spec["kind"], entry.get("error"))
+            continue
+        start, end, matte = timing[spec["id"]]
+        p = Placed(Beat(kind=spec["kind"], start=start, end=end), start, end, [], spec["place"], tuple(spec["box"]), file=entry["file"])
+        p.matte, p.behind = matte, bool(matte)
+        placed.append(p)
+    return placed
+
+
+async def _draw(specs: list[dict], work: Path) -> dict[str, dict]:
+    """The renderer run on ``specs``: {id: {"file": ..., "error": ...}}."""
     spec_file = work / "graphics.json"
     spec_file.write_text(json.dumps({"W": W, "H": H, "fps": FPS, "beats": specs}))
     env = {**os.environ, "RENDER_WORKERS": str(RENDER_WORKERS)}
@@ -415,20 +461,7 @@ async def render_graphics(plan: EditPlan, work: Path, captions_only: bool = Fals
         raise RuntimeError("graphics renderer timed out")
     if proc.returncode != 0:
         raise RuntimeError(f"graphics renderer failed: {err.decode('utf-8', 'ignore')[-500:]}")
-    rendered = {r["id"]: r for r in json.loads((work / "rendered.json").read_text())}
-    timing = {g.id: (g.start, g.end, g.data.get("matte", "")) for g in plan.graphics}
-    timing.update({c.id: (c.start, c.end, "") for c in plan.captions})
-    placed = []
-    for spec in specs:
-        entry = rendered.get(spec["id"], {})
-        if not entry.get("file"):
-            log.warning("Graphic %s (%s) did not render: %s", spec["id"], spec["kind"], entry.get("error"))
-            continue
-        start, end, matte = timing[spec["id"]]
-        p = Placed(Beat(kind=spec["kind"], start=start, end=end), start, end, [], spec["place"], tuple(spec["box"]), file=entry["file"])
-        p.matte, p.behind = matte, bool(matte)
-        placed.append(p)
-    return placed
+    return {r["id"]: r for r in json.loads((work / "rendered.json").read_text())}
 
 
 # ------------------------------------------------------------------ compose + encode
@@ -441,6 +474,6 @@ async def compose(plan: EditPlan, picture: Path, placed: list[Placed], mix: Path
     else:
         drawn = picture
     run(["ffmpeg", "-v", "error", "-y", "-i", str(drawn), "-i", str(mix), "-map", "0:v", "-map", "1:a",
-         "-c:v", "libx264", "-preset", "medium", "-crf", "19", "-profile:v", "high", "-pix_fmt", "yuv420p",
+         "-c:v", "libx264", "-preset", "fast", "-crf", "19", "-profile:v", "high", "-pix_fmt", "yuv420p",
          "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-shortest", str(out)])
     return out

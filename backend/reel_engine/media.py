@@ -14,6 +14,8 @@ log = get_logger(__name__)
 
 # Output frame and timing of every reel.
 W, H, FPS = 1080, 1920, 30
+# Steps between the source and the final file re-encode at near-lossless quality; speed matters more than size there.
+INTERMEDIATE_PRESET = "superfast"
 # The vision endpoint takes at most 50 images a request; frames are packed into sheets to fit.
 MAX_IMAGES = 48
 FONT = "/System/Library/Fonts/Helvetica.ttc" if Path("/System/Library/Fonts/Helvetica.ttc").exists() else \

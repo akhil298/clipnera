@@ -57,7 +57,9 @@ def _track(detector, frames: list[tuple[float, np.ndarray]]) -> list[list[float]
     return track
 
 
-async def watch_source(source: Source) -> tuple[list[Shot], list[list[float]], list[list[float]], list[tuple[float, np.ndarray]]]:
+async def watch_source(source: Source, track: bool = True) -> tuple[list[Shot], list[list[float]], list[list[float]], list[tuple[float, np.ndarray]]]:
+    """Shots, face rows, focus rows and sampled frames; ``track=False`` leaves face and focus tracking for later
+    (pipeline.add_tracks tracks only the stretches the reels use)."""
     from video_processor.face_detection import FaceDetector
 
     if source.kind == "image":
@@ -69,7 +71,10 @@ async def watch_source(source: Source) -> tuple[list[Shot], list[list[float]], l
         faces = _faces(detector, image) if image is not None else []
         return [Shot(id=f"s{source.index}.0", src=source.index, t0=0.0, t1=source.duration, faces=faces)], _track(detector, frames), [], frames
     info = MediaInfo(duration=source.duration, width=source.width, height=source.height, has_audio=source.has_audio, has_video=True)
-    (frames, (faces_seen, focus)) = await asyncio.gather(sample_frames(source.path, info), tracking.track(source))
+    async def none() -> tuple[list, list]:
+        return [], []
+
+    (frames, (faces_seen, focus)) = await asyncio.gather(sample_frames(source.path, info), tracking.track(source) if track else none())
     found = await asyncio.to_thread(detect_shots, frames, source.duration)
     detector = FaceDetector()
     shots = []
@@ -97,10 +102,10 @@ def director_sheets(frames: dict[int, list[tuple[float, np.ndarray]]]) -> tuple[
         f"{len(items)} frames packed {columns}x{columns} per sheet, read left-right then top-bottom; each is stamped source:second"
 
 
-async def watch(sources: list[Source]) -> tuple[list[Shot], dict[str, list[list[float]]], dict[str, list[list[float]]], list[bytes], str,
-                                               dict[int, list[tuple[float, np.ndarray]]]]:
+async def watch(sources: list[Source], track: bool = True) -> tuple[list[Shot], dict[str, list[list[float]]], dict[str, list[list[float]]],
+                                                                  list[bytes], str, dict[int, list[tuple[float, np.ndarray]]]]:
     visual = [s for s in sources if s.kind in ("video", "image")]
-    results = await asyncio.gather(*(watch_source(s) for s in visual))
+    results = await asyncio.gather(*(watch_source(s, track) for s in visual))
     shots: list[Shot] = []
     tracks: dict[str, list[list[float]]] = {}
     focus: dict[str, list[list[float]]] = {}

@@ -42,7 +42,7 @@ def beat(**kw) -> DBeat:
 
 def director(**kw) -> DirectorPlan:
     base = dict(audio_view="voice", recipe="creator_advice", target_seconds=30, title_lead="", title_text="", hook_text="", cta="",
-                caption_mode="every_word", music="bed", text_style="punch", mood="upbeat", sections=[], hooks=[], story=[], beats=[],
+                caption_mode="every_word", music="bed", type_kit="amber_block", mood="upbeat", sections=[], hooks=[], story=[], beats=[],
                 inserts=[], keywords=[], burned_captions=False,
                 drop_word=-1, spelling=[], style="podcast", effects=[], notes="")
     return DirectorPlan(**{**base, **kw})
@@ -520,10 +520,12 @@ def test_a_style_holds_the_reel_to_its_rules():
     from reel_engine import styles
 
     words = words_of("this is a calm talk about breathing and being present every day")
-    d = director(style="calm", text_style="comic", mood="energetic", story=[clip(w0=0, w1=len(words) - 1)])
+    from reel_engine import typekits
+
+    d = director(style="calm", type_kit="comic_burst", mood="energetic", story=[clip(w0=0, w1=len(words) - 1)])
     brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0)
     calm = styles.get("calm")
-    assert brief.style == "calm" and brief.text_style in calm["text_styles"] and brief.mood in calm["moods"]
+    assert brief.style == "calm" and brief.type_kit in {k["id"] for k in typekits.for_style("calm")} and brief.mood in calm["moods"]
     assert brief.caption_looks == calm["caption_looks"]
     assert styles.get("nonsense")["name"] == styles.catalog()["default"]
 
@@ -647,3 +649,57 @@ def test_a_thing_with_no_photo_pops_in_as_an_object_beside_the_speaker():
     assert len(objects) == 1 and objects[0].asset.id == "lungs" and objects[0].data["text"] == "Lungs"
     assert not plan.inserts and [g.id for g in plan.graphics if g.kind != "object"] == ["g1"]
     assert len(plan.captions) == 1  # the captions carry on beside it
+
+
+
+# ------------------------------------------------------------------ type kits
+
+def test_every_type_kit_font_is_declared_for_the_renderer_and_shipped():
+    import re
+
+    from reel_engine import typekits
+
+    css = "".join((Path(__file__).resolve().parents[1] / "beats" / "renderer" / name).read_text() for name in ("fonts.css", "beats.css"))
+    declared = set(re.findall(r'font-family: "([^"]+)"; (?:font-weight: [^;]+; )?src: url\("([^"]+)"\)', css))
+    assert typekits.fonts() <= {family for family, _ in declared}
+    fonts = Path(__file__).resolve().parents[1] / "static" / "motion" / "fonts"
+    assert all((fonts / Path(url).name).exists() for _, url in declared)
+    styles_ = {"podcast", "education", "business", "calm", "vlog", "hype", "food"}
+    assert all(len(typekits.for_style(s)) >= 6 for s in styles_)  # every style has real choice
+
+
+def test_reels_of_one_video_never_share_a_type_kit():
+    from reel_engine import typekits
+
+    taken: set[str] = set()
+    words = words_of("money habits that quietly make you poor every single month")
+    picks = []
+    for n in range(6):
+        d = director(style="business", type_kit="oswald_red", story=[clip(w0=0, w1=len(words) - 1)])
+        brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0, taken=taken, seed=f"reel{n}")
+        picks.append(brief.type_kit)
+    assert picks[0] == "oswald_red" and len(set(picks)) == 6
+    assert all(k in {kit["id"] for kit in typekits.for_style("business")} for k in picks)
+
+
+def test_a_kit_draws_from_variables_and_takes_its_accent_from_the_footage():
+    from reel_engine import typekits
+
+    title = typekits.spec("playfair_gold", "title")
+    assert title["classes"] == "treat-underline lead-spaced" and title["vars"]["--key-font"] == '"Playfair"'
+    assert typekits.spec("clean_underline", "text", "#33aaff")["vars"]["--accent"] == "#33aaff"
+    red = np.zeros((64, 64, 3), np.uint8)
+    red[:] = (30, 30, 220)  # BGR: a red set
+    accent = typekits.palette_accent([red])
+    assert accent.startswith("#ff") and accent != typekits.FALLBACK_ACCENT
+    assert typekits.palette_accent([np.full((64, 64, 3), 128, np.uint8)]) == typekits.FALLBACK_ACCENT
+
+
+def test_an_accent_that_matches_the_footage_gives_way_to_a_readable_one():
+    from reel_engine import typekits
+
+    orange_robe = "#ff7a1f"
+    assert typekits.spec("fraunces_soft", "text", orange_robe)["vars"]["--accent"] == "#ffffff"  # peach on orange: white
+    assert typekits.spec("syne_art", "text", "#ff40d0")["vars"]["--accent"] == "#ffd36e"         # pink on pink: its gold
+    assert typekits.spec("lexend_blue", "text", orange_robe)["vars"]["--accent"] == "#4da3ff"    # blue on orange reads
+    assert typekits.spec("amber_block", "text", typekits.FALLBACK_ACCENT)["vars"]["--accent"] == "#ffb020"

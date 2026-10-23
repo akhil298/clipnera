@@ -225,8 +225,8 @@ export function FootageReelForm({ onCreated }: { onCreated: (id: string) => void
         </button>
         <p className="flex items-center justify-center gap-2 text-[13px] text-neutral-400 text-center">
           <Sparkles className="w-4 h-4 text-amber-400 shrink-0" aria-hidden="true" />
-          {link && !footage.length ? 'Edited by GPT-Astra · credits per reel are based on the video\'s length; long videos give several reels'
-            : `Edited by GPT-Astra · about ${estimate} credits per reel${entitlements ? ` · you have ${entitlements.credit_minutes_remaining}` : ''}`}
+          {link && !footage.length ? 'Edited by GPT-Astra · credits are based on the video\'s length; long videos give several reels, each extra one costs less'
+            : `Edited by GPT-Astra · about ${estimate} credits, each extra reel costs less${entitlements ? ` · you have ${entitlements.credit_minutes_remaining}` : ''}`}
         </p>
         {error && <p role="alert" className="text-sm text-rose-300 text-center">{error}</p>}
       </form>

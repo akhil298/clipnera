@@ -1,7 +1,8 @@
 """Editing styles (data/styles.json): the house rules a reel is cut by, chosen by the director, held by code.
 
 A style decides which signature effects a reel reaches for and how many it may use, which caption looks it rotates,
-which caption styles and music moods fit it, and how often a story graphic appears. Adding a style is an entry in
+which music moods fit it, and how often a story graphic appears; the type kits that fit it are listed in the type kit
+catalogue (typekits.py). Adding a style is an entry in
 the catalog; nothing else changes.
 """
 
@@ -31,14 +32,13 @@ def names() -> list[str]:
 def prompt() -> str:
     """The STYLE section of the director's instructions, written from the catalog."""
     rows = [f"- {name} ({s['title']}): for {s['when']}. Favour effects {', '.join(s['effects'])} (up to {s['max_effects']}); "
-            f"caption styles {', '.join(s['text_styles'])}; moods {', '.join(s['moods'])}; a story graphic every ~{s['graphic_every']} s."
+            f"moods {', '.join(s['moods'])}; a story graphic every ~{s['graphic_every']} s."
             for name, s in catalog()["styles"].items()]
     return ("STYLE: pick the editing style that fits this creator and this content (style = its name). It is the house "
-            "rulebook for the whole reel: reach for its effects (they are what make the style), keep text_style and mood "
-            "within its lists, and pace graphics to it.\n" + "\n".join(rows))
+            "rulebook for the whole reel: reach for its effects (they are what make the style), pick a type_kit listed for it, keep "
+            "mood within its list, and pace graphics to it.\n" + "\n".join(rows))
 
 
-def hold(style: dict, text_style: str, mood: str) -> tuple[str, str]:
-    """The director's caption style and mood, kept within the style's own (its first choice when they stray)."""
-    return (text_style if text_style in style["text_styles"] else style["text_styles"][0],
-            mood if mood in style["moods"] else style["moods"][0])
+def hold(style: dict, mood: str) -> str:
+    """The director's music mood, kept within the style's own (its first choice when it strays)."""
+    return mood if mood in style["moods"] else style["moods"][0]

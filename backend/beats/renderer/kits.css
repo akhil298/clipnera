@@ -1,0 +1,48 @@
+/* Type kits (reel_engine/typekits.py): one stylesheet draws every kit. A kit sets variables on the stage (fonts, weights,
+   case, colours) and two classes: how the big word is set off (treat-*) and how the small words read (lead-*).
+   Templates mark text as .lead (small words), .key (the big word), .head, .figure, .hook-word and .tag-pill. */
+.kit { --kit-scripts: var(--scripts); }
+.kit .lead, .kit .head { font-family: var(--lead-font), var(--kit-scripts), sans-serif; font-weight: var(--lead-weight);
+  text-transform: var(--lead-case); color: var(--lead-color, #fff); }
+.kit .key, .kit .figure, .kit .hook-word { font-family: var(--key-font), var(--kit-scripts), sans-serif; font-weight: var(--key-weight);
+  text-transform: var(--key-case); letter-spacing: 0; }
+.kit .key { color: var(--accent); }
+.kit .key.alt { color: var(--alt); }
+.kit .hook-word { color: #fff; }
+.kit .tag-pill { font-family: var(--lead-font), var(--kit-scripts), sans-serif; font-weight: var(--lead-weight); }
+
+/* The small words */
+.kit.lead-stroke .lead { -webkit-text-stroke: 2px rgba(0,0,0,.8); paint-order: stroke fill;
+  text-shadow: 0 3px 12px rgba(0,0,0,.55); }
+.kit.lead-shadow .lead { text-shadow: 0 2px 4px rgba(0,0,0,.85), 0 4px 22px rgba(0,0,0,.65); }
+.kit.lead-spaced .lead { letter-spacing: .2em; font-size: .82em; color: var(--accent); text-shadow: 0 1px 10px rgba(0,0,0,.7); }
+.kit.lead-glow .lead { letter-spacing: .12em; color: var(--alt); text-shadow: 0 0 10px var(--alt), 0 0 26px var(--alt); }
+.kit.lead-plain .lead { text-shadow: 0 2px 10px rgba(0,0,0,.35); }
+
+/* The big word */
+.kit.treat-block .key { color: var(--ink); background: var(--accent); padding: 0 .16em .03em; border-radius: .1em;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.kit.treat-block .key.alt { background: var(--alt); color: #111; }
+.kit.treat-outline .key { -webkit-text-stroke: .07em rgba(20,10,0,.9); paint-order: stroke fill;
+  text-shadow: 0 .08em 0 rgba(0,0,0,.4), 0 0 .5em color-mix(in srgb, var(--accent) 55%, transparent); }
+.kit.treat-bubble .key { color: var(--ink); background: #fff; padding: .04em .3em .08em; border-radius: .34em; box-shadow: 0 12px 30px rgba(0,0,0,.35); }
+.kit.treat-bubble .key.alt { background: var(--accent); }
+.kit.treat-glow .key { color: #fff; text-shadow: 0 0 .06em #fff, 0 0 .2em var(--accent), 0 0 .5em var(--accent), 0 0 1em var(--accent); }
+.kit.treat-glow .key.alt { text-shadow: 0 0 .06em #fff, 0 0 .2em var(--alt), 0 0 .5em var(--alt), 0 0 1em var(--alt); }
+.kit.treat-softglow .key { color: #fff8e6; text-shadow: 0 0 .3em color-mix(in srgb, var(--accent) 80%, transparent), 0 .05em .4em rgba(0,0,0,.5); }
+.kit.treat-shadow .key { text-shadow: .05em .06em 0 rgba(0,0,0,.55), 0 .1em .6em rgba(0,0,0,.45); }
+.kit.treat-underline .key { color: #fff; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: .08em;
+  text-underline-offset: .12em; text-shadow: 0 2px 18px rgba(0,0,0,.5); }
+.kit.treat-tilt .key { rotate: -3deg; text-shadow: .04em .06em 0 rgba(0,0,0,.5), 0 0 .5em rgba(0,0,0,.35); }
+.kit.treat-comic .key { rotate: -2deg; -webkit-text-stroke: .09em #111; paint-order: stroke fill; text-shadow: .08em .1em 0 #111; }
+.kit.treat-gradient .key, .kit.treat-gradient .key > span { background: linear-gradient(100deg, var(--accent) 10%, var(--alt) 90%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.kit.treat-gradient .key { filter: drop-shadow(0 .05em .12em rgba(0,0,0,.6)); }
+/* Letters animated one by one sit in their own boxes: each carries the gradient itself. */
+.kit.treat-gradient .key:has(> span) { background: none; }
+.kit.treat-plate .caption > span, .kit.treat-plate .hook-line > span { background: rgba(10,10,14,.78); border-radius: .22em; padding: .04em .24em;
+  -webkit-text-stroke: 0; text-shadow: none; }
+.kit.treat-plate .key { color: var(--accent); }
+.kit.treat-sticker .key { color: var(--accent); -webkit-text-stroke: .12em #fff; paint-order: stroke fill;
+  filter: drop-shadow(0 .06em .1em rgba(0,0,0,.55)); }
+.kit.treat-sticker .key.alt { color: var(--alt); }
