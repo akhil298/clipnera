@@ -153,3 +153,12 @@ html, body { background: transparent; overflow: hidden; }
 .caption { position: absolute; }
 .caption .lead, .style-editorial .caption .key, .style-script .caption .key, .style-minimal .caption .key, .style-neon .caption .lead {
   -webkit-text-stroke: 2px rgba(0,0,0,.75); paint-order: stroke fill; }
+
+/* Caption looks (footage.js T.caption) and the drifting light on full cards (beats.js ambient). */
+.key-bar { position: absolute; left: -4%; right: -4%; bottom: -0.08em; height: 0.14em; border-radius: 0.07em;
+  background: var(--accent); transform-origin: left center; transform: scaleX(0); z-index: -1; }
+.key.look-punch { text-shadow: 0 0.06em 0.2em rgba(0,0,0,.45); }
+.page { overflow: hidden; }
+.blob { position: absolute; border-radius: 50%; background: var(--accent); opacity: .16; filter: blur(60px); transform: translate(-50%, -50%); }
+.sweep { position: absolute; top: 45%; left: 0; width: 100%; height: 3px; background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: .5; }

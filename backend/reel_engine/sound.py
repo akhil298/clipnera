@@ -22,9 +22,11 @@ from reel_engine.plan import AssetRef, AudioItem, EditPlan
 
 log = get_logger(__name__)
 
-# Only soft whooshes on real transitions (a new chapter, a full card, a photo, a cutaway). No dings, ticks or pops:
-# beeping accents read as noise over a voice and over music.
-GRAPHIC_SOUNDS = {"photocard": ["whoosh_short"], "chapter": ["whoosh_short"], "statement": ["whoosh_short"]}
+# Soft whooshes on real transitions (a new chapter, a full card, a photo, a big word), spaced out; a quiet click as
+# each checklist item lands. No dings, beeps or boings: those read as noise over a voice and over music.
+GRAPHIC_SOUNDS = {"photocard": ["whoosh_short"], "chapter": ["whoosh_short"], "statement": ["whoosh_short"],
+                  "two": ["whoosh_short"], "keyword": ["whoosh_short"]}
+STEP_SOUND, STEP_KINDS, STEP_GAIN = "soft_click", {"list", "flow"}, 0.2
 MIN_SPACING = 3.0
 EFFECT_GAIN = 0.32
 
@@ -43,12 +45,15 @@ def structure(plan: EditPlan) -> Structure:
                      mood=plan.brief.mood if plan.brief else "upbeat")
 
 
-async def effects(plan: EditPlan, scout: Scout) -> list[tuple[float, AssetRef]]:
-    """(output second, sound) for every graphic, caption payoff and framing change, spaced so none smear."""
+async def effects(plan: EditPlan, scout: Scout) -> list[tuple[float, AssetRef, float]]:
+    """(output second, sound, gain) for transitions, spaced so none smear, and a click per checklist item."""
     wanted: list[tuple[float, str]] = []
+    steps: list[float] = []
     for g in plan.graphics:
         for k, name in enumerate(GRAPHIC_SOUNDS.get(g.kind, [])):
-            wanted.append((g.start + (0.3 * k if name != "ding" else 0.35), name))
+            wanted.append((g.start + 0.3 * k, name))
+        if g.kind in STEP_KINDS:
+            steps += [g.start + float(t) for t in g.data.get("steps", [])]
     for item in plan.inserts:
         wanted.append((max(0.0, item.start - 0.06), "whoosh_short"))
     out, last = [], -1.0
@@ -59,9 +64,12 @@ async def effects(plan: EditPlan, scout: Scout) -> list[tuple[float, AssetRef]]:
         if name not in cache:
             cache[name] = await scout.sound(name)
         if cache[name]:
-            out.append((round(at, 3), cache[name]))
+            out.append((round(at, 3), cache[name], EFFECT_GAIN))
             last = at
-    return out
+    click = await scout.sound(STEP_SOUND) if steps else None
+    if click:
+        out += [(round(at, 3), click, STEP_GAIN) for at in sorted(steps) if at < plan.duration]
+    return sorted(out, key=lambda e: e[0])
 
 
 async def voice_track(plan: EditPlan, work: Path) -> Path | None:
@@ -146,12 +154,12 @@ async def mix(plan: EditPlan, scout: Scout, work: Path) -> Path:
                                           asset=AssetRef(id="voice", kind="voice", path=str(voice), licence="user footage", source="user")))
     elif music_ref:
         layers.append("[music]")
-    for n, (at, ref) in enumerate(sfx):
+    for n, (at, ref, gain) in enumerate(sfx):
         inputs += ["-i", ref.path]
         k = len(inputs) // 2 - 1
-        chains.append(f"[{k}:a]aresample=48000,aformat=channel_layouts=stereo,volume={EFFECT_GAIN},adelay={round(at * 1000)}:all=1[s{n}]")
+        chains.append(f"[{k}:a]aresample=48000,aformat=channel_layouts=stereo,volume={gain},adelay={round(at * 1000)}:all=1[s{n}]")
         layers.append(f"[s{n}]")
-        plan.audio_items.append(AudioItem(id=f"s{n}", kind="sfx", start=at, end=at + 0.5, asset=ref, gain=EFFECT_GAIN))
+        plan.audio_items.append(AudioItem(id=f"s{n}", kind="sfx", start=at, end=at + 0.5, asset=ref, gain=gain))
     chains.append("".join(layers) + f"amix=inputs={len(layers)}:duration=first:normalize=0,"
                   f"loudnorm=I=-14:TP=-1:LRA=11,atrim=0:{total:.3f}[out]")
     out = work / "mix.wav"

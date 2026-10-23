@@ -239,8 +239,26 @@
     };
   };
 
+  // A full card never sits still: soft accent light drifts across it and a thin line sweeps by.
+  function ambient(page, seed) {
+    const r = rng(seed);
+    const blobs = [0, 1, 2].map((i) => {
+      const b = el('div', 'blob', page);
+      return { b, x: r() * 80, y: 10 + r() * 70, dx: (r() - 0.5) * 30, dy: (r() - 0.5) * 20, size: 38 + r() * 30 };
+    });
+    const line = el('div', 'sweep', page);
+    return (t, dur) => {
+      blobs.forEach(({ b, x, y, dx, dy, size }) => {
+        const k = t / Math.max(dur, 1);
+        Object.assign(b.style, { left: `${x + dx * k}%`, top: `${y + dy * k}%`, width: `${size}vw`, height: `${size}vw` });
+      });
+      line.style.transform = `translateX(${-120 + 240 * ease.inOut(span(t, 0.15, Math.max(dur - 0.3, 0.5)))}%) rotate(-24deg)`;
+    };
+  }
+
   T.statement = (s, root) => {
     const page = el('div', 'full page', root);
+    const drift = ambient(page, s.id || s.data.text);
     const g = boxed(el('div', 'g', root), s.box);
     Object.assign(g.style, { display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '0.4em', textAlign: 'center' });
     let label = null;
@@ -264,6 +282,7 @@
       seek(t) {
         const z = 1 - ease.out(span(t, s.dur - EXIT, EXIT));
         page.style.opacity = clamp(span(t, 0, 0.18)) * z;
+        drift(t, s.dur);
         g.style.opacity = z;
         if (label) reveal(label, t, 0.05, { dy: 14 });
         words.forEach((w, i) => reveal(w, t, 0.1 + i * 0.09, { dy: 34, from: 0.8 }));

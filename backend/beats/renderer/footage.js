@@ -107,12 +107,21 @@
       icon.src = s.asset;
       Object.assign(icon.style, { width: `${h * 0.42}px`, height: `${h * 0.42}px`, objectFit: 'contain' });
     }
+    // look: how this line moves - pop (words rise in), stack (the big word on its own line), slide (words glide in
+    // from the left), punch (the line lands at once and the big word slams in over an accent bar).
+    const look = s.data.look || 'pop';
     const words = (s.data.words || []).map((wd) => {
-      const node = el('span', wd.key ? `figure key${s.data.alt ? ' alt' : ''}` : 'head lead', g, wd.text);
+      const node = el('span', wd.key ? `figure key look-${look}${s.data.alt ? ' alt' : ''}` : 'head lead', g, wd.text);
       node.style.display = 'inline-block';
-      node.style.fontSize = `${h * (wd.key ? 0.44 : 0.26)}px`;
+      node.style.fontSize = `${h * (wd.key ? (look === 'stack' ? 0.56 : 0.44) : 0.26)}px`;
       node.style.lineHeight = '1.05';
-      return { node, at: wd.at || 0 };
+      let bar = null;
+      if (wd.key && look === 'stack') node.style.flexBasis = '100%';
+      if (wd.key && look === 'punch') {
+        node.style.position = 'relative';
+        bar = el('span', 'key-bar', node);
+      }
+      return { node, bar, key: !!wd.key, at: look === 'punch' ? Math.min(wd.at || 0, 0.12) : wd.at || 0 };
     });
     let scale = 1;
     while ((g.scrollHeight > h * 1.02 || g.scrollWidth > w * 1.02) && scale > 0.45) {
@@ -122,10 +131,22 @@
     return {
       seek(t) {
         envelope(g, t, s.dur, { from: 0.96, blur: 0, rise: 8 });
-        words.forEach(({ node, at }) => {
+        words.forEach(({ node, bar, key, at }) => {
           const p = ease.back(span(t, at, 0.22));
           node.style.opacity = clamp(span(t, at, 0.1));
-          node.style.transform = `translateY(${(1 - p) * 30}%) scale(${0.85 + 0.15 * p})`;
+          if (look === 'slide') {
+            const q = ease.out(span(t, at, 0.28));
+            node.style.transform = `translateX(${(1 - q) * -60}px)`;
+            node.style.filter = `blur(${(1 - q) * 6}px)`;
+          } else if (look === 'punch' && key) {
+            const q = ease.back(span(t, at + 0.08, 0.3));
+            node.style.transform = `scale(${1.7 - 0.7 * q})`;
+            if (bar) bar.style.transform = `scaleX(${ease.out(span(t, at + 0.2, 0.35))})`;
+          } else if (look === 'punch') {
+            node.style.transform = '';
+          } else {
+            node.style.transform = `translateY(${(1 - p) * 30}%) scale(${(look === 'stack' && key ? 0.6 : 0.85) + (look === 'stack' && key ? 0.4 : 0.15) * p})`;
+          }
         });
         if (icon) icon.style.transform = `scale(${ease.back(span(t, 0.05, 0.3))})`;
       },

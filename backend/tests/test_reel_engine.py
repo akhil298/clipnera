@@ -324,3 +324,48 @@ def test_a_content_filter_flag_retries_with_fewer_frames(monkeypatch):
     from reel_engine.inserts import Picks
     result = asyncio.run(ai.vision_json("s", "t", [b"a", b"b", b"c", b"d"], Picks, 100))
     assert result.picks == [] and calls == [4, 2, 2, 0]
+
+
+# ------------------------------------------------------------------ checklists
+
+def test_checklist_items_land_as_spoken_and_captions_do_not_repeat_them():
+    words = words_of("you can be a poor student or an average student or a topper and still pass", gap=0.3)
+    d = director(story=[clip(w0=0, w1=len(words) - 1)],
+                 beats=[beat(kind="list", w0=0, w1=len(words) - 1, items=["Poor student", "Average student", "Topper"], mark="check")])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0)
+    items = comp.video_track(d, brief, words, [], {0: 30.0})
+    graphics = comp.graphics_track(d, brief, words, items, [])
+    panel = next(g for g in graphics if g.kind == "list")
+    said = {w.text: comp.to_output(items, 0, w.t0) for w in words}
+    landed = [panel.start + s for s in panel.data["steps"]]
+    assert abs(landed[0] - said["poor"]) < 0.05 and abs(landed[1] - said["average"]) < 0.05 and abs(landed[2] - said["topper"]) < 0.05
+    assert panel.start <= said["poor"] and said["poor"] - panel.start < 0.4
+    captions, _ = comp.captions_track(d, brief, words, items, graphics)
+    under = [w["text"] for c in captions if panel.start < c.end and c.start < panel.end for w in c.words]
+    assert "topper" not in under and "poor" not in under
+
+
+def test_checklist_steps_fill_unheard_items_between_neighbours():
+    assert comp._steps([1.0, None, 2.0], 0.8, 4.0) == [0.2, 0.7, 1.2]
+
+
+def test_checklist_panel_fits_its_rows():
+    from reel_engine.layout import default_box
+
+    two, five = default_box("list", {"items": ["a", "b"]}), default_box("list", {"items": list("abcde")})
+    assert two[3] < five[3] <= 760 and two[3] < 500
+
+
+def test_each_checklist_item_gets_a_quiet_click():
+    from reel_engine import sound
+
+    plan = EditPlan(duration=10.0, graphics=[GraphicItem(id="g", kind="list", start=2.0, end=5.0, data={"steps": [0.2, 1.0, 1.8]})])
+
+    class S:
+        async def sound(self, name):
+            from reel_engine.plan import AssetRef
+            return AssetRef(id=name, kind="sfx", path=f"/{name}.wav", licence="", source="test")
+
+    out = asyncio.run(sound.effects(plan, S()))
+    clicks = [at for at, ref, gain in out if ref.id == sound.STEP_SOUND]
+    assert clicks == [2.2, 3.0, 3.8] and all(gain < sound.EFFECT_GAIN for _, ref, gain in out if ref.id == sound.STEP_SOUND)

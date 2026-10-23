@@ -71,9 +71,15 @@ def free_top(box: list[int], blocked: list[tuple[int, int, int, int]], detail: n
     return best[1]
 
 
-def default_box(kind: str) -> list[int]:
+def default_box(kind: str, data: dict | None = None) -> list[int]:
     x, w, h, top = BOXES.get(kind, BOXES["two"])
-    return [x, top, w, h]
+    items = len((data or {}).get("items") or [])
+    # Panels fit their rows (the renderer's row sizes): two items get a small card, not the five-item one.
+    if kind == "list" and items:
+        h = round(w * 0.12 + w * 0.15 * (items + (1.3 if (data or {}).get("title") else 0.2)))
+    elif kind == "flow" and items:
+        h = round(w * 0.16 * 1.6 * items)
+    return [x, top, w, min(h, BOXES[kind][2]) if kind in BOXES else h]
 
 
 def place(graphics: list[GraphicItem], captions: list[CaptionLine], video: str) -> None:
@@ -82,7 +88,7 @@ def place(graphics: list[GraphicItem], captions: list[CaptionLine], video: str) 
     items: list[tuple[str, float, float, object]] = [("caption" if not c.payoff else "payoff", c.start, c.end, c) for c in captions]
     items += [(g.kind, g.start, g.end, g) for g in graphics]
     for kind, start, end, item in sorted(items, key=lambda i: (i[0] not in ("caption", "payoff"), i[1])):
-        box = item.box if item.box else default_box(kind)
+        box = item.box if item.box else default_box(kind, getattr(item, "data", None))
         if kind in FIXED or getattr(item, "behind", False):
             item.box = box
             continue

@@ -227,8 +227,20 @@ def _uri(path: str) -> str:
 
 
 TITLE_KINDS = {"chapter", "cta", "flicker", "progress", "statement"}
+# Caption looks rotated through a reel, a couple of lines each, so the words never move the same way for long.
+CAPTION_LOOKS = ("pop", "slide", "stack", "pop", "punch")
+LINES_PER_LOOK = 2
 # Styles drawn in the brand accent; the others carry their own palette (neon magenta, comic yellow...).
 ACCENT_STYLES = {"punch", "highlight", "bubble"}
+
+
+def caption_look(plan: EditPlan, n: int) -> str:
+    """The opening and payoff lines punch; the rest rotate through the looks, starting where this reel's style says."""
+    c = plan.captions[n]
+    if n == 0 or c.payoff:
+        return "punch"
+    first = sum(map(ord, plan.brief.text_style if plan.brief else "")) % len(CAPTION_LOOKS)
+    return CAPTION_LOOKS[(first + n // LINES_PER_LOOK) % len(CAPTION_LOOKS)]
 
 
 def graphic_specs(plan: EditPlan) -> list[dict]:
@@ -247,7 +259,7 @@ def graphic_specs(plan: EditPlan) -> list[dict]:
     for n, c in enumerate(plan.captions):
         words = [{**w, "text": w["text"].strip(",.")} for w in c.words] or [{"text": c.lead, "key": False, "at": 0}, {"text": c.keyword, "key": True, "at": 0.1}]
         specs.append({"id": c.id, "kind": "caption", "theme": "clean", "style": text_style, "place": "beside", "dur": round(c.end - c.start, 3),
-                      "box": c.box, "data": {"words": words, "alt": n % 3 == 2}, "steps": [],
+                      "box": c.box, "data": {"words": words, "alt": n % 3 == 2, "look": caption_look(plan, n)}, "steps": [],
                       "asset": _uri(c.icon.path) if c.icon else "",
                       "accent": (plan.brief.accent if plan.brief else "#ffb020") if text_style in ACCENT_STYLES else ""})
     return specs

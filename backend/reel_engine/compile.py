@@ -37,7 +37,7 @@ CAPTION_YIELDS_TO = {"two", "keyword", "count_up", "statement", "list", "flow", 
 # Every-word captions carry the speech: they give way to graphics that take the whole frame, and under a word
 # graphic they leave out only the words it already shows.
 FULL_FRAME = {"statement", "flicker", "cta"}
-WORD_GRAPHICS = {"two", "keyword"}
+WORD_GRAPHICS = {"two", "keyword", "list", "flow"}
 # Never the big word of a caption line.
 WEAK = {"a", "an", "the", "and", "but", "or", "so", "to", "of", "in", "on", "at", "it", "is", "was", "be", "we", "we've", "i",
         "i'm", "you", "your", "they", "he", "she", "this", "that", "with", "for", "do", "did", "not", "just", "very", "really",
@@ -158,19 +158,51 @@ def _word_times(items: list[VideoItem], words: list[Word], w0: int, w1: int) -> 
     return start, end if end is not None and end > start else start + MIN_GRAPHIC
 
 
-def _steps(items: list[VideoItem], words: list[Word], w0: int, w1: int, labels: list[str], start: float, end: float) -> list[float]:
-    """When each list item lands: the output time of the first word that starts it, else evenly spaced."""
-    found = []
-    pool = words[max(0, w0):min(len(words), w1 + 1)]
+def _same(a: str, b: str) -> bool:
+    """Loose match of a spoken word to a label word: case, punctuation and endings ("students"/"student") aside."""
+    a, b = a.lower().strip(".,!?'\""), b.lower().strip(".,!?'\"")
+    return bool(a and b) and (a == b or (min(len(a), len(b)) >= 4 and a[:4] == b[:4]))
+
+
+def _spoken_at(items: list[VideoItem], words: list[Word], w0: int, w1: int, labels: list[str]) -> list[float | None]:
+    """Output second each label is said: its first strong word, searched in order from where the last one was found."""
+    pool = words[max(0, w0 - 2):min(len(words), w1 + 12)]
+    found: list[float | None] = []
+    k = 0
     for label in labels:
-        head = (label.split() or [""])[0].lower().strip(".,!?")
-        hit = next((w for w in pool if w.text.lower().strip(".,!?") == head), None)
-        t = to_output(items, hit.src, hit.t0) if hit else None
-        found.append(None if t is None else t - start)
-    if any(v is None for v in found) or found != sorted(found):
-        gap = max(0.3, (end - start - 0.4) / max(1, len(labels)))
-        return [round(0.2 + k * gap, 3) for k in range(len(labels))]
-    return [round(max(0.05, v), 3) for v in found]
+        heads = [t for t in label.split() if t.lower().strip(".,!?") not in WEAK] or label.split()
+        # The label's first word decides ("Average student" is not the "student" of the item before); later words
+        # are a fallback for labels said in other words.
+        hit = next((n for h in heads for n in range(k, len(pool)) if any(_same(p, h) for p in pool[n].text.split())), None)
+        t = to_output(items, pool[hit].src, pool[hit].t0) if hit is not None else None
+        if t is not None:
+            k = hit + 1
+        found.append(t)
+    return found
+
+
+def _steps(found: list[float | None], start: float, end: float) -> list[float]:
+    """When each item lands, relative to the graphic: when it is said; items not heard sit between their neighbours."""
+    n = len(found)
+    known = [(k, t - start) for k, t in enumerate(found) if t is not None and t >= start - 0.1]
+    if not known:
+        gap = max(0.3, (end - start - 0.4) / max(1, n))
+        return [round(0.2 + k * gap, 3) for k in range(n)]
+    steps = []
+    for k in range(n):
+        before = [(i, v) for i, v in known if i <= k]
+        after = [(i, v) for i, v in known if i >= k]
+        if before and before[-1][0] == k:
+            v = before[-1][1]
+        elif before and after:
+            (i0, v0), (i1, v1) = before[-1], after[0]
+            v = v0 + (v1 - v0) * (k - i0) / (i1 - i0)
+        elif before:
+            v = before[-1][1] + 0.6 * (k - before[-1][0])
+        else:
+            v = max(0.05, after[0][1] - 0.6 * (after[0][0] - k))
+        steps.append(round(max(0.05, v), 3))
+    return [max(s, steps[i - 1] + 0.15) if i else s for i, s in enumerate(steps)]
 
 
 def _shot_at(shots: list[Shot], items: list[VideoItem], out_t: float) -> Shot | None:
@@ -238,12 +270,18 @@ def graphics_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
             add("two", start, end, {"lead": beat.lead, "text": beat.text}, icon=beat.icon, why=beat.why)
         elif k == "tag":
             add("tag", start, end, {"text": beat.text}, icon=beat.icon, why=beat.why)
-        elif k == "list":
+        elif k in ("list", "flow"):
             items_ = [i for i in beat.items if i][:5]
             if items_:
+                # The panel opens as the first item is said and stays a beat past the last one; items land as spoken.
+                found = _spoken_at(items, words, beat.w0, beat.w1, items_)
+                heard = [t for t in found if t is not None]
+                if heard:
+                    start = max(0.0, heard[0] - 0.25)
+                    end = max(end, heard[-1] + 1.2)
                 end = max(end, start + 0.6 * len(items_) + 0.8)
-                add("list", start, end, {"title": beat.lead, "items": items_, "mark": beat.mark}, place="panel", why=beat.why,
-                    steps=_steps(items, words, beat.w0, beat.w1, items_, start, end))
+                data = {"title": beat.lead, "items": items_, "mark": beat.mark} if k == "list" else {"items": items_}
+                add(k, start, end, data, place="panel", why=beat.why, steps=_steps(found, start, end))
         elif k == "count_up":
             add("count_up", start, max(end, start + 1.8), {"prefix": beat.prefix, "number": beat.number or "0", "suffix": beat.suffix,
                                                           "label": beat.text}, why=beat.why)
@@ -256,11 +294,6 @@ def graphics_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
         elif k == "chart":
             add("chart", start, max(end, start + 2.0), {"label": beat.text, "trend": beat.trend if beat.trend != "none" else "up",
                                                        "figures": [beat.number] if beat.number else []}, place="panel", why=beat.why)
-        elif k == "flow":
-            items_ = [i for i in beat.items if i][:5]
-            if items_:
-                add("flow", start, max(end, start + 0.6 * len(items_) + 0.8), {"items": items_}, place="panel", why=beat.why,
-                    steps=_steps(items, words, beat.w0, beat.w1, items_, start, end))
         elif k == "name":
             add("name", start, end, {"text": beat.text, "label": beat.lead}, why=beat.why)
     payoff = next((i for i in items if i.role == "payoff"), None) or (items[-2] if len(items) > 2 else None)
@@ -324,7 +357,7 @@ def captions_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
             continue
         for w in words:
             if w.src == item.src and not w.filler and item.t0 <= w.t0 < item.t1:
-                kept.append((w, round(item.out0 + (w.t0 - item.t0), 3), round(item.out0 + (min(w.t1, item.t1) - item.t0), 3)))
+                kept.append((w, round(item.out0 + (w.t0 - item.t0) / item.speed, 3), round(item.out0 + (min(w.t1, item.t1) - item.t0) / item.speed, 3)))
     # A stutter ("and and") shows once.
     kept = [e for k, e in enumerate(kept) if k == 0 or e[0].text.lower().strip(",.") != kept[k - 1][0].text.lower().strip(",.")]
     lines: list[list[tuple[Word, float, float]]] = []
@@ -342,7 +375,8 @@ def captions_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
     def blocking() -> list[tuple[float, float, set[str] | None]]:
         """(start, end, words it shows) of each graphic a caption gives way to; None hides every word."""
         if brief.caption_mode == "every_word":
-            return [(g.start, g.end, None if g.kind in FULL_FRAME else _spoken(f"{g.data.get('lead', '')} {g.data.get('text', '')}"))
+            return [(g.start, g.end, None if g.kind in FULL_FRAME else _spoken(" ".join(
+                        [str(g.data.get(k, "")) for k in ("lead", "text", "title")] + [str(i) for i in g.data.get("items", [])])))
                     for g in graphics if g.kind in FULL_FRAME | WORD_GRAPHICS]
         return [(g.start, g.end, None) for g in graphics if g.kind in CARD_KINDS or g.place == "card" or g.kind in CAPTION_YIELDS_TO]
 
