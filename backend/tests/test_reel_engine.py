@@ -510,5 +510,5 @@ def test_nobody_on_screen_frames_what_matters_not_the_middle():
 
     focus = [[k * 0.5, 0.82] for k in range(8)]
     crop, _ = render.framing(_src(), _item(), [], focus)
-    left = float(re.search(r"'\(([0-9.]+)\)\*iw'", crop).group(1))
+    left = float(re.findall(r"([0-9]\.[0-9]+)\)*\*iw'", crop)[-1])  # where the window settles
     assert left > 0.5  # a centred window would start at 0.34
