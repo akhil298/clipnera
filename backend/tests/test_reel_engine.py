@@ -1089,6 +1089,16 @@ def test_the_director_designs_each_reels_type_and_a_broken_design_falls_back_to_
     assert all(f in typekits.design_prompt() for f in ("Unbounded", "Inter", "glow"))
 
 
+def test_a_designed_look_is_not_repeated_by_a_sibling_or_recent_reel():
+    words = words_of("money habits that quietly make you poor")
+    d = director(style="business", type_kit="oswald_red", story=[clip(w0=0, w1=len(words) - 1)])
+    taken: set[str] = set()
+    first, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0, taken=taken, seed="r0")
+    second, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0, taken=taken, seed="r1")
+    assert first.kit["key"]["font"] == "Unbounded" and second.kit == {}
+    assert second.type_kit != first.type_kit
+
+
 def test_a_long_take_is_reframed_about_every_two_seconds_between_words():
     words = words_of(" ".join(f"w{i}" for i in range(30)))  # ~10.5 s of continuous speech
     d = director(story=[clip(w0=0, w1=29, zoom="in")])

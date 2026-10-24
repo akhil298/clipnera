@@ -20,7 +20,7 @@ from edit_engine.model import EditProject, EditStatus
 from edit_engine.pricing import reel_credits
 from jobs.queue import Job, handler
 from notifications.service import notify_reel_outcome
-from reel_engine import pipeline
+from reel_engine import pipeline, typekits
 from reel_engine.media import cover
 from reel_engine.moments import dump as moments_dump
 from reel_engine.plan import EditPlan
@@ -64,6 +64,8 @@ async def recent_kits(user_id: str, edit_id: str) -> frozenset[str]:
         brief = (json.loads(raw or "{}").get("plan") or {}).get("brief") or {}
         if brief.get("type_kit"):
             kits.add(brief["type_kit"])
+        if brief.get("kit"):
+            kits.add(typekits.signature(brief["kit"]))
     return frozenset(kits)
 
 

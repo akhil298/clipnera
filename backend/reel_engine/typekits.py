@@ -62,9 +62,17 @@ def design_prompt() -> str:
             f"{', '.join(sorted(declared_fonts()))}. Use one or two families (a heavy display face for key/title, a clean "
             "sans for lead); lead weight 600+ (or lead_treatment stroke/glow) so captions read on a phone; key/title "
             f"700-900. treatment (how the big word is set off): one of {', '.join(sorted(big))}; lead_treatment: one of "
-            f"{', '.join(sorted(lead - {'spaced'}))}. accent = the big word's colour (strong, readable on the footage), alt = "
-            "a second colour, ink = text colour on light cards; all as #rrggbb. type_kit still names the closest catalogue "
-            "kit: it is used if your design breaks a rule. why = one line on the design.")
+            f"{', '.join(sorted(lead - {'spaced'}))}. accent = the big word's colour, taken from this footage and topic "
+            "(strong, readable on it; amber is one choice among many, not a default), alt = a second colour, ink = text "
+            "colour on light cards; all as #rrggbb. Every reel gets a different look: the same Inter captions under a "
+            "condensed headline face on a plate, reel after reel, is the house look to avoid; a design that repeats one of "
+            "the creator's recent reels is dropped for a catalogue kit. type_kit still names the closest catalogue kit: it "
+            "is used if your design breaks a rule. why = one line on the design.")
+
+
+def signature(kit: dict) -> str:
+    """What makes a designed kit look like itself (its big word's font and treatment), so two reels don't share it."""
+    return f"designed:{kit['key']['font']}/{kit['treatment']}"
 
 
 def mix(main: str, picked: list[str], style: str, seed: str = "") -> list[str]:

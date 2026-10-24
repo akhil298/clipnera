@@ -245,7 +245,7 @@ packaging that is part of the scene); then caption_mode must be "none" - two cap
 CAPTIONS: caption_mode from the recipe (every_word whenever someone talks to camera or narrates, keyword only for ads and demos, none
 when nobody talks). keywords = word ids shown big (nouns, numbers, punch words; about one per 3-6 words).
 MUSIC: music "bed" under a voice, "score" for picture-only reels, mood to match. drop_word = id of the reveal word
-(the music drops there), or -1. ACCENT stays the brand amber.
+(the music drops there), or -1.
 SPELLING: speech recognition mishears names, dishes and dialect. For each wrong word id give the correct spelling
 as a local would type it (romanized for Indic languages).
 TITLE: title_lead + title_text name the result or the idea (shown over the payoff). cta <= 34 chars: one action the

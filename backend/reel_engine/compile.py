@@ -86,8 +86,13 @@ def brief_of(d: DirectorPlan, audio: AudioReport, target: float, headline: str =
     kit = typekits.choose(d.type_kit, style["name"], taken, seed or d.notes)
     taken.add(kit)
     mixed = typekits.mix(kit, d.mix_kits, style["name"], seed or d.notes)
-    # The director's own type design for this reel when it keeps to the rules; the catalogue kit otherwise.
+    # The director's own type design for this reel when it keeps to the rules and no reel in ``taken`` has its look;
+    # the catalogue kit otherwise.
     design = typekits.designed(d.text_style.model_dump()) or {}
+    if design and typekits.signature(design) in taken:
+        design = {}
+    if design:
+        taken.add(typekits.signature(design))
     accent = typekits.spec(kit, "text", footage_accent, kit=design or None)["vars"]["--accent"]
     brief = Brief(path=path, audio_kind=measured, recipe=r["id"], target_seconds=target or d.target_seconds,
                   type_kit=kit, mix_kits=mixed, kit=design, style=style["name"], caption_looks=style["caption_looks"],
