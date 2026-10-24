@@ -235,14 +235,16 @@ if [[ "${ROLE}" == "worker" ]]; then
         || echo "WARNING: sound, motion and emoji libraries not fetched; reels use the built-in set." >&2
 fi
 
-# Small machines (t3.micro: 1 GB) get swap so a burst cannot OOM-kill the API.
-if [[ "$(awk '/MemTotal/ {print $2}' /proc/meminfo)" -lt 3000000 ]] && ! swapon --show | grep -q .; then
-    sudo fallocate -l 2G /swapfile
+# Small machines (t3.micro: 1 GB) get swap so a burst cannot OOM-kill the API; the worker gets more, since two
+# edits at once (Demucs, Chrome, FFmpeg) peaked past its 8 GB and the OOM killer restarted them from the start.
+SWAP_GB=$([[ "${ROLE}" == "worker" ]] && echo 4 || echo 2)
+if { [[ "${ROLE}" == "worker" ]] || [[ "$(awk '/MemTotal/ {print $2}' /proc/meminfo)" -lt 3000000 ]]; } && ! swapon --show | grep -q .; then
+    sudo fallocate -l "${SWAP_GB}G" /swapfile
     sudo chmod 600 /swapfile
     sudo mkswap /swapfile >/dev/null
     sudo swapon /swapfile
     grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
-    echo "Added 2 GB swap."
+    echo "Added ${SWAP_GB} GB swap."
 fi
 
 # Settings now come from S3 only; a leftover .env would silently override
