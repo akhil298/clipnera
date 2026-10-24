@@ -43,8 +43,11 @@ class Choices(_M):
 SYSTEM = """You choose icons for a video's on-screen labels. Each request is a thing named in the video, the words
 around it, and candidate icons (id: what the icon shows). Pick the candidate that LITERALLY shows that thing as it
 is meant here - "weight plates" in a gym are not dinner plates, "battle ropes" are not a knot, a "pull-up bar" is
-not signal bars, "CapCut" is an app, not a cap. If no candidate shows it, answer "none". Never pick a loose,
-metaphorical or decorative match. Animated emoji (ids starting e_) are fine when the emoji literally shows the
+not signal bars, "CapCut" is an app, not a cap. The thing must be meant literally: a word inside a figure of
+speech names nothing to show - "in your head" is not a brain, "the key is" is not a key, "the heart of it" is not a
+heart, "on the table" is not a table, "I'm buying a car" as an example of a choice is not a car being shown. If no
+candidate shows it, or the word is used figuratively, answer "none". Never pick a loose, metaphorical or decorative
+match. Animated emoji (ids starting e_) are fine when the emoji literally shows the
 thing or the feeling said; prefer them for feelings and simple objects. JSON only."""
 
 

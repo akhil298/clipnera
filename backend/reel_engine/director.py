@@ -131,6 +131,7 @@ class DirectorPlan(_M):
     burned_captions: bool
     music: Literal["bed", "score", "none"]
     type_kit: str
+    mix_kits: list[str]
     text_style: DTextStyle
     mood: Literal["upbeat", "energetic", "chill", "lofi", "cinematic", "inspiring", "dramatic", "corporate", "funny", "urban"]
     sections: list[DSection]

@@ -1,6 +1,6 @@
 """Run the reel engine on local files.
 
-    cd backend && venv/bin/python -m reel_engine clip1.mp4 [clip2.mp4 ...] --out out/reel.mp4 [--brief "..."] [--target 45]
+    cd backend && venv/bin/python -m reel_engine clip1.mp4 [clip2.mp4 ...] --out out/reel.mp4 [--brief "..."] [--target 45] [--passes 3 --ship 9]
 
 The Edit Plan is written next to the reel as ``<name>.plan.json``; made assets go to a local registry
 (``--store``, default ``~/.clipnera/reel_assets``) that later runs search before making anything again.
@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 from reel_engine.assets import LocalAssetStore
-from reel_engine.pipeline import run
+from reel_engine.pipeline import SHIP_SCORE, run
 
 
 def main() -> None:
@@ -24,6 +24,7 @@ def main() -> None:
     parser.add_argument("--brief", default="")
     parser.add_argument("--target", type=float, default=0.0)
     parser.add_argument("--passes", type=int, default=2)
+    parser.add_argument("--ship", type=float, default=SHIP_SCORE, help="stop the review passes once a pass scores this")
     parser.add_argument("--work", type=Path)
     parser.add_argument("--store", type=Path, default=Path.home() / ".clipnera" / "reel_assets")
     args = parser.parse_args()
@@ -35,7 +36,7 @@ def main() -> None:
         print(f"[{last.at:6.1f}s] {last.stage:9} {last.note}", flush=True)
 
     plan = asyncio.run(run([p.resolve() for p in args.inputs], work, out, LocalAssetStore(args.store), owner="local",
-                           brief=args.brief, target_seconds=args.target, passes=args.passes, on_progress=report))
+                           brief=args.brief, target_seconds=args.target, passes=args.passes, on_progress=report, ship=args.ship))
     out.with_suffix(".plan.json").write_text(json.dumps(plan.model_dump(), indent=1, ensure_ascii=False))
     print(f"\nReel: {out} ({plan.duration:.1f} s)")
     print(f"Path {plan.brief.path} · recipe {plan.brief.recipe} · audio {plan.audio.kind} · model calls {plan.ai_calls}")

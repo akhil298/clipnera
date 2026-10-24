@@ -168,13 +168,14 @@ async def add_tracks(found: Analysis, windows: list[tuple[int, float, float]] | 
 
 
 async def run(inputs: list[Path], work: Path, out: Path, store: AssetStore, owner: str = "", brief: str = "",
-              target_seconds: float = 0.0, passes: int = 2, on_progress: Progress_ = None) -> EditPlan:
-    """One reel from the footage (the whole of it is the director's to choose from)."""
+              target_seconds: float = 0.0, passes: int = 2, on_progress: Progress_ = None, ship: float = SHIP_SCORE) -> EditPlan:
+    """One reel from the footage (the whole of it is the director's to choose from); review passes stop once a pass
+    scores ``ship`` or more."""
     work.mkdir(parents=True, exist_ok=True)
     plan = EditPlan()
     stage = _stager(plan, on_progress)
     found = await analyze(inputs, work, stage)
-    return await edit(found, plan, stage, work, out, store, owner, brief, target_seconds, passes)
+    return await edit(found, plan, stage, work, out, store, owner, brief, target_seconds, passes, ship=ship)
 
 
 async def run_many(inputs: list[Path], work: Path, out_dir: Path, store: AssetStore, owner: str = "", brief: str = "",
@@ -282,7 +283,8 @@ def moment_length(seconds: float) -> float:
 
 async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awaitable[None]], work: Path, out: Path,
                store: AssetStore, owner: str, brief: str, target_seconds: float, passes: int,
-               window: tuple[int, float, float] | None = None, headline: str = "", kits: set[str] | None = None) -> EditPlan:
+               window: tuple[int, float, float] | None = None, headline: str = "", kits: set[str] | None = None,
+               ship: float = SHIP_SCORE) -> EditPlan:
     """One reel from analysed footage; ``window`` keeps the director to one moment and shows it that stretch closely,
     ``headline`` is the moment finder's hook text (the director's own is used when it has none)."""
     work.mkdir(parents=True, exist_ok=True)
@@ -425,7 +427,7 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
         await stage("review", f"pass {n + 1} scored {result.overall}/10")
         if best is None or result.overall > best[0]:
             best = (result.overall, final, plan.model_copy(deep=True))
-        if result.overall >= SHIP_SCORE or n + 1 >= passes:
+        if result.overall >= ship or n + 1 >= passes:
             break
         if not apply(plan, actions):
             break

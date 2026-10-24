@@ -109,6 +109,8 @@ class Brief(_Model):
     # The reel's type kit (data/type_kits.json). text_style/title_style are the looks before kits, kept so older saved
     # plans still load.
     type_kit: str = ""
+    # More kits mixed in beside type_kit (typekits.mix): captions and statements take turns through them.
+    mix_kits: list[str] = Field(default_factory=list)
     # A type design the director wrote for this reel (typekits.designed), used instead of the catalogue kit.
     kit: dict = Field(default_factory=dict)
     text_style: str = ""

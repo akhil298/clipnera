@@ -19,6 +19,8 @@ import numpy as np
 
 CATALOG = Path(__file__).resolve().parent / "data" / "type_kits.json"
 FALLBACK_ACCENT = "#ffb020"
+# How many kits a reel mixes in beside its main one.
+MIX_MIN, MIX_MAX = 2, 3
 
 
 @lru_cache(maxsize=1)
@@ -42,9 +44,13 @@ def for_style(style: str) -> list[dict]:
 def prompt() -> str:
     """The TYPE KITS section of the director's instructions."""
     rows = [f"- {k['id']} ({', '.join(k['styles'])}): {k['about']}" for k in catalog().values() if legible(k)]
-    return ("TYPE KITS (type_kit: the look of every caption, label and title in the reel). Pick the kit whose feel fits this "
-            "creator, the topic and the footage's colours, from the kits listed for your STYLE; vary it - the same few kits "
-            "on every reel is exactly what to avoid.\n" + "\n".join(rows))
+    return ("TYPE KITS (type_kit: the reel's main look, kept for the hook and the payoff line). Pick the kit whose feel fits "
+            "this creator, the topic and the footage's colours, from the kits listed for your STYLE; vary it - the same few "
+            "kits on every reel is exactly what to avoid.\n"
+            f"mix_kits: {MIX_MIN}-{MIX_MAX} more kits that pair with type_kit and contrast with it (another treatment, another "
+            "font: a heavy block word beside a clean outline, a sticker beside a soft glow), the way the best human edits mix "
+            "several type styles in one reel. Captions take turns through the set a few lines at a time and statements, "
+            "labels and titles alternate through it, so pick kits that read as one family of looks.\n" + "\n".join(rows))
 
 
 def design_prompt() -> str:
@@ -59,6 +65,26 @@ def design_prompt() -> str:
             f"{', '.join(sorted(lead - {'spaced'}))}. accent = the big word's colour (strong, readable on the footage), alt = "
             "a second colour, ink = text colour on light cards; all as #rrggbb. type_kit still names the closest catalogue "
             "kit: it is used if your design breaks a rule. why = one line on the design.")
+
+
+def mix(main: str, picked: list[str], style: str, seed: str = "") -> list[str]:
+    """The kits a reel mixes in beside ``main``: the director's picks that exist, read on a phone and differ from the
+    main kit, topped up from the style's kits with another treatment and font (stable for a reel via ``seed``)."""
+    kits = catalog()
+    base = kits.get(main, {})
+
+    def contrasts(k: dict) -> bool:
+        return k["id"] != main and legible(k) and (k["treatment"] != base.get("treatment") or k["key"]["font"] != base.get("key", {}).get("font"))
+
+    out = list(dict.fromkeys(p for p in picked if p in kits and contrasts(kits[p])))[:MIX_MAX]
+    spare = [k for k in for_style(style) if k["id"] not in out and contrasts(k)]
+    while len(out) < MIX_MIN and spare:
+        k = spare.pop(zlib.crc32(f"{seed}:{len(out)}".encode()) % len(spare))
+        if all(kits[o]["treatment"] != k["treatment"] for o in out):
+            out.append(k["id"])
+        elif not any(all(kits[o]["treatment"] != s["treatment"] for o in out) for s in spare):
+            out.append(k["id"])
+    return out
 
 
 def choose(picked: str, style: str, avoid: set[str] | frozenset[str] = frozenset(), seed: str = "") -> str:

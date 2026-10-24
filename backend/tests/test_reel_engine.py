@@ -43,7 +43,7 @@ def beat(**kw) -> DBeat:
 
 def director(**kw) -> DirectorPlan:
     base = dict(audio_view="voice", recipe="creator_advice", target_seconds=30, title_lead="", title_text="", hook_text="", cta="",
-                caption_mode="every_word", music="bed", type_kit="amber_block", mood="upbeat", sections=[], hooks=[], story=[], beats=[],
+                caption_mode="every_word", music="bed", type_kit="amber_block", mix_kits=[], mood="upbeat", sections=[], hooks=[], story=[], beats=[],
                 inserts=[], scenes=[], keywords=[], burned_captions=False,
                 drop_word=-1, spelling=[], style="podcast", effects=[], notes="", text_style=text_style())
     return DirectorPlan(**{**base, **kw})
@@ -929,6 +929,39 @@ def test_captions_only_use_readable_type_kits():
     assert all(typekits.legible(k) for k in typekits.for_style("podcast"))
     assert "serif_editorial" not in [k["id"] for k in typekits.for_style("podcast")]
     assert "serif_editorial" not in typekits.prompt()
+
+
+def test_a_reel_mixes_several_type_kits_the_director_picks_or_code_tops_up():
+    from reel_engine import typekits
+
+    words = words_of("money habits that quietly make you poor")
+    kits = typekits.catalog()
+    d = director(style="business", type_kit="oswald_red", mix_kits=["oswald_red", "no_such_kit"], story=[clip(w0=0, w1=len(words) - 1)])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0, seed="r0")
+    assert typekits.MIX_MIN <= len(brief.mix_kits) <= typekits.MIX_MAX and brief.type_kit not in brief.mix_kits
+    assert all(k in kits and typekits.legible(kits[k]) for k in brief.mix_kits)
+    assert len({kits[k]["treatment"] for k in [brief.type_kit, *brief.mix_kits]}) >= 2
+    chosen = [k["id"] for k in typekits.for_style("business") if k["id"] != brief.type_kit][:2]
+    d = director(style="business", type_kit="oswald_red", mix_kits=chosen, story=[clip(w0=0, w1=len(words) - 1)])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0, seed="r0")
+    assert brief.mix_kits[:len(chosen)] == [k for k in chosen if k in brief.mix_kits]
+
+
+def test_captions_and_statements_take_turns_through_the_reels_kits():
+    from reel_engine import render
+    from reel_engine.plan import Brief
+
+    plan = EditPlan(duration=20, brief=Brief(path="voice", audio_kind="voice", recipe="creator_advice", target_seconds=20,
+                                                type_kit="amber_block", mix_kits=["oswald_red", "comic_burst"]),
+                    graphics=[GraphicItem(id="h", kind="hook", start=0, end=2, data={"text": "Hook"}),
+                              GraphicItem(id="s1", kind="statement", start=4, end=6, data={"text": "One"}),
+                              GraphicItem(id="s2", kind="statement", start=8, end=10, data={"text": "Two"})],
+                    captions=[_line(f"c{i}", 2.0 + i * 1.6, f"w{i}") for i in range(9)])
+    specs = {s["id"]: s for s in render.graphic_specs(plan)}
+    fonts = lambda ids: [specs[i]["kit"]["vars"]["--key-font"] for i in ids]
+    assert fonts(["h"]) == fonts(["c0"])  # the hook keeps the main kit
+    assert len(set(fonts([f"c{i}" for i in range(9)]))) >= 2
+    assert fonts(["s1"]) != fonts(["s2"])
 
 
 def _line(cid: str, start: float, keyword: str) -> "CaptionLine":

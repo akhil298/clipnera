@@ -418,6 +418,7 @@ TITLE_KINDS = {"chapter", "cta", "flicker", "progress", "statement"}
 # Caption looks rotated through a reel, a couple of lines each, so the words never move the same way for long.
 CAPTION_LOOKS = ("pop", "slide", "stack", "pop", "punch")
 LINES_PER_LOOK = 2
+LINES_PER_KIT = 3
 # Styles drawn in the brand accent; the others carry their own palette (neon magenta, comic yellow...).
 
 
@@ -438,17 +439,29 @@ def caption_look(plan: EditPlan, n: int) -> str:
     return looks[(first + n // LINES_PER_LOOK) % len(looks)]
 
 
-def _kit(plan: EditPlan, role: str) -> dict:
-    """The reel's type kit for a graphic (typekits.spec); the accent is the one the brief settled on."""
-    kit = typekits.spec(plan.brief.type_kit if plan.brief else "", role, kit=(plan.brief.kit or None) if plan.brief else None)
-    if plan.brief and plan.brief.accent:
-        kit["vars"]["--accent"] = plan.brief.accent
+def _kit(plan: EditPlan, role: str, turn: int = 0) -> dict:
+    """The type kit for a graphic (typekits.spec): turn 0 is the reel's main kit (or the director's own design), later
+    turns cycle through the kits it mixes in. Mixed-in kits keep their own accent; the main kit takes the brief's."""
+    brief = plan.brief
+    kits = [brief.type_kit if brief else ""] + (brief.mix_kits if brief else [])
+    n = turn % len(kits)
+    kit = typekits.spec(kits[n], role, kit=(brief.kit or None) if brief and n == 0 else None)
+    if n == 0 and brief and brief.accent:
+        kit["vars"]["--accent"] = brief.accent
     return kit
+
+
+def caption_turn(plan: EditPlan, n: int) -> int:
+    """Which of the reel's kits caption line ``n`` takes: the opening and payoff lines keep the main kit, the others
+    change kit every ``LINES_PER_KIT`` lines."""
+    c = plan.captions[n]
+    return 0 if n == 0 or c.payoff else n // LINES_PER_KIT
 
 
 def graphic_specs(plan: EditPlan) -> list[dict]:
     specs = []
     text_kit, title_kit = _kit(plan, "text"), _kit(plan, "title")
+    turn = 0  # statements, labels and titles alternate through the mixed-in kits
     accent = plan.brief.accent if plan.brief and plan.brief.accent else typekits.FALLBACK_ACCENT
     for g in plan.graphics:
         if g.kind == "effect":
@@ -463,13 +476,17 @@ def graphic_specs(plan: EditPlan) -> list[dict]:
             data["svg"] = Path(g.asset.path).read_text(encoding="utf-8")
         # The hook headline is read like the captions; other titles take the kit's title font.
         title = g.kind != "hook" and (g.kind in TITLE_KINDS or g.by == "finish" or g.why == "hook word")
-        specs.append({"id": g.id, "kind": g.kind, "theme": "clean", "kit": title_kit if title else text_kit, "place": g.place,
+        kit = title_kit if title else text_kit
+        if g.kind not in ("hook", "progress", "accent", "cta") and g.data.get("text"):
+            turn += 1
+            kit = _kit(plan, "title" if title else "text", turn)
+        specs.append({"id": g.id, "kind": g.kind, "theme": "clean", "kit": kit, "place": g.place,
                       "dur": round(g.end - g.start, 3), "box": g.box, "data": data, "steps": g.data.get("steps", []) if timed else [],
                       "lottie": _lottie(g.asset), "asset": _uri(g.asset.path) if g.asset and not g.asset.path.endswith(".json") else "",
                       "accent": accent})
     for n, c in enumerate(plan.captions):
         words = [{**w, "text": w["text"].strip(",.")} for w in c.words] or [{"text": c.lead, "key": False, "at": 0}, {"text": c.keyword, "key": True, "at": 0.1}]
-        specs.append({"id": c.id, "kind": "caption", "theme": "clean", "kit": text_kit, "place": "beside", "dur": round(c.end - c.start, 3),
+        specs.append({"id": c.id, "kind": "caption", "theme": "clean", "kit": _kit(plan, "text", caption_turn(plan, n)), "place": "beside", "dur": round(c.end - c.start, 3),
                       "box": c.box, "data": {"words": words, "alt": n % 3 == 2, "look": caption_look(plan, n)}, "steps": [],
                       "lottie": _lottie(c.icon), "asset": _uri(c.icon.path) if c.icon and not c.icon.path.endswith(".json") else "",
                       "accent": accent})

@@ -83,11 +83,12 @@ def brief_of(d: DirectorPlan, audio: AudioReport, target: float, headline: str =
     taken = taken if taken is not None else set()
     kit = typekits.choose(d.type_kit, style["name"], taken, seed or d.notes)
     taken.add(kit)
+    mixed = typekits.mix(kit, d.mix_kits, style["name"], seed or d.notes)
     # The director's own type design for this reel when it keeps to the rules; the catalogue kit otherwise.
     design = typekits.designed(d.text_style.model_dump()) or {}
     accent = typekits.spec(kit, "text", footage_accent, kit=design or None)["vars"]["--accent"]
     brief = Brief(path=path, audio_kind=measured, recipe=r["id"], target_seconds=target or d.target_seconds,
-                  type_kit=kit, kit=design, style=style["name"], caption_looks=style["caption_looks"],
+                  type_kit=kit, mix_kits=mixed, kit=design, style=style["name"], caption_looks=style["caption_looks"],
                   title_lead=d.title_lead, title_text=d.title_text,
                   hook_word=(d.hooks[0].word if d.hooks else "").upper()[:12],
                   hook_text=hook_text(headline, d.hook_text) if path == "voice" else "",
