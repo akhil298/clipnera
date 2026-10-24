@@ -103,6 +103,13 @@ def _preview(path: Path, kind: str) -> bytes:
     return jpeg(image) if image is not None else b""
 
 
+def same_subject(record: AssetRecord, asked: set[str]) -> bool:
+    """A stored picture is reused only for the same subject: it shares most of the words asked for (one shared word
+    put a galaxy on "hand on chest" and on "clock face close up")."""
+    shared = asked & set(record.words)
+    return len(shared) >= min(len(asked), 2) and len(shared) >= 0.6 * len(asked)
+
+
 async def resolve(requests: list, items: list[VideoItem], words: list[Word], scout: Scout, work: Path,
                   sources: dict[int, str], shots_per_source: dict[int, int] | None = None) -> tuple[list[InsertItem], int]:
     """Inserts placed on the cut, with their assets; and how many vision calls it took."""
@@ -131,7 +138,8 @@ async def resolve(requests: list, items: list[VideoItem], words: list[Word], sco
     found: dict[int, AssetRef] = {}
     pending: list[tuple[int, list[tuple[Path, dict]]]] = []
     async def look(n: int, request) -> None:
-        reuse = await scout.store.search(request.kind, kit.words_of(request.query), scout.owner)
+        asked = kit.words_of(request.query)
+        reuse = [r for r in await scout.store.search(request.kind, asked, scout.owner) if same_subject(r, asked)]
         if reuse:
             found[n] = await scout._reuse(reuse[0])
             return
@@ -230,7 +238,8 @@ def cutaway_cmd(item: InsertItem, out: Path, grade: Path, fps: int, width: int, 
     else:
         inputs = ["-ss", f"{item.src_t0:.3f}", "-t", f"{length + 0.2:.3f}", "-i", item.asset.path]
         chain = [f"fps={fps}", f"scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}"]
-    chain += [f"lut3d=file='{lut}'", "eq=contrast=1.04:saturation=1.08", "format=yuv420p"]
+    # A drawn scene keeps its own colours; footage and photos are graded to match the reel.
+    chain += ([] if item.kind == "scene" else [f"lut3d=file='{lut}'", "eq=contrast=1.04:saturation=1.08"]) + ["format=yuv420p"]
     return ["ffmpeg", "-v", "error", "-y", *inputs, "-an", "-vf", ",".join(chain), "-frames:v", str(frames),
             "-c:v", "libx264", "-preset", INTERMEDIATE_PRESET, "-crf", "17", str(out)]
 

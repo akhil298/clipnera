@@ -249,6 +249,13 @@ class BaseConfig(BaseSettings):
     REEL_IMAGE_PROVIDER: Literal["", "gemini", "openai"] = ""
     GEMINI_IMAGE_MODEL: str = "gemini-2.5-flash-image"
     REEL_MAX_GENERATED_IMAGES: int = 3
+    # Explainer scenes (reel_engine/scenes.py): 3D animated cutaways where the speaker explains how or why something
+    # works, at most REEL_MAX_SCENES a reel. A scene the 3D kit cannot show is made with Veo only when REEL_SCENE_VEO is
+    # on (GEMINI_API_KEY with Veo billing), at most REEL_SCENE_VEO_MAX a reel.
+    REEL_SCENES: bool = True
+    REEL_MAX_SCENES: int = 6
+    REEL_SCENE_VEO: bool = False
+    REEL_SCENE_VEO_MAX: int = 2
     # A reel step's model over reel_engine.ai.MODELS, "provider:model[:effort]" (e.g. {"reel_director":
     # "openai:gpt-6-astra-1:medium"} puts the director back on Astra). {} keeps the defaults.
     REEL_STEP_MODELS: dict[str, str] = {}

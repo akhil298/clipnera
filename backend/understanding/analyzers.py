@@ -68,6 +68,13 @@ def tag_fillers(words: Sequence[Word]) -> list[Word]:
         elif previous and bare[i] and bare[i] == bare[i - 1] and word.t0 - previous.t1 < 0.5:
             # "I I think": the first of a stuttered pair is the one to cut.
             previous.filler = previous.filler or "repeat"
+    # "I think I think", "you know what, you know what": a phrase said twice in a row; the first saying is cut.
+    for n in (4, 3, 2):
+        for i in range(len(tagged) - 2 * n + 1):
+            first, again = bare[i:i + n], bare[i + n:i + 2 * n]
+            if all(first) and first == again and tagged[i + n].t0 - tagged[i + n - 1].t1 < 1.0:
+                for word in tagged[i:i + n]:
+                    word.filler = word.filler or "repeat"
     return tagged
 
 

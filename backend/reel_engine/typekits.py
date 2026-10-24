@@ -26,15 +26,22 @@ def catalog() -> dict[str, dict]:
     return {k["id"]: k for k in json.loads(CATALOG.read_text())["kits"]}
 
 
+def legible(kit: dict) -> bool:
+    """Captions a phone viewer reads at a glance: a lead word of weight 600 or more, or outlined; never thin
+    letter-spaced type (a serif-editorial reel's captions read as faint)."""
+    treatment = kit.get("lead_treatment")
+    return treatment != "spaced" and (kit["lead"]["weight"] >= 600 or treatment in ("stroke", "glow"))
+
+
 def for_style(style: str) -> list[dict]:
-    """The kits an editing style may use (every kit when the style names none)."""
-    kits = [k for k in catalog().values() if style in k["styles"]]
-    return kits or list(catalog().values())
+    """The readable kits an editing style may use (every readable kit when the style names none)."""
+    kits = [k for k in catalog().values() if style in k["styles"] and legible(k)]
+    return kits or [k for k in catalog().values() if legible(k)]
 
 
 def prompt() -> str:
     """The TYPE KITS section of the director's instructions."""
-    rows = [f"- {k['id']} ({', '.join(k['styles'])}): {k['about']}" for k in catalog().values()]
+    rows = [f"- {k['id']} ({', '.join(k['styles'])}): {k['about']}" for k in catalog().values() if legible(k)]
     return ("TYPE KITS (type_kit: the look of every caption, label and title in the reel). Pick the kit whose feel fits this "
             "creator, the topic and the footage's colours, from the kits listed for your STYLE; vary it - the same few kits "
             "on every reel is exactly what to avoid.\n" + "\n".join(rows))

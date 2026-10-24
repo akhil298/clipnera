@@ -71,7 +71,7 @@
     };
   }
 
-  window.BeatsKit = { T, el, boxed, fitText, envelope, reveal, ease, span, clamp, EXIT, lottieIn };
+  window.BeatsKit = { T, el, boxed, fitText, envelope, reveal, ease, span, clamp, EXIT, lottieIn, rng };
 
   T.count_up = (s, root) => {
     const { prefix = '', number = '0', suffix = '', label = '' } = s.data;
@@ -547,6 +547,9 @@
       const make = T[spec.kind];
       if (!make) throw new Error(`No template for ${spec.kind}`);
       current = make({ steps: [], data: {}, ...spec }, stage);
+      stage.querySelectorAll('img').forEach(img => { img.onerror = () => img.classList.add('missing'); });
+      // A template that loads pictures first (a 3D scene's textures) says so with ``ready``; render.mjs awaits it.
+      if (current.ready) return current.ready.then(() => { current.seek(0); return true; });
       current.seek(0);
       return true;
     },

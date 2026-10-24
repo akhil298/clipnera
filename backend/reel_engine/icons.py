@@ -87,13 +87,13 @@ def label(entry: dict) -> str:
 
 
 async def choose(requests: list[tuple[str, str]], animated: frozenset[int] = frozenset(),
-                 kinds: tuple[str, ...] = KINDS) -> list[AssetRef | None]:
-    """For each (query, context), the kit icon that truly shows it, or None. Requests numbered in ``animated``
-    (caption lines) may also get an animated emoji."""
+                 kinds: tuple[str, ...] = KINDS, n: int = CANDIDATES) -> list[AssetRef | None]:
+    """For each (query, context), the kit icon that truly shows it, or None, from ``n`` candidates each. Requests
+    numbered in ``animated`` (caption lines) may also get an animated emoji."""
     from reel_engine.ai import vision_json
 
-    pools = [[] if not q or kit.words_of(q) <= DECORATIVE else candidates(q, kinds=kinds) + (emoji_candidates(q) if n in animated else [])
-             for n, (q, _) in enumerate(requests)]
+    pools = [[] if not q or kit.words_of(q) <= DECORATIVE else candidates(q, n, kinds=kinds) + (emoji_candidates(q) if k in animated else [])
+             for k, (q, _) in enumerate(requests)]
     asked = [(n, q, ctx, pool) for n, ((q, ctx), pool) in enumerate(zip(requests, pools)) if pool]
     result: list[AssetRef | None] = [None] * len(requests)
     if not asked:

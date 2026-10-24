@@ -1,0 +1,49 @@
+{
+  "seconds": [2.2, 4.5],
+  "shots": {
+    "reveal": {"actors": [1, 4], "use_when": "the thing being explained is first named or introduced (the first actor is the hero, up to 3 more stand beside it)"},
+    "inside": {"actors": [1, 2], "use_when": "what something holds, is made of or has inside (a cloud holds water, lungs hold air, a phone holds a battery); actors: the container, then what is inside (a cloud needs no second actor: its water is built in)"},
+    "compare": {"actors": [2, 2], "use_when": "two things set side by side, especially by size (a raindrop vs a cloud droplet, the sun vs the earth); ratio = the second's size / the first's"},
+    "many": {"actors": [1, 1], "use_when": "huge numbers of something small (billions of droplets, millions of cells, thousands of people); number = the count as said, e.g. \"billions\""},
+    "force": {"actors": [1, 2], "use_when": "something is pushed, lifted, pulled or makes something fall or rise (warm air lifts droplets, gravity pulls rain down); actors: the thing moved, then the cause (heat, an arrow, wind...); direction = where it moves"},
+    "transform": {"actors": [1, 2], "use_when": "one thing becomes, merges into or turns into another (droplets merge into a raindrop, water turns to ice, savings grow into wealth); actors: from, to"},
+    "flow": {"actors": [2, 4], "use_when": "a process, a chain of steps or cause and effect (salary -> savings -> investing; seed -> plant -> fruit); actors in order"},
+    "cycle": {"actors": [3, 4], "use_when": "a loop that repeats (the water cycle, a habit loop, day and night); actors in order around the loop"},
+    "scale": {"actors": [1, 1], "use_when": "an amount or quantity piling up (5 lakh kg, ₹10 lakh, 2 tonnes of gold); number = the amount exactly as said, digits where spoken as a number"},
+    "wrong": {"actors": [1, 2], "use_when": "a myth or wrong idea the speaker rejects (it is NOT one big blob of water), optionally followed by the right one; actors: wrong, then right"},
+    "location": {"actors": [0, 0], "use_when": "a real place on Earth (a city, country, river, mountain); place = its name, lat/lon = its coordinates"}
+  },
+  "worlds": {
+    "sky": "weather, clouds, rain, air, birds, flight, the outdoors seen from above",
+    "space": "planets, stars, the sun, the moon, atoms and anything cosmic",
+    "macro": "the microscopic or the tiny: droplets, molecules, bubbles, particles, chemistry",
+    "body": "inside the human body: blood, cells, organs, germs, health, medicine",
+    "ocean": "under water: sea life, the ocean, rivers, fish, diving",
+    "room": "everyday life indoors: a home, light through a window, dust, household things",
+    "studio": "money, business, work, technology, products, ideas, habits, psychology; the default for anything abstract",
+    "city": "cities, rent, housing, traffic, jobs, the economy of places"
+  },
+  "forms": {
+    "cloud": ["cloud", "clouds", "rain cloud", "storm cloud"],
+    "drop": ["raindrop", "rain drop", "drop", "water drop", "teardrop", "drop of water"],
+    "droplet": ["droplet", "droplets", "water droplet", "water droplets", "tiny droplet", "tiny droplets", "mist", "vapour", "vapor"],
+    "bubble": ["bubble", "bubbles", "air bubble", "foam"],
+    "water": ["water", "blob of water", "water blob", "liquid", "big blob"],
+    "sun": ["sun", "sunlight", "star"],
+    "planet": ["earth", "planet", "globe", "world", "planet earth"],
+    "moon": ["moon", "asteroid", "meteor"],
+    "coin": ["coin", "coins", "gold coin", "rupee coin", "money", "cash", "savings", "wealth"],
+    "block": ["block", "box", "cube", "brick"],
+    "rock": ["rock", "stone", "boulder", "pebble"],
+    "tree": ["tree", "trees", "forest", "plant"],
+    "mountain": ["mountain", "mountains", "hill", "peak", "volcano"],
+    "arrow": ["arrow", "arrows", "down arrow", "up arrow", "downward arrow", "upward arrow", "arrow down", "arrow up", "push", "force", "gravity", "pull"],
+    "heat": ["heat", "warm air", "hot air", "rising air", "updraft", "thermal", "temperature"],
+    "flame": ["fire", "flame", "flames", "burning", "candle"],
+    "atom": ["atom", "atoms", "electron", "electrons", "nucleus"],
+    "molecule": ["molecule", "molecules", "compound", "chemical"],
+    "cell": ["blood cell", "blood cells", "red blood cell", "cell", "cells", "blood"],
+    "germ": ["germ", "germs", "virus", "viruses", "bacteria", "bacterium", "infection"],
+    "house": ["house", "home", "rent", "property", "flat", "apartment"]
+  }
+}

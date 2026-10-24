@@ -189,10 +189,11 @@ class AudioItem(_Model):
 
 
 class InsertItem(_Model):
-    """A related picture cut to while the voice carries on: B-roll, a photo, or the user's own footage."""
+    """A related picture cut to while the voice carries on: B-roll, a photo, the user's own footage, or an explainer
+    scene (a drawn 3D animation of what is explained, reel_engine/scenes.py)."""
 
     id: str
-    kind: Literal["broll", "photo", "footage"]
+    kind: Literal["broll", "photo", "footage", "scene"]
     start: float
     end: float
     asset: AssetRef

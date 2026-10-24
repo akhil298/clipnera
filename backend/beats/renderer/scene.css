@@ -1,0 +1,21 @@
+/* Explainer scenes (scene.js): the 3D canvas, and the labels and stamps drawn over it. */
+.sc-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sc-layer { position: absolute; inset: 0; pointer-events: none; }
+.sc-label { position: absolute; inset: 0; }
+.sc-box {
+  position: absolute; padding: 12px 30px 10px; background: #fff; border-radius: 6px; white-space: nowrap;
+  font-family: "Rubik", "Outfit", sans-serif; font-weight: 800; font-size: 70px; line-height: 1.05; letter-spacing: 0.01em;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28); transform-origin: 50% 50%; min-height: 1.05em;
+}
+.tone-red .sc-box { color: #f0142f; }
+.tone-blue .sc-box { color: #1e88f0; }
+.sc-stem { position: absolute; width: 3px; background: #fff; box-shadow: 0 0 6px rgba(0, 0, 0, 0.25); }
+.sc-pin { position: absolute; width: 14px; height: 14px; border: 3px solid #fff; background: rgba(0, 0, 0, 0.18); box-sizing: border-box; }
+.sc-stamp {
+  position: absolute; width: 300px; height: 300px; display: grid; place-items: center; border-radius: 64px;
+  font-family: "Rubik", sans-serif; font-weight: 900; font-size: 250px; line-height: 1; border: 26px solid; box-sizing: border-box;
+  opacity: 0;
+}
+.sc-cross { color: #ff4d5a; border-color: #ff4d5a; background: rgba(255, 77, 90, 0.12); }
+.sc-check { color: #22c55e; border-color: #22c55e; background: rgba(34, 197, 94, 0.12); width: 220px; height: 220px; font-size: 170px; border-width: 20px; }
+.sc-flash { position: absolute; inset: 0; background: #fff; }

@@ -38,15 +38,17 @@ class Check(_M):
 class Verdicts(_M):
     best_hook: int
     hook_why: str
-    subtitles: Literal["none", "top", "bottom", "other"]
+    subtitles: Literal["none", "top", "bottom", "middle", "other"]
     checks: list[Check]
 
 
 SYSTEM = """You are the head editor checking a plan before it is rendered. HOOKS: strips of 3 frames from each hook
 option; pick the one most likely to stop someone scrolling (a finished result, a strong face or reaction, motion,
 a surprising moment), as its index. SUBTITLES: the creator's own text burned into the hook frames: "top" or "bottom" for
-subtitles in a band along that edge (they change with the speech), "other" for text cards or labels laid elsewhere
-over the footage, "none" when there is none (a sign, packaging or anything that is part of the scene is not). ITEMS: each item is a strip (start, middle, end) of ONE shot and the label
+text in a band along that edge (subtitles that change with the speech, a lower-third name banner, a news ticker),
+"middle" for subtitles that follow the speech across the middle of the picture, "other" for text cards or labels laid
+elsewhere that do not follow the speech, "none" when there is none (a sign, packaging or anything that is part of the
+scene is not). ITEMS: each item is a strip (start, middle, end) of ONE shot and the label
 planned over it. keep it if it names what is clearly visible or happening in that shot; rewrite it (same kind,
 lead 0-3 small words, text 1-2 words, icon = search words) for what IS shown; drop it if nothing there deserves a
 label. A chapter opens a step: keep it when this shot shows that step starting. JSON only."""
@@ -107,8 +109,9 @@ async def verify(d: DirectorPlan, sources: list[Source], words: list[Word]) -> t
                 item.short = check.text.split()[-1][:8].capitalize()
     d.beats = [b for b in d.beats if id(b) not in drop]
     edge = verdicts.subtitles if verdicts.subtitles in ("top", "bottom") else ""
-    if d.burned_captions and verdicts.subtitles != "other":
-        # No text of its own, or subtitles in a band the crop leaves out: the reel carries its own captions.
+    if d.burned_captions and verdicts.subtitles != "middle":
+        # Only subtitles across the middle of the picture make ours a second track; a banner, a ticker or subtitles in
+        # a band the crop leaves out, or a text card, do not (a doctor's lower third once cost a reel all its captions).
         d.burned_captions = False
         d.caption_mode = "every_word" if d.caption_mode == "none" else d.caption_mode
         changes.append(f"captions kept: {'its subtitles are framed out' if edge else 'the footage has no text of its own'}")

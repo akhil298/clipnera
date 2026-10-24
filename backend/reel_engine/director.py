@@ -16,11 +16,12 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from core.logging_config import get_logger
-from reel_engine import styles, typekits
+from reel_engine import scenes, styles, typekits
 from reel_engine.ai import vision_json
 from reel_engine.effects import DEffect
 from reel_engine.effects import prompt as effects_prompt
 from reel_engine.plan import AudioReport, Shot, Source, Word
+from reel_engine.scenes import DScene
 
 log = get_logger(__name__)
 
@@ -113,6 +114,7 @@ class DirectorPlan(_M):
     story: list[DClip]
     beats: list[DBeat]
     inserts: list[DInsert]
+    scenes: list[DScene]
     keywords: list[int]
     drop_word: int
     spelling: list[DFix]
@@ -274,10 +276,11 @@ async def direct(sources: list[Source], audio: AudioReport, shots: list[Shot], j
             f"Shots:\n{shot_listing(shots)}\n\n"
             f"Words (id:word, ~ = filler, [take] = earlier take):\n{word_listing(words, takes) if words else '(nobody speaks)'}\n\n"
             f"Frames: {how}.\n\nPlan the reel. JSON only.")
-    plan = await vision_json(system + "\n\n" + styles.prompt() + "\n\n" + typekits.prompt() + "\n\n" + effects_prompt(), user, jpegs,
+    plan = await vision_json(system + "\n\n" + styles.prompt() + "\n\n" + typekits.prompt() + "\n\n" + effects_prompt() + "\n\n" + scenes.prompt(),
+                             user, jpegs,
                              DirectorPlan, max_tokens=16000, step="reel_director")
-    log.info("Director: recipe=%s audio=%s %d clips %d beats %d sections %d effects", plan.recipe, plan.audio_view,
-             len(plan.story), len(plan.beats), len(plan.sections), len(plan.effects))
+    log.info("Director: recipe=%s audio=%s %d clips %d beats %d sections %d effects %d scenes", plan.recipe, plan.audio_view,
+             len(plan.story), len(plan.beats), len(plan.sections), len(plan.effects), len(plan.scenes))
     return plan
 
 

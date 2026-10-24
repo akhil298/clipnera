@@ -453,8 +453,8 @@ async def render_graphics(plan: EditPlan, work: Path, captions_only: bool = Fals
     return placed
 
 
-async def _draw(specs: list[dict], work: Path) -> dict[str, dict]:
-    """The renderer run on ``specs``: {id: {"file": ..., "error": ...}}."""
+async def _draw(specs: list[dict], work: Path, frame_seconds: float = FRAME_SECONDS) -> dict[str, dict]:
+    """The renderer run on ``specs``: {id: {"file": ..., "error": ...}}; ``frame_seconds`` is the time allowed a frame."""
     spec_file = work / "graphics.json"
     spec_file.write_text(json.dumps({"W": W, "H": H, "fps": FPS, "beats": specs}))
     env = {**os.environ, "RENDER_WORKERS": str(RENDER_WORKERS)}
@@ -467,7 +467,7 @@ async def _draw(specs: list[dict], work: Path) -> dict[str, dict]:
                                                 stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
     try:
         frames = sum(s["dur"] for s in specs) * FPS
-        _, err = await asyncio.wait_for(proc.communicate(), GRAPHICS_TIMEOUT + frames * FRAME_SECONDS / RENDER_WORKERS)
+        _, err = await asyncio.wait_for(proc.communicate(), GRAPHICS_TIMEOUT + frames * frame_seconds / RENDER_WORKERS)
     except TimeoutError:
         proc.kill()
         raise RuntimeError("graphics renderer timed out")

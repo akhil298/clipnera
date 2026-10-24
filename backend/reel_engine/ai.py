@@ -31,6 +31,7 @@ MODELS = {
     "reel_proof": "openai:gpt-4.1-mini-1",
     "reel_icons": "openai:gpt-4.1-mini-1",
     "reel_photos": "openai:gpt-4.1-mini-1",
+    "reel_check": "openai:gpt-4.1-mini-1",
 }
 FLAGGED = ("content_policy", "content_filter", "content safety", "responsibleaipolicy")
 

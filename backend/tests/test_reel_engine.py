@@ -44,7 +44,7 @@ def beat(**kw) -> DBeat:
 def director(**kw) -> DirectorPlan:
     base = dict(audio_view="voice", recipe="creator_advice", target_seconds=30, title_lead="", title_text="", hook_text="", cta="",
                 caption_mode="every_word", music="bed", type_kit="amber_block", mood="upbeat", sections=[], hooks=[], story=[], beats=[],
-                inserts=[], keywords=[], burned_captions=False,
+                inserts=[], scenes=[], keywords=[], burned_captions=False,
                 drop_word=-1, spelling=[], style="podcast", effects=[], notes="")
     return DirectorPlan(**{**base, **kw})
 
@@ -784,3 +784,246 @@ def test_an_accent_that_matches_the_footage_gives_way_to_a_readable_one():
     assert typekits.spec("syne_art", "text", "#ff40d0")["vars"]["--accent"] == "#ffd36e"         # pink on pink: its gold
     assert typekits.spec("lexend_blue", "text", orange_robe)["vars"]["--accent"] == "#4da3ff"    # blue on orange reads
     assert typekits.spec("amber_block", "text", typekits.FALLBACK_ACCENT)["vars"]["--accent"] == "#ffb020"
+
+
+# ------------------------------------------------------------------ explainer scenes
+
+def scene(**kw):
+    from reel_engine.scenes import DActor, DScene
+
+    base = dict(shot="reveal", world="sky", w0=-1, w1=-1, actors=[DActor(show="cloud", label="")], number="", ratio=0.0,
+                direction="none", place="", lat=0.0, lon=0.0, why="")
+    return DScene(**{**base, **kw})
+
+
+def test_scene_actors_use_a_built_form_when_one_fits_else_the_kit():
+    from reel_engine.scenes import form_of
+
+    assert form_of("Raindrop") == "drop" and form_of("warm air") == "heat" and form_of("water droplets") == "droplet"
+    assert form_of("clouds") == "cloud" and form_of("lungs") is None
+
+
+def test_a_scene_label_never_shows_a_figure_that_was_not_said():
+    from reel_engine.scenes import proven
+
+    assert proven("5 LAKH KG", "a cloud holds 500000 kg or 5 lakh kg of water") == "5 LAKH KG"
+    assert proven("7 LAKH KG", "a cloud holds 5 lakh kg") == ""
+    assert proven("5 LAKH KG", "ek cloud mein paanch lakh kilo") == "5 LAKH KG"  # said in words: cannot be checked
+    assert proven("५ लाख", "बादल में 5 लाख किलो") == "५ लाख"
+
+
+def test_scenes_keep_off_the_opening_face_and_each_other_within_their_length(monkeypatch):
+    from reel_engine import scenes
+    from reel_engine.plan import VideoItem
+
+    words = words_of(" ".join(f"w{i}" for i in range(60)))
+    items = [VideoItem(id="v0", src=0, t0=0, t1=3, out0=0, out1=3, role="hook"),
+             VideoItem(id="v1", src=0, t0=3, t1=21, out0=3, out1=21)]
+    asked = [scene(w0=1, w1=4), scene(w0=3, w1=8), scene(w0=10, w1=40), scene(w0=12, w1=14), scene(w0=30, w1=33, shot="many")]
+    spots = scenes.placed(asked, items, words)
+    # w0=1 would cut away before the face is seen; w0=3 opens on the hook's line; w0=12 overlaps the scene before it
+    assert [s.w0 for _, _, s in spots] == [3, 10, 30]
+    lo, hi = scenes.catalog()["seconds"]
+    assert all(lo - 0.01 <= end - start <= hi + 0.01 for start, end, _ in spots)
+
+
+def test_a_scene_takes_its_stretch_from_photos_and_story_graphics_but_not_captions():
+    from reel_engine.plan import AssetRef, CaptionLine, InsertItem
+    from reel_engine.scenes import make_room
+
+    made = AssetRef(id="s", kind="scene", path="x0.mov", licence="made", source="scene", made=True)
+    photo = AssetRef(id="p", kind="photo", path="p.jpg", licence="cc0", source="openverse")
+    drawn = [InsertItem(id="x0", kind="scene", start=4, end=7, asset=made)]
+    plan = EditPlan(duration=20, inserts=[InsertItem(id="i0", kind="photo", start=5, end=6, asset=photo),
+                                          InsertItem(id="i1", kind="photo", start=10, end=12, asset=photo)],
+                    graphics=[GraphicItem(id="g0", kind="tag", start=5, end=6), GraphicItem(id="g1", kind="progress", start=0, end=20),
+                              GraphicItem(id="g2", kind="list", start=12, end=14)],
+                    captions=[CaptionLine(id="c0", start=4, end=6, lead="", keyword="heat")])
+    make_room(plan, drawn)
+    assert [i.id for i in plan.inserts] == ["x0", "i1"]
+    assert [g.id for g in plan.graphics] == ["g1", "g2"] and len(plan.captions) == 1
+
+
+def test_a_drawn_scene_keeps_its_colours_when_cut_to():
+    from reel_engine.inserts import cutaway_cmd
+    from reel_engine.plan import AssetRef, InsertItem
+
+    item = InsertItem(id="x0", kind="scene", start=1, end=3, asset=AssetRef(id="s", kind="scene", path="x0.mov", licence="", source=""))
+    assert "lut3d" not in " ".join(cutaway_cmd(item, Path("o.mp4"), Path("g.cube"), 30, 1080, 1920))
+    item.kind = "broll"
+    assert "lut3d" in " ".join(cutaway_cmd(item, Path("o.mp4"), Path("g.cube"), 30, 1080, 1920))
+
+
+def test_director_prompt_lists_every_scene_shot_and_world():
+    from reel_engine.scenes import catalog, prompt
+
+    text = prompt()
+    assert all(f"- {name} (" in text for name in catalog()["shots"]) and all(f"- {name}:" in text for name in catalog()["worlds"])
+
+
+def test_every_built_form_is_drawn_by_the_renderer():
+    from reel_engine.scenes import catalog
+
+    js = (Path(__file__).resolve().parents[1] / "beats" / "renderer" / "scene.js").read_text()
+    assert all(re.search(rf"\b{form}: \(", js) or f"FORMS.{form} =" in js for form in catalog()["forms"])
+    assert all(f"{shot}(" in js or f"SHOTS.{shot} =" in js for shot in catalog()["shots"])
+    assert all(f"{world}: (" in js for world in catalog()["worlds"])
+
+
+def test_a_stored_picture_is_reused_only_for_the_same_subject():
+    from beats import kit
+    from reel_engine.inserts import same_subject
+
+    galaxy = AssetRecord(kind="photo", scope="global", words=["close", "finger", "hand", "pointing", "up"])
+    bedroom = AssetRecord(kind="photo", scope="global", words=["bed", "bedroom", "dark", "pillow"])
+    assert not same_subject(galaxy, kit.words_of("adult hand on chest discomfort"))
+    assert not same_subject(galaxy, kit.words_of("analog clock face close up"))
+    assert same_subject(bedroom, kit.words_of("bed pillow dark bedroom"))
+    assert same_subject(bedroom, kit.words_of("dark bedroom"))
+
+
+def test_a_scene_takes_a_strong_accent_and_needs_its_subject(monkeypatch):
+    from reel_engine import icons, scenes
+    from reel_engine.plan import VideoItem
+    from reel_engine.scenes import DActor, vivid
+
+    assert vivid("#ffffff") == "#ffb020" and vivid("#1e88f0") == "#1e88f0" and vivid("#202020") == "#ffb020"
+
+    async def nothing(requests, **kw):
+        return [None] * len(requests)
+
+    monkeypatch.setattr(icons, "choose", nothing)
+    words = words_of(" ".join(f"w{i}" for i in range(40)))
+    items = [VideoItem(id="v0", src=0, t0=0, t1=14, out0=0, out1=14)]
+    asked = [scene(shot="force", w0=5, w1=12, actors=[DActor(show="price tag", label="Price"), DActor(show="arrow", label="")]),
+             scene(shot="force", w0=20, w1=27, actors=[DActor(show="droplets", label=""), DActor(show="heat", label="Heat")])]
+    resolved = asyncio.run(scenes.resolve(asked, items, words))
+    assert resolved[0][3] is None and [a["form"] for a in resolved[1][3]] == ["droplet", "heat"]
+
+
+# ------------------------------------------------------------------ the 8+ pass: cuts, density, accuracy, captions
+
+def test_a_phrase_said_twice_in_a_row_loses_its_first_saying():
+    from reel_engine.listen import tag_fillers
+
+    words = words_of("I think I think the heart is fine and fine")
+    tag_fillers(words)
+    assert [w.text for w in words if not w.filler] == ["I", "think", "the", "heart", "is", "fine", "and", "fine"]
+
+
+def test_captions_only_use_readable_type_kits():
+    from reel_engine import typekits
+
+    assert all(typekits.legible(k) for k in typekits.for_style("podcast"))
+    assert "serif_editorial" not in [k["id"] for k in typekits.for_style("podcast")]
+    assert "serif_editorial" not in typekits.prompt()
+
+
+def _line(cid: str, start: float, keyword: str) -> "CaptionLine":
+    from reel_engine.plan import CaptionLine
+
+    return CaptionLine(id=cid, start=start, end=start + 1.5, lead="the", keyword=keyword,
+                       words=[{"text": "the", "key": False, "at": 0.0}, {"text": keyword, "key": True, "at": 0.4}])
+
+
+def test_plain_talking_stretches_get_an_object_for_a_word_said(monkeypatch):
+    from reel_engine import density, icons
+    from reel_engine.plan import AssetRef
+
+    plan = EditPlan(duration=20, graphics=[GraphicItem(id="h", kind="hook", start=0, end=2.5), GraphicItem(id="p", kind="progress", start=0, end=20),
+                                           GraphicItem(id="g", kind="list", start=9, end=12)],
+                    captions=[_line("c0", 3.0, "heart"), _line("c1", 5.2, "blood"), _line("c2", 13.0, "stress"), _line("c3", 16.5, "sleep")])
+    assert density.gaps(plan) == [(2.5, 9), (12, 19.5)]
+
+    async def pick(requests, **kw):
+        return [AssetRef(id=q, kind="icon", path=f"{q}.png", licence="MIT", source="kit") if q != "stress" else None for q, _ in requests]
+
+    monkeypatch.setattr(icons, "choose", pick)
+    asyncio.run(density.fill(plan))
+    added = [(g.asset.id, g.start) for g in plan.graphics if g.by == "density"]
+    # one every few seconds, each at its word ("blood" comes too soon after "heart"; "stress" had no icon)
+    assert added == [("heart", 3.4), ("sleep", 16.9)]
+
+
+def test_the_accuracy_check_drops_a_picture_that_does_not_show_what_is_said(monkeypatch, tmp_path):
+    from reel_engine import ai, check
+    from reel_engine.plan import AssetRef, InsertItem, VideoItem
+
+    photo = tmp_path / "p.jpg"
+    import cv2
+    cv2.imwrite(str(photo), np.full((64, 64, 3), 128, np.uint8))
+    words = words_of("my hand on my chest hurts and the clock ticks")
+    plan = EditPlan(duration=6, video=[VideoItem(id="v0", src=0, t0=0, t1=6, out0=0, out1=6)],
+                    inserts=[InsertItem(id="i0", kind="photo", start=0.5, end=2, query="hand on chest", asset=AssetRef(id="a", kind="photo", path=str(photo), licence="cc0", source="x")),
+                             InsertItem(id="i1", kind="photo", start=3, end=4.5, query="clock", asset=AssetRef(id="b", kind="photo", path=str(photo), licence="cc0", source="x"))])
+    plan.audio.words = words
+    asked = {}
+
+    async def judge(system, text, jpegs, schema, max_tokens, step):
+        asked.update(text=text, images=len(jpegs), step=step)
+        return check.Verdicts(verdicts=[check.Verdict(item=0, shows=False, why="a galaxy"), check.Verdict(item=1, shows=True, why="clock")])
+
+    monkeypatch.setattr(ai, "vision_json", judge)
+    asyncio.run(check.check(plan))
+    assert [i.id for i in plan.inserts] == ["i1"] and asked["images"] == 2 and asked["step"] == "reel_check"
+    assert "hand on my chest" in asked["text"]
+
+
+def test_the_check_answers_in_a_strict_schema():
+    from reel_engine.check import Verdicts as CheckVerdicts
+
+    assert _strict_compatible(CheckVerdicts.model_json_schema())
+
+
+def test_a_reel_goes_on_without_its_scenes_when_the_renderer_fails(monkeypatch, tmp_path):
+    from reel_engine import render, scenes
+    from reel_engine.plan import Brief, VideoItem
+
+    async def broken(*a, **kw):
+        raise RuntimeError("graphics renderer timed out")
+
+    monkeypatch.setattr(render, "_draw", broken)
+    words = words_of(" ".join(f"w{i}" for i in range(40)))
+    plan = EditPlan(video=[VideoItem(id="v0", src=0, t0=0, t1=14, out0=0, out1=14)],
+                    brief=Brief(path="voice", audio_kind="voice", recipe="x", target_seconds=14))
+    assert asyncio.run(scenes.build([scene(shot="many", w0=5, w1=12, actors=[scenes.DActor(show="droplets", label="")])], plan, words, tmp_path)) == []
+
+
+def test_graphics_never_cover_a_face_or_the_headline_they_shrink_or_go(monkeypatch):
+    from reel_engine import layout
+
+    face = (300, 380, 780, 1000)  # a talking head filling the middle of the frame
+    monkeypatch.setattr(layout, "look", lambda video, a, b: ([face], np.zeros((layout.DETAIL_H, layout.DETAIL_W), np.float32)))
+    hook = GraphicItem(id="h", kind="hook", start=0, end=3)
+    icon = GraphicItem(id="o", kind="object", start=0.1, end=2.5)
+    checklist = GraphicItem(id="l", kind="list", start=5, end=9, data={"items": ["a", "b", "c", "d", "e"]})
+    huge = GraphicItem(id="c", kind="chart", start=10, end=12, box=[0, 200, 1080, 1500])
+    graphics = [icon, hook, checklist, huge]
+    layout.place(graphics, [], "unused.mp4")
+    kept = {g.id: g for g in graphics}
+    assert "h" in kept  # the hook always stays
+    assert "c" not in kept or kept["c"].box[2] < 1080  # a frame-filling chart is set smaller beside the face, or left out
+    for g in kept.values():
+        if g.kind in layout.OPTIONAL:
+            assert layout.overlap(g.box, [face]) <= layout.CLEAR
+    if "o" in kept:
+        hx, hy, hw, hh = kept["h"].box
+        assert layout.overlap(kept["o"].box, [(hx, hy, hx + hw, hy + hh)]) <= layout.CLEAR
+
+
+@pytest.mark.parametrize("seen, ours", [("other", True), ("bottom", True), ("none", True), ("middle", False)])
+def test_our_captions_step_aside_only_for_subtitles_across_the_picture(monkeypatch, seen, ours):
+    from reel_engine import verify as verifying
+    from reel_engine.plan import Source
+
+    words = words_of("can afib cause a heart attack")
+    d = director(burned_captions=True, caption_mode="none", hooks=[DHook(clip=clip(w0=0, w1=5), word="", why="question")])
+
+    async def judge(*a, **kw):
+        return Verdicts(best_hook=0, hook_why="", subtitles=seen, checks=[])
+
+    monkeypatch.setattr(verifying, "strip", lambda *a: b"jpeg")
+    monkeypatch.setattr(verifying, "vision_json", judge)
+    asyncio.run(verifying.verify(d, [Source(index=0, name="a.mp4", path="a.mp4", kind="video")], words))
+    assert (not d.burned_captions and d.caption_mode == "every_word") == ours
+

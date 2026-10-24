@@ -18,7 +18,7 @@ from pathlib import Path
 
 from core.config import get_settings
 from core.logging_config import get_logger
-from reel_engine import accents, effects, icons, inserts, layout, moments, proof, sound, styles, tracks, typekits
+from reel_engine import accents, check, density, effects, icons, inserts, layout, moments, proof, scenes, sound, styles, tracks, typekits
 from reel_engine.assets import AssetStore, Scout
 from reel_engine.compile import BEAT, brief_of, captions_track, graphics_track, to_output, video_track
 from reel_engine.director import direct, recipe
@@ -358,13 +358,25 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
         else:
             item.icon = asset
 
-    if d.inserts and plan.brief.path == "voice":
-        await stage("assets", f"finding {len(d.inserts)} cutaways and photos")
-        plan.inserts, calls = await inserts.resolve(d.inserts, plan.video, words, scout, work,
+    drawn: list = []
+    if d.scenes and plan.brief.path == "voice":
+        await stage("assets", f"drawing {len(d.scenes)} explainer scenes")
+        drawn = await scenes.build(d.scenes, plan, words, work)
+        plan.ai_calls += 1
+    asked = scenes.clear_requests(d.inserts, drawn, plan.video, words)
+    if asked and plan.brief.path == "voice":
+        await stage("assets", f"finding {len(asked)} cutaways and photos")
+        plan.inserts, calls = await inserts.resolve(asked, plan.video, words, scout, work,
                                                     {s.index: s.path for s in plan.sources if s.kind == "video"},
                                                     {s.index: sum(1 for sh in plan.shots if sh.src == s.index) for s in plan.sources})
         plan.ai_calls += calls
         add_photo_cards(plan)
+    scenes.make_room(plan, drawn)
+    if plan.brief.path == "voice":
+        await stage("assets", "something on screen every few seconds")
+        plan.ai_calls += await density.fill(plan)
+    await stage("assets", "checking every picture against what is said")
+    plan.ai_calls += await check.check(plan)
     grade = recipe(plan.brief.recipe).get("grade", "teal_orange")
     await stage("picture", f"{len(plan.video)} shots, {len(plan.inserts)} cutaways, {plan.duration:.1f} s")
     picture = await render_picture(plan, grade, work)

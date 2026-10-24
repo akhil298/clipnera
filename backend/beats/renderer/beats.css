@@ -165,3 +165,6 @@ html, body { background: transparent; overflow: hidden; }
   opacity: .5; }
 /* Lottie art comes in any colour: a soft light halo keeps a dark animation readable on dark footage. */
 .accent-art { filter: drop-shadow(0 0 10px rgba(255,255,255,.75)) drop-shadow(0 4px 16px rgba(0,0,0,.35)); }
+
+/* A picture with no file, or one that fails to load, shows nothing rather than the browser's broken-image glyph. */
+img[src=""], img:not([src]), img.missing { visibility: hidden; }

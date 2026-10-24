@@ -36,6 +36,10 @@ BOXES = {
     "object": (300, 480, 440, 880),
 }
 FIXED = {"statement", "progress", "wash", "flicker", "accent", "effect"}
+# A graphic may cover this share of a face or another item at most; past it, it is set smaller or at a side, else left
+# out. Only these kinds are left out: the hook, titles and captions always stay.
+CLEAR = 0.12
+OPTIONAL = {"object", "photocard", "tag", "two", "count_up", "chart", "list", "flow", "name", "keyword", "image", "logo", "map", "ui"}
 _detector = None
 
 
@@ -106,6 +110,25 @@ def free_top(box: list[int], blocked: list[tuple[int, int, int, int]], detail: n
     return best[1]
 
 
+def overlap(box: list[int], blocked: list[tuple[int, int, int, int]]) -> float:
+    """The share of ``box`` lying on the ``blocked`` boxes."""
+    x, y, w, h = box
+    return sum(max(0, min(x + w, x1) - max(x, x0)) * max(0, min(y + h, y1) - max(y, y0)) for x0, y0, x1, y1 in blocked) / max(1, w * h)
+
+
+def fit(box: list[int], blocked: list[tuple[int, int, int, int]], detail: np.ndarray, preferred: int) -> list[int] | None:
+    """``box`` where it covers no face and no other item: as it is, else smaller (centred, then at either side), else
+    None. A checklist the size of the frame once sat on the doctor's face, and an icon on the opening headline."""
+    for scale in (1.0, 0.8, 0.65, 0.5):
+        w, h = round(box[2] * scale), round(box[3] * scale)
+        for x in dict.fromkeys((box[0] + (box[2] - w) // 2, 40, W - 40 - w)):
+            candidate = [x, 0, w, h]
+            candidate[1] = free_top(candidate, blocked, detail, preferred)
+            if overlap(candidate, blocked) <= CLEAR:
+                return candidate
+    return None
+
+
 def default_box(kind: str, data: dict | None = None) -> list[int]:
     x, w, h, top = BOXES.get(kind, BOXES["two"])
     items = len((data or {}).get("items") or [])
@@ -128,14 +151,17 @@ def place(graphics: list[GraphicItem], captions: list[CaptionLine], video: str,
           picture: tuple[int, int, int, int] | None = None) -> None:
     """Set the box of every item; captions first (they sit where the eye already is), then graphics by start time.
     ``picture`` is the footage's strip when a reel shows each shot whole over a blurred copy: nothing is set on it, and
-    statements move to the blurred band above it (else below)."""
+    statements move to the blurred band above it (else below). A graphic that fits nowhere clear (see ``fit``) is taken
+    out of ``graphics``."""
     # An effect's card (a paper note, a panel) sits where its template puts it: other items keep off it.
     taken: list[tuple[float, float, tuple[int, int, int, int]]] = [
         (g.start, g.end, (x, y, x + w, y + h)) for g in graphics if g.kind == "effect"
         for x, y, w, h in [g.data.get("panel") or ()] if w]
     items: list[tuple[str, float, float, object]] = [("caption" if not c.payoff else "payoff", c.start, c.end, c) for c in captions]
     items += [(g.kind, g.start, g.end, g) for g in graphics]
-    for kind, start, end, item in sorted(items, key=lambda i: (i[0] not in ("caption", "payoff"), i[1])):
+    dropped: set[int] = set()
+    # Captions first, then what must stay (hook, titles), then the optional graphics: those fit round the rest.
+    for kind, start, end, item in sorted(items, key=lambda i: (i[0] not in ("caption", "payoff"), i[0] in OPTIONAL, i[1])):
         box = item.box if item.box else default_box(kind, getattr(item, "data", None))
         if picture and kind == "statement":
             box = band_box(box, picture)
@@ -147,6 +173,16 @@ def place(graphics: list[GraphicItem], captions: list[CaptionLine], video: str,
         faces, detail = look(video, start, end)
         others = [b for a, z, b in taken if a < end and start < z] + ([picture] if picture else [])
         lanes = CAPTION_LANES if kind in ("caption", "payoff") else None
-        box[1] = free_top(box, faces + others, detail, box[1], lanes)
+        if kind in OPTIONAL:
+            placed = fit(box, faces + others, detail, box[1])
+            if placed is None:
+                dropped.add(id(item))
+                continue
+            box = placed
+        else:
+            box[1] = free_top(box, faces + others, detail, box[1], lanes)
         item.box = box
         taken.append((start, end, (box[0], box[1], box[0] + box[2], box[1] + box[3])))
+    if dropped:
+        log.info("Layout: %d graphics left out, nowhere clear of faces and other items", len(dropped))
+        graphics[:] = [g for g in graphics if id(g) not in dropped]
