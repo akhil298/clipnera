@@ -12,10 +12,11 @@ interface PricingSectionProps {
 type Period = 'monthly' | 'yearly';
 
 // Static copy of the server's plan rules (backend/subscription/entitlements.py:
-// PLAN_PRICES, CREDIT_PACKS, ENTITLEMENTS). Change both together; the server's amounts are what get charged.
+// PLAN_PRICES, CREDIT_PACKS, ENTITLEMENTS). Change both together; the server's amounts are what get charged
+// (in rupees over UPI, at the day's rate).
 const PRO_PRICE: Record<Period, { amount: number; suffix: string }> = {
-  monthly: { amount: 699, suffix: '/month' },
-  yearly: { amount: 6990, suffix: '/year' },
+  monthly: { amount: 30, suffix: '/month' },
+  yearly: { amount: 300, suffix: '/year' },
 };
 const YEARLY_SAVING = Math.round((1 - PRO_PRICE.yearly.amount / (PRO_PRICE.monthly.amount * 12)) * 100);
 const CREDITS_PER_MINUTE = 2;
@@ -23,9 +24,9 @@ const FREE_CREDITS = 20;
 const PRO_CREDITS = 600;
 
 const CREDIT_PACKS = [
-  { name: 'Starter', credits: 60, amount: 99 },
-  { name: 'Creator', credits: 200, amount: 299 },
-  { name: 'Studio', credits: 500, amount: 649 },
+  { name: 'Starter', credits: 60, amount: 5 },
+  { name: 'Creator', credits: 200, amount: 14 },
+  { name: 'Studio', credits: 500, amount: 29 },
 ];
 
 const minutesOf = (credits: number) => credits / CREDITS_PER_MINUTE;
@@ -72,7 +73,7 @@ function Cell({ value }: { value: string | boolean }) {
   return <>{value}</>;
 }
 
-/** Plans, credit packs and a side-by-side comparison, in rupees. */
+/** Plans, credit packs and a side-by-side comparison, in dollars. */
 export function PricingSection({ onLaunchStudio }: PricingSectionProps) {
   const [period, setPeriod] = useState<Period>('monthly');
   const pro = PRO_PRICE[period];
@@ -117,14 +118,14 @@ export function PricingSection({ onLaunchStudio }: PricingSectionProps) {
                 <div>
                   <p className="flex items-baseline gap-1.5">
                     <span className="font-syne text-5xl font-extrabold tracking-[-0.03em] text-white">
-                      {formatAmount(paid ? pro.amount : 0, 'INR')}
+                      {formatAmount(paid ? pro.amount : 0, 'USD')}
                     </span>
                     <span className="text-base font-semibold text-neutral-400">{paid ? pro.suffix : 'forever'}</span>
                   </p>
                   <p className="mt-2 text-[15px] text-neutral-300">
                     <span className="font-bold text-amber-400">{plan.credits} credits</span> every 30 days, about{' '}
                     {minutesOf(plan.credits) >= 60 ? `${minutesOf(plan.credits) / 60} hours` : `${minutesOf(plan.credits)} minutes`} of video
-                    {paid && period === 'yearly' && <span className="text-neutral-400"> · {formatAmount(Math.round(pro.amount / 12), 'INR')} a month, billed yearly</span>}
+                    {paid && period === 'yearly' && <span className="text-neutral-400"> · {formatAmount(Math.round(pro.amount / 12), 'USD')} a month, billed yearly</span>}
                   </p>
                 </div>
                 <ul className="space-y-3 text-[15px] text-neutral-200">
@@ -165,7 +166,7 @@ export function PricingSection({ onLaunchStudio }: PricingSectionProps) {
                     {pack.credits} credits · about {minutesOf(pack.credits)} min
                   </p>
                 </div>
-                <p className="font-syne text-2xl font-extrabold text-white">{formatAmount(pack.amount, 'INR')}</p>
+                <p className="font-syne text-2xl font-extrabold text-white">{formatAmount(pack.amount, 'USD')}</p>
               </li>
             ))}
           </ul>
@@ -194,7 +195,7 @@ export function PricingSection({ onLaunchStudio }: PricingSectionProps) {
         </div>
 
         <p className="mt-6 max-w-[80ch] text-sm text-neutral-400">
-          Prices in Indian rupees; the amount shown is the amount you pay. Video uses {CREDITS_PER_MINUTE} credits a minute. Pro
+          Prices in US dollars, paid by UPI in rupees at the day&apos;s exchange rate; checkout shows the exact rupee amount before you pay. Video uses {CREDITS_PER_MINUTE} credits a minute. Pro
           doesn&apos;t renew automatically. See our{' '}
           <a href="/refunds" className="text-amber-400 underline underline-offset-2">Refund Policy</a>.
         </p>

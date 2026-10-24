@@ -1251,8 +1251,11 @@ export interface UpiCheckoutResponse {
   plan_type: BillingPeriod | null;
   credit_pack: string | null;
   credits: number | null;
+  /** What the QR charges: the dollar price in rupees at today's rate. */
   amount: number;
   currency: string;
+  amount_usd: number;
+  usd_inr_rate: number;
   upi_id: string;
   payee_name: string;
   /** upi://pay deep link with the amount pre-filled. */

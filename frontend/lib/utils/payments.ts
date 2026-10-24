@@ -1,11 +1,14 @@
 import type { BillingPeriod, PaymentResponse, PlanCapabilities } from '@/lib/api';
 import { parseApiDate } from './dates';
 
-const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
+const FORMATS: Record<string, Intl.NumberFormat> = {
+  INR: new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }),
+  // Whole-dollar prices read as "$30", not "$30.00".
+  USD: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 2 }),
+};
 
 export function formatAmount(amount: number, currency: string): string {
-  if (currency === 'INR') return inr.format(amount);
-  return `${currency} ${amount}`;
+  return FORMATS[currency]?.format(amount) ?? `${currency} ${amount}`;
 }
 
 export const BILLING_PERIOD_LABELS: Record<BillingPeriod, string> = { monthly: 'Monthly', yearly: 'Yearly' };

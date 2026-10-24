@@ -163,11 +163,22 @@ export function PaymentModal({ isOpen, onClose, plan, creditPack = null, onPayme
                   </>
                 )}
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-neutral-300">Amount</span>
+                  <span className="text-sm text-neutral-300">Price</span>
                   <span className="text-sm font-bold text-white">
-                    {checkout ? formatAmount(checkout.amount, checkout.currency) : '—'}
+                    {checkout ? formatAmount(checkout.amount_usd, 'USD') : '—'}
                   </span>
                 </div>
+                {checkout && (
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-sm text-neutral-300">You pay by UPI</span>
+                    <span className="text-sm font-bold text-white">{formatAmount(checkout.amount, checkout.currency)}</span>
+                  </div>
+                )}
+                {checkout && (
+                  <p className="mt-2 text-[11px] text-neutral-400">
+                    At today&apos;s rate, {formatAmount(checkout.usd_inr_rate, 'INR')} = $1
+                  </p>
+                )}
               </div>
 
               <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
@@ -214,7 +225,9 @@ export function PaymentModal({ isOpen, onClose, plan, creditPack = null, onPayme
                 </div>
                 <div className="text-center">
                   <p className="text-2xl font-bold text-white">{formatAmount(checkout.amount, checkout.currency)}</p>
-                  <p className="text-xs text-neutral-400">to {checkout.payee_name}</p>
+                  <p className="text-xs text-neutral-400">
+                    {formatAmount(checkout.amount_usd, 'USD')} at today&apos;s rate, to {checkout.payee_name}
+                  </p>
                 </div>
                 <a
                   href={checkout.upi_uri}

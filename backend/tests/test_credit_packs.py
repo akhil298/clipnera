@@ -70,9 +70,9 @@ def _service(ledger: _Ledger, monkeypatch) -> SubscriptionService:
 
 
 def test_packs_cost_more_per_credit_than_pro():
-    pro = PLAN_PRICES[BillingPeriod.MONTHLY].amount_inr / 600
+    pro = PLAN_PRICES[BillingPeriod.MONTHLY].amount_usd / 600
     for pack in CREDIT_PACKS.values():
-        assert pack.amount_inr / pack.credits > pro, pack.slug
+        assert pack.amount_usd / pack.credits > pro, pack.slug
 
 
 @pytest.mark.asyncio

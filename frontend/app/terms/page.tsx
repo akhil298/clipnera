@@ -53,8 +53,9 @@ export default function TermsPage() {
       <h2>Plans, credits and payments</h2>
       <ul>
         <li>
-          Prices are shown in Indian rupees (₹) in the app before you pay, and the amount you pay is the amount shown. There
-          are no setup, processing or hidden fees.
+          Prices are set in US dollars ($). Payment is by UPI in Indian rupees (₹), converted at that day&apos;s exchange rate;
+          the rupee amount is shown at checkout before you pay, and the amount you pay is the amount shown. There are no
+          setup, processing or hidden fees.
         </li>
         <li>
           Pro is paid monthly or yearly by UPI. It does not renew automatically: when the period ends your account returns

@@ -261,13 +261,13 @@ class SubscriptionService:
                     name=plan.name,
                     capabilities=entitlements_for(slug).to_dict(),
                     prices=[
-                        PlanPriceResponse(plan_type=period.value, amount=price.amount_inr, currency="INR", days=price.days)
+                        PlanPriceResponse(plan_type=period.value, amount=price.amount_usd, currency="USD", days=price.days)
                         for period, price in prices.items()
                     ],
                 )
             )
         packs = [
-            CreditPackResponse(slug=p.slug, name=p.name, credits=p.credits, amount=p.amount_inr, currency="INR")
+            CreditPackResponse(slug=p.slug, name=p.name, credits=p.credits, amount=p.amount_usd, currency="USD")
             for p in CREDIT_PACKS.values()
         ]
         return PlansResponse(plans=offers, credit_packs=packs)

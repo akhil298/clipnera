@@ -15,6 +15,7 @@ from core.config import get_settings
 from core.exceptions import CustomException
 from core.logging_config import get_logger
 from notifications.service import notify_payment_approved
+from payment.fx import to_inr, usd_inr_rate
 from payment.repository import ManualPaymentRepository
 from payment.schema import AdminPaymentResponse, PaymentResponse, UpiCheckoutResponse
 from referral.service import refresh_referrals_of
@@ -104,8 +105,8 @@ class PaymentService:
 
     async def get_checkout(self, plan_slug: str, plan_type: BillingPeriod) -> UpiCheckoutResponse:
         plan = await self._get_purchasable_plan(plan_slug)
-        return self._checkout(
-            float(PLAN_PRICES[plan_type].amount_inr),
+        return await self._checkout(
+            PLAN_PRICES[plan_type].amount_usd,
             f"{self._settings.APP_NAME} {plan.name} {plan_type.value}",
             plan_slug=_slug(plan),
             plan_name=plan.name,
@@ -114,8 +115,8 @@ class PaymentService:
 
     async def get_credit_pack_checkout(self, pack_slug: str) -> UpiCheckoutResponse:
         pack = self._get_credit_pack(pack_slug)
-        return self._checkout(
-            float(pack.amount_inr),
+        return await self._checkout(
+            pack.amount_usd,
             f"{self._settings.APP_NAME} {pack.credits} credits",
             credit_pack=pack.slug,
             credits=pack.credits,
@@ -139,7 +140,7 @@ class PaymentService:
             plan_id=plan.id,
             plan_type=plan_type,
             # Always the server's price for this period, never the client's.
-            amount=float(PLAN_PRICES[plan_type].amount_inr),
+            amount=float(to_inr(PLAN_PRICES[plan_type].amount_usd, await usd_inr_rate())),
         )
         log.info(f"UPI payment submitted: user={user_id} plan={_slug(plan)} period={plan_type.value} tx={tx.id}")
         return self._to_response(tx)
@@ -155,7 +156,7 @@ class PaymentService:
             content_type,
             credit_pack=pack.slug,
             credits=pack.credits,
-            amount=float(pack.amount_inr),
+            amount=float(to_inr(pack.amount_usd, await usd_inr_rate())),
         )
         log.info(f"UPI payment submitted: user={user_id} credit_pack={pack.slug} tx={tx.id}")
         return self._to_response(tx)
@@ -245,12 +246,17 @@ class PaymentService:
 
     # Helpers
 
-    def _checkout(self, amount: float, note: str, **item) -> UpiCheckoutResponse:
+    async def _checkout(self, amount_usd: int, note: str, **item) -> UpiCheckoutResponse:
+        """The UPI request for a dollar price, in rupees at today's rate."""
+        rate = await usd_inr_rate()
+        amount = float(to_inr(amount_usd, rate))
         upi_uri = build_upi_uri(self._settings.UPI_ID, self._settings.UPI_PAYEE_NAME, amount, note)
         return UpiCheckoutResponse(
             **item,
             amount=amount,
             currency="INR",
+            amount_usd=amount_usd,
+            usd_inr_rate=rate,
             upi_id=self._settings.UPI_ID,
             payee_name=self._settings.UPI_PAYEE_NAME,
             upi_uri=upi_uri,

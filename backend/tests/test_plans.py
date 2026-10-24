@@ -52,9 +52,9 @@ def test_pro_plus_keeps_its_limits_but_is_not_sold():
 
 def test_yearly_is_about_two_months_cheaper():
     monthly, yearly = PLAN_PRICES[BillingPeriod.MONTHLY], PLAN_PRICES[BillingPeriod.YEARLY]
-    assert (monthly.amount_inr, monthly.days) == (699, 30)
-    assert (yearly.amount_inr, yearly.days) == (6990, 365)
-    assert yearly.amount_inr == 10 * monthly.amount_inr
+    assert (monthly.amount_usd, monthly.days) == (30, 30)
+    assert (yearly.amount_usd, yearly.days) == (300, 365)
+    assert yearly.amount_usd == 10 * monthly.amount_usd
 
 
 @pytest.mark.parametrize(
@@ -165,7 +165,7 @@ def test_plans_endpoint_lists_prices_from_config(client_for, monkeypatch):
     free, pro = data["plans"]
     assert free["prices"] == []
     assert free["capabilities"]["features"]["brand_kit_edit"] is False
-    assert {p["plan_type"]: p["amount"] for p in pro["prices"]} == {"monthly": 699, "yearly": 6990}
+    assert {p["plan_type"]: p["amount"] for p in pro["prices"]} == {"monthly": 30, "yearly": 300}
     assert pro["capabilities"]["credit_minutes"] == 600
 
 

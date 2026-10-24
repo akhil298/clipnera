@@ -149,7 +149,7 @@ export function PlanSelectionModal({ isOpen, onClose, onPlanSelected, upgradeRea
                         </div>
                         <div className="flex items-baseline gap-1">
                           <span className="text-3xl font-extrabold text-white tabular-nums">
-                            {price ? formatAmount(price.amount, price.currency) : formatAmount(0, 'INR')}
+                            {price ? formatAmount(price.amount, price.currency) : formatAmount(0, 'USD')}
                           </span>
                           {price && <span className="text-xs text-neutral-400">{PERIOD_SUFFIX[period]}</span>}
                         </div>

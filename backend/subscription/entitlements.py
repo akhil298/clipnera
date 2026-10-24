@@ -47,16 +47,17 @@ CREDIT_CYCLE_DAYS = 30
 
 @dataclass(frozen=True)
 class PlanPrice:
-    amount_inr: int
+    amount_usd: int
     days: int
 
 
-# The one plan sold through UPI, and what each billing period costs. Payment
-# amounts are always taken from here on the server, never from the client.
+# The one plan sold through UPI, and what each billing period costs in dollars
+# (charged in rupees at today's rate, payment/fx.py). Payment amounts are always
+# taken from here on the server, never from the client.
 PURCHASABLE_PLAN = PlanSlug.PRO.value
 PLAN_PRICES: dict[BillingPeriod, PlanPrice] = {
-    BillingPeriod.MONTHLY: PlanPrice(amount_inr=699, days=30),
-    BillingPeriod.YEARLY: PlanPrice(amount_inr=6990, days=365),
+    BillingPeriod.MONTHLY: PlanPrice(amount_usd=30, days=30),
+    BillingPeriod.YEARLY: PlanPrice(amount_usd=300, days=365),
 }
 
 
@@ -65,18 +66,18 @@ class CreditPack:
     slug: str
     name: str
     credits: int
-    amount_inr: int
+    amount_usd: int
 
 
 # One-off credits sold through UPI, on any plan. Bought credits never expire and
 # are spent after the plan's allowance. Each costs more per credit than Pro
-# (₹699 for 600), so a subscription stays the better deal for regular use.
+# ($30 for 600), so a subscription stays the better deal for regular use.
 CREDIT_PACKS: dict[str, CreditPack] = {
     pack.slug: pack
     for pack in (
-        CreditPack(slug="starter", name="Starter", credits=60, amount_inr=99),
-        CreditPack(slug="creator", name="Creator", credits=200, amount_inr=299),
-        CreditPack(slug="studio", name="Studio", credits=500, amount_inr=649),
+        CreditPack(slug="starter", name="Starter", credits=60, amount_usd=5),
+        CreditPack(slug="creator", name="Creator", credits=200, amount_usd=14),
+        CreditPack(slug="studio", name="Studio", credits=500, amount_usd=29),
     )
 }
 

@@ -18,8 +18,11 @@ class UpiCheckoutResponse(BaseModel):
     plan_type: Optional[PlanTypeValue] = None
     credit_pack: Optional[str] = None
     credits: Optional[int] = None
+    # What the QR charges: the dollar price in rupees at today's rate.
     amount: float
     currency: str
+    amount_usd: float
+    usd_inr_rate: float
     upi_id: str
     payee_name: str
     # upi://pay deep link; opens the user's UPI app directly on mobile.

@@ -157,6 +157,17 @@ def settings(monkeypatch):
     return fake
 
 
+RATE = 95.0
+
+
+@pytest.fixture(autouse=True)
+def fixed_rate(monkeypatch):
+    async def _rate():
+        return RATE
+
+    monkeypatch.setattr(svc, "usd_inr_rate", _rate)
+
+
 def _service(tx_repo=None, plan=_plan(), subs=None) -> PaymentService:
     return PaymentService(tx_repo or _TxRepo(), _PlanRepo(plan), subs or _SubscriptionService())
 
@@ -214,11 +225,12 @@ def test_upi_uri_prefills_amount_in_inr():
 
 
 @pytest.mark.parametrize(
-    "period,amount", [(BillingPeriod.MONTHLY, 699.0), (BillingPeriod.YEARLY, 6990.0)]
+    "period,usd,amount", [(BillingPeriod.MONTHLY, 30, 2850.0), (BillingPeriod.YEARLY, 300, 28500.0)]
 )
 @pytest.mark.asyncio
-async def test_checkout_uses_the_server_price_for_the_period(period, amount):
+async def test_checkout_charges_the_dollar_price_in_rupees_at_todays_rate(period, usd, amount):
     checkout = await _service().get_checkout("pro", period)
+    assert (checkout.amount_usd, checkout.usd_inr_rate) == (usd, RATE)
     assert checkout.amount == amount
     assert checkout.plan_type == period.value
     assert checkout.currency == "INR"
@@ -259,7 +271,7 @@ async def test_submit_stores_private_screenshot_and_pending_record(storage):
     assert key.startswith("payment-screenshots/user-1/") and key.endswith(".png")
     assert "ACL" not in kwargs  # never public-read
     # Amount and currency come from the server's price list, not the client.
-    assert repo.created["amount"] == 6990.0
+    assert repo.created["amount"] == 28500.0
     assert repo.created["currency"] == "INR"
     assert repo.created["plan_type"] == BillingPeriod.YEARLY
     assert repo.created["utr_number"] == "123456789012"
