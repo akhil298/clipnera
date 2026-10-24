@@ -4,6 +4,7 @@ captions, placement, the asset loop and the schemas the models answer in."""
 from __future__ import annotations
 
 import asyncio
+import re
 from pathlib import Path
 
 import numpy as np
@@ -271,6 +272,30 @@ def test_on_a_fitted_reel_a_statement_moves_off_the_picture_strip():
     strip = (0, 656, 1080, 1264)
     top, h = band_box([86, 384, 908, 1152], strip)[1:4:2]
     assert top + h <= strip[1] or top >= strip[3]
+
+
+def test_the_window_frames_out_a_subtitle_band():
+    from reel_engine.plan import Source, VideoItem
+    from reel_engine.render import framing
+
+    src = Source(index=0, name="a", path="a.mp4", kind="video", duration=60, width=1920, height=1080, fps=30)
+    item = VideoItem(id="v0", src=0, t0=1, t1=4, out0=0, out1=3, zoom="in", role="body")
+    track = [[t, 0.5, 0.3, 0.12, 0.25, 0.0] for t in (1.0, 2.0, 3.0)]
+    crop, _ = framing(src, item, track, inside=[0.09, 1.0])
+    height, top = (float(v) for v in re.findall(r"ih\*([0-9.]+)", crop))
+    assert top >= 0.09 - 1e-4 and top + height <= 1.0 + 1e-4
+
+
+def test_an_object_keeps_off_an_effects_card(monkeypatch):
+    from reel_engine import layout
+    from reel_engine.plan import GraphicItem
+
+    monkeypatch.setattr(layout, "look", lambda video, a, b: ([], np.zeros((layout.DETAIL_H, layout.DETAIL_W), np.float32)))
+    card = GraphicItem(id="e0f", kind="effect", start=0, end=3, box=[0, 0, 1080, 1920], data={"panel": [130, 1080, 820, 300]})
+    obj = GraphicItem(id="o1", kind="object", start=1, end=2)
+    layout.place([card, obj], [], "unused.mp4")
+    x, y, w, h = obj.box
+    assert y + h <= 1080 or y >= 1380
 
 
 def test_a_still_photo_gives_its_frame(tmp_path):

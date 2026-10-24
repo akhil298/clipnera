@@ -23,7 +23,7 @@ from reel_engine.assets import AssetStore, Scout
 from reel_engine.compile import BEAT, brief_of, captions_track, graphics_track, to_output, video_track
 from reel_engine.director import direct, recipe
 from reel_engine.listen import listen
-from reel_engine.media import H, W, probe
+from reel_engine.media import H, W, probe, text_band
 from reel_engine.plan import AudioReport, EditPlan, MusicChoice, Progress, Shot, Source
 from reel_engine.render import compose, render_graphics, render_inserts, render_picture, resolve_behind
 from reel_engine.review import apply, review, since
@@ -309,7 +309,7 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
         plan.ai_calls += 1
 
     await stage("verify", "checking hooks and labels against the footage")
-    hook, hook_why, changes = await verify(d, plan.sources, words)
+    hook, hook_why, changes, edge = await verify(d, plan.sources, words)
     if window:  # a moment opens on the line the moment finder chose; the director put it first
         hook = 0
     plan.ai_calls += 1
@@ -322,6 +322,11 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
                              seed=str(out))
     plan.brief.fit = (get_settings().REEL_FIT_LAYOUT and d.burned_captions
                       and any(s.kind == "video" and s.width > s.height * 0.6 for s in plan.sources))
+    if edge:
+        for s in plan.sources:
+            if s.kind == "video" and s.width > s.height * 0.6:
+                reach = await asyncio.to_thread(text_band, s.path, edge)
+                plan.brief.text_free[str(s.index)] = [reach, 1.0] if edge == "top" else [0.0, 1.0 - reach]
     src_len = {s.index: s.duration for s in plan.sources}
     picture = plan.brief.path == "visual"
     track = tracks.pick(plan.brief.mood, target_seconds or plan.brief.target_seconds or 40, picture) if picture else None

@@ -12,6 +12,9 @@ from core.logging_config import get_logger
 
 log = get_logger(__name__)
 
+# Where burned-in subtitles usually reach (share of the height from that edge) when they cannot be measured.
+TEXT_BAND = {"top": 0.12, "bottom": 0.24}
+
 # Output frame and timing of every reel.
 W, H, FPS = 1080, 1920, 30
 # Steps between the source and the final file re-encode at near-lossless quality; speed matters more than size there.
@@ -64,6 +67,27 @@ def frame(path: str | Path, t: float, width: int = 540) -> np.ndarray | None:
     raw = subprocess.run(["ffmpeg", "-v", "error", *seek, "-i", str(path), "-frames:v", "1",
                           "-vf", f"scale={width}:{height}", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"], capture_output=True).stdout
     return np.frombuffer(raw, np.uint8).reshape(height, width, 3) if len(raw) == width * height * 3 else None
+
+
+def text_band(path: str | Path, side: str, samples: int = 16) -> float:
+    """How far (share of the height, from the ``side`` edge) the footage's burned-in subtitles reach. Lettering is
+    rows dense with sharp vertical strokes, which a scene's edges are not; a band is not found, a usual one is assumed."""
+    import cv2
+
+    duration = probe(path)["duration"] or 0.0
+    rows = []
+    for k in range(samples):
+        image = frame(path, duration * (k + 0.5) / samples, 640)
+        if image is not None:
+            grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(np.float32)
+            rows.append((np.abs(cv2.Sobel(grey, cv2.CV_32F, 1, 0)) > 120).mean(axis=1))
+    if not rows:
+        return TEXT_BAND[side]
+    profile = np.mean(rows, axis=0)
+    profile = profile if side == "top" else profile[::-1]
+    reach = int(len(profile) * 0.35)
+    lettered = np.nonzero(profile[:reach] > max(0.04, 3 * float(np.median(profile))))[0]
+    return min(0.35, (lettered[-1] + 1) / len(profile) + 0.02) if lettered.size else TEXT_BAND[side]
 
 
 def jpeg(image: np.ndarray, quality: int = 80) -> bytes:

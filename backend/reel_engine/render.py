@@ -155,13 +155,15 @@ def _split(source: Source, pair: tuple[dict, dict]) -> tuple[str, float] | None:
     return f"split[sa][sb];[sa]{parts[0]}[ta];[sb]{parts[1]}[tb];[ta][tb]vstack", upscale
 
 
-def framing(source: Source, item: VideoItem, track: list[list[float]], focus: list[list[float]] | None = None) -> tuple[str | None, float]:
+def framing(source: Source, item: VideoItem, track: list[list[float]], focus: list[list[float]] | None = None,
+            inside: list[float] | None = None) -> tuple[str | None, float]:
     """A 9:16 window framed on the right subject, as (crop filter, upscale factor); (None, 1) when the source needs none.
 
     The subject is the person talking (followed sideways over the item; the camera stays with them rather than
     hopping to whoever is biggest each second), both people stacked when two trade lines in a wide two-shot, or,
     when nobody is on screen, the window holding the most detail and movement (``focus``) instead of the middle.
-    Sized so the face fills about a fifth of the frame, tighter on punch-ins, never upscaled past MAX_UPSCALE.
+    Sized so the face fills about a fifth of the frame, tighter on punch-ins, never upscaled past MAX_UPSCALE; kept
+    inside ``inside`` (rows, as shares of the height) when the footage's own subtitles run along an edge.
     """
     aspect = source.width / max(1, source.height)
     rows = [r for r in track if item.t0 - 0.5 <= r[0] <= item.t1 + 0.5]
@@ -194,6 +196,9 @@ def framing(source: Source, item: VideoItem, track: list[list[float]], focus: li
         # Nobody on screen: follow what matters (detail and movement), smoothed so the window glides.
         near = [f for f in (focus or []) if item.t0 - 0.5 <= f[0] <= item.t1 + 0.5]
         points = [[f[0], float(np.median([g[1] for g in near[max(0, k - 2):k + 3]])), 0.5, 0.0] for k, f in enumerate(near)]
+    if inside:
+        height = min(height, inside[1] - inside[0])
+        top = float(np.clip(top, inside[0], inside[1] - height))
     width = height * 9 / 16 / aspect
     centres = [p[1] for p in points] or [0.5]
     anchor = float(np.median(centres))
@@ -218,7 +223,8 @@ def shake(kind: str, rate: float) -> str:
 
 
 def segment_cmd(source: Source, item: VideoItem, track: list[list[float]], wb: str, gamma: float, grade: Path, shaky: bool,
-                dark: bool, out: Path, focus: list[list[float]] | None = None, fit: bool = False) -> list[str]:
+                dark: bool, out: Path, focus: list[list[float]] | None = None, fit: bool = False,
+                rows: list[float] | None = None) -> list[str]:
     length = item.out1 - item.out0
     count = max(1, round(length * FPS))
     cw, ch = ZOOM_CANVAS
@@ -235,7 +241,7 @@ def segment_cmd(source: Source, item: VideoItem, track: list[list[float]], wb: s
             chain.append(f"minterpolate=fps={FPS}:mi_mode=mci:mc_mode=aobmc:vsbmc=1")
         if shaky:
             chain.append("deshake")
-        crop, upscale = (None, 0.0) if fit else framing(source, item, track, focus)
+        crop, upscale = (None, 0.0) if fit else framing(source, item, track, focus, rows)
         if fit:
             # The whole frame across the middle over a blurred copy of itself: the footage's own text stays whole.
             chain.append(f"split[bg][fg];[bg]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,boxblur=12:2,"
@@ -276,7 +282,8 @@ async def render_picture(plan: EditPlan, grade_name: str, work: Path) -> Path:
         cmd = segment_cmd(source, item, plan.face_track.get(str(item.src), []), white_balance(source, item),
                           exposure(source, item, target) if source.kind == "video" else 1.0, grade,
                           bool(shot and shot.motion >= SHAKY_MOTION and not shot.faces), bool(shot and shot.dark), out,
-                          plan.focus_track.get(str(item.src), []), fit=bool(plan.brief and plan.brief.fit))
+                          plan.focus_track.get(str(item.src), []), fit=bool(plan.brief and plan.brief.fit),
+                          rows=plan.brief.text_free.get(str(item.src)) if plan.brief else None)
         async with slots:
             await asyncio.to_thread(run, cmd)
         return out

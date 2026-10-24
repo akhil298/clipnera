@@ -38,22 +38,23 @@ class Check(_M):
 class Verdicts(_M):
     best_hook: int
     hook_why: str
-    subtitles: bool
+    subtitles: Literal["none", "top", "bottom", "other"]
     checks: list[Check]
 
 
 SYSTEM = """You are the head editor checking a plan before it is rendered. HOOKS: strips of 3 frames from each hook
 option; pick the one most likely to stop someone scrolling (a finished result, a strong face or reaction, motion,
-a surprising moment), as its index. SUBTITLES: true only when the hook frames show the creator's own text burned into the
-picture: subtitles that change with the speech, or text cards and labels laid over the footage; a sign, packaging or
-anything that is part of the scene is not. ITEMS: each item is a strip (start, middle, end) of ONE shot and the label
+a surprising moment), as its index. SUBTITLES: the creator's own text burned into the hook frames: "top" or "bottom" for
+subtitles in a band along that edge (they change with the speech), "other" for text cards or labels laid elsewhere
+over the footage, "none" when there is none (a sign, packaging or anything that is part of the scene is not). ITEMS: each item is a strip (start, middle, end) of ONE shot and the label
 planned over it. keep it if it names what is clearly visible or happening in that shot; rewrite it (same kind,
 lead 0-3 small words, text 1-2 words, icon = search words) for what IS shown; drop it if nothing there deserves a
 label. A chapter opens a step: keep it when this shot shows that step starting. JSON only."""
 
 
-async def verify(d: DirectorPlan, sources: list[Source], words: list[Word]) -> tuple[int, str, list[str]]:
-    """Picks the hook and fixes the director's picture-anchored labels and sections in place; returns (hook, why, changes)."""
+async def verify(d: DirectorPlan, sources: list[Source], words: list[Word]) -> tuple[int, str, list[str], str]:
+    """Picks the hook and fixes the director's picture-anchored labels and sections in place; returns (hook, why, changes,
+    the edge the footage's own subtitles run along: "top", "bottom" or "")."""
     paths = {s.index: s.path for s in sources}
     jpegs: list[bytes] = []
     lines: list[str] = []
@@ -77,7 +78,7 @@ async def verify(d: DirectorPlan, sources: list[Source], words: list[Word]) -> t
         if clip:
             targets.append(("section", sec, clip.src, clip.start, clip.end))
     if not jpegs and not targets:
-        return 0, "", []
+        return 0, "", [], ""
     for k, (kind, item, src, a, b) in enumerate(targets):
         jpegs.append(strip(paths[src], a, b))
         label = f"chapter '{item.lead} {item.text}'" if kind == "section" else f"{item.kind} '{item.lead} {item.text}'"
@@ -88,7 +89,7 @@ async def verify(d: DirectorPlan, sources: list[Source], words: list[Word]) -> t
                                      step="reel_verify")
     except Exception as exc:  # a check that cannot run keeps the director's plan as it is
         log.warning("Verify skipped: %s", exc)
-        return 0, "", []
+        return 0, "", [], ""
     changes = []
     drop = set()
     for check in verdicts.checks:
@@ -105,11 +106,12 @@ async def verify(d: DirectorPlan, sources: list[Source], words: list[Word]) -> t
             if kind == "section":
                 item.short = check.text.split()[-1][:8].capitalize()
     d.beats = [b for b in d.beats if id(b) not in drop]
-    if d.burned_captions and not verdicts.subtitles:
-        # The footage shows no text of its own: a reel is never shipped without captions.
+    edge = verdicts.subtitles if verdicts.subtitles in ("top", "bottom") else ""
+    if d.burned_captions and verdicts.subtitles != "other":
+        # No text of its own, or subtitles in a band the crop leaves out: the reel carries its own captions.
         d.burned_captions = False
         d.caption_mode = "every_word" if d.caption_mode == "none" else d.caption_mode
-        changes.append("captions kept: the footage has no text of its own")
+        changes.append(f"captions kept: {'its subtitles are framed out' if edge else 'the footage has no text of its own'}")
     hook = min(max(0, verdicts.best_hook), max(0, len(d.hooks) - 1))
     log.info("Verify: hook %d, %d changes", hook, len(changes))
-    return hook, verdicts.hook_why, changes
+    return hook, verdicts.hook_why, changes, edge

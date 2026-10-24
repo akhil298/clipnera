@@ -129,7 +129,10 @@ def place(graphics: list[GraphicItem], captions: list[CaptionLine], video: str,
     """Set the box of every item; captions first (they sit where the eye already is), then graphics by start time.
     ``picture`` is the footage's strip when a reel shows each shot whole over a blurred copy: nothing is set on it, and
     statements move to the blurred band above it (else below)."""
-    taken: list[tuple[float, float, tuple[int, int, int, int]]] = []
+    # An effect's card (a paper note, a panel) sits where its template puts it: other items keep off it.
+    taken: list[tuple[float, float, tuple[int, int, int, int]]] = [
+        (g.start, g.end, (x, y, x + w, y + h)) for g in graphics if g.kind == "effect"
+        for x, y, w, h in [g.data.get("panel") or ()] if w]
     items: list[tuple[str, float, float, object]] = [("caption" if not c.payoff else "payoff", c.start, c.end, c) for c in captions]
     items += [(g.kind, g.start, g.end, g) for g in graphics]
     for kind, start, end, item in sorted(items, key=lambda i: (i[0] not in ("caption", "payoff"), i[1])):

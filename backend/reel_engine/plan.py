@@ -103,6 +103,9 @@ class Brief(_Model):
     # The footage carries its own text (subtitles, cards) and is wider than the reel: each shot is shown whole over
     # a blurred copy of itself, since a 9:16 crop would slice that text.
     fit: bool = False
+    # Per source ("0", "1"...): the rows (shares of the height, [from, to]) the 9:16 window stays inside, so the
+    # footage's own subtitles band is framed out and the reel's captions replace it.
+    text_free: dict[str, list[float]] = Field(default_factory=dict)
     # The reel's type kit (data/type_kits.json). text_style/title_style are the looks before kits, kept so older saved
     # plans still load.
     type_kit: str = ""
