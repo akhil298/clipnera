@@ -262,6 +262,8 @@ class EditReelResponse(BaseModel):
     url: str | None
     duration_s: float
     title: str
+    # The reel's cover (its frame with the hook up); None for reels made before covers.
+    thumb_url: str | None = None
 
 
 class EditResponse(BaseModel):
@@ -309,6 +311,8 @@ class EditSummary(BaseModel):
     status: str
     duration_s: float
     created_at: datetime
+    # The edit's cover on the reels board: its first reel's cover, else a thumbnail from its footage.
+    cover_url: str | None = None
 
 
 class EditLimitsResponse(BaseModel):

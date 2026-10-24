@@ -32,7 +32,7 @@ function ReelSet({ edit, onNew }: { edit: EditResponse; onNew: () => void }) {
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-5">
         {edit.reels.map((reel, i) => (
           <li key={reel.url ?? i} className="rounded-[24px] border border-neutral-800 bg-neutral-900/80 overflow-hidden flex flex-col">
-            <video src={reel.url ?? undefined} controls playsInline preload="metadata" className="w-full aspect-[9/16] bg-black" />
+            <video src={reel.url ?? undefined} poster={reel.thumb_url ?? undefined} controls playsInline preload="metadata" className="w-full aspect-[9/16] bg-black" />
             <div className="p-4 flex items-center gap-3">
               <span className="min-w-0 flex-1">
                 <span className="block text-[15px] font-semibold text-white truncate">{reel.title}</span>
@@ -62,7 +62,7 @@ export function FootageReelReady({ edit, onEdit, onNew }: { edit: EditResponse; 
   return (
     <div className="flex flex-wrap gap-8 lg:gap-10 items-start">
       <section aria-label="Your reel" className="flex-[0_1_420px] min-w-[260px] space-y-3">
-        <video src={edit.output_url ?? undefined} controls playsInline className="w-full aspect-[9/16] rounded-[28px] bg-black border border-neutral-800" />
+        <video src={edit.output_url ?? undefined} poster={edit.reels?.[0]?.thumb_url ?? undefined} controls playsInline className="w-full aspect-[9/16] rounded-[28px] bg-black border border-neutral-800" />
         <p className="text-[13px] text-neutral-400 text-center">{formatSeconds(edit.duration_s)} · {edit.credits_charged} credits used</p>
       </section>
 

@@ -406,7 +406,7 @@ const imageCard = (r: ReelSummary): ReelCard => ({
   ...r, kind: 'images', status: REEL_STATUS[r.status], href: `/dashboard/reels/${r.id}`,
 });
 const footageCard = (e: EditSummary): ReelCard => ({
-  ...e, kind: 'footage', cover_url: null, status: EDIT_STATUS[e.status], href: `/dashboard/reels/footage/${e.id}`,
+  ...e, kind: 'footage', cover_url: e.cover_url ?? null, status: EDIT_STATUS[e.status], href: `/dashboard/reels/footage/${e.id}`,
 });
 
 const FILTERS = [

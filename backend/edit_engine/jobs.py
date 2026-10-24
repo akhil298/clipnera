@@ -32,6 +32,7 @@ from feature_flags.registry import REEL_EDITOR_OPUS
 from feature_flags.service import FeatureFlagService
 from jobs.queue import Job, get_queue, handler
 from notifications.service import notify_reel_outcome
+from reel_engine.media import cover
 from reels.jobs import spoken_language
 from reels.vision import describe_image
 from reels.voice import reading_timings, synthesize
@@ -423,9 +424,16 @@ async def _render(edit_id: str, user_id: str) -> None:
         final = await render.render(timeline, local, music, entitlements.watermark_forced, work)
         key = f"edits/{user_id}/{edit_id}/reel.mp4"
         await asyncio.to_thread(s3.upload_file, settings.S3_BUCKET_NAME, key, str(final), "video/mp4")
+        # Its cover for the reels board and the player's poster (the reel listed like the reel engine's reels).
+        image = await asyncio.to_thread(cover, final)
+        thumb = f"edits/{user_id}/{edit_id}/reel.jpg" if image else None
+        if thumb:
+            await asyncio.to_thread(s3.put_object, settings.S3_BUCKET_NAME, thumb, image, ContentType="image/jpeg")
 
     credit = json.dumps(track_choice(track), ensure_ascii=False) if track else None
-    await save(edit_id, output_key=key, status=EditStatus.DONE, error=None, renders=edit.renders + 1, music_credit=credit)
+    reels = json.dumps([{"key": key, "duration": round(float(timeline["duration"]), 2), "title": edit.title, "thumb": thumb}])
+    await save(edit_id, output_key=key, status=EditStatus.DONE, error=None, renders=edit.renders + 1, music_credit=credit,
+               reels=reels)
     await notify_reel_outcome(user_id, edit.title, success=True)
     log.info("Footage reel rendered: edit=%s duration=%.1fs", edit_id, timeline["duration"])
 

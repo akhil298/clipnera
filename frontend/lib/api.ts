@@ -2639,6 +2639,8 @@ export interface EditReel {
   url: string | null;
   duration_s: number;
   title: string;
+  /** The reel's cover (its frame with the hook up); null for reels made before covers. */
+  thumb_url: string | null;
 }
 
 export interface EditResponse {
@@ -2686,6 +2688,8 @@ export interface EditSummary {
   status: EditStatus;
   duration_s: number;
   created_at: string;
+  /** Cover on the reels board: the first reel's cover, else a thumbnail from the footage. */
+  cover_url: string | null;
 }
 
 export interface EditLimitsResponse {

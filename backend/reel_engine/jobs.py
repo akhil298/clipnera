@@ -21,6 +21,7 @@ from edit_engine.pricing import reel_credits
 from jobs.queue import Job, handler
 from notifications.service import notify_reel_outcome
 from reel_engine import pipeline
+from reel_engine.media import cover
 from reel_engine.moments import dump as moments_dump
 from reel_engine.plan import EditPlan
 from reel_engine.store import DbAssetStore
@@ -243,7 +244,10 @@ async def _run(edit_id: str, user_id: str, charged: dict[str, int]) -> None:
         key = f"{prefix}/reel{n + 1}.mp4"
         await asyncio.to_thread(s3.upload_file, settings.S3_BUCKET_NAME, key, str(path), "video/mp4")
         named = f"{plan.brief.title_lead} {plan.brief.title_text}".strip() if plan.brief else ""
-        made.append({"key": key, "duration": round(plan.duration, 2), "title": (named or title)[:300]})
+        # A cover for the reels board and the player's poster: the reel's own frame with its hook headline up.
+        image = await asyncio.to_thread(cover, path)
+        thumb = await upload_jpeg(f"{prefix}/reel{n + 1}.jpg", image) if image else None
+        made.append({"key": key, "duration": round(plan.duration, 2), "title": (named or title)[:300], "thumb": thumb})
         # Reels finish out of order when made side by side; they are listed in the order of their moments.
         made.sort(key=lambda r: int(r["key"].rsplit("reel", 1)[1].split(".")[0]))
         await _save(edit_id, reels=json.dumps(made, ensure_ascii=False))

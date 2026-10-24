@@ -138,6 +138,19 @@ def burned_bands(path: str | Path, samples: int = 16, least: int = 2) -> dict[st
     return {side: max(r) for side, r in seen.items() if len(r) >= least}
 
 
+COVER_AT = 1.2  # seconds into a reel: the hook headline is up and the speaker is on screen
+
+
+def cover(path: str | Path, width: int = 540) -> bytes:
+    """A JPEG cover of a finished reel (its frame at COVER_AT, or its first frame when shorter), or b"" if unreadable."""
+    try:
+        seconds = probe(path)["duration"] or 0.0
+        image = frame(path, min(COVER_AT, max(0.0, seconds - 0.1)), width)
+    except MediaError:  # a cover is never worth failing a delivered reel over
+        return b""
+    return jpeg(image, 85) if image is not None else b""
+
+
 def jpeg(image: np.ndarray, quality: int = 80) -> bytes:
     import cv2
 

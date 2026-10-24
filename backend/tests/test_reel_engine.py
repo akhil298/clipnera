@@ -1175,3 +1175,30 @@ def test_captions_step_aside_while_the_hook_headline_is_up_and_statements_leave_
     x, top, w, h = layout.default_box("statement")
     assert top >= 1100 and top + h <= layout.SAFE_BOTTOM  # a lower card: the face above it stays clear
 
+
+def test_a_finished_reel_gets_a_cover_from_its_own_frames(tmp_path):
+    import subprocess
+
+    from reel_engine.media import cover
+
+    reel = tmp_path / "reel.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=orange:s=270x480:d=2", "-pix_fmt", "yuv420p", str(reel)], check=True)
+    image = cover(reel)
+    assert image[:2] == b"\xff\xd8"  # a JPEG
+    assert cover(tmp_path / "missing.mp4") == b""
+
+
+def test_the_reels_board_cover_is_the_first_reel_then_a_planned_moment_then_a_footage_frame():
+    import json as _json
+
+    from edit_engine.model import EditProject
+    from edit_engine.service import _cover_key
+
+    def made(reels=None, premium=None) -> EditProject:
+        return EditProject(reels=_json.dumps(reels or []), premium=_json.dumps(premium or {}))
+
+    assert _cover_key(made([{"key": "r1.mp4", "thumb": "r1.jpg"}], {"planned": [{"thumb": "m0.jpg"}]})) == "r1.jpg"
+    assert _cover_key(made([{"key": "r1.mp4"}], {"planned": [{"thumb": None}, {"thumb": "m1.jpg"}], "frames": ["f0.jpg"]})) == "m1.jpg"
+    assert _cover_key(made(premium={"frames": ["f0.jpg"]})) == "f0.jpg"
+    assert _cover_key(made()) is None
+

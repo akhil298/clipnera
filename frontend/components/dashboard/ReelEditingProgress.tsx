@@ -153,7 +153,7 @@ function PlannedReels({ planned, reels }: { planned: PremiumPlannedReel[]; reels
         {cards.map(({ reel, video }, i) => (
           <li key={i} className="relative aspect-[9/16] rounded-2xl overflow-hidden border border-neutral-800 bg-neutral-900">
             {video?.url ? (
-              <video src={video.url} controls playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover bg-black" />
+              <video src={video.url} poster={video.thumb_url ?? reel.thumb_url ?? undefined} controls playsInline preload="metadata" className="absolute inset-0 w-full h-full object-cover bg-black" />
             ) : (
               <>
                 {reel.thumb_url && <img src={reel.thumb_url} alt="" className={`absolute inset-0 w-full h-full object-cover ${reel.status === 'queued' ? 'opacity-50' : ''}`} />}

@@ -86,6 +86,18 @@ def in_background(work: Any) -> None:
     task.add_done_callback(_running.discard)
 
 
+
+def _cover_key(edit: EditProject) -> str | None:
+    """The S3 key of an edit's cover: its first reel's, else the moment thumbnail of its first planned reel, else the
+    first frame read from its footage (both kept by the reel engine while it works); None when there is none yet."""
+    reels = json.loads(edit.reels or "[]")
+    if reels and reels[0].get("thumb"):
+        return reels[0]["thumb"]
+    premium = json.loads(edit.premium or "{}")
+    planned = [r.get("thumb") for r in premium.get("planned") or [] if r.get("thumb")]
+    frames = premium.get("frames") or []
+    return planned[0] if planned else frames[0] if frames else None
+
 class EditService:
     def __init__(self, session: AsyncSession, s3: S3 | None = None) -> None:
         self._session = session
@@ -135,8 +147,8 @@ class EditService:
         rows = (await self._session.execute(
             select(EditProject).where(EditProject.user_id == user_id).order_by(EditProject.created_at.desc()).limit(100)
         )).scalars().all()
-        return [EditSummary(id=r.id, title=r.title, status=r.status.value, duration_s=r.duration_s, created_at=r.created_at)
-                for r in rows]
+        return [EditSummary(id=r.id, title=r.title, status=r.status.value, duration_s=r.duration_s, created_at=r.created_at,
+                            cover_url=self._url(_cover_key(r))) for r in rows]
 
     async def get(self, user_id: str, edit_id: str) -> EditResponse:
         return await self.response(await self._edit(user_id, edit_id))
@@ -457,7 +469,8 @@ class EditService:
             replans_left=max(0, self._settings.EDIT_MAX_REPLANS - edit.replans),
             chat_edits_left=max(0, limits.max_chat_edits - edit.chat_edits),
             output_url=self._url(edit.output_key),
-            reels=[EditReelResponse(url=self._url(r["key"]), duration_s=float(r.get("duration") or 0), title=r.get("title") or edit.title)
+            reels=[EditReelResponse(url=self._url(r["key"]), duration_s=float(r.get("duration") or 0), title=r.get("title") or edit.title,
+                                    thumb_url=self._url(r.get("thumb")))
                    for r in json.loads(edit.reels or "[]")],
             music_credit=_credit_text(edit.music_credit), error=edit.error,
             created_at=edit.created_at,
