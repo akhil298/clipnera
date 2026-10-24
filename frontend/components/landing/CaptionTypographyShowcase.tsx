@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { getAllCaptionStyles, getCaptionStyle, type CaptionPreset } from '@/lib/utils/captionStyles';
 import { CaptionStylePreview } from '@/components/dashboard/CaptionStylePreview';
-import { LandingVideo } from './LandingVideo';
+import { CAPTION_PREVIEW_FRAME } from '@/lib/landingResults';
 
 // Featured presets; every one comes from the same list the export renders with.
 const FEATURED: CaptionPreset[] = ['karaoke', 'purple_pop', 'glitch', 'blur_in'];
@@ -20,10 +20,8 @@ export function CaptionTypographyShowcase() {
   return (
     <section id="captions" className="scroll-mt-20 py-20 lg:py-24">
       <div className="mx-auto flex max-w-[1440px] flex-col-reverse items-center gap-14 px-4 sm:px-8 lg:flex-row lg:items-start lg:gap-24 xl:px-16">
-        <LandingVideo
-          clip="talk"
-          className="relative aspect-[340/604] w-full max-w-[340px] flex-shrink-0 rounded-[30px] border border-neutral-700 shadow-[0_40px_80px_rgba(0,0,0,0.6)]"
-        >
+        <div className="relative aspect-[340/604] w-full max-w-[340px] flex-shrink-0 overflow-hidden rounded-[30px] border border-neutral-700 shadow-[0_40px_80px_rgba(0,0,0,0.6)]">
+          <img src={CAPTION_PREVIEW_FRAME} alt="A frame from HelloChen's CC BY video" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
           <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-b from-transparent to-black/60" />
           <div className="absolute inset-x-3 bottom-[22%]">
             <CaptionStylePreview key={preset} config={config} words={PHONE_WORDS} fontSize={30} overlay />
@@ -31,11 +29,11 @@ export function CaptionTypographyShowcase() {
           <span className="absolute left-4 top-4 rounded-lg bg-neutral-950/80 px-2.5 py-1 font-jetbrains text-[10px] text-neutral-200">
             PREVIEW · {brandName}
           </span>
-        </LandingVideo>
+        </div>
 
         <div className="w-full space-y-7">
           <div className="space-y-4">
-            <p className="font-jetbrains text-xs font-medium uppercase tracking-[0.14em] text-amber-400">05 · Captions</p>
+            <p className="font-jetbrains text-xs font-medium uppercase tracking-[0.14em] text-amber-400">00:38 · Captions</p>
             <h2 className="font-syne text-[28px] font-extrabold leading-none tracking-[-0.03em] text-white sm:text-5xl lg:text-[54px]">
               Captions people
               <br />

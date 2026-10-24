@@ -1,105 +1,109 @@
 'use client';
 
-import { useState } from 'react';
-import { Upload, Wand2 } from 'lucide-react';
+import { Check } from 'lucide-react';
+import { HERO_RESULT } from '@/lib/landingResults';
 import { VideoLinkForm } from './VideoLinkForm';
-import { HeroStage } from './HeroStage';
+import { LoopVideo } from './LoopVideo';
 
 interface HeroSectionProps {
   heroUrl: string;
   setHeroUrl: (url: string) => void;
   onLaunchStudio: () => void;
+  soundId: string | null;
+  toggleSound: (id: string) => void;
 }
 
-type SourceMode = 'link' | 'upload' | 'prompt';
+const PROMISES = ['Free plan, no card', 'Free credits every 30 days', 'Captions in English, Hindi, Telugu, Hinglish and Tenglish'];
 
-const SOURCE_MODES: Array<{ id: SourceMode; label: string }> = [
-  { id: 'link', label: 'YouTube link' },
-  { id: 'upload', label: 'Upload a file' },
-  { id: 'prompt', label: 'Write a prompt' },
+const FACTS = [
+  ['FRAMED', 'Speaker kept in shot'],
+  ['CAPTIONED', 'Word by word'],
+  ['OPENS ON', 'The big question'],
 ];
 
-const PROMISES = ['Free plan, no card', 'Free credits every 30 days', 'Background noise reduction'];
+const tag = 'pointer-events-none absolute left-2.5 top-2.5 rounded-md px-2 py-1 font-jetbrains text-[11px] font-bold tracking-[0.06em]';
 
-export function HeroSection({ heroUrl, setHeroUrl, onLaunchStudio }: HeroSectionProps) {
-  const [mode, setMode] = useState<SourceMode>('link');
+/** The pitch beside one real before and after: the raw video Clipnera got and the reel it made. */
+export function HeroSection({ heroUrl, setHeroUrl, onLaunchStudio, soundId, toggleSound }: HeroSectionProps) {
+  const heroSoundId = `hero-${HERO_RESULT.id}`;
 
   return (
-    <section className="relative overflow-hidden pb-20 pt-10 lg:pt-12">
-      <div className="mx-auto max-w-[1440px] space-y-10 px-4 sm:px-8 xl:px-16">
-        <header className="space-y-7">
-          <div className="space-y-5">
-            <p className="flex items-center gap-2.5 font-jetbrains text-xs font-medium uppercase tracking-[0.14em] text-amber-400">
-              <span aria-hidden="true" className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-              Live demo · real footage, real output
+    <section className="pb-24 pt-12 lg:pt-16">
+      <div className="mx-auto grid max-w-[1240px] items-center gap-14 px-4 sm:px-8 lg:grid-cols-[1.02fr_0.98fr] lg:gap-16">
+        <header>
+          <p className="font-jetbrains text-xs font-bold uppercase tracking-[0.12em] text-amber-400">
+            For podcasters, YouTubers and anyone who talks on camera
+          </p>
+          <h1 className="mt-5 font-syne text-[46px] font-extrabold leading-[0.96] tracking-[-0.035em] text-white sm:text-7xl xl:text-[88px]">
+            Record once.
+            <br />
+            <span className="text-amber-400">Post all week.</span>
+          </h1>
+          <p className="mt-7 max-w-[56ch] text-[17px] leading-relaxed text-neutral-300 sm:text-[19px]">
+            Paste a YouTube link or upload a video. Clipnera finds the moments worth posting, keeps the speaker in frame,
+            cleans up the audio and adds word-by-word captions. You pick the ones you like and post them.
+          </p>
+          <div className="mt-9 max-w-[560px]">
+            <VideoLinkForm id="hero-url" url={heroUrl} setUrl={setHeroUrl} onSubmit={onLaunchStudio} />
+            <p className="mt-3.5 text-[15px] text-neutral-400">
+              Video on your computer?{' '}
+              <button type="button" onClick={onLaunchStudio} className="font-semibold text-amber-400 underline-offset-2 hover:underline">
+                Upload a file instead
+              </button>
             </p>
-            <h1 className="font-syne text-[44px] font-extrabold leading-[0.98] tracking-[-0.035em] text-white sm:text-6xl lg:text-6xl xl:text-[76px]">
-              One long video in.
-              <br />A week of <span className="text-amber-500">Shorts</span> out.
-            </h1>
           </div>
-
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between lg:gap-16">
-            <div className="max-w-[600px] space-y-3.5">
-              <p className="text-base leading-relaxed text-neutral-300 sm:text-[17px]">
-                Clipnera finds the moments worth posting, reframes them to 9:16 around the speaker, cleans the audio and
-                burns in word-by-word captions. You review, then publish.
-              </p>
-              <ul className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-neutral-400">
-                {PROMISES.map((promise) => (
-                  <li key={promise}>
-                    <span aria-hidden="true" className="text-emerald-400">✓ </span>
-                    {promise}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="w-full space-y-2.5 lg:w-[560px] lg:flex-shrink-0">
-              <div role="group" aria-label="How to add your video" className="flex flex-wrap gap-1.5">
-                {SOURCE_MODES.map(({ id, label }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setMode(id)}
-                    aria-pressed={mode === id}
-                    className={`h-9 rounded-[10px] border px-3.5 text-[13px] transition-colors ${
-                      mode === id
-                        ? 'border-amber-900 bg-amber-950/60 font-bold text-amber-300'
-                        : 'border-neutral-800 font-semibold text-neutral-300 hover:text-white'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              {mode === 'link' && <VideoLinkForm id="hero-url" url={heroUrl} setUrl={setHeroUrl} onSubmit={onLaunchStudio} />}
-              {mode === 'upload' && (
-                <button
-                  type="button"
-                  onClick={onLaunchStudio}
-                  className="flex h-[62px] w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-neutral-700 bg-neutral-900 text-[15px] font-bold text-white transition-colors hover:border-amber-500"
-                >
-                  <Upload className="h-4 w-4 text-amber-400" aria-hidden="true" />
-                  Choose a video file
-                </button>
-              )}
-              {mode === 'prompt' && (
-                <button
-                  type="button"
-                  onClick={onLaunchStudio}
-                  className="flex h-[62px] w-full items-center justify-center gap-2 rounded-2xl border border-neutral-800 bg-neutral-900 text-[15px] font-bold text-white transition-colors hover:border-amber-500"
-                >
-                  <Wand2 className="h-4 w-4 text-amber-400" aria-hidden="true" />
-                  Turn a story idea into a Short
-                </button>
-              )}
-            </div>
-          </div>
+          <ul className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-[15px] text-neutral-400">
+            {PROMISES.map((promise) => (
+              <li key={promise} className="flex items-center gap-2">
+                <Check className="h-4 w-4 text-emerald-400" aria-hidden="true" />
+                {promise}
+              </li>
+            ))}
+          </ul>
         </header>
 
-        <HeroStage />
+        <figure className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.62fr)] items-end gap-3 rounded-3xl border border-neutral-800 bg-[#0f0f0f] p-3 shadow-[0_30px_60px_-30px_rgba(0,0,0,0.8)] sm:gap-[18px] sm:p-[18px]">
+          <div className="space-y-3.5">
+            <LoopVideo
+              src={HERO_RESULT.before.video}
+              poster={HERO_RESULT.before.poster}
+              label="Before: the raw landscape video"
+              className="relative aspect-video rounded-xl"
+              videoClassName="saturate-[0.75]"
+            >
+              <span className={`${tag} bg-neutral-950/80 text-neutral-200`}>BEFORE · RAW 16:9 · {HERO_RESULT.sourceLength}</span>
+            </LoopVideo>
+            <div aria-hidden="true" className="flex items-center gap-2.5 font-jetbrains text-xs text-neutral-400">
+              <span>one click</span>
+              <span className="h-0.5 flex-1 bg-[repeating-linear-gradient(90deg,#f59e0b_0_6px,transparent_6px_11px)]" />
+              <span>{HERO_RESULT.reelLength} reel</span>
+            </div>
+            <ul className="grid gap-2 sm:grid-cols-3">
+              {FACTS.map(([label, text]) => (
+                <li key={label} className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-[13px] leading-snug text-neutral-300">
+                  <span className="block font-jetbrains text-[11px] font-bold tracking-[0.06em] text-amber-400">{label}</span>
+                  {text}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <LoopVideo
+            src={HERO_RESULT.video}
+            poster={HERO_RESULT.poster}
+            label={`After: the reel Clipnera made, “${HERO_RESULT.title}”`}
+            className="relative aspect-[9/16] rounded-[20px]"
+            sound={{ on: soundId === heroSoundId, onToggle: () => toggleSound(heroSoundId) }}
+          >
+            <span className={`${tag} bg-amber-500 text-neutral-950`}>AFTER</span>
+          </LoopVideo>
+          <figcaption className="col-span-2 px-0.5 text-[13px] text-neutral-400">
+            Real Clipnera output, untouched. Made from a{' '}
+            <a href={HERO_RESULT.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-amber-400 underline-offset-2 hover:underline">
+              {HERO_RESULT.creator} video
+            </a>{' '}
+            (CC BY). They aren&apos;t affiliated with Clipnera and don&apos;t endorse it.
+          </figcaption>
+        </figure>
       </div>
     </section>
   );

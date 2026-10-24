@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "media:landing": "node scripts/fetch-landing-media.mjs",
     "test": "node --test lib/"
   },
   "dependencies": {

@@ -4,7 +4,7 @@ import { BrandMark } from './BrandMark';
 
 // Rooted at "/" so the same bar works on the home page and on /editor.
 const LINKS = [
-  { href: '/#clip-wall', label: 'Clip wall' },
+  { href: '/#results', label: 'Results' },
   { href: '/#how-it-works', label: 'How it works' },
   { href: '/editor', label: 'Editor', isNew: true },
   { href: '/#captions', label: 'Captions' },
