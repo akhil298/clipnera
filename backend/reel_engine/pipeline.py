@@ -18,9 +18,9 @@ from pathlib import Path
 
 from core.config import get_settings
 from core.logging_config import get_logger
-from reel_engine import accents, check, density, effects, icons, inserts, layout, moments, proof, scenes, sound, styles, tracks, typekits
+from reel_engine import accents, check, density, effects, icons, inserts, layout, moments, motion_code, proof, scenes, sound, styles, tracks, typekits
 from reel_engine.assets import AssetStore, Scout
-from reel_engine.compile import BEAT, brief_of, captions_track, graphics_track, to_output, video_track
+from reel_engine.compile import BEAT, brief_of, captions_track, design_track, graphics_track, to_output, video_track
 from reel_engine.director import direct, recipe
 from reel_engine.listen import listen
 from reel_engine.media import H, W, burned_bands, probe, text_band
@@ -398,6 +398,10 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
     await stage("layout", "placing every graphic off faces and the action")
     await asyncio.to_thread(layout.place, plan.graphics, plan.captions, str(picture), fitted(plan))
     accents.add(plan)
+    designs = design_track(d, words, plan.video) if plan.brief.path == "voice" else []
+    if designs:
+        await stage("graphics", f"designing {len(designs)} graphics from scratch")
+        plan.ai_calls += await motion_code.design(plan, designs, picture, work)
 
     best: tuple[float, Path, EditPlan] | None = None
     history = ""

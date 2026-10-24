@@ -66,6 +66,14 @@ class DBeat(_M):
     why: str
 
 
+class DDesign(_M):
+    """A moment whose graphic a motion designer writes from scratch (motion_code.py) instead of a template."""
+
+    w0: int
+    w1: int
+    why: str
+
+
 class DInsert(_M):
     kind: Literal["broll", "photo", "footage"]
     w0: int
@@ -138,6 +146,7 @@ class DirectorPlan(_M):
     hooks: list[DHook]
     story: list[DClip]
     beats: list[DBeat]
+    designs: list[DDesign]
     inserts: list[DInsert]
     scenes: list[DScene]
     keywords: list[int]
@@ -204,6 +213,12 @@ sentence's SHAPE, not by keyword spotting:
 - an action or money shot -> two (lead = 1-3 small words, text = 1-2 word keyword, icon = search words)
 Anchor talking beats to word ids w0..w1 (the words that say it; at = until = -1, src = -1). Anchor picture beats
 to src + at..until source seconds (w0 = w1 = -1). Every text must match what is said or clearly visible then.
+
+DESIGNS (designs): the 1-3 strongest moments of a talking reel, where a graphic designed from scratch for this exact
+line beats any template - a striking number with context ("50 times revenue"), a list or a before/after, a myth
+being knocked down, the key claim. w0..w1 = the words that say it (1.5-5 s of speech); why = the idea the graphic
+should show. A motion designer builds it; it replaces any beat on those words, so do not also put a beat there.
+Empty for a picture-only reel.
 
 INSERTS (what the viewer SEES while someone talks; premium edits show something related every few seconds, never
 just the talking head for long): when a person talks, add an insert about every 3-4 s of output on the words that

@@ -30,6 +30,8 @@ CARD_KINDS = {"statement", "list", "chart", "flow", "count_up"}
 VOICE_KINDS = ("voice", "voice_song")
 MIN_LINE_WORDS = 3
 CARD_EVERY = 8.0
+# Designed graphics (motion_code.py): at most this many a reel, at least this long, held this long past the last word.
+MAX_DESIGNS, MIN_DESIGN, DESIGN_TAIL = 3, 1.2, 0.35
 EMOJI_EVERY = 3
 # Graphics that hold the eye: a keyword caption steps aside while one is on screen.
 CAPTION_YIELDS_TO = {"two", "keyword", "count_up", "statement", "list", "flow", "chart", "cta", "flicker", "photocard"}
@@ -378,6 +380,28 @@ def graphics_track(d: DirectorPlan, brief: Brief, words: list[Word], items: list
     out = _space(out)
     if brief.path == "voice":
         out = _few_cards(out, total)
+    return out
+
+
+def design_track(d: DirectorPlan, words: list[Word], items: list[VideoItem]) -> list[GraphicItem]:
+    """The director's designed moments (motion_code.py) as timed graphics, not yet drawn. Each ends at the cut out of
+    its shot when that still leaves it ``MIN_DESIGN`` seconds: a card held over the next shot reads as a leftover."""
+    out: list[GraphicItem] = []
+    for design in d.designs[:MAX_DESIGNS]:
+        span = _word_times(items, words, design.w0, design.w1)
+        if span is None:
+            continue
+        start, end = span
+        item = next((i for i in items if i.out0 <= start < i.out1), None)
+        end = min(end + DESIGN_TAIL, item.out1 if item and item.out1 - start >= MIN_DESIGN else end + DESIGN_TAIL)
+        if end - start < MIN_DESIGN:
+            continue
+        said = [w for w in words[design.w0:design.w1 + 1] if not w.filler]
+        line = [{"text": w.text, "at": round(t - start, 2)} for w in said
+                for t in [to_output(items, w.src, w.t0)] if t is not None]
+        out.append(GraphicItem(id=f"d{len(out)}", kind="code", start=round(start, 3), end=round(end, 3), box=[0, 0, 1080, 1920],
+                               data={"line": " ".join(w["text"] for w in line), "words": line}, place="free",
+                               why=design.why, by="design"))
     return out
 
 

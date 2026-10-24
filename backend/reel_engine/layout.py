@@ -35,7 +35,7 @@ BOXES = {
     "flicker": (60, 960, 300, 780), "photocard": (190, 700, 600, 470), "hook": (60, 960, 300, 250),
     "object": (300, 480, 440, 880),
 }
-FIXED = {"statement", "progress", "wash", "flicker", "accent", "effect"}
+FIXED = {"statement", "progress", "wash", "flicker", "accent", "effect", "code"}
 # A graphic may cover this share of a face or another item at most; past it, it is set smaller or at a side, else left
 # out. Only these kinds are left out: the hook, titles and captions always stay.
 CLEAR = 0.12
