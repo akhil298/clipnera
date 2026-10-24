@@ -117,18 +117,32 @@ def default_box(kind: str, data: dict | None = None) -> list[int]:
     return [x, top, w, min(h, BOXES[kind][2]) if kind in BOXES else h]
 
 
-def place(graphics: list[GraphicItem], captions: list[CaptionLine], video: str) -> None:
-    """Set the box of every item; captions first (they sit where the eye already is), then graphics by start time."""
+def band_box(box: list[int], picture: tuple[int, int, int, int]) -> list[int]:
+    """``box`` fitted into the band above ``picture`` (the taller of the two clear bands when the top one is short)."""
+    above, below = picture[1] - SAFE_TOP - 20, SAFE_BOTTOM - picture[3] - 20
+    top, h = (SAFE_TOP, above) if above >= max(below, 260) else (picture[3] + 20, below)
+    return [box[0], top, box[2], max(h, 120)]
+
+
+def place(graphics: list[GraphicItem], captions: list[CaptionLine], video: str,
+          picture: tuple[int, int, int, int] | None = None) -> None:
+    """Set the box of every item; captions first (they sit where the eye already is), then graphics by start time.
+    ``picture`` is the footage's strip when a reel shows each shot whole over a blurred copy: nothing is set on it, and
+    statements move to the blurred band above it (else below)."""
     taken: list[tuple[float, float, tuple[int, int, int, int]]] = []
     items: list[tuple[str, float, float, object]] = [("caption" if not c.payoff else "payoff", c.start, c.end, c) for c in captions]
     items += [(g.kind, g.start, g.end, g) for g in graphics]
     for kind, start, end, item in sorted(items, key=lambda i: (i[0] not in ("caption", "payoff"), i[1])):
         box = item.box if item.box else default_box(kind, getattr(item, "data", None))
+        if picture and kind == "statement":
+            box = band_box(box, picture)
+            # In its band the statement is an ordinary box: later items keep off it.
+            taken.append((start, end, (box[0], box[1], box[0] + box[2], box[1] + box[3])))
         if kind in FIXED or getattr(item, "behind", False):
             item.box = box
             continue
         faces, detail = look(video, start, end)
-        others = [b for a, z, b in taken if a < end and start < z]
+        others = [b for a, z, b in taken if a < end and start < z] + ([picture] if picture else [])
         lanes = CAPTION_LANES if kind in ("caption", "payoff") else None
         box[1] = free_top(box, faces + others, detail, box[1], lanes)
         item.box = box

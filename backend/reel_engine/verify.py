@@ -44,8 +44,9 @@ class Verdicts(_M):
 
 SYSTEM = """You are the head editor checking a plan before it is rendered. HOOKS: strips of 3 frames from each hook
 option; pick the one most likely to stop someone scrolling (a finished result, a strong face or reaction, motion,
-a surprising moment), as its index. SUBTITLES: true only when the hook frames show subtitles burned into the picture
-(a line of text near the bottom that changes with the speech); a diagram, sign or title is not subtitles. ITEMS: each item is a strip (start, middle, end) of ONE shot and the label
+a surprising moment), as its index. SUBTITLES: true only when the hook frames show the creator's own text burned into the
+picture: subtitles that change with the speech, or text cards and labels laid over the footage; a sign, packaging or
+anything that is part of the scene is not. ITEMS: each item is a strip (start, middle, end) of ONE shot and the label
 planned over it. keep it if it names what is clearly visible or happening in that shot; rewrite it (same kind,
 lead 0-3 small words, text 1-2 words, icon = search words) for what IS shown; drop it if nothing there deserves a
 label. A chapter opens a step: keep it when this shot shows that step starting. JSON only."""
@@ -83,7 +84,8 @@ async def verify(d: DirectorPlan, sources: list[Source], words: list[Word]) -> t
         lines.append(f"item {k}: {label} icon '{item.icon}'")
     try:
         verdicts = await vision_json(SYSTEM, "Strips in order:\n" + "\n".join(lines) + "\n\nCheck them. JSON only.",
-                                     [j for j in jpegs if j], Verdicts, max_tokens=4000)
+                                     [j for j in jpegs if j], Verdicts, max_tokens=4000,
+                                     step="reel_verify")
     except Exception as exc:  # a check that cannot run keeps the director's plan as it is
         log.warning("Verify skipped: %s", exc)
         return 0, "", []
@@ -104,10 +106,10 @@ async def verify(d: DirectorPlan, sources: list[Source], words: list[Word]) -> t
                 item.short = check.text.split()[-1][:8].capitalize()
     d.beats = [b for b in d.beats if id(b) not in drop]
     if d.burned_captions and not verdicts.subtitles:
-        # The footage shows no subtitles of its own: a reel is never shipped without captions.
+        # The footage shows no text of its own: a reel is never shipped without captions.
         d.burned_captions = False
         d.caption_mode = "every_word" if d.caption_mode == "none" else d.caption_mode
-        changes.append("captions kept: the footage has no burned-in subtitles")
+        changes.append("captions kept: the footage has no text of its own")
     hook = min(max(0, verdicts.best_hook), max(0, len(d.hooks) - 1))
     log.info("Verify: hook %d, %d changes", hook, len(changes))
     return hook, verdicts.hook_why, changes

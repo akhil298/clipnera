@@ -249,6 +249,11 @@ class BaseConfig(BaseSettings):
     REEL_IMAGE_PROVIDER: Literal["", "gemini", "openai"] = ""
     GEMINI_IMAGE_MODEL: str = "gemini-2.5-flash-image"
     REEL_MAX_GENERATED_IMAGES: int = 3
+    # A reel step's model over reel_engine.ai.MODELS, "provider:model[:effort]" (e.g. {"reel_director":
+    # "openai:gpt-6-astra-1:medium"} puts the director back on Astra). {} keeps the defaults.
+    REEL_STEP_MODELS: dict[str, str] = {}
+    # Footage with its own text (subtitles, cards) shown whole over a blurred copy instead of cropped to 9:16.
+    REEL_FIT_LAYOUT: bool = False
     # Reels one premium edit may cut from a long video: one per strong moment and about four minutes of speech, up to
     # this many (each charged); REEL_PARALLEL of them are edited at once.
     REEL_MAX_REELS_FREE: int = 2

@@ -119,10 +119,10 @@ async def review(plan: EditPlan, video: str, history: str = "") -> tuple[Review,
     message_text = (f"{history}Measurements: {facts}\n\nFirst {len(overview)} images: frames across the reel. Then one image per item:\n"
                     + "\n".join(notes) + "\n\nReview it. JSON only.")
     try:
-        verdict = await vision_json(SYSTEM, message_text, overview + item_jpegs, Verdict, max_tokens=4000)
+        verdict = await vision_json(SYSTEM, message_text, overview + item_jpegs, Verdict, max_tokens=4000, step="reel_review")
     except Exception as exc:  # a large request that times out is tried once more with half the frames
         log.warning("Review request failed (%s: %s); retrying with fewer frames", type(exc).__name__, exc)
-        verdict = await vision_json(SYSTEM, message_text, overview[:3] + item_jpegs[:12], Verdict, max_tokens=4000)
+        verdict = await vision_json(SYSTEM, message_text, overview[:3] + item_jpegs[:12], Verdict, max_tokens=4000, step="reel_review")
     scores = [LayerScore(layer=s.layer, score=max(1, min(10, s.score)), note=s.note) for s in verdict.scores]
     overall = round(sum(s.score for s in scores) / len(scores), 1) if scores else 0.0
     log.info("Review: overall %.1f", overall)

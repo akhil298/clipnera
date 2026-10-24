@@ -42,16 +42,16 @@ correct, not an error. Each fix is the word id and the one word that replaces it
 
 async def proofread(words: list[Word], language: str) -> int:
     """Correct misheard words in place; returns how many were changed (0 when the call fails: captions go as heard)."""
-    from clients.ai import get_text_client
+    from reel_engine.ai import vision_json
 
     if len(words) < 8:
         return 0
     rows = [" ".join(f"{w.i}:{w.text}" for w in words[a:b + 1]) for a, b in sentences(words[:MAX_WORDS])]
     by_id = {w.i: w for w in words}
     try:
-        found = await get_text_client(is_pro=True, step="director").chat_json(
-            [{"role": "system", "content": SYSTEM.format(language=language or "the speaker's language")},
-             {"role": "user", "content": "Transcript (id:word):\n" + "\n".join(rows) + "\n\nJSON only."}], Fixes, max_tokens=3000)
+        found = await vision_json(SYSTEM.format(language=language or "the speaker's language"),
+                                  "Transcript (id:word):\n" + "\n".join(rows) + "\n\nJSON only.", [], Fixes, max_tokens=3000,
+                                  step="reel_proof")
     except Exception as exc:
         log.warning("Proofread failed, captions kept as heard: %s", exc)
         return 0

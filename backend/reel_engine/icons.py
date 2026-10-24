@@ -90,7 +90,7 @@ async def choose(requests: list[tuple[str, str]], animated: frozenset[int] = fro
                  kinds: tuple[str, ...] = KINDS) -> list[AssetRef | None]:
     """For each (query, context), the kit icon that truly shows it, or None. Requests numbered in ``animated``
     (caption lines) may also get an animated emoji."""
-    from clients.ai import get_text_client
+    from reel_engine.ai import vision_json
 
     pools = [[] if not q or kit.words_of(q) <= DECORATIVE else candidates(q, kinds=kinds) + (emoji_candidates(q) if n in animated else [])
              for n, (q, _) in enumerate(requests)]
@@ -100,9 +100,8 @@ async def choose(requests: list[tuple[str, str]], animated: frozenset[int] = fro
         return result
     lines = [f"request {n}: '{q}' - said: \"{ctx[:120]}\"\n  candidates: " + " | ".join(label(e) for e in pool) for n, q, ctx, pool in asked]
     try:
-        client = get_text_client(is_pro=True, step="beat_planning")
-        answer = await client.chat_json([{"role": "system", "content": SYSTEM},
-                                         {"role": "user", "content": "\n".join(lines) + "\n\nChoose. JSON only."}], Choices, max_tokens=2000)
+        answer = await vision_json(SYSTEM, "\n".join(lines) + "\n\nChoose. JSON only.", [], Choices, max_tokens=2000,
+                                   step="reel_icons")
     except Exception as exc:  # without the check no icon is shown, rather than a guessed one
         log.warning("Icon choice failed, labels go without icons: %s", exc)
         return result

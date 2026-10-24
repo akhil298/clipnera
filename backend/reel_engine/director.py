@@ -195,9 +195,9 @@ Anchor on word ids w0..w1 (src = -1, at = -1) or for footage give src + at too. 
 the speaker's face IS the point (a reaction, a punchline). Picture-only reels: inserts = [] (the clips are the
 pictures). Never ask for logos of real brands or photos of private people.
 
-BURNED CAPTIONS: set burned_captions = true when the footage already shows subtitles or captions burned into the
-picture (text along the bottom that follows the speech); then caption_mode must be "none" - two caption tracks
-read as a mistake.
+BURNED CAPTIONS: set burned_captions = true when the footage already shows the creator's own text burned into the
+picture: subtitles or captions that follow the speech, or text cards and labels explaining something (not a sign or
+packaging that is part of the scene); then caption_mode must be "none" - two caption tracks read as a mistake.
 
 CAPTIONS: caption_mode from the recipe (every_word whenever someone talks to camera or narrates, keyword only for ads and demos, none
 when nobody talks). keywords = word ids shown big (nouns, numbers, punch words; about one per 3-6 words).
@@ -275,7 +275,7 @@ async def direct(sources: list[Source], audio: AudioReport, shots: list[Shot], j
             f"Words (id:word, ~ = filler, [take] = earlier take):\n{word_listing(words, takes) if words else '(nobody speaks)'}\n\n"
             f"Frames: {how}.\n\nPlan the reel. JSON only.")
     plan = await vision_json(system + "\n\n" + styles.prompt() + "\n\n" + typekits.prompt() + "\n\n" + effects_prompt(), user, jpegs,
-                             DirectorPlan, max_tokens=16000)
+                             DirectorPlan, max_tokens=16000, step="reel_director")
     log.info("Director: recipe=%s audio=%s %d clips %d beats %d sections %d effects", plan.recipe, plan.audio_view,
              len(plan.story), len(plan.beats), len(plan.sections), len(plan.effects))
     return plan

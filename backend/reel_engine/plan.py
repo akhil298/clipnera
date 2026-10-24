@@ -100,6 +100,9 @@ class Brief(_Model):
     # The on-screen hook over a talking reel's first seconds: a specific question or claim, 3-7 words.
     hook_text: str = ""
     caption_mode: CaptionMode = "every_word"
+    # The footage carries its own text (subtitles, cards) and is wider than the reel: each shot is shown whole over
+    # a blurred copy of itself, since a 9:16 crop would slice that text.
+    fit: bool = False
     # The reel's type kit (data/type_kits.json). text_style/title_style are the looks before kits, kept so older saved
     # plans still load.
     type_kit: str = ""

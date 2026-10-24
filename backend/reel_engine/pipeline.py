@@ -16,13 +16,14 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.config import get_settings
 from core.logging_config import get_logger
 from reel_engine import accents, effects, icons, inserts, layout, moments, proof, sound, styles, tracks, typekits
 from reel_engine.assets import AssetStore, Scout
 from reel_engine.compile import BEAT, brief_of, captions_track, graphics_track, to_output, video_track
 from reel_engine.director import direct, recipe
 from reel_engine.listen import listen
-from reel_engine.media import probe
+from reel_engine.media import H, W, probe
 from reel_engine.plan import AudioReport, EditPlan, MusicChoice, Progress, Shot, Source
 from reel_engine.render import compose, render_graphics, render_inserts, render_picture, resolve_behind
 from reel_engine.review import apply, review, since
@@ -260,6 +261,15 @@ async def run_many(inputs: list[Path], work: Path, out_dir: Path, store: AssetSt
     return plans
 
 
+def fitted(plan: EditPlan) -> tuple[int, int, int, int] | None:
+    """The footage's strip (output pixels) when each shot is shown whole over a blurred copy, else None."""
+    videos = [s for s in plan.sources if s.kind == "video" and s.width]
+    if not (plan.brief and plan.brief.fit and videos):
+        return None
+    tall = max(round(W * s.height / s.width) for s in videos)
+    return (0, (H - tall) // 2, W, (H + tall) // 2)
+
+
 def moment_line(found: Analysis, k: int) -> str:
     spans = moments.sentences(found.audio.words)
     return " ".join(w.text for w in found.audio.words[spans[k][0]:spans[k][1] + 1]) if 0 <= k < len(spans) else ""
@@ -310,6 +320,8 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
             if not window or (src == window[0] and window[1] <= t <= window[2])]
     plan.brief, _ = brief_of(d, audio, target_seconds, headline, kits, typekits.palette_accent(near[:: max(1, len(near) // 24)]),
                              seed=str(out))
+    plan.brief.fit = (get_settings().REEL_FIT_LAYOUT and d.burned_captions
+                      and any(s.kind == "video" and s.width > s.height * 0.6 for s in plan.sources))
     src_len = {s.index: s.duration for s in plan.sources}
     picture = plan.brief.path == "visual"
     track = tracks.pick(plan.brief.mood, target_seconds or plan.brief.target_seconds or 40, picture) if picture else None
@@ -357,7 +369,7 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
     picture = await effects.apply_picture(plan, picture, work)
     await resolve_behind(plan, picture, work)
     await stage("layout", "placing every graphic off faces and the action")
-    await asyncio.to_thread(layout.place, plan.graphics, plan.captions, str(picture))
+    await asyncio.to_thread(layout.place, plan.graphics, plan.captions, str(picture), fitted(plan))
     accents.add(plan)
 
     best: tuple[float, Path, EditPlan] | None = None
@@ -393,7 +405,7 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
         if not apply(plan, actions):
             break
         history = since(result, actions)
-        await asyncio.to_thread(layout.place, plan.graphics, plan.captions, str(picture))
+        await asyncio.to_thread(layout.place, plan.graphics, plan.captions, str(picture), fitted(plan))
 
     _, final, plan_best = best
     plan = plan_best

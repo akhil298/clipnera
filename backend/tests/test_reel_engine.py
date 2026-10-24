@@ -251,6 +251,28 @@ def test_the_hook_line_is_not_said_twice():
     assert items[0].role == "hook" and items[0].t0 >= words[3].t0 - 0.1
 
 
+def test_footage_with_its_own_text_is_shown_whole_not_cropped(tmp_path):
+    from reel_engine.plan import Source, VideoItem
+    from reel_engine.render import segment_cmd
+
+    src = Source(index=0, name="a", path="a.mp4", kind="video", duration=60, width=1920, height=1080, fps=30)
+    item = VideoItem(id="v0", src=0, t0=1, t1=4, out0=0, out1=3, zoom="punch", role="body")
+    track = [[2.0, 0.2, 0.4, 0.1, 0.2, 0.0]]
+    cropped = segment_cmd(src, item, track, "", 1.0, tmp_path / "g.cube", False, False, tmp_path / "o.mp4")
+    fitted = segment_cmd(src, item, track, "", 1.0, tmp_path / "g.cube", False, False, tmp_path / "o.mp4", fit=True)
+    vf = lambda cmd: cmd[cmd.index("-vf") + 1]  # noqa: E731
+    assert "crop=iw*" in vf(cropped) and "crop=iw*" not in vf(fitted)
+    assert "overlay=0:(H-h)/2" in vf(fitted) and "z='1.0'" in vf(fitted)
+
+
+def test_on_a_fitted_reel_a_statement_moves_off_the_picture_strip():
+    from reel_engine.layout import band_box
+
+    strip = (0, 656, 1080, 1264)
+    top, h = band_box([86, 384, 908, 1152], strip)[1:4:2]
+    assert top + h <= strip[1] or top >= strip[3]
+
+
 def test_a_still_photo_gives_its_frame(tmp_path):
     import cv2
     import numpy as np
@@ -343,8 +365,21 @@ def test_a_content_filter_flag_retries_with_fewer_frames(monkeypatch):
 
     monkeypatch.setattr(ai_clients, "get_text_client", lambda **kw: Client())
     from reel_engine.inserts import Picks
-    result = asyncio.run(ai.vision_json("s", "t", [b"a", b"b", b"c", b"d"], Picks, 100))
+    result = asyncio.run(ai.vision_json("s", "t", [b"a", b"b", b"c", b"d"], Picks, 100, step="reel_photos"))
     assert result.picks == [] and calls == [4, 2, 2, 0]
+
+
+def test_each_reel_step_runs_on_its_model_and_a_setting_overrides_it(monkeypatch):
+    import clients.ai as ai_clients
+    from core.config import get_settings
+    from reel_engine import ai
+
+    monkeypatch.setattr(ai_clients, "get_text_client", lambda choice: choice)
+    director = ai.client("reel_director")
+    assert (director.provider, director.model, director.effort) == ("openai", "gpt-6.1-sol-1", "medium")
+    assert (ai.client("reel_proof").model, ai.client("reel_proof").effort) == ("gpt-4.1-mini-1", None)
+    monkeypatch.setattr(get_settings(), "REEL_STEP_MODELS", {"reel_director": "openai:gpt-6-astra-1:high"})
+    assert (ai.client("reel_director").model, ai.client("reel_director").effort) == ("gpt-6-astra-1", "high")
 
 
 # ------------------------------------------------------------------ checklists

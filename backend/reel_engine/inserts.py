@@ -158,7 +158,7 @@ async def resolve(requests: list, items: list[VideoItem], words: list[Word], sco
             jpegs += [_preview(p, request.kind) for p, _ in cands]
         try:
             picks = await vision_json(CHOOSER, "\n".join(lines) + "\n\nPick for each request. JSON only.", [j for j in jpegs if j],
-                                      Picks, max_tokens=2000)
+                                      Picks, max_tokens=2000, step="reel_photos")
             calls = 1
         except Exception as exc:
             log.warning("Insert choice failed, inserts skipped: %s", exc)

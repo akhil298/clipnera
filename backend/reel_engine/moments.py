@@ -76,16 +76,14 @@ def score(m: Moment) -> float:
 
 async def find(words: list[Word], brief: str = "") -> list[tuple[Moment, float, float, int]]:
     """Ranked moments as (moment, start second, end second, source index), best first; [] when there is no speech."""
-    from clients.ai import get_text_client
+    from reel_engine.ai import vision_json
 
     if len(words) < 30:
         return []
     text, spans = listing(words)
-    client = get_text_client(is_pro=True, step="director")
     try:
-        found = await client.chat_json([{"role": "system", "content": SYSTEM},
-                                        {"role": "user", "content": f"User brief: {brief or '(none)'}\n\nTranscript:\n{text}\n\nJSON only."}],
-                                       Moments, max_tokens=4000)
+        found = await vision_json(SYSTEM, f"User brief: {brief or '(none)'}\n\nTranscript:\n{text}\n\nJSON only.", [], Moments,
+                                  max_tokens=4000, step="reel_moments")
     except Exception as exc:  # without moments the editor works on the whole video, as before
         log.warning("Moment finder failed: %s", exc)
         return []

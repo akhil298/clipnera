@@ -218,7 +218,7 @@ def shake(kind: str, rate: float) -> str:
 
 
 def segment_cmd(source: Source, item: VideoItem, track: list[list[float]], wb: str, gamma: float, grade: Path, shaky: bool,
-                dark: bool, out: Path, focus: list[list[float]] | None = None) -> list[str]:
+                dark: bool, out: Path, focus: list[list[float]] | None = None, fit: bool = False) -> list[str]:
     length = item.out1 - item.out0
     count = max(1, round(length * FPS))
     cw, ch = ZOOM_CANVAS
@@ -235,18 +235,24 @@ def segment_cmd(source: Source, item: VideoItem, track: list[list[float]], wb: s
             chain.append(f"minterpolate=fps={FPS}:mi_mode=mci:mc_mode=aobmc:vsbmc=1")
         if shaky:
             chain.append("deshake")
-        crop, upscale = framing(source, item, track, focus)
+        crop, upscale = (None, 0.0) if fit else framing(source, item, track, focus)
+        if fit:
+            # The whole frame across the middle over a blurred copy of itself: the footage's own text stays whole.
+            chain.append(f"split[bg][fg];[bg]scale=270:480:force_original_aspect_ratio=increase,crop=270:480,boxblur=12:2,"
+                         f"eq=brightness=-0.06,scale={cw}:{ch}[b];[fg]scale={cw}:-2[f];[b][f]overlay=0:(H-h)/2")
         if crop:
             chain.append(crop)
         if upscale >= 1.0:
             # The grade costs per pixel: on the window before it is scaled up it does a third of the work (3x faster).
             chain += colour
             colour = []
-        chain.append(f"scale={cw}:{ch}:flags=lanczos:force_original_aspect_ratio=increase,crop={cw}:{ch}")
+        if not fit:
+            chain.append(f"scale={cw}:{ch}:flags=lanczos:force_original_aspect_ratio=increase,crop={cw}:{ch}")
         if upscale > 2.0:
             chain.append("unsharp=5:5:0.6:5:5:0.0")
     chain.append(f"fps={FPS}")
-    chain.append(f"zoompan=z='{zoom_expr(item.zoom, count)}':x='iw/2-(iw/zoom/2){shake(item.zoom, 2.3)}'"
+    # A zoom would cut the sides of a fitted frame, and the text there with them.
+    chain.append(f"zoompan=z='{zoom_expr('hold' if fit else item.zoom, count)}':x='iw/2-(iw/zoom/2){shake(item.zoom, 2.3)}'"
                  f":y='ih/2-(ih/zoom/2){shake(item.zoom, 3.1)}':d=1:s={W}x{H}:fps={FPS}")
     chain += [*colour, "vignette=PI/9", "noise=alls=4:allf=t", "format=yuv420p"]
     return ["ffmpeg", "-v", "error", "-y", *inputs, "-an", "-vf", ",".join(chain), "-frames:v", str(count),
@@ -270,7 +276,7 @@ async def render_picture(plan: EditPlan, grade_name: str, work: Path) -> Path:
         cmd = segment_cmd(source, item, plan.face_track.get(str(item.src), []), white_balance(source, item),
                           exposure(source, item, target) if source.kind == "video" else 1.0, grade,
                           bool(shot and shot.motion >= SHAKY_MOTION and not shot.faces), bool(shot and shot.dark), out,
-                          plan.focus_track.get(str(item.src), []))
+                          plan.focus_track.get(str(item.src), []), fit=bool(plan.brief and plan.brief.fit))
         async with slots:
             await asyncio.to_thread(run, cmd)
         return out
