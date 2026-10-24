@@ -83,11 +83,54 @@ def text_band(path: str | Path, side: str, samples: int = 16) -> float:
             rows.append((np.abs(cv2.Sobel(grey, cv2.CV_32F, 1, 0)) > 120).mean(axis=1))
     if not rows:
         return TEXT_BAND[side]
-    profile = np.mean(rows, axis=0)
+    reach = lettered_reach(np.mean(rows, axis=0), side)
+    return reach if reach is not None else TEXT_BAND[side]
+
+
+def lettered_reach(profile: np.ndarray, side: str) -> float | None:
+    """How far lettering reaches from ``side`` in a row profile of sharp vertical strokes, or None when there is none."""
     profile = profile if side == "top" else profile[::-1]
     reach = int(len(profile) * 0.35)
     lettered = np.nonzero(profile[:reach] > max(0.04, 3 * float(np.median(profile))))[0]
-    return min(0.35, (lettered[-1] + 1) / len(profile) + 0.02) if lettered.size else TEXT_BAND[side]
+    return min(0.35, (lettered[-1] + 1) / len(profile) + 0.02) if lettered.size else None
+
+
+def edge_band(profile: np.ndarray, side: str) -> float | None:
+    """How far a band of lettering reaches from ``side``, when it is one: it starts at the very edge (within its outer
+    tenth) and runs on with no long gap. A poster on the wall or hair high in the frame is not a ticker."""
+    rows = profile if side == "top" else profile[::-1]
+    n = len(rows)
+    dense = rows[:int(n * 0.35)] > max(0.04, 3 * float(np.median(profile)))
+    hits = np.nonzero(dense)[0]
+    if not hits.size or hits[0] > n * 0.10:
+        return None
+    end, gap = hits[0], max(2, int(n * 0.02))
+    for k in hits[1:]:
+        if k - end > gap:
+            break
+        end = k
+    return min(0.35, (end + 1) / n + 0.02)
+
+
+def burned_bands(path: str | Path, samples: int = 16, least: int = 2) -> dict[str, float]:
+    """Text bands along the top or bottom edge anywhere in the footage - a news ticker, a lower third, an end-card
+    footer that shows up late - as {side: reach}. Each frame is read on its own, so text seen in only part of the video
+    still counts once it shows in ``least`` frames."""
+    import cv2
+
+    duration = probe(path)["duration"] or 0.0
+    seen: dict[str, list[float]] = {"top": [], "bottom": []}
+    for k in range(samples):
+        image = frame(path, duration * (k + 0.5) / samples, 640)
+        if image is None:
+            continue
+        grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(np.float32)
+        profile = (np.abs(cv2.Sobel(grey, cv2.CV_32F, 1, 0)) > 120).mean(axis=1)
+        for side in seen:
+            reach = edge_band(profile, side)
+            if reach is not None:
+                seen[side].append(reach)
+    return {side: max(r) for side, r in seen.items() if len(r) >= least}
 
 
 def jpeg(image: np.ndarray, quality: int = 80) -> bytes:

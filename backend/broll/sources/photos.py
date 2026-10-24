@@ -16,6 +16,8 @@ NASA_URL = "https://images-api.nasa.gov/search"
 NASA_LICENSE_URL = "https://www.nasa.gov/nasa-brand-center/images-and-media/"
 # Openverse licence codes we accept: CC0 and the Public Domain Mark.
 OPEN_LICENCES = {"cc0": "cc0", "pdm": "public_domain"}
+# Openverse providers ranked for a reel's cutaways: clean stock first.
+STOCK_FIRST = {"stocksnap": 0, "rawpixel": 1, "wikimedia": 2, "flickr": 3}
 # Anonymous Openverse use is rate limited (a burst of searches gets 403/429): one search at a time, one retry.
 _OPENVERSE_GATE = asyncio.Semaphore(1)
 OPENVERSE_RETRY_SECONDS = 4.0
@@ -27,7 +29,9 @@ class OpenversePhotos:
     name = "openverse"
 
     async def search(self, query: str, per_page: int) -> list[StockClip]:
-        params = {"q": query, "license": "cc0,pdm", "page_size": min(20, per_page * 2), "mature": "false"}
+        # Photographs only (no diagrams or scans), the clean stock libraries first: StockSnap and rawpixel publish
+        # everyday CC0 stock (people at work, money, homes), where archives mostly hold history.
+        params = {"q": query, "license": "cc0,pdm", "category": "photograph", "page_size": 20, "mature": "false"}
         async with _OPENVERSE_GATE, http_client() as client:
             response = await client.get(OPENVERSE_URL, params=params)
             if response.status_code in (403, 429):
@@ -43,6 +47,7 @@ class OpenversePhotos:
                                      download_url=r["url"], title=r.get("title") or query, tags=[t.get("name", "") for t in r.get("tags") or []][:20],
                                      width=int(r.get("width") or 0), height=int(r.get("height") or 0), duration_s=0.0, license_code=code,
                                      license_url=r.get("license_url"), author=r.get("creator"), record=r))
+            out.sort(key=lambda c: STOCK_FIRST.get(c.source_id.split(":")[0] if ":" in c.source_id else c.record.get("source", ""), 9))
             return out[:per_page]
 
 

@@ -66,7 +66,7 @@ def _source_gains(path: str, duration: float) -> np.ndarray:
     return _grey_world(mean_rgb(path, [duration * k / 6 for k in range(1, 6)]))
 
 
-def white_balance(source: Source, item: VideoItem | None = None) -> str:
+def white_balance(source: Source, item: VideoItem | None = None, skin: np.ndarray | None = None) -> str:
     """Grey-world gains, clamped: removes a colour cast before the grade. With ``item``, the source's gains are blended
     half and half with the shot's own, so a shot that drifts warmer or cooler (a lamp, a window) matches its neighbours
     without flattening the source's look."""
@@ -76,7 +76,55 @@ def white_balance(source: Source, item: VideoItem | None = None) -> str:
     if item is not None:
         gains = np.clip((gains + _grey_world(mean_rgb(source.path, [item.t0 + (item.t1 - item.t0) * k for k in (0.25, 0.75)]))) / 2,
                         *WB_LIMIT)
+    if skin is not None:
+        gains = gains * skin
     return f"colorchannelmixer=rr={gains[0]:.3f}:gg={gains[1]:.3f}:bb={gains[2]:.3f}"
+
+
+# Skin match: each shot's face is nudged toward the reel's typical face colour (only its cast - never lighter or
+# darker), so one person looks the same across cuts; a strongly yellow-green face is pulled back a little more.
+SKIN_LIMIT = (0.94, 1.06)
+YELLOW_BR = 0.62   # blue/red of a face below this reads yellow under warm light and a warm grade
+
+
+def face_rgb(source: Source, item: VideoItem, track: list[list[float]]) -> np.ndarray | None:
+    """Mean RGB of the inner face (cheeks and forehead) over the shot, or None when no face is tracked in it."""
+    from reel_engine.media import frame
+
+    rows = [r for r in track if item.t0 <= r[0] <= item.t1 and len(r) >= 4 and r[3] > 0.02]
+    if source.kind != "video" or not rows:
+        return None
+    samples = []
+    for r in (rows[len(rows) // 4], rows[3 * len(rows) // 4]):
+        image = frame(source.path, r[0], 540)
+        if image is None:
+            continue
+        h, w = image.shape[:2]
+        half_w = r[3] * w * 0.28
+        half_h = half_w * 1.1
+        x0, x1 = int(max(0, r[1] * w - half_w)), int(min(w, r[1] * w + half_w))
+        y0, y1 = int(max(0, r[2] * h - half_h)), int(min(h, r[2] * h + half_h))
+        if x1 - x0 > 4 and y1 - y0 > 4:
+            samples.append(image[y0:y1, x0:x1].reshape(-1, 3)[:, ::-1].mean(axis=0))  # BGR -> RGB
+    return np.mean(samples, axis=0) if samples else None
+
+
+def skin_match(faces: list[np.ndarray | None]) -> list[np.ndarray]:
+    """Per-shot RGB gains bringing each face's cast to the reel's median face (ones where no face was measured)."""
+    seen = [f / max(f[0], 1.0) for f in faces if f is not None]
+    if not seen:
+        return [np.ones(3) for _ in faces]
+    target = np.median(seen, axis=0)
+    if target[2] < YELLOW_BR:  # the whole reel's skin reads yellow: lift blue and ease green a little
+        target = target * np.array([1.0, 0.98, min(1.08, YELLOW_BR / max(target[2], 0.3))])
+    out = []
+    for f in faces:
+        if f is None:
+            out.append(np.ones(3))
+            continue
+        gains = np.clip(target / (f / max(f[0], 1.0)), *SKIN_LIMIT)
+        out.append(gains / gains.mean() * 1.0)  # a cast change only: the face keeps its brightness
+    return out
 
 
 def exposure(source: Source, item: VideoItem, target: float) -> float:
@@ -229,7 +277,7 @@ def segment_cmd(source: Source, item: VideoItem, track: list[list[float]], wb: s
     count = max(1, round(length * FPS))
     cw, ch = ZOOM_CANVAS
     colour = (["hqdn3d=2:1.5:3:3"] if dark else []) + ([wb] if wb else []) + ([f"eq=gamma={gamma:.3f}"] if abs(gamma - 1.0) > 0.02 else [])
-    colour += [f"lut3d=file='{str(grade).replace(':', chr(92) + ':')}'", "eq=contrast=1.04:saturation=1.1"]
+    colour += [f"lut3d=file='{str(grade).replace(':', chr(92) + ':')}'", "eq=contrast=1.04:saturation=1.04"]
     chain = []
     if source.kind == "image":
         inputs = ["-loop", "1", "-t", f"{length + 0.2:.3f}", "-i", source.path]
@@ -271,6 +319,8 @@ async def render_picture(plan: EditPlan, grade_name: str, work: Path) -> Path:
     levels = await asyncio.gather(*(asyncio.to_thread(lambda i=i: mean_rgb(sources[i.src].path, [(i.t0 + i.t1) / 2]).mean() / 255)
                                     for i in plan.video if sources[i.src].kind == "video"))
     target = float(np.median(levels or [0.45]))
+    faces = await asyncio.gather(*(asyncio.to_thread(face_rgb, sources[i.src], i, plan.face_track.get(str(i.src), [])) for i in plan.video))
+    skins = skin_match(list(faces))
     # Match toward the brighter of the median and a bright floor: dim shots are lifted, bright ones kept.
     target = max(target, EXPOSURE_FLOOR)
     grade = grade_path(grade_name)
@@ -281,7 +331,7 @@ async def render_picture(plan: EditPlan, grade_name: str, work: Path) -> Path:
         source = sources[item.src]
         shot = next((s for (src, _), s in shots.items() if src == item.src and s.t0 <= item.t0 < s.t1), None)
         out = work / f"seg{n:03d}.mp4"
-        cmd = segment_cmd(source, item, plan.face_track.get(str(item.src), []), white_balance(source, item),
+        cmd = segment_cmd(source, item, plan.face_track.get(str(item.src), []), white_balance(source, item, skins[n]),
                           exposure(source, item, target) if source.kind == "video" else 1.0, grade,
                           bool(shot and shot.motion >= SHAKY_MOTION and not shot.faces), bool(shot and shot.dark), out,
                           plan.focus_track.get(str(item.src), []), fit=bool(plan.brief and plan.brief.fit),

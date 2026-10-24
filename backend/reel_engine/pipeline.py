@@ -23,7 +23,7 @@ from reel_engine.assets import AssetStore, Scout
 from reel_engine.compile import BEAT, brief_of, captions_track, graphics_track, to_output, video_track
 from reel_engine.director import direct, recipe
 from reel_engine.listen import listen
-from reel_engine.media import H, W, probe, text_band
+from reel_engine.media import H, W, burned_bands, probe, text_band
 from reel_engine.plan import AudioReport, EditPlan, MusicChoice, Progress, Shot, Source
 from reel_engine.render import compose, render_graphics, render_inserts, render_picture, resolve_behind
 from reel_engine.review import apply, review, since
@@ -322,11 +322,18 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
                              seed=str(out))
     plan.brief.fit = (get_settings().REEL_FIT_LAYOUT and d.burned_captions
                       and any(s.kind == "video" and s.width > s.height * 0.6 for s in plan.sources))
-    if edge:
-        for s in plan.sources:
-            if s.kind == "video" and s.width > s.height * 0.6:
-                reach = await asyncio.to_thread(text_band, s.path, edge)
-                plan.brief.text_free[str(s.index)] = [reach, 1.0] if edge == "top" else [0.0, 1.0 - reach]
+    for s in plan.sources:
+        if s.kind != "video" or s.width <= s.height * 0.6:
+            continue
+        # The subtitles the hook frames showed, and any ticker or footer seen anywhere in the video: the 9:16 window
+        # keeps between them (a doctor's scrolling footer once ran across a reel's ending).
+        bands = await asyncio.to_thread(burned_bands, s.path)
+        if edge:
+            bands[edge] = max(bands.get(edge, 0.0), await asyncio.to_thread(text_band, s.path, edge))
+        if bands:
+            top, bottom = bands.get("top", 0.0), bands.get("bottom", 0.0)
+            if 1.0 - top - bottom >= 0.5:  # never squeeze the picture to less than half the frame's height
+                plan.brief.text_free[str(s.index)] = [round(top, 3), round(1.0 - bottom, 3)]
     src_len = {s.index: s.duration for s in plan.sources}
     picture = plan.brief.path == "visual"
     track = tracks.pick(plan.brief.mood, target_seconds or plan.brief.target_seconds or 40, picture) if picture else None
@@ -377,6 +384,7 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
         plan.ai_calls += await density.fill(plan)
     await stage("assets", "checking every picture against what is said")
     plan.ai_calls += await check.check(plan)
+    density.one_of_each(plan)
     grade = recipe(plan.brief.recipe).get("grade", "teal_orange")
     await stage("picture", f"{len(plan.video)} shots, {len(plan.inserts)} cutaways, {plan.duration:.1f} s")
     picture = await render_picture(plan, grade, work)

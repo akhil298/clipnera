@@ -1120,3 +1120,42 @@ def test_photo_requests_search_stock_first_and_show_the_best_of_every_source(mon
     assert [p[1]["source"] for p in picked] == ["pexels", "pixabay", "wikimedia", "pexels"]
     assert not any("openverse" in g for g in got)
 
+
+def test_one_persons_skin_matches_across_cuts_and_a_yellow_cast_eases_without_changing_brightness():
+    from reel_engine.render import SKIN_LIMIT, skin_match
+
+    warm, cool, usual = np.array([200, 160, 110.0]), np.array([190, 160, 140.0]), np.array([200, 162, 128.0])
+    gains = skin_match([warm, cool, usual, None])
+    matched = [f * g for f, g in zip((warm, cool, usual), gains)]
+    spread = lambda faces: np.ptp([f[2] / f[0] for f in faces])  # noqa: E731
+    assert spread(matched) < spread([warm, cool, usual])  # the shots move toward one skin colour
+    assert all(abs(g.mean() - 1.0) < 1e-6 for g in gains) and np.allclose(gains[3], 1.0)
+    assert all(SKIN_LIMIT[0] - 0.05 <= x <= SKIN_LIMIT[1] + 0.05 for g in gains for x in g)
+    yellow = skin_match([np.array([210, 170, 100.0])] * 2)[0]
+    assert yellow[2] > 1.0  # a reel whose skin reads yellow gets a little more blue
+
+
+def test_no_icon_shows_twice_in_a_reel():
+    from reel_engine.density import one_of_each
+    from reel_engine.plan import AssetRef, CaptionLine
+
+    car = AssetRef(id="obj.car", kind="icon", path="car.png", licence="MIT", source="kit")
+    plan = EditPlan(duration=20, graphics=[GraphicItem(id="a", kind="object", start=1, end=2, asset=car),
+                                           GraphicItem(id="b", kind="object", start=5, end=6, asset=car),
+                                           GraphicItem(id="c", kind="tag", start=8, end=9, asset=car, data={"text": "Car"})],
+                    captions=[CaptionLine(id="l", start=12, end=13, lead="a", keyword="car", icon=car)])
+    assert one_of_each(plan) == 3
+    assert [g.id for g in plan.graphics] == ["a", "c"] and plan.graphics[1].asset is None and plan.captions[0].icon is None
+
+
+def test_a_ticker_band_starts_at_the_edge_and_a_poster_high_in_the_frame_is_not_one():
+    from reel_engine.media import edge_band
+
+    plain = np.full(360, 0.01)
+    ticker = plain.copy()
+    ticker[-40:] = 0.3          # lettering along the bottom edge
+    poster = plain.copy()
+    poster[60:100] = 0.3        # lettering in the top third, away from the edge
+    assert 0.1 < edge_band(ticker, "bottom") < 0.16
+    assert edge_band(poster, "top") is None and edge_band(plain, "bottom") is None
+

@@ -74,3 +74,31 @@ async def fill(plan: EditPlan) -> int:
     plan.graphics.sort(key=lambda g: g.start)
     log.info("Density: %d objects added for %d words asked", added, len(picks))
     return 1
+
+
+def one_of_each(plan: EditPlan) -> int:
+    """No icon twice in a reel: the same cartoon car three times reads as a template. A repeated pop-in object goes,
+    a repeated icon on a label or caption line is left off (its words stay). Returns how many repeats were removed."""
+    seen: set[str] = set()
+    removed = 0
+    keep = []
+    for g in sorted(plan.graphics, key=lambda g: g.start):
+        if g.asset is not None and g.asset.kind == "icon":
+            if g.asset.id in seen:
+                removed += 1
+                if g.kind == "object":
+                    continue
+                g.asset = None
+            else:
+                seen.add(g.asset.id)
+        keep.append(g)
+    plan.graphics = keep
+    for c in sorted(plan.captions, key=lambda c: c.start):
+        if c.icon is not None:
+            if c.icon.id in seen:
+                c.icon = None
+                removed += 1
+            else:
+                seen.add(c.icon.id)
+    return removed
+
