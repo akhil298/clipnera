@@ -96,16 +96,19 @@ def lettered_reach(profile: np.ndarray, side: str) -> float | None:
 
 
 def edge_band(profile: np.ndarray, side: str) -> float | None:
-    """How far a band of lettering reaches from ``side``, when it is one: it starts at the very edge (within its outer
-    tenth) and runs on with no long gap. A poster on the wall or hair high in the frame is not a ticker."""
+    """How far a band of lettering reaches from ``side``, when it is one: it starts near the edge (within the outer
+    tenth at the top; a lower third sits a little higher, so the outer 15% at the bottom) and runs on with no long gap.
+    A poster on the wall or hair high in the frame is not a ticker."""
     rows = profile if side == "top" else profile[::-1]
     n = len(rows)
-    dense = rows[:int(n * 0.35)] > max(0.04, 3 * float(np.median(profile)))
-    hits = np.nonzero(dense)[0]
-    if not hits.size or hits[0] > n * 0.10:
+    median = float(np.median(profile))
+    hits = np.nonzero(rows[:int(n * 0.35)] > max(0.04, 3 * median))[0]
+    if not hits.size or hits[0] > n * (0.10 if side == "top" else 0.15):
         return None
-    end, gap = hits[0], max(2, int(n * 0.02))
-    for k in hits[1:]:
+    # Once a band starts, lighter lettering (a banner's second, thinner line) still belongs to it.
+    lighter = np.nonzero(rows[:int(n * 0.35)] > max(0.04, 2 * median))[0]
+    end, gap = hits[0], max(2, int(n * 0.03))
+    for k in lighter[lighter > hits[0]]:
         if k - end > gap:
             break
         end = k
@@ -120,8 +123,10 @@ def burned_bands(path: str | Path, samples: int = 16, least: int = 2) -> dict[st
 
     duration = probe(path)["duration"] or 0.0
     seen: dict[str, list[float]] = {"top": [], "bottom": []}
-    for k in range(samples):
-        image = frame(path, duration * (k + 0.5) / samples, 640)
+    # A name banner (lower third) is usually up only in the first seconds: those are read closely too.
+    times = sorted({t for t in (0.5, 1.5, 2.5, 3.5) if t < duration} | {duration * (k + 0.5) / samples for k in range(samples)})
+    for t in times:
+        image = frame(path, t, 640)
         if image is None:
             continue
         grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY).astype(np.float32)

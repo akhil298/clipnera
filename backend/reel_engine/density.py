@@ -62,7 +62,7 @@ async def fill(plan: EditPlan) -> int:
     if not picks:
         return 0
     found = await icons.choose([(line.keyword, " ".join(w["text"] for w in line.words)) for _, line in picks],
-                               animated=frozenset(range(len(picks))), kinds=("object3d",), n=16)
+                               kinds=("object3d",), n=16)
     added = 0
     for (at, line), asset in zip(picks, found):
         if asset is None:

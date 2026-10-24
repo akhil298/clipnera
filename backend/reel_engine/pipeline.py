@@ -357,7 +357,7 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
     picked = await icons.choose([(item.data["icon_query"], " ".join(str(item.data.get(k, "")) for k in ("lead", "text", "label")) + " " + item.why)
                                  if hasattr(item, "data") else (item.icon_query, " ".join(w["text"] for w in item.words))
                                  for item in wanting],
-                                animated=frozenset(n for n, item in enumerate(wanting) if not hasattr(item, "data")))
+                                kinds=("object3d",))
     plan.ai_calls += 1 if wanting else 0
     for item, asset in zip(wanting, picked):
         if hasattr(item, "data"):

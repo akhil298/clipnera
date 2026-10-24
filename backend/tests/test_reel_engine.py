@@ -1159,3 +1159,19 @@ def test_a_ticker_band_starts_at_the_edge_and_a_poster_high_in_the_frame_is_not_
     assert 0.1 < edge_band(ticker, "bottom") < 0.16
     assert edge_band(poster, "top") is None and edge_band(plain, "bottom") is None
 
+
+def test_captions_step_aside_while_the_hook_headline_is_up_and_statements_leave_the_face_clear():
+    from reel_engine import layout
+
+    words = words_of("why do investors buy high and sell low every single time the market moves")
+    d = director(hook_text="Why do investors buy high?", hooks=[DHook(clip=clip(w0=0, w1=4), word="", why="question")],
+                 story=[clip(w0=5, w1=len(words) - 1)])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0)
+    items = comp.video_track(d, brief, words, [], {0: 60.0})
+    graphics = comp.graphics_track(d, brief, words, items, [])
+    hook = next(g for g in graphics if g.kind == "hook")
+    captions, _ = comp.captions_track(d, brief, words, items, graphics)
+    assert captions and not any(c.start < hook.end - 0.05 and hook.start < c.end - 0.05 for c in captions)
+    x, top, w, h = layout.default_box("statement")
+    assert top >= 1100 and top + h <= layout.SAFE_BOTTOM  # a lower card: the face above it stays clear
+

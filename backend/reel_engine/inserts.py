@@ -213,7 +213,7 @@ async def resolve(requests: list, items: list[VideoItem], words: list[Word], sco
 
         # A 3D object or an animated emoji that shows the thing (the director's "show" words, else its photo search).
         objects = await icons.choose([(getattr(placed[n][2], "show", "") or placed[n][2].query, placed[n][2].query + "; " + placed[n][2].why)
-                                      for n in unresolved], animated=frozenset(range(len(unresolved))), kinds=("object3d",))
+                                      for n in unresolved], kinds=("object3d",))
         calls += 1
         for n, asset in zip(unresolved, objects):
             if asset:

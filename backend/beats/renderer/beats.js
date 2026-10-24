@@ -275,8 +275,10 @@
   }
 
   T.statement = (s, root) => {
-    // A dark see-through scrim over the footage, not a blank page: the speaker stays on screen behind the words.
-    const page = el('div', 'full scrim', root);
+    // A dark band rising from the bottom behind the words, not a scrim over the whole frame: the speaker's face
+    // stays clear above the card.
+    const page = el('div', 'scrim-low', root);
+    page.style.top = `${Math.max(0, s.box[1] - 160)}px`;
     const drift = ambient(page, s.id || s.data.text);
     const g = boxed(el('div', 'g', root), s.box);
     Object.assign(g.style, { display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '0.4em', textAlign: 'center' });

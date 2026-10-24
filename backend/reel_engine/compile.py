@@ -35,7 +35,9 @@ EMOJI_EVERY = 3
 CAPTION_YIELDS_TO = {"two", "keyword", "count_up", "statement", "list", "flow", "chart", "cta", "flicker", "photocard"}
 # Every-word captions carry the speech: they give way to graphics that take the whole frame, and under a word
 # graphic they leave out only the words it already shows.
-FULL_FRAME = {"statement", "flicker", "cta"}
+# Captions give way to these entirely: a full card, or the hook headline (while it is up, it is the reel's text; a
+# headline and captions stacked under it read as two things shouting at once).
+FULL_FRAME = {"statement", "flicker", "cta", "hook"}
 WORD_GRAPHICS = {"two", "keyword", "list", "flow"}
 # Never the big word of a caption line.
 WEAK = {"a", "an", "the", "and", "but", "or", "so", "to", "of", "in", "on", "at", "it", "is", "was", "be", "we", "we've", "i",
