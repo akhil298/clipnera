@@ -32,6 +32,9 @@ MODELS = {
     "reel_icons": "openai:gpt-4.1-mini-1",
     "reel_photos": "openai:gpt-4.1-mini-1",
     "reel_check": "openai:gpt-4.1-mini-1",
+    # A graphic the model writes as code (motion_code.py) and the art director's look at it.
+    "reel_motion_code": "openai:gpt-6-astra-1:medium",
+    "reel_motion_check": "openai:gpt-6.1-sol-1:low",
 }
 FLAGGED = ("content_policy", "content_filter", "content safety", "responsibleaipolicy")
 
