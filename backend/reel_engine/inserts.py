@@ -30,10 +30,11 @@ from reel_engine.plan import AssetRef, InsertItem, VideoItem, Word
 log = get_logger(__name__)
 
 MAX_INSERTS = 16
-CANDIDATES = 3
+CANDIDATES = 4
 MIN_SECONDS, MAX_SECONDS = 1.2, 3.2
 MAX_VIDEO_BYTES = 80 * 1024 * 1024
-FREE_LICENCES = {"public_domain", "pd_us_gov", "cc0"}
+# Public domain and CC0, and (the owner's call, 2026-10-24) Pexels and Pixabay stock: free for commercial use, no credit.
+FREE_LICENCES = {"public_domain", "pd_us_gov", "cc0", "pexels", "pixabay"}
 CHOOSER = """You pick the pictures a premium editor cuts to while someone talks. For each request you get what is
 being said and 1-3 candidate images (photos, or a frame of a video clip). Pick the candidate that clearly shows the
 requested thing in a way that looks good full screen in a vertical reel; pick -1 when none does (wrong subject,
@@ -77,16 +78,27 @@ async def _download(url: str, target: Path, limit: int) -> Path | None:
 async def _candidates(kind: str, query: str, work: Path, n: int) -> list[tuple[Path, dict]]:
     """Downloaded candidates (file, licence record) for a photo or B-roll request."""
     from broll.sources.nasa import NasaSource
-    from broll.sources.photos import NasaPhotos, OpenversePhotos, WikimediaPhotos
+    from broll.sources.pexels import PexelsSource
+    from broll.sources.photos import NasaPhotos, OpenversePhotos, PexelsPhotos, PixabayPhotos, WikimediaPhotos
+    from broll.sources.pixabay import PixabaySource
     from broll.sources.wikimedia import WikimediaSource
 
-    sources = [WikimediaPhotos(), OpenversePhotos(), NasaPhotos()] if kind == "photo" else [NasaSource(), WikimediaSource()]
-    found = []
+    settings = get_settings()
+    # Stock first: it has the everyday things people talk about (a lawn, a dentist's chair, a car lot), which public
+    # domain archives mostly lack. A source without its key is skipped.
+    if kind == "photo":
+        sources = [PexelsPhotos(), PixabayPhotos(), WikimediaPhotos(), OpenversePhotos(), NasaPhotos()]
+    else:
+        sources = ([PexelsSource()] if settings.PEXELS_API_KEY else []) + ([PixabaySource()] if settings.PIXABAY_API_KEY else []) \
+            + [NasaSource(), WikimediaSource()]
+    results = []
     for result in await asyncio.gather(*(s.search(query, CANDIDATES) for s in sources), return_exceptions=True):
         if isinstance(result, Exception):
             log.info("Insert search failed for %r: %s", query, result)
             continue
-        found += [c for c in result if c.license_code in FREE_LICENCES]
+        results.append([c for c in result if c.license_code in FREE_LICENCES])
+    # Each source's best first, then each one's second...: the chooser sees the strongest of every source.
+    found = [c for rank in range(CANDIDATES) for r in results if rank < len(r) for c in [r[rank]]]
     async def fetch(c) -> tuple[Path, dict] | None:
         suffix = Path(c.download_url.split("?")[0]).suffix.lower() or (".jpg" if kind == "photo" else ".mp4")
         target = work / f"cand_{abs(hash(c.download_url)) % 10**9}{suffix}"

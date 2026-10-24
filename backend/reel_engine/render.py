@@ -267,15 +267,17 @@ def segment_cmd(source: Source, item: VideoItem, track: list[list[float]], wb: s
 
 async def render_picture(plan: EditPlan, grade_name: str, work: Path) -> Path:
     sources = {s.index: s for s in plan.sources}
-    target = float(np.median([mean_rgb(sources[i.src].path, [(i.t0 + i.t1) / 2]).mean() / 255 for i in plan.video
-                              if sources[i.src].kind == "video"] or [0.45]))
+    # Each shot's brightness is read side by side: one ffmpeg seek after another took tens of seconds on a reframed reel.
+    levels = await asyncio.gather(*(asyncio.to_thread(lambda i=i: mean_rgb(sources[i.src].path, [(i.t0 + i.t1) / 2]).mean() / 255)
+                                    for i in plan.video if sources[i.src].kind == "video"))
+    target = float(np.median(levels or [0.45]))
     # Match toward the brighter of the median and a bright floor: dim shots are lifted, bright ones kept.
     target = max(target, EXPOSURE_FLOOR)
     grade = grade_path(grade_name)
     shots = {(s.src, round(s.t0, 2)): s for s in plan.shots}
     slots = asyncio.Semaphore(PARALLEL_SEGMENTS)
 
-    async def one(n: int, item: VideoItem) -> Path:
+    def build(n: int, item: VideoItem) -> Path:
         source = sources[item.src]
         shot = next((s for (src, _), s in shots.items() if src == item.src and s.t0 <= item.t0 < s.t1), None)
         out = work / f"seg{n:03d}.mp4"
@@ -284,9 +286,13 @@ async def render_picture(plan: EditPlan, grade_name: str, work: Path) -> Path:
                           bool(shot and shot.motion >= SHAKY_MOTION and not shot.faces), bool(shot and shot.dark), out,
                           plan.focus_track.get(str(item.src), []), fit=bool(plan.brief and plan.brief.fit),
                           rows=plan.brief.text_free.get(str(item.src)) if plan.brief else None)
-        async with slots:
-            await asyncio.to_thread(run, cmd)
+        run(cmd)
         return out
+
+    async def one(n: int, item: VideoItem) -> Path:
+        # Measuring a shot (white balance, exposure) reads frames too: it runs with the encode, off the event loop.
+        async with slots:
+            return await asyncio.to_thread(build, n, item)
 
     parts = await asyncio.gather(*(one(n, item) for n, item in enumerate(plan.video)))
     listing = work / "segments.txt"
@@ -303,14 +309,19 @@ async def render_inserts(plan: EditPlan, picture: Path, grade_name: str, work: P
     if not plan.inserts:
         return picture
     grade = grade_path(grade_name)
-    cuts = []
-    for item in plan.inserts:
+    slots = asyncio.Semaphore(PARALLEL_SEGMENTS)
+
+    async def one(item) -> tuple | None:
         out = work / f"insert_{item.id}.mp4"
         try:
-            await asyncio.to_thread(run, cutaway_cmd(item, out, grade, FPS, W, H))
-            cuts.append((item, out))
+            async with slots:
+                await asyncio.to_thread(run, cutaway_cmd(item, out, grade, FPS, W, H))
+            return item, out
         except Exception as exc:  # an unreadable insert is left out; the speaker stays on screen
             log.warning("Insert %s skipped: %s", item.id, exc)
+            return None
+
+    cuts = [c for c in await asyncio.gather(*(one(item) for item in plan.inserts)) if c]
     if not cuts:
         return picture
     out = work / "picture_inserts.mp4"
@@ -379,7 +390,7 @@ def caption_look(plan: EditPlan, n: int) -> str:
 
 def _kit(plan: EditPlan, role: str) -> dict:
     """The reel's type kit for a graphic (typekits.spec); the accent is the one the brief settled on."""
-    kit = typekits.spec(plan.brief.type_kit if plan.brief else "", role)
+    kit = typekits.spec(plan.brief.type_kit if plan.brief else "", role, kit=(plan.brief.kit or None) if plan.brief else None)
     if plan.brief and plan.brief.accent:
         kit["vars"]["--accent"] = plan.brief.accent
     return kit

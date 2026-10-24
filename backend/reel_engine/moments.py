@@ -21,9 +21,9 @@ from reel_engine.plan import Word
 log = get_logger(__name__)
 
 MIN_SECONDS, MAX_SECONDS = 18.0, 75.0
-GOOD_ENOUGH = 6.5       # a moment worth its own reel scores at least this (average of the three scores)
+GOOD_ENOUGH = 6.0       # a moment worth its own reel scores at least this (average of the three scores)
 PAD = 0.3
-SPEECH_PER_REEL = 240.0  # one reel for about every four minutes of speech
+SPEECH_PER_REEL = 90.0  # one reel for about every minute and a half of speech: a 10-minute talk gives a handful
 
 
 class _M(BaseModel):

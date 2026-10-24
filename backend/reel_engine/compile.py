@@ -81,9 +81,11 @@ def brief_of(d: DirectorPlan, audio: AudioReport, target: float, headline: str =
     taken = taken if taken is not None else set()
     kit = typekits.choose(d.type_kit, style["name"], taken, seed or d.notes)
     taken.add(kit)
-    accent = typekits.spec(kit, "text", footage_accent)["vars"]["--accent"]
+    # The director's own type design for this reel when it keeps to the rules; the catalogue kit otherwise.
+    design = typekits.designed(d.text_style.model_dump()) or {}
+    accent = typekits.spec(kit, "text", footage_accent, kit=design or None)["vars"]["--accent"]
     brief = Brief(path=path, audio_kind=measured, recipe=r["id"], target_seconds=target or d.target_seconds,
-                  type_kit=kit, style=style["name"], caption_looks=style["caption_looks"],
+                  type_kit=kit, kit=design, style=style["name"], caption_looks=style["caption_looks"],
                   title_lead=d.title_lead, title_text=d.title_text,
                   hook_word=(d.hooks[0].word if d.hooks else "").upper()[:12],
                   hook_text=hook_text(headline, d.hook_text) if path == "voice" else "",
@@ -105,6 +107,28 @@ def _talk_spans(words: list[Word], w0: int, w1: int, src_len: dict[int, float]) 
         else:
             spans.append([w.src, w.t0, w.t1, w.i, w.i])
     return [(s, max(0.0, a - PAD_IN), min(src_len.get(s, b + PAD_OUT), b + PAD_OUT), i0, i1) for s, a, b, i0, i1 in spans]
+
+
+# Reframe rhythm: a long talking run is cut into sub-shots of about SUBSHOT seconds, alternating a tight punch-in with
+# the wider frame, each cut in the gap between two words. The best human edits reframe every 1.5-2.5 s even inside one
+# take; a 5 s static talking head is where viewers swipe.
+SUBSHOT, SUBSHOT_MAX = 2.0, 2.8
+
+
+def _subshots(words: list[Word], span: tuple[int, float, float, int, int]) -> list[tuple[float, float]]:
+    """``span`` cut into about-SUBSHOT pieces at word gaps (never inside a word); a short span stays whole."""
+    src, a, b, i0, i1 = span
+    if b - a <= SUBSHOT_MAX:
+        return [(a, b)]
+    cuts, last = [], a
+    for k in range(i0 + 1, i1 + 1):
+        prev, word = words[k - 1], words[k]
+        gap = (prev.t1 + word.t0) / 2
+        if word.src == src and gap - last >= SUBSHOT and b - gap >= SUBSHOT * 0.6 and not word.filler:
+            cuts.append(gap)
+            last = gap
+    edges = [a, *cuts, b]
+    return list(zip(edges, edges[1:]))
 
 
 def _beats(seconds: float, beat: float = BEAT) -> float:
@@ -140,14 +164,18 @@ def video_track(d: DirectorPlan, brief: Brief, words: list[Word], shots: list[Sh
     for n, clip in enumerate(clips):
         section = clip.section if 0 <= clip.section < len(brief.sections) else -1
         if brief.path == "voice" and clip.w0 >= 0 and clip.w1 >= clip.w0 and words:
-            for k, (src, a, b, _, _) in enumerate(_talk_spans(words, clip.w0, clip.w1, src_len)):
-                if b - a < 0.25:
-                    continue
-                zoom = clip.zoom if k == 0 else ("in" if flip else "out")
-                flip = not flip
-                items.append(VideoItem(id=f"v{len(items)}", src=src, t0=round(a, 3), t1=round(b, 3), zoom=zoom, role=clip.role,
-                                       section=section if k == 0 else -1, sound=clip.sound, money=clip.money, what=clip.what,
-                                       keeps_voice=True))
+            k = 0
+            for span in _talk_spans(words, clip.w0, clip.w1, src_len):
+                for a, b in _subshots(words, span):
+                    if b - a < 0.25:
+                        continue
+                    # The clip's own framing first, then tight and wide in turn, so each sub-shot visibly reframes.
+                    zoom = clip.zoom if k == 0 else ("punch" if clip.zoom != "punch" and k % 2 else ("in" if flip else "out"))
+                    flip = not flip
+                    items.append(VideoItem(id=f"v{len(items)}", src=span[0], t0=round(a, 3), t1=round(b, 3), zoom=zoom, role=clip.role,
+                                           section=section if k == 0 else -1, sound=clip.sound, money=clip.money, what=clip.what,
+                                           keeps_voice=True))
+                    k += 1
             continue
         if clip.src not in src_len or clip.start < 0:
             continue

@@ -3,8 +3,9 @@
 - Voice: the kept words, cut from the source with 10 ms fades at every join; separated from any music
   under it first (voice_song), then cleaned (rumble cut, noise reduced, levelled).
 - Music: a bed from the library ducked under the voice, or a score composed to the cuts (picture reels).
-- Effects: only soft whooshes on real transitions (a chapter, a full card, a photo, a cutaway), spaced out; no
-  synthesised beeps or foley over real music.
+- Effects: sound design the way the best human edits do it: a pop as an icon lands, an impact under a big word, a
+  whoosh into every cutaway and scene, a soft swish on a punch-in, a riser into the payoff; each from the licensed
+  library by role, kept under the voice on its own limited bus.
 - Mix: voice on top, music sidechained under it, effects on their frames, loudness -14 LUFS, peak -1 dB.
 """
 
@@ -23,15 +24,21 @@ from reel_engine.plan import AssetRef, AudioItem, EditPlan
 
 log = get_logger(__name__)
 
-# Soft whooshes on real transitions (a new chapter, a full card, a photo, a big word), spaced out; a quiet click as
-# each checklist item lands. No dings, beeps or boings: those read as noise over a voice and over music.
-GRAPHIC_SOUNDS = {"photocard": ["whoosh_short"], "chapter": ["whoosh_short"], "statement": ["whoosh_short"],
-                  "two": ["whoosh_short"], "keyword": ["whoosh_short"], "object": ["whoosh_short"]}
+# What each graphic lands with (a sound library role) and how loud: the best Afters put a hit on nearly every visual
+# beat (one every 0.1-0.3 s in their measured audio), all of it well under the voice.
+GRAPHIC_SOUNDS = {"photocard": ("whoosh", 0.3), "chapter": ("whoosh", 0.32), "statement": ("impact", 0.26),
+                  "two": ("click", 0.24), "keyword": ("impact", 0.28), "object": ("click", 0.24), "tag": ("click", 0.22),
+                  "name": ("click", 0.2), "count_up": ("click", 0.22), "chart": ("whoosh", 0.26), "hook": ("impact", 0.3),
+                  "image": ("whoosh", 0.28), "logo": ("click", 0.22), "map": ("whoosh", 0.26)}
+INSERT_SOUNDS = {"scene": ("transition", 0.3), "photo": ("whoosh", 0.28), "broll": ("whoosh", 0.28), "footage": ("whoosh", 0.24)}
+PUNCH_SOUND = ("whoosh", 0.14)      # a soft swish as the frame punches in on a reframe
+RISER = ("riser", 0.22)             # into the payoff
 STEP_SOUND, STEP_KINDS, STEP_GAIN = "soft_click", {"list", "flow"}, 0.2
 # Built-in sound name -> sound library role; accents -> the sound they land with.
 LIBRARY_ROLE = {"whoosh_short": "whoosh"}
 ACCENT_SOUNDS = {"follow": "click", "burst": "impact"}
-MIN_SPACING = 3.0
+FALLBACK = {"whoosh": "whoosh_short", "transition": "whoosh_short", "click": "soft_click", "impact": "whoosh_short"}
+MIN_SPACING = 0.45  # two hits closer than this smear into one
 EFFECT_GAIN = 0.32
 SFX_PEAK = 0.35  # linear peak ceiling of the effects bus (about -9 dBFS) before the final loudness pass
 
@@ -51,36 +58,47 @@ def structure(plan: EditPlan) -> Structure:
 
 
 async def effects(plan: EditPlan, scout: Scout) -> list[tuple[float, AssetRef, float]]:
-    """(output second, sound, gain) for transitions, spaced so none smear, and a click per checklist item."""
-    wanted: list[tuple[float, str]] = []
+    """(output second, sound, gain): a hit on every visual beat, by kind, spaced so none smear; a click per checklist
+    item; a riser into the payoff."""
+    wanted: list[tuple[float, str, float]] = []
     steps: list[float] = []
     for g in plan.graphics:
-        for k, name in enumerate(GRAPHIC_SOUNDS.get(g.kind, [])):
-            wanted.append((g.start + 0.3 * k, name))
+        if g.kind in GRAPHIC_SOUNDS:
+            role, gain = GRAPHIC_SOUNDS[g.kind]
+            wanted.append((max(0.0, g.start - 0.04), role, gain))
         if g.kind in STEP_KINDS:
+            wanted.append((max(0.0, g.start - 0.04), "whoosh", 0.24))
             steps += [g.start + float(t) for t in g.data.get("steps", [])]
-    for item in plan.inserts:
-        wanted.append((max(0.0, item.start - 0.06), "whoosh_short"))
-    for g in plan.graphics:
         if g.kind == "accent" and g.data.get("role") in ACCENT_SOUNDS:
-            wanted.append((g.start, ACCENT_SOUNDS[g.data["role"]]))
+            wanted.append((g.start, ACCENT_SOUNDS[g.data["role"]], EFFECT_GAIN))
         elif g.kind == "effect" and g.data.get("part") != "back":
-            wanted.append((max(0.0, g.start - (0.15 if g.data["effect"] == "zoom_through" else 0.0)), g.data["sound"]))
-    out, last = [], -1.0
+            wanted.append((max(0.0, g.start - (0.15 if g.data["effect"] == "zoom_through" else 0.0)), g.data["sound"], EFFECT_GAIN))
+    for item in plan.inserts:
+        role, gain = INSERT_SOUNDS.get(item.kind, ("whoosh", 0.28))
+        wanted.append((max(0.0, item.start - 0.08), role, gain))
+    covered = [(i.start, i.end) for i in plan.inserts]
+    for item in plan.video[1:]:
+        if item.zoom == "punch" and not any(a <= item.out0 < b for a, b in covered):
+            wanted.append((max(0.0, item.out0 - 0.05), *PUNCH_SOUND))
+    payoff = next((i.out0 for i in plan.video if i.role == "payoff"), None)
+    if payoff and payoff > 3.0:
+        wanted.append((payoff - 1.6, *RISER))
+    out: list[tuple[float, AssetRef, float]] = []
     cache: dict[str, AssetRef | None] = {}
     seed = accents.seed_of(plan)
-    for n, (at, name) in enumerate(sorted(wanted)):
-        if at - last < MIN_SPACING or at >= plan.duration:
+    # Louder hits win a crowded moment: they are placed first, then quieter ones fill the gaps between them.
+    for n, (at, name, gain) in enumerate(sorted(wanted, key=lambda w: -w[2])):
+        if at >= plan.duration or any(abs(at - t) < MIN_SPACING for t, _, _ in out):
             continue
-        # Library sounds by role, a different one each time; the built-in sound when the library is not fetched.
+        # Library sounds by role, a different one each time; a built-in sound when the library is not fetched.
         ref = accents.sound(LIBRARY_ROLE.get(name, name), n, seed)
         if ref is None:
-            if name not in cache:
-                cache[name] = await scout.sound(name)
-            ref = cache[name]
+            fallback = FALLBACK.get(name, name)
+            if fallback not in cache:
+                cache[fallback] = await scout.sound(fallback)
+            ref = cache[fallback]
         if ref:
-            out.append((round(at, 3), ref, EFFECT_GAIN))
-            last = at
+            out.append((round(at, 3), ref, gain))
     click = await scout.sound(STEP_SOUND) if steps else None
     if click:
         out += [(round(at, 3), click, STEP_GAIN) for at in sorted(steps) if at < plan.duration]

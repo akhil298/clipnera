@@ -47,6 +47,20 @@ def prompt() -> str:
             "on every reel is exactly what to avoid.\n" + "\n".join(rows))
 
 
+def design_prompt() -> str:
+    """The TEXT STYLE section: the director designs the reel's type from the fonts and treatments the renderer has."""
+    big, lead = treatments()
+    return ("TEXT STYLE (text_style): design this reel's own type, the way a top editor styles each client differently - "
+            "fitted to the creator, the topic, the footage's colours and the mood. lead = the small words of each caption "
+            "line, key = the one big word per line, title = headlines and the call to action. Fonts ONLY from: "
+            f"{', '.join(sorted(declared_fonts()))}. Use one or two families (a heavy display face for key/title, a clean "
+            "sans for lead); lead weight 600+ (or lead_treatment stroke/glow) so captions read on a phone; key/title "
+            f"700-900. treatment (how the big word is set off): one of {', '.join(sorted(big))}; lead_treatment: one of "
+            f"{', '.join(sorted(lead - {'spaced'}))}. accent = the big word's colour (strong, readable on the footage), alt = "
+            "a second colour, ink = text colour on light cards; all as #rrggbb. type_kit still names the closest catalogue "
+            "kit: it is used if your design breaks a rule. why = one line on the design.")
+
+
 def choose(picked: str, style: str, avoid: set[str] | frozenset[str] = frozenset(), seed: str = "") -> str:
     """The kit for a reel: the director's pick when the style allows it and it is not taken, else another of the
     style's kits sharing its mood (then any free one), chosen by ``seed`` so the choice is stable for a reel."""
@@ -102,10 +116,48 @@ def readable(accent: str, alt: str, footage: str) -> str:
     return alt if not clash(alt) and _hsv(alt)[1] > 0.25 else "#ffffff"
 
 
-def spec(kit_id: str, role: str, footage_accent: str = "") -> dict:
+@lru_cache(maxsize=1)
+def declared_fonts() -> frozenset[str]:
+    """Every font family the renderer has a file for (fonts.css, beats.css)."""
+    import re
+
+    here = Path(__file__).resolve().parents[1] / "beats" / "renderer"
+    css = "".join((here / name).read_text() for name in ("fonts.css", "beats.css"))
+    return frozenset(re.findall(r'font-family: "([^"]+)"; (?:font-weight: [^;]+; )?src: url', css))
+
+
+def treatments() -> tuple[set[str], set[str]]:
+    """The big-word and lead-word treatments the renderer draws (kits.css), as the catalogue uses them."""
+    kits = catalog().values()
+    return {k["treatment"] for k in kits}, {k["lead_treatment"] for k in kits}
+
+
+def designed(style: dict) -> dict | None:
+    """A kit from a type design the director wrote for this reel, or None when it breaks a rule: fonts the renderer
+    has, treatments it draws, real colours, legible captions. One renderer draws any kit, so a design is data only."""
+    import re
+
+    fonts, (big, lead) = declared_fonts(), treatments()
+    colour = re.compile(r"^#[0-9a-fA-F]{6}$")
+    parts = {name: {"font": style.get(f"{name}_font", ""), "weight": int(style.get(f"{name}_weight", 700) or 700),
+                    "case": style.get(f"{name}_case", "none")} for name in ("lead", "key", "title")}
+    if not all(p["font"] in fonts and 400 <= p["weight"] <= 900 and p["case"] in ("none", "uppercase", "lowercase") for p in parts.values()):
+        return None
+    if style.get("treatment") not in big or style.get("lead_treatment") not in lead:
+        return None
+    if not all(colour.match(str(style.get(c, ""))) for c in ("accent", "alt", "ink")):
+        return None
+    kit = {"id": "designed", "about": str(style.get("why", ""))[:200], "styles": [], "moods": [], **parts,
+           "treatment": style["treatment"], "lead_treatment": style["lead_treatment"],
+           "accent": style["accent"], "alt": style["alt"], "ink": style["ink"]}
+    return kit if legible(kit) else None
+
+
+def spec(kit_id: str, role: str, footage_accent: str = "", kit: dict | None = None) -> dict:
     """What the renderer needs for one graphic: the kit's classes and variables for ``role`` ("text" for captions and
-    labels, "title" for titles, chapters and the call to action, which take the kit's title font)."""
-    kit = catalog().get(kit_id) or next(iter(catalog().values()))
+    labels, "title" for titles, chapters and the call to action, which take the kit's title font). ``kit`` is a
+    designed kit (see ``designed``), used instead of the catalogue's."""
+    kit = kit or catalog().get(kit_id) or next(iter(catalog().values()))
     key = kit["title"] if role == "title" else kit["key"]
     accent = (footage_accent or FALLBACK_ACCENT) if kit["accent"] == "footage" else readable(kit["accent"], kit["alt"], footage_accent)
     return {

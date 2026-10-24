@@ -84,6 +84,29 @@ class DHook(_M):
     why: str
 
 
+Case = Literal["none", "uppercase", "lowercase"]
+
+
+class DTextStyle(_M):
+    """The reel's own type design (typekits.designed checks it; the catalogue kit stands in when it breaks a rule)."""
+
+    lead_font: str
+    lead_weight: int
+    lead_case: Case
+    key_font: str
+    key_weight: int
+    key_case: Case
+    title_font: str
+    title_weight: int
+    title_case: Case
+    treatment: Literal["block", "bubble", "comic", "glow", "gradient", "outline", "plate", "shadow", "softglow", "sticker", "tilt", "underline"]
+    lead_treatment: Literal["glow", "plain", "shadow", "stroke"]
+    accent: str
+    alt: str
+    ink: str
+    why: str
+
+
 class DSection(_M):
     lead: str
     text: str
@@ -108,6 +131,7 @@ class DirectorPlan(_M):
     burned_captions: bool
     music: Literal["bed", "score", "none"]
     type_kit: str
+    text_style: DTextStyle
     mood: Literal["upbeat", "energetic", "chill", "lofi", "cinematic", "inspiring", "dramatic", "corporate", "funny", "urban"]
     sections: list[DSection]
     hooks: list[DHook]
@@ -186,11 +210,12 @@ name or imply something showable - a place, object, food, product, animal, body 
 feeling or idea made concrete (stress -> a ticking clock, money -> a stack of cash, breathing -> lungs, success ->
 a trophy), a number made visual. show = 1-2 plain English words for ONE concrete object or symbol that pictures
 it (what an emoji or a 3D icon would show: "lungs", "alarm clock", "trophy", "brain", "money bag", "rocket"); it is
-shown as an animated 3D object beside the speaker when no photo exists, so every insert needs a good show. kind "photo" or "broll" (a short video; public-
-domain video exists mainly for space, science, nature, cities' landmarks and history - ask for a photo for
-everyday things like food, products, gadgets or people's activities) with
-query = 3-6 concrete English search words for a real photo or clip (e.g. "international space station exterior
-earth", "fresh croissants bakery tray"); label = 0-3 words to print on a photo card, or "". kind "footage" = a
+shown as an animated 3D object beside the speaker when no photo exists, so every insert needs a good show. kind "photo" or "broll" (a short
+stock video clip: real footage of everyday life exists for almost anything - people working, a lawn being mowed, a
+dentist with a patient, cash being counted, a car lot, city traffic; prefer broll whenever the thing moves or is an
+action, photo for objects and places) with query = 3-6 concrete English search words a stock site would match,
+naming what is SEEN, not the idea (e.g. "gardener laying fresh sod lawn", "dentist examining patient teeth",
+"fresh croissants bakery tray"); label = 0-3 words to print on a photo card, or "". kind "footage" = a
 moment of the user's OWN footage that shows what is said (src + at in source seconds) - only when that footage
 has OTHER shots (B-roll, a different scene); a single talking take has nothing to cut to, so ask for photos then.
 Anchor on word ids w0..w1 (src = -1, at = -1) or for footage give src + at too. No inserts on the hook or when
@@ -276,7 +301,8 @@ async def direct(sources: list[Source], audio: AudioReport, shots: list[Shot], j
             f"Shots:\n{shot_listing(shots)}\n\n"
             f"Words (id:word, ~ = filler, [take] = earlier take):\n{word_listing(words, takes) if words else '(nobody speaks)'}\n\n"
             f"Frames: {how}.\n\nPlan the reel. JSON only.")
-    plan = await vision_json(system + "\n\n" + styles.prompt() + "\n\n" + typekits.prompt() + "\n\n" + effects_prompt() + "\n\n" + scenes.prompt(),
+    plan = await vision_json(system + "\n\n" + styles.prompt() + "\n\n" + typekits.prompt() + "\n\n" + effects_prompt() + "\n\n" + scenes.prompt()
+                             + "\n\n" + typekits.design_prompt(),
                              user, jpegs,
                              DirectorPlan, max_tokens=16000, step="reel_director")
     log.info("Director: recipe=%s audio=%s %d clips %d beats %d sections %d effects %d scenes", plan.recipe, plan.audio_view,

@@ -45,8 +45,17 @@ def director(**kw) -> DirectorPlan:
     base = dict(audio_view="voice", recipe="creator_advice", target_seconds=30, title_lead="", title_text="", hook_text="", cta="",
                 caption_mode="every_word", music="bed", type_kit="amber_block", mood="upbeat", sections=[], hooks=[], story=[], beats=[],
                 inserts=[], scenes=[], keywords=[], burned_captions=False,
-                drop_word=-1, spelling=[], style="podcast", effects=[], notes="")
+                drop_word=-1, spelling=[], style="podcast", effects=[], notes="", text_style=text_style())
     return DirectorPlan(**{**base, **kw})
+
+
+def text_style(**kw):
+    from reel_engine.director import DTextStyle
+
+    base = dict(lead_font="Inter", lead_weight=700, lead_case="none", key_font="Unbounded", key_weight=800, key_case="uppercase",
+                title_font="Unbounded", title_weight=900, title_case="uppercase", treatment="glow", lead_treatment="stroke",
+                accent="#ff7a1a", alt="#ffffff", ink="#111111", why="warm glowing keywords")
+    return DTextStyle(**{**base, **kw})
 
 
 # ------------------------------------------------------------------ listen
@@ -493,8 +502,9 @@ def test_zoom_through_snaps_to_a_cut_or_is_dropped():
     cut = items[1].out0
     made = effects.compile_effects([fx(name="zoom_through", w0=6, w1=6)], words, items)
     assert len(made) == 1 and abs((made[0].start + made[0].end) / 2 - cut) < 0.01
-    single = comp.video_track(director(story=[clip(w0=0, w1=len(words) - 1)]), brief, words, [], {0: 60.0})
-    assert effects.compile_effects([fx(name="zoom_through", w0=6, w1=6)], words, single) == []
+    # A take short enough to stay one shot (a longer one is reframed every ~2 s, which is a cut to zoom through).
+    single = comp.video_track(director(story=[clip(w0=0, w1=6)]), brief, words, [], {0: 60.0})
+    assert len(single) == 1 and effects.compile_effects([fx(name="zoom_through", w0=3, w1=3)], words, single) == []
 
 
 def test_story_graphics_and_captions_make_way_for_an_effect():
@@ -647,13 +657,15 @@ def test_a_split_screen_that_would_lose_a_face_cuts_to_the_talker():
 
 # ------------------------------------------------------------------ several reels, hooks, proofreading, review history
 
-def test_a_long_video_gives_a_reel_per_four_minutes_of_speech_within_the_cap():
+def test_a_long_video_gives_a_reel_per_ninety_seconds_of_speech_within_the_cap():
     from reel_engine import moments
 
     minute = [Word(i=k, src=0, t0=k * 0.5, t1=k * 0.5 + 0.45, text="word") for k in range(120)]
+    ten = [Word(i=k, src=0, t0=k * 0.5, t1=k * 0.5 + 0.45, text="word") for k in range(1200)]
     hour = [Word(i=k, src=0, t0=k * 0.5, t1=k * 0.5 + 0.45, text="word") for k in range(7200)]
     assert moments.reels_for(minute, 8) == 1
-    assert moments.reels_for(hour, 8) == 8 and moments.reels_for(hour, 2) == 2
+    assert moments.reels_for(ten, 10) == 6  # ten minutes (9 of speech) gives six reels
+    assert moments.reels_for(hour, 10) == 10 and moments.reels_for(hour, 3) == 3
     assert moments.reels_for([], 8) == 1
 
 
@@ -664,7 +676,7 @@ def test_the_best_moment_always_makes_a_reel_and_weak_ones_do_not():
         return Moment(start=0, end=1, hook=0, payoff=1, title="t", headline="Why does this work?", hook_score=score,
                       payoff_score=score, standalone_score=score, why="")
 
-    found = [(m(8), 0, 30, 0), (m(6.8), 40, 70, 0), (m(5), 80, 110, 0), (m(7), 120, 150, 0)]
+    found = [(m(8), 0, 30, 0), (m(6.2), 40, 70, 0), (m(5), 80, 110, 0), (m(7), 120, 150, 0)]
     assert [f[1] for f in worth_a_reel(found, 8)] == [0, 40, 120]
     assert [f[1] for f in worth_a_reel(found, 2)] == [0, 40]
     assert worth_a_reel([(m(3), 0, 30, 0)], 8)  # one weak moment still gives the one reel
@@ -1026,4 +1038,85 @@ def test_our_captions_step_aside_only_for_subtitles_across_the_picture(monkeypat
     monkeypatch.setattr(verifying, "vision_json", judge)
     asyncio.run(verifying.verify(d, [Source(index=0, name="a.mp4", path="a.mp4", kind="video")], words))
     assert (not d.burned_captions and d.caption_mode == "every_word") == ours
+
+
+def test_the_director_designs_each_reels_type_and_a_broken_design_falls_back_to_a_kit():
+    from reel_engine import typekits
+
+    words = words_of("money habits that quietly make you poor")
+    d = director(style="business", type_kit="oswald_red", story=[clip(w0=0, w1=len(words) - 1)])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0, seed="r0")
+    assert brief.kit["key"]["font"] == "Unbounded" and brief.kit["treatment"] == "glow"
+    made = typekits.spec(brief.type_kit, "text", kit=brief.kit)
+    assert made["vars"]["--key-font"] == '"Unbounded"' and "treat-glow" in made["classes"]
+    for broken in (dict(key_font="Comic Sans"), dict(accent="orange"), dict(lead_weight=300, lead_treatment="plain")):
+        d = director(style="business", type_kit="oswald_red", story=[clip(w0=0, w1=len(words) - 1)], text_style=text_style(**broken))
+        brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0, seed="r0")
+        assert brief.kit == {} and brief.type_kit == "oswald_red"
+    assert all(f in typekits.design_prompt() for f in ("Unbounded", "Inter", "glow"))
+
+
+def test_a_long_take_is_reframed_about_every_two_seconds_between_words():
+    words = words_of(" ".join(f"w{i}" for i in range(30)))  # ~10.5 s of continuous speech
+    d = director(story=[clip(w0=0, w1=29, zoom="in")])
+    brief, _ = comp.brief_of(d, AudioReport(kind="voice", words=words), 0)
+    items = comp.video_track(d, brief, words, [], {0: 60.0})
+    assert len(items) >= 4 and all(1.5 <= i.t1 - i.t0 <= comp.SUBSHOT_MAX + 0.6 for i in items)
+    assert {i.zoom for i in items[1:]} >= {"punch"}  # tight and wide in turn
+    starts = [w.t0 for w in words]
+    ends = [w.t1 for w in words]
+    for item in items[1:]:  # every cut falls in a gap between two words, never inside one
+        assert not any(a < item.t0 < b for a, b in zip(starts, ends))
+
+
+def test_every_visual_beat_lands_with_its_own_sound_and_none_smear(monkeypatch, tmp_path):
+    from reel_engine import accents, sound
+    from reel_engine.plan import AssetRef, InsertItem, VideoItem
+
+    picked = []
+
+    def library(role, n, seed=0):
+        picked.append(role)
+        return AssetRef(id=f"sfx.{role}.{n}", kind="sfx", path=f"{role}.wav", licence="", source="lib")
+
+    monkeypatch.setattr(accents, "sound", library)
+    plan = EditPlan(duration=20, video=[VideoItem(id="v0", src=0, t0=0, t1=5, out0=0, out1=5), VideoItem(id="v1", src=0, t0=5, t1=8, out0=5, out1=8, zoom="punch"),
+                                        VideoItem(id="v2", src=0, t0=8, t1=20, out0=8, out1=20, role="payoff")],
+                    graphics=[GraphicItem(id="o", kind="object", start=2, end=3), GraphicItem(id="k", kind="keyword", start=2.2, end=3),
+                              GraphicItem(id="s", kind="statement", start=10, end=12)],
+                    inserts=[InsertItem(id="x", kind="scene", start=14, end=17, asset=AssetRef(id="s", kind="scene", path="s.mov", licence="", source=""))])
+    hits = asyncio.run(sound.effects(plan, Scout(LocalAssetStore(tmp_path), "o", tmp_path)))
+    times = [t for t, _, _ in hits]
+    assert all(b - a >= sound.MIN_SPACING for a, b in zip(times, times[1:]))
+    assert {"click" if "click" in r.id else r.id.split(".")[1] for _, r, _ in hits} >= {"impact", "whoosh", "transition", "riser"}
+    assert all(gain < 0.35 for _, _, gain in hits)  # always well under the voice
+
+
+def test_photo_requests_search_stock_first_and_show_the_best_of_every_source(monkeypatch, tmp_path):
+    from broll.sources import photos
+    from broll.sources.base import StockClip
+    from reel_engine import inserts
+
+    def fake(name, licence, n=3):
+        async def search(self, query, per_page):
+            return [StockClip(source=name, source_id=f"{name}{k}", source_url="", download_url=f"https://x/{name}{k}.jpg", title=query,
+                              tags=[], width=1080, height=1920, duration_s=0, license_code=licence, license_url=None) for k in range(n)]
+        return search
+
+    monkeypatch.setattr(photos.PexelsPhotos, "search", fake("pexels", "pexels"))
+    monkeypatch.setattr(photos.PixabayPhotos, "search", fake("pixabay", "pixabay"))
+    monkeypatch.setattr(photos.WikimediaPhotos, "search", fake("wikimedia", "cc0"))
+    monkeypatch.setattr(photos.OpenversePhotos, "search", fake("openverse", "cc_by"))  # not a licence we take
+    monkeypatch.setattr(photos.NasaPhotos, "search", fake("nasa", "public_domain", 0))
+    got = []
+
+    async def download(url, target, limit):
+        got.append(url.rsplit("/", 1)[-1])
+        target.write_bytes(b"x" * 2048)
+        return target
+
+    monkeypatch.setattr(inserts, "_download", download)
+    picked = asyncio.run(inserts._candidates("photo", "gardener laying sod", tmp_path, 4))
+    assert [p[1]["source"] for p in picked] == ["pexels", "pixabay", "wikimedia", "pexels"]
+    assert not any("openverse" in g for g in got)
 

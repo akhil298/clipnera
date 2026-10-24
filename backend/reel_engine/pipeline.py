@@ -394,11 +394,11 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
     for n in range(max(1, passes)):
         pass_dir = work / f"pass{n}"
         pass_dir.mkdir(exist_ok=True)
-        await stage("graphics", f"pass {n + 1}: {len(plan.graphics)} graphics, {len(plan.captions)} captions")
-        placed = await draw(plan, pass_dir)
-        await stage("sound", "voice, music and effects")
+        await stage("graphics", f"pass {n + 1}: {len(plan.graphics)} graphics, {len(plan.captions)} captions; voice, music and effects")
+        # The mix needs only the plan, not the drawn graphics: both run at once.
         plan.audio_items = []
-        mix = await sound.mix(plan, scout, pass_dir)
+        placed, mix = await asyncio.gather(draw(plan, pass_dir), sound.mix(plan, scout, pass_dir))
+        await stage("sound", "voice, music and effects mixed")
         await stage("compose", "final encode")
         final = await compose(plan, picture, placed, mix, pass_dir, pass_dir / "reel.mp4")
         await stage("review", f"pass {n + 1}")

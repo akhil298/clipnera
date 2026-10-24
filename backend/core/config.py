@@ -263,8 +263,8 @@ class BaseConfig(BaseSettings):
     REEL_FIT_LAYOUT: bool = False
     # Reels one premium edit may cut from a long video: one per strong moment and about four minutes of speech, up to
     # this many (each charged); REEL_PARALLEL of them are edited at once.
-    REEL_MAX_REELS_FREE: int = 2
-    REEL_MAX_REELS_PRO: int = 8
+    REEL_MAX_REELS_FREE: int = 3
+    REEL_MAX_REELS_PRO: int = 10
     REEL_PARALLEL: int = 2
 
     GOOGLE_CLIENT_ID: str = ""
