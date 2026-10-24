@@ -441,7 +441,7 @@ async def test_youtube_links_are_checked_when_the_reel_is_made(world, monkeypatc
         empty = await service.create(user_id, EditCreateRequest())
         with pytest.raises(CustomException) as nothing:
             await service.analyze(user_id, empty.id)
-        assert "YouTube link" in nothing.value.message
+        assert "YouTube or Instagram link" in nothing.value.message
 
 
 async def test_a_youtube_fetch_that_fails_leaves_a_clear_reason(world, monkeypatch):

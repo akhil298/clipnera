@@ -44,7 +44,7 @@ class EditCreateRequest(BaseModel):
     ai_effort: Effort | None = None
     # A reel whose editing style to copy (pacing, captions, energy), by link.
     reference_url: str | None = Field(None, max_length=1000, pattern=r"^https?://\S+$")
-    # A YouTube video to edit: fetched as footage when the edit starts, alone or with uploaded files.
+    # A YouTube video or Instagram reel to edit: fetched as footage when the edit starts, alone or with uploaded files.
     source_url: str | None = Field(None, max_length=1000, pattern=r"^https?://\S+$")
 
 

@@ -445,7 +445,7 @@ export function ReelsView({ reelId, editId }: { reelId?: string; editId?: string
         </h1>
         <p className="text-lg text-neutral-400">
           {showFootage
-            ? 'Videos, photos, audio or a YouTube link: add any of them. We pick the best moment and edit it for you.'
+            ? 'Videos, photos, audio, or a YouTube or Instagram reel link: add any of them. We pick the best moment and edit it for you.'
             : 'Turn your photos and a short script into a narrated reel with scenes you can change.'}
         </p>
       </section>

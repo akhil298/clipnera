@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Film, Image as ImageIcon, Link2, Loader2, Mic, Sparkles, Upload, X, Youtube } from 'lucide-react';
+import { ArrowRight, Film, Image as ImageIcon, Instagram, Link2, Loader2, Mic, Sparkles, Upload, X, Youtube } from 'lucide-react';
 import {
   EDIT_AUDIO_TYPES,
   EDIT_IMAGE_TYPES,
@@ -12,7 +12,7 @@ import {
 } from '@/lib/api';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { DEFAULT_CAPTION_PRESET } from '@/lib/utils/captionStyles';
-import { INTENT_MAX, estimateEditCredits, formatSeconds, isReferenceLink, mediaDuration } from '@/lib/utils/footageReels';
+import { INTENT_MAX, estimateEditCredits, formatSeconds, isInstagramLink, isSourceLink, mediaDuration } from '@/lib/utils/footageReels';
 
 const ACCEPTED = [...EDIT_VIDEO_TYPES, ...EDIT_IMAGE_TYPES, ...EDIT_AUDIO_TYPES];
 /** The big card a new reel is made in, shared with the photos form. */
@@ -28,7 +28,7 @@ interface Picked {
 const kindOf = (file: File): 'video' | 'image' | 'audio' =>
   file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'video';
 
-/** Start a reel: drop videos, photos or a voiceover and/or paste a YouTube link, then one click. The AI does the rest. */
+/** Start a reel: drop videos, photos or a voiceover and/or paste a YouTube or Instagram reel link, then one click. The AI does the rest. */
 export function FootageReelForm({ onCreated }: { onCreated: (id: string) => void }) {
   const { entitlements } = useEntitlements();
   const isPro = Boolean(entitlements?.pro_ai_provider);
@@ -68,8 +68,8 @@ export function FootageReelForm({ onCreated }: { onCreated: (id: string) => void
 
   const addLink = () => {
     const url = linkDraft.trim();
-    if (!isReferenceLink(url)) {
-      setError('Paste a YouTube video or Shorts link.');
+    if (!isSourceLink(url)) {
+      setError('Paste a YouTube video, Shorts or Instagram reel link.');
       return;
     }
     setError(null);
@@ -77,6 +77,8 @@ export function FootageReelForm({ onCreated }: { onCreated: (id: string) => void
     setLinkDraft('');
   };
 
+  const linkIsInstagram = Boolean(link && isInstagramLink(link));
+  const linkName = linkIsInstagram ? 'Instagram reel' : 'YouTube video';
   const footage = files.filter((f) => kindOf(f.file) !== 'audio');
   const rawSeconds = files.reduce((sum, f) => sum + (kindOf(f.file) === 'video' ? f.durationS ?? 0 : 0), 0);
   const overFootage = limits ? rawSeconds > limits.max_raw_seconds : false;
@@ -142,15 +144,15 @@ export function FootageReelForm({ onCreated }: { onCreated: (id: string) => void
 
         {/* Link */}
         <div className="flex items-center gap-3 text-xs font-semibold tracking-wider text-neutral-500" aria-hidden="true">
-          <span className="flex-1 h-px bg-neutral-800" /> OR PASTE A YOUTUBE LINK <span className="flex-1 h-px bg-neutral-800" />
+          <span className="flex-1 h-px bg-neutral-800" /> OR PASTE A YOUTUBE OR INSTAGRAM LINK <span className="flex-1 h-px bg-neutral-800" />
         </div>
         <div className="flex flex-wrap gap-2.5">
-          <label htmlFor="source-link" className="sr-only">YouTube link</label>
+          <label htmlFor="source-link" className="sr-only">YouTube or Instagram reel link</label>
           <div className="flex-[1_1_320px] min-w-0 relative">
             <Link2 className="w-5 h-5 text-neutral-500 absolute left-4 top-1/2 -translate-y-1/2" aria-hidden="true" />
             <input id="source-link" value={linkDraft} onChange={(e) => setLinkDraft(e.target.value)} disabled={busy || Boolean(link)} maxLength={1000}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLink(); } }}
-              placeholder={link ? 'One link per reel' : 'https://youtube.com/watch?v=…'} className={`${field} w-full pl-12`} />
+              placeholder={link ? 'One link per reel' : 'YouTube or Instagram reel link'} className={`${field} w-full pl-12`} />
           </div>
           <button type="button" onClick={addLink} disabled={busy || Boolean(link) || !linkDraft.trim()}
             className="h-12 px-5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-[15px] font-semibold text-white disabled:opacity-40">Add link</button>
@@ -170,12 +172,14 @@ export function FootageReelForm({ onCreated }: { onCreated: (id: string) => void
             <ul className="flex flex-col gap-2" aria-label="Added for this reel">
               {link && (
                 <li className="flex items-center gap-3.5 p-2.5 rounded-xl bg-neutral-900 border border-neutral-800">
-                  <span className="w-14 h-11 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0"><Youtube className="w-5 h-5 text-amber-400" /></span>
+                  <span className="w-14 h-11 rounded-lg bg-neutral-800 flex items-center justify-center shrink-0">
+                    {linkIsInstagram ? <Instagram className="w-5 h-5 text-amber-400" /> : <Youtube className="w-5 h-5 text-amber-400" />}
+                  </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[15px] font-semibold text-white truncate">{link}</span>
-                    <span className="block text-[13px] text-neutral-400">YouTube video · we fetch it for you</span>
+                    <span className="block text-[13px] text-neutral-400">{linkName} · we fetch it for you</span>
                   </span>
-                  <button type="button" disabled={busy} onClick={() => setLink(null)} aria-label="Remove the YouTube link"
+                  <button type="button" disabled={busy} onClick={() => setLink(null)} aria-label={`Remove the ${linkName} link`}
                     className="w-11 h-11 rounded-xl text-neutral-400 hover:text-white hover:bg-neutral-800 flex items-center justify-center shrink-0"><X className="w-4 h-4" /></button>
                 </li>
               )}

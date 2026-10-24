@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from clients.ai import ModelChoice, get_text_client
 from clients.ai.roles import selectable_models
 from clients.services.s3 import S3
+from clip.instagram_service import link_name
 from core.config import get_settings
 from core.exceptions import CustomException
 from core.logging_config import get_logger
@@ -201,7 +202,7 @@ class EditService:
         edit = await self._edit(user_id, edit_id, statuses=(EditStatus.DRAFT, EditStatus.FAILED))
         sources = [s for s in json.loads(edit.sources) if s.get("uploaded")]
         if not edit.source_url and not any(s["kind"] in ("video", "image") for s in sources):
-            raise CustomException(message="Add a video, a photo or a YouTube link", code="INVALID_BODY", status_code=400)
+            raise CustomException(message="Add a video, a photo, or a YouTube or Instagram link", code="INVALID_BODY", status_code=400)
         # A retry after a failed analysis is on us: only a new reel counts toward the daily limit.
         if edit.status == EditStatus.DRAFT:
             await self._subscriptions.consume_daily_quota(user_id, "auto_edits")
@@ -209,10 +210,11 @@ class EditService:
         if edit.source_url and not any(s.get("link") for s in sources):
             # The linked video is fetched in the background first; the edit then starts as if it had been uploaded.
             edit.status, edit.error = EditStatus.ANALYZING, None
+            note = f"Fetching your {link_name(edit.source_url)}"
             if edit.engine == "premium":
-                edit.premium = json.dumps({"progress": [{"stage": "fetch", "note": "Fetching your YouTube video", "at": 0.0}]})
+                edit.premium = json.dumps({"progress": [{"stage": "fetch", "note": note, "at": 0.0}]})
             else:
-                edit.analysis = json.dumps({"progress": "Fetching your YouTube video"})
+                edit.analysis = json.dumps({"progress": note})
             await self._session.commit()
             in_background(jobs.fetch_link(edit.id, user_id))
             return await self.response(edit)
@@ -393,14 +395,21 @@ class EditService:
 
     @staticmethod
     async def _check_source_link(url: str, max_seconds: int) -> str:
-        """The linked video's title, after checking it is a YouTube video we can open and short enough for the plan."""
+        """The linked video's title, after checking it is a YouTube video or an Instagram reel we can open and short
+        enough for the plan."""
+        from clip.instagram_service import InstagramService, is_instagram_link
         from clip.youtube_service import YouTubeService
 
-        if not reference.is_supported_link(url):
-            raise CustomException(message="Paste a YouTube video or Shorts link.", code="INVALID_BODY", status_code=400)
-        found = await YouTubeService().fetch_metadata(url)
+        if is_instagram_link(url):
+            found = await InstagramService().fetch_metadata(url)
+            where = "Instagram reel"
+        elif reference.is_supported_link(url):
+            found = await YouTubeService().fetch_metadata(url)
+            where = "YouTube video"
+        else:
+            raise CustomException(message="Paste a YouTube video, Shorts or Instagram reel link.", code="INVALID_BODY", status_code=400)
         if found is None:
-            raise CustomException(message="We couldn't open that YouTube video. Check that it's public and try again.",
+            raise CustomException(message=f"We couldn't open that {where}. Check that it's public and try again.",
                                   code="INVALID_BODY", status_code=400)
         if found.duration and found.duration > max_seconds:
             raise CustomException(message=f"That video is {round(found.duration / 60)} minutes long. Your plan edits up to "

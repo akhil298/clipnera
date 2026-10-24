@@ -83,6 +83,13 @@ export const REFERENCE_MAX_SECONDS = 180;
 export const isReferenceLink = (url: string): boolean =>
   /^https?:\/\/(www\.|m\.)?(youtube\.com\/(watch\?|shorts\/)|youtu\.be\/)\S+$/i.test(url.trim());
 
+/** Instagram reel and post links (INSTAGRAM_LINK in backend/clip/instagram_service.py). */
+export const isInstagramLink = (url: string): boolean =>
+  /^https?:\/\/(www\.|m\.)?instagram\.com\/([\w.]+\/)?(reels?|p|tv)\/[\w-]+/i.test(url.trim());
+
+/** Footage links the reel maker fetches: YouTube videos and Shorts, and Instagram reels. */
+export const isSourceLink = (url: string): boolean => isReferenceLink(url) || isInstagramLink(url);
+
 /** Mirrors the intent limit in backend/edit_engine/schema.py. */
 export const INTENT_MAX = 300;
 

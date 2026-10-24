@@ -277,6 +277,9 @@ class BaseConfig(BaseSettings):
     UPI_ID: str = ""
     UPI_PAYEE_NAME: str = "Clipnera"
     PAYMENT_SUBMISSIONS_PER_HOUR: int = 5
+    # Prices are in dollars and charged in rupees at today's rate (payment/fx.py);
+    # this is used only when the rate source is unreachable.
+    USD_INR_FALLBACK_RATE: float = 95.0
 
     EMAIL_SENDER: str = "no-reply@clipnera.com"
 
@@ -294,6 +297,9 @@ class BaseConfig(BaseSettings):
     # exports them locally and copies them to YOUTUBE_COOKIES_PATH.
     YOUTUBE_COOKIES_BROWSER: str = ""
     YOUTUBE_COOKIES_PATH: str = "~/.clipnera/youtube_cookies.txt"
+    # Instagram reel links in the reel maker: public reels open without them; a cookies.txt from a signed-in
+    # browser here gets past the login wall Instagram puts up for server addresses.
+    INSTAGRAM_COOKIES_PATH: str = "~/.clipnera/instagram_cookies.txt"
 
     # Connected publishing platforms (social/). OAuth callbacks land on the
     # frontend, so redirect URIs are built from PUBLIC_APP_URL and must match

@@ -92,26 +92,32 @@ def _friendly(exc: Exception, prefix: str) -> str:
 
 
 async def fetch_link(edit_id: str, user_id: str) -> None:
-    """Fetch the reel's YouTube video into its sources, then start the edit as if it had been uploaded.
+    """Fetch the reel's linked video (YouTube or an Instagram reel) into its sources, then start the edit as if it
+    had been uploaded.
 
     Runs in the API process (``EditService.analyze``), not on the worker: YouTube turns away server addresses
     without signed-in cookies, and the API machine keeps its cookies fresh by using them, as the clips flow does.
     The download goes to the downloads folder on disk (the API machine's /tmp is in memory).
     """
+    from clip.instagram_service import InstagramService, is_instagram_link, link_name
     from clip.source_video import DOWNLOAD_DIR
     from clip.youtube_service import YouTubeService
     from core.exceptions import CustomException
     from edit_engine.service import EditService
 
     settings, s3 = get_settings(), S3()
+    edit = None
     try:
         edit = await load(edit_id)
         async with AsyncSessionLocal() as session:
             limits = limits_for(await SubscriptionService.for_session(session).get_entitlements(user_id))
         DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(dir=DOWNLOAD_DIR) as workdir:
-            path, title = await YouTubeService().download_for_edit(edit.source_url, Path(workdir), limits.max_raw_seconds)
+            fetcher = InstagramService() if is_instagram_link(edit.source_url) else YouTubeService()
+            path, title = await fetcher.download_for_edit(edit.source_url, Path(workdir), limits.max_raw_seconds)
             info = await perception.probe_media(str(path))
+            if info.duration > limits.max_raw_seconds + 1:  # Instagram may not say how long a reel is until it is here
+                raise ValueError(f"the video is longer than {limits.max_raw_seconds // 60} minutes")
             key = f"edits/{user_id}/{edit_id}/{uuid4().hex}.mp4"
             await asyncio.to_thread(s3.upload_file, settings.S3_BUCKET_NAME, key, str(path), "video/mp4")
         async with AsyncSessionLocal() as session:
@@ -125,12 +131,13 @@ async def fetch_link(edit_id: str, user_id: str) -> None:
     except CustomException as exc:
         await save(edit_id, status=EditStatus.FAILED, error=exc.message)
     except Exception as exc:
-        log.warning("YouTube fetch failed: edit=%s (%s)", edit_id, exc)
-        if "not a bot" in str(exc):
-            reason = "YouTube is blocking our server right now; try again in a while, or upload the video file instead"
+        what = link_name(edit.source_url) if edit else "video"
+        log.warning("%s fetch failed: edit=%s (%s)", what, edit_id, exc)
+        if "not a bot" in str(exc) or "login" in str(exc).lower():
+            reason = f"{what.split()[0]} is blocking our server right now; try again in a while, or upload the video file instead"
         else:
             reason = str(exc) if isinstance(exc, ValueError) else "check that it's public and try again"
-        await save(edit_id, status=EditStatus.FAILED, error=f"We couldn't fetch your YouTube video ({reason}).")
+        await save(edit_id, status=EditStatus.FAILED, error=f"We couldn't fetch your {what} ({reason}).")
 
 
 async def _download(sources: list[dict[str, Any]], work: Path, s3: S3) -> dict[int, Path]:
