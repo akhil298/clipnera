@@ -194,7 +194,7 @@ class BaseConfig(BaseSettings):
     CLIP_CUT_CONCURRENCY: int = 3
 
     # B-roll library. Pixabay stays off until its API caching terms are confirmed.
-    BROLL_SOURCES: str = "pexels,nasa,wikimedia"
+    BROLL_SOURCES: str = "pexels,mixkit,nasa,wikimedia"
     PEXELS_API_KEY: str = ""
     PIXABAY_API_KEY: str = ""
     BROLL_S3_PREFIX: str = "broll"

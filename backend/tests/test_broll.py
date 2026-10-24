@@ -9,7 +9,7 @@ from broll import sources as broll_sources
 from broll.ingest import matches_topic, orientation_of, quality_score, retry_wait, search_text
 from broll.repository import Candidate
 from broll.retrieval import BrollRetriever, SceneQuery, coverage, terms
-from broll.sources import nasa, pexels, pixabay, wikimedia
+from broll.sources import mixkit, nasa, pexels, pixabay, wikimedia
 from broll.sources.base import best_rendition
 
 
@@ -55,6 +55,22 @@ class TestPixabay:
         clip = pixabay.parse(payload)[0]
         assert clip.tags == ["money", "coins", "finance"] and clip.download_url == "https://p/l.mp4"
         assert clip.author_url == "https://pixabay.com/users/ann-7/"
+
+
+class TestMixkit:
+    def test_parse(self):
+        card = ('data-item-grid--video-player-item-id-value="41865" > <img src="t.jpg" class="item-grid-video-player__thumb" '
+                'alt="Cup being filled." width="460" height="818"> <span class="item-grid-video-player__overlay-video-title"> '
+                'Cup being filled with coffee </span> <span class="item-grid-video-player__overlay-video-description"> '
+                'A close-up view. </span> <a href="/free-stock-video/cup-41865/" class="x">')
+        clip = mixkit.parse(card + card)[0]
+        assert len(mixkit.parse(card + card)) == 1 and clip.title == "Cup being filled with coffee"
+        assert clip.download_url == "https://assets.mixkit.co/videos/41865/41865-720.mp4" and clip.license_code == "mixkit"
+        assert (clip.width, clip.height) == (720, 1280) and "coffee" in clip.tags and "close" in clip.tags
+        assert clip.source_url == "https://mixkit.co/free-stock-video/cup-41865/"
+
+    def test_slug(self):
+        assert mixkit._slug("City at Night!") == "city-at-night"
 
 
 class TestNasa:

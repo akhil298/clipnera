@@ -34,18 +34,19 @@ SFX_SITE = "https://mixkit.co/free-sound-effects/"
 SFX_LICENCE = "Mixkit Sound Effects Free License"
 # Our roles and the Mixkit categories that feed each.
 SFX_ROLES = {
-    "whoosh": ["whoosh", "woosh", "swoosh", "swish", "whip", "sweep"],
-    "transition": ["transition", "slide", "zoom", "glitch", "spin", "rewind"],
-    "impact": ["impact", "thud", "stomp", "cinematic"],
-    "riser": ["swell"],
-    "click": ["click", "interface", "camera", "keyboard", "type", "typewriter"],
+    "whoosh": ["whoosh", "woosh", "swoosh", "swish", "whip", "sweep", "flying"],
+    "transition": ["transition", "slide", "zoom", "glitch", "spin", "rewind", "high-tech", "static", "tape-machine"],
+    "impact": ["impact", "thud", "stomp", "cinematic", "hit", "punch", "boom", "drop", "bass", "drum", "cymbal"],
+    "riser": ["swell", "sweeping", "sci-fi", "movie"],
+    "click": ["click", "interface", "camera", "keyboard", "type", "typewriter", "tap", "pop", "mouse", "page", "paper",
+              "write"],
 }
 SFX_SKIP = {"beep", "bleep", "buzzer", "alarm", "alert", "error", "notification", "ding", "bell", "cartoon", "fart", "laugh",
             "phone", "ring", "siren", "scream", "horror", "scary", "game over", "arcade", "video game"}
 SFX_MAX_SECONDS = 6
 # Every sound sits at the level of our own whoosh, so one effect gain suits them all (none blasts over a voice).
 SFX_LUFS, SFX_SHORT_PEAK_DB, SFX_MAX_PEAK_DB = -19.0, -6.0, -1.0
-SFX_PAGES = 2
+SFX_PAGES = 12  # each category is read page by page until it runs out
 
 # ------------------------------------------------------------------ motion graphics
 
@@ -56,14 +57,18 @@ LOTTIE_ROLES = {
     "arrow": ["arrow pointing", "hand drawn arrow", "curved arrow", "arrow down"],
     "underline": ["underline", "brush stroke", "highlight marker"],
     "circle": ["circle scribble", "hand drawn circle", "circle highlight"],
-    "burst": ["burst", "sparkle", "shine", "star burst"],
+    "burst": ["burst", "sparkle", "shine", "star burst", "sparkles", "glitter", "pop burst", "explosion lines",
+              "light rays", "twinkle", "magic sparkle", "comic burst"],
     "confetti": ["confetti", "celebration", "fireworks"],
     "check": ["check mark", "success tick", "checkbox"],
     "cross": ["cross mark", "wrong", "error x"],
-    "follow": ["subscribe button", "follow button", "like button", "bell notification icon"],
+    "follow": ["subscribe button", "follow button", "like button", "bell notification icon", "subscribe", "follow us",
+               "like share subscribe", "instagram follow", "youtube subscribe", "notification bell"],
     "swipe": ["swipe up", "scroll down", "tap here"],
-    "money": ["money", "coins", "dollar"],
-    "growth": ["growth chart", "graph up", "rocket launch"],
+    "money": ["money", "coins", "dollar", "cash", "rupee", "wallet", "money rain", "piggy bank", "payment",
+              "credit card", "money bag"],
+    "growth": ["growth chart", "graph up", "rocket launch", "trending up", "bar chart", "analytics", "success growth",
+               "arrow up", "increase", "stock market"],
     "idea": ["light bulb idea", "brain thinking"],
     "time": ["clock", "hourglass", "timer"],
     "heart": ["heart like", "love heart"],
@@ -74,8 +79,9 @@ LOTTIE_ROLES = {
     "phone": ["smartphone", "mobile app"],
     "chat": ["chat bubble", "message"],
 }
-LOTTIE_PER_SEARCH = 6
+LOTTIE_PER_SEARCH = 24  # the search returns the newest first
 LOTTIE_MAX_BYTES = 900_000
+LOTTIE_PAGE = 12
 
 # ------------------------------------------------------------------ animated emoji
 
@@ -170,6 +176,7 @@ def build_sfx() -> None:
     jobs: dict[str, tuple[dict, str]] = {}
     for role, categories in SFX_ROLES.items():
         for category in categories:
+            seen: set[str] = set()
             for page in range(1, SFX_PAGES + 1):
                 url = f"{SFX_SITE}{category}/" + (f"?page={page}" if page > 1 else "")
                 try:
@@ -181,8 +188,10 @@ def build_sfx() -> None:
                     key = f"mk_{card['id']}"
                     if sfx_wanted(card) and key not in entries and key not in jobs:
                         jobs[key] = (card, role)
-                if not found:
+                # A page past the end redirects to the first one: stop once a page brings nothing new.
+                if not {c["id"] for c in found} - seen:
                     break
+                seen |= {c["id"] for c in found}
     print(f"sfx: {len(jobs)} new sounds to fetch")
     with cf.ThreadPoolExecutor(8) as ex:
         for key, entry in zip(jobs, ex.map(lambda j: sfx_save(j[0], j[1], folder), jobs.values())):
@@ -195,10 +204,21 @@ def build_sfx() -> None:
 # ------------------------------------------------------------------ lottie
 
 def lottie_search(query: str, first: int) -> list[dict]:
-    body = json.dumps({"query": "query($q: String!, $n: Int) { searchPublicAnimations(query: $q, first: $n) { edges { node "
-                                "{ id name jsonUrl createdBy { username } } } } }", "variables": {"q": query, "n": first}}).encode()
-    data = json.loads(fetch(LOTTIE_API, body, {"content-type": "application/json"}))
-    return [e["node"] for e in (data.get("data") or {}).get("searchPublicAnimations", {}).get("edges", [])]
+    """The newest ``first`` public animations for ``query``, a page at a time."""
+    nodes: list[dict] = []
+    after = None
+    while len(nodes) < first:
+        body = json.dumps({"query": "query($q: String!, $n: Int, $after: String) { searchPublicAnimations(query: $q, first: $n, "
+                                    "after: $after) { pageInfo { hasNextPage endCursor } edges { node { id name jsonUrl "
+                                    "createdAt createdBy { username } } } } }",
+                           "variables": {"q": query, "n": min(LOTTIE_PAGE, first - len(nodes)), "after": after}}).encode()
+        found = (json.loads(fetch(LOTTIE_API, body, {"content-type": "application/json"})).get("data") or {}).get("searchPublicAnimations") or {}
+        nodes += [e["node"] for e in found.get("edges", [])]
+        page = found.get("pageInfo") or {}
+        if not page.get("hasNextPage") or not found.get("edges"):
+            break
+        after = page.get("endCursor")
+    return nodes
 
 
 def lottie_ok(raw: bytes) -> dict | None:
@@ -244,7 +264,7 @@ def build_lottie() -> None:
             return None
         (folder / f"{key}.json").write_bytes(raw)
         return key, {"file": f"{key}.json", "role": role, "name": node.get("name") or query, "query": query, **meta,
-                     "source": f"lottiefiles {node['id']}", "licence": LOTTIE_LICENCE}
+                     "created": node.get("createdAt"), "source": f"lottiefiles {node['id']}", "licence": LOTTIE_LICENCE}
 
     with cf.ThreadPoolExecutor(8) as ex:
         for got in ex.map(get, jobs):

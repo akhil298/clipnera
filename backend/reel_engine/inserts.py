@@ -33,8 +33,8 @@ MAX_INSERTS = 16
 CANDIDATES = 4
 MIN_SECONDS, MAX_SECONDS = 1.2, 3.2
 MAX_VIDEO_BYTES = 80 * 1024 * 1024
-# Public domain and CC0, and (the owner's call, 2026-10-24) Pexels and Pixabay stock: free for commercial use, no credit.
-FREE_LICENCES = {"public_domain", "pd_us_gov", "cc0", "pexels", "pixabay"}
+# Public domain and CC0, and (the owner's call, 2026-10-24) Pexels, Pixabay and Mixkit stock: free for commercial use, no credit.
+FREE_LICENCES = {"public_domain", "pd_us_gov", "cc0", "pexels", "pixabay", "mixkit"}
 CHOOSER = """You pick the pictures a premium editor cuts to while someone talks. For each request you get what is
 being said and 1-3 candidate images (photos, or a frame of a video clip). Pick the candidate that clearly shows the
 requested thing in a way that looks good full screen in a vertical reel; pick -1 when none does (wrong subject,
@@ -78,6 +78,7 @@ async def _download(url: str, target: Path, limit: int) -> Path | None:
 async def _candidates(kind: str, query: str, work: Path, n: int) -> list[tuple[Path, dict]]:
     """Downloaded candidates (file, licence record) for a photo or B-roll request."""
     from broll.sources.nasa import NasaSource
+    from broll.sources.mixkit import MixkitSource
     from broll.sources.pexels import PexelsSource
     from broll.sources.photos import NasaPhotos, OpenversePhotos, PexelsPhotos, PixabayPhotos, WikimediaPhotos
     from broll.sources.pixabay import PixabaySource
@@ -90,7 +91,7 @@ async def _candidates(kind: str, query: str, work: Path, n: int) -> list[tuple[P
         sources = [PexelsPhotos(), PixabayPhotos(), WikimediaPhotos(), OpenversePhotos(), NasaPhotos()]
     else:
         sources = ([PexelsSource()] if settings.PEXELS_API_KEY else []) + ([PixabaySource()] if settings.PIXABAY_API_KEY else []) \
-            + [NasaSource(), WikimediaSource()]
+            + [MixkitSource(), NasaSource(), WikimediaSource()]
     results = []
     for result in await asyncio.gather(*(s.search(query, CANDIDATES) for s in sources), return_exceptions=True):
         if isinstance(result, Exception):

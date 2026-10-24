@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from broll.sources.base import StockClip, StockSource
+from broll.sources.mixkit import MixkitSource
 from broll.sources.nasa import NasaSource
 from broll.sources.pexels import PexelsSource
 from broll.sources.pixabay import PixabaySource
@@ -12,6 +13,7 @@ from core.config import get_settings
 SOURCES: dict[str, type] = {
     "pexels": PexelsSource,
     "pixabay": PixabaySource,
+    "mixkit": MixkitSource,
     "nasa": NasaSource,
     "wikimedia": WikimediaSource,
 }
