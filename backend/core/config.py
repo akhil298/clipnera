@@ -227,7 +227,7 @@ class BaseConfig(BaseSettings):
     # A re-render after edits reuses the analysis and plan: this share of the price.
     EDIT_RERENDER_SHARE: float = 0.25
     EDIT_MAX_RAW_SECONDS_FREE: int = 180
-    EDIT_MAX_RAW_SECONDS_PRO: int = 1800
+    EDIT_MAX_RAW_SECONDS_PRO: int = 18000
     EDIT_MAX_FILES_FREE: int = 10
     EDIT_MAX_FILES_PRO: int = 40
     EDIT_MAX_OUTPUT_SECONDS_FREE: int = 45
