@@ -207,7 +207,11 @@ async def run_many(inputs: list[Path], work: Path, out_dir: Path, store: AssetSt
         chosen = moments.load(known)
     else:
         count = moments.reels_for(found.audio.words, most)
-        chosen = moments.worth_a_reel(await moments.find(found.audio.words, brief), count) if count > 1 else []
+        found_moments = await moments.find(found.audio.words, brief)
+        chosen = moments.worth_a_reel(found_moments, count) if count > 1 and found_moments else []
+        # If we found moments but worth_a_reel filtered too aggressively, take them anyway
+        if not chosen and found_moments and count >= 1:
+            chosen = found_moments[:max(1, min(count, len(found_moments)))]
     await stage("moments", f"{len(chosen) or 1} reel(s)")
     windows = chosen or [None]
     if on_moments:
@@ -258,6 +262,12 @@ async def run_many(inputs: list[Path], work: Path, out_dir: Path, store: AssetSt
 
     plans = [p for p in await asyncio.gather(*(one(n, windows[n]) for n in todo)) if p is not None]
     if not plans and not skip:
+        # Try again without moment splitting if it fails
+        try:
+            if chosen:
+                return await run_many(inputs, work, out_dir, store, owner, brief, target_seconds, passes, on_progress, most=1, on_reel=on_reel, allow=allow, on_fail=on_fail, parallel=parallel, known=None, skip=skip, on_analysed=on_analysed, on_moments=on_moments, on_status=on_status, avoid_kits=avoid_kits)
+        except Exception:
+            pass
         raise RuntimeError("no reel could be made from this footage")
     return plans
 
