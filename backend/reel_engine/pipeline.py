@@ -338,7 +338,18 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
                 plan.brief.text_free[str(s.index)] = [round(top, 3), round(1.0 - bottom, 3)]
     src_len = {s.index: s.duration for s in plan.sources}
     picture = plan.brief.path == "visual"
+    import random
+    # Add more music variety
     track = tracks.pick(plan.brief.mood, target_seconds or plan.brief.target_seconds or 40, picture) if picture else None
+    if track and random.random() < 0.2 and not picture:  # sometimes pick different mood track
+        try:
+            alt_moods = [m for m in styles.get(plan.brief.style).get("moods", []) if m != plan.brief.mood]
+            if alt_moods:
+                track2 = tracks.pick(random.choice(alt_moods), target_seconds or plan.brief.target_seconds or 40, picture)
+                if track2:
+                    track = track2
+        except Exception:
+            pass
     plan.video = video_track(d, plan.brief, words, shots, src_len, hook, beat=track.beat if track else BEAT)
     if not plan.video:
         raise RuntimeError("the director's story had no usable clips")
@@ -349,7 +360,9 @@ async def edit(found: Analysis, plan: EditPlan, stage: Callable[[str, str], Awai
                                  offset=tracks.offset(track, reveal_at(plan, d, words), plan.duration),
                                  licence=track.licence, source=track.source)
     plan.graphics = graphics_track(d, plan.brief, words, plan.video, shots)
-    picked = effects.compile_effects(d.effects, words, plan.video, most=styles.get(plan.brief.style)["max_effects"])
+    import random
+    # Vary effects more
+    picked = effects.compile_effects(d.effects, words, plan.video, most=max(1, styles.get(plan.brief.style)["max_effects"] + random.randint(-1, 1)))
     plan.graphics = sorted(effects.clear_under(plan.graphics, picked) + picked, key=lambda g: g.start)
     plan.captions, plan.graphics = captions_track(d, plan.brief, words, plan.video, plan.graphics)
 

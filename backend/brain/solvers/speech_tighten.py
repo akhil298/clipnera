@@ -11,15 +11,15 @@ from collections.abc import Sequence
 
 from understanding.mud import Word
 
-GAP_SECONDS = {"natural": 0.8, "tight": 0.5, "punchy": 0.35}
+GAP_SECONDS = {"natural": 0.6, "tight": 0.4, "punchy": 0.25}
 FILLER_CONFIDENCE = 0.7
 # Assumed confidence when the transcriber gave none.
 DEFAULT_CONFIDENCE = 0.8
-PAD_BEFORE = 0.09
-PAD_AFTER = 0.06
+PAD_BEFORE = 0.07
+PAD_AFTER = 0.05
 # A kept piece shorter than this flickers past as its own shot; it joins its neighbour instead,
 # keeping the pause between them.
-MIN_PIECE_SECONDS = 1.2
+MIN_PIECE_SECONDS = 0.8
 
 
 def keep_ranges(words: Sequence[Word], t0: float, t1: float, style: str = "natural") -> list[tuple[float, float]]:

@@ -80,7 +80,17 @@ def brief_of(d: DirectorPlan, audio: AudioReport, target: float, headline: str =
     music = d.music if d.music != "none" else r["music"]
     if path == "visual":
         music = "score"
-    style = styles.get(d.style)
+    import random
+    # Add variety - if director picked a style, maybe rotate or randomize sometimes
+    style_name = d.style
+    all_styles = styles.names()
+    if not style_name or style_name not in all_styles:
+        style_name = random.choice(all_styles)
+    else:
+        # 30% chance to pick a different style for more variety
+        if random.random() < 0.3:
+            style_name = random.choice([s for s in all_styles if s != style_name])
+    style = styles.get(style_name)
     mood = styles.hold(style, d.mood)
     taken = taken if taken is not None else set()
     kit = typekits.choose(d.type_kit, style["name"], taken, seed or d.notes)
@@ -122,7 +132,7 @@ def _talk_spans(words: list[Word], w0: int, w1: int, src_len: dict[int, float]) 
 # Reframe rhythm: a long talking run is cut into sub-shots of about SUBSHOT seconds, alternating a tight punch-in with
 # the wider frame, each cut in the gap between two words. The best human edits reframe every 1.5-2.5 s even inside one
 # take; a 5 s static talking head is where viewers swipe.
-SUBSHOT, SUBSHOT_MAX = 2.0, 2.8
+SUBSHOT, SUBSHOT_MAX = 1.4, 2.2
 
 
 def _subshots(words: list[Word], span: tuple[int, float, float, int, int]) -> list[tuple[float, float]]:
@@ -134,9 +144,11 @@ def _subshots(words: list[Word], span: tuple[int, float, float, int, int]) -> li
     for k in range(i0 + 1, i1 + 1):
         prev, word = words[k - 1], words[k]
         gap = (prev.t1 + word.t0) / 2
-        if word.src == src and gap - last >= SUBSHOT and b - gap >= SUBSHOT * 0.6 and not word.filler:
+        if word.src == src and gap - last >= 0.7 and b - gap >= 0.7 and not word.filler:
             cuts.append(gap)
             last = gap
+            if len(cuts) > 30:
+                break
     edges = [a, *cuts, b]
     return list(zip(edges, edges[1:]))
 
@@ -170,21 +182,39 @@ def video_track(d: DirectorPlan, brief: Brief, words: list[Word], shots: list[Sh
         clips = [hook.model_copy(update={"role": "hook", "zoom": "punch"})] + _without([c for c in clips if c.role != "hook"], hook)
     shot_seconds = recipe(brief.recipe)["shot_seconds"]
     items: list[VideoItem] = []
-    flip = False
+    import random
+    rng = random.Random(hash((brief.title_text or "", brief.notes or "", id(brief)) & 0xffffffff))
+    seen: set[tuple[int, int, int]] = set()
     for n, clip in enumerate(clips):
         section = clip.section if 0 <= clip.section < len(brief.sections) else -1
         if brief.path == "voice" and clip.w0 >= 0 and clip.w1 >= clip.w0 and words:
             k = 0
             for span in _talk_spans(words, clip.w0, clip.w1, src_len):
+                src, sa, sb, i0, i1 = span
                 for a, b in _subshots(words, span):
-                    if b - a < 0.25:
+                    if b - a < 0.16:
                         continue
-                    # The clip's own framing first, then tight and wide in turn, so each sub-shot visibly reframes.
-                    zoom = clip.zoom if k == 0 else ("punch" if clip.zoom != "punch" and k % 2 else ("in" if flip else "out"))
-                    flip = not flip
-                    items.append(VideoItem(id=f"v{len(items)}", src=span[0], t0=round(a, 3), t1=round(b, 3), zoom=zoom, role=clip.role,
+                    key = (src, int(round(a * 30)), int(round(b * 30)))
+                    if key in seen:
+                        continue
+                    if k == 0:
+                        zoom = clip.zoom if clip.zoom in ("in", "out", "punch", "hold") else rng.choice(["punch", "in", "out"])
+                    elif clip.role == "hook":
+                        zoom = "punch"
+                    elif rng.random() < 0.28:
+                        zoom = rng.choice(["punch", "in", "out"])
+                    elif k % 5 == 1:
+                        zoom = "in"
+                    elif k % 5 == 3:
+                        zoom = "out"
+                    elif k % 5 == 0:
+                        zoom = "punch"
+                    else:
+                        zoom = rng.choice(["in", "out", "punch", "hold"])
+                    items.append(VideoItem(id=f"v{len(items)}", src=src, t0=round(a, 3), t1=round(b, 3), zoom=zoom, role=clip.role,
                                            section=section if k == 0 else -1, sound=clip.sound, money=clip.money, what=clip.what,
                                            keeps_voice=True))
+                    seen.add(key)
                     k += 1
             continue
         if clip.src not in src_len or clip.start < 0:
@@ -201,9 +231,15 @@ def video_track(d: DirectorPlan, brief: Brief, words: list[Word], shots: list[Sh
         else:
             out_len = beat * _beats(min(length, max(shot_seconds, length / MAX_SPEED)), beat)
         speed = min(MAX_SPEED, max(MIN_SPEED, length / out_len)) if out_len else 1.0
-        items.append(VideoItem(id=f"v{len(items)}", src=clip.src, t0=round(start, 3), t1=round(start + speed * out_len, 3),
+        s = start
+        e = start + speed * out_len
+        key = (clip.src, int(round(s * 30)), int(round(e * 30)))
+        if key in seen:
+            continue
+        items.append(VideoItem(id=f"v{len(items)}", src=clip.src, t0=round(s, 3), t1=round(e, 3),
                                speed=round(speed, 4), zoom=clip.zoom, role=clip.role, section=section, sound=clip.sound,
                                money=clip.money, what=clip.what))
+        seen.add(key)
     t = 0.0
     for item in items:
         length = round((item.t1 - item.t0) / item.speed * FPS) / FPS
