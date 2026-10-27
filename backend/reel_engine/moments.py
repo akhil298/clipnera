@@ -20,10 +20,10 @@ from reel_engine.plan import Word
 
 log = get_logger(__name__)
 
-MIN_SECONDS, MAX_SECONDS = 18.0, 75.0
-GOOD_ENOUGH = 6.0       # a moment worth its own reel scores at least this (average of the three scores)
-PAD = 0.3
-SPEECH_PER_REEL = 90.0  # one reel for about every minute and a half of speech: a 10-minute talk gives a handful
+MIN_SECONDS, MAX_SECONDS = 25.0, 95.0
+GOOD_ENOUGH = 4.5       # more lenient - take decent moments too
+PAD = 0.2
+SPEECH_PER_REEL = 75.0  # more reels per minute of speech without shrinking them artificially
 
 
 class _M(BaseModel):
@@ -48,7 +48,7 @@ class Moments(_M):
 
 
 SYSTEM = """You find the moments in a long video that would each make a great short reel on their own. Read the
-transcript (sentences with ids and times). A moment is a stretch of consecutive sentences, 20-70 seconds, that
+transcript (sentences with ids and times). A moment is a stretch of consecutive sentences, 25-90 seconds, that
 makes ONE complete point: a strong opening, a reason to keep watching, and a payoff (an answer, a twist, a lesson,
 a punchline). Never stitch unrelated parts. Prefer moments a stranger understands without the rest of the video.
 Start each moment on a complete sentence that makes sense cold - never on "and", "so", "because" or a reply to a
@@ -59,7 +59,7 @@ on-screen text, 3-7 words, a specific question or bold claim this moment answers
 script as spoken (romanized Hindi stays romanized, e.g. "Athletes body hair kyun hatate hain?"), never one generic
 word like "ENERGY" or "HAIR"; scores 0-10 for hook, payoff and standalone (be strict: 9+ only for a moment that
 would go viral), and why in one line. Return the best moments first, as many distinct topics as the video truly
-has (up to 12), never overlapping, never two on the same point. If nothing stands alone, return the single best
+has (up to 25), never overlapping, never two on the same point. If nothing stands alone, return the single best
 stretch. JSON only."""
 
 
@@ -114,7 +114,14 @@ def worth_a_reel(found: list[tuple[Moment, float, float, int]], most: int) -> li
     """The moments that each deserve their own reel (the best one always), up to ``most``."""
     if not found:
         return []
-    return [found[0]] + [f for f in found[1:] if score(f[0]) >= GOOD_ENOUGH][:max(0, most - 1)]
+    # Take more moments - be generous
+    out = [found[0]]
+    for f in found[1:]:
+        if len(out) >= most:
+            break
+        if score(f[0]) >= 4.0:
+            out.append(f)
+    return out
 
 
 def dump(found: list[tuple[Moment, float, float, int]]) -> list:
