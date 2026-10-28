@@ -260,14 +260,24 @@ async def run_many(inputs: list[Path], work: Path, out_dir: Path, store: AssetSt
                 await on_status(n, "ready")
             return plan
 
-    plans = [p for p in await asyncio.gather(*(one(n, windows[n]) for n in todo)) if p is not None]
     if not plans and not skip:
         # Try again without moment splitting if it fails
         try:
             if chosen:
+                log.warning("Retrying without moment splitting for all reels")
                 return await run_many(inputs, work, out_dir, store, owner, brief, target_seconds, passes, on_progress, most=1, on_reel=on_reel, allow=allow, on_fail=on_fail, parallel=parallel, known=None, skip=skip, on_analysed=on_analysed, on_moments=on_moments, on_status=on_status, avoid_kits=avoid_kits)
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning("Retry without splitting failed: %s", e)
+        # Last resort - try to make one reel directly
+        try:
+            if not windows or windows == [None] or len(windows) == 0:
+                log.warning("Last resort: making single reel directly")
+                plan = EditPlan()
+                stage2 = _stager(plan, on_progress)
+                p = await edit(found, plan, stage2, work, out_dir / "reel1.mp4", store, owner, brief, target_seconds or 60, passes)
+                return [p]
+        except Exception as e:
+            log.exception("Last resort failed: %s", e)
         raise RuntimeError("no reel could be made from this footage")
     return plans
 

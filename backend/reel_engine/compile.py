@@ -183,7 +183,8 @@ def video_track(d: DirectorPlan, brief: Brief, words: list[Word], shots: list[Sh
     shot_seconds = recipe(brief.recipe)["shot_seconds"]
     items: list[VideoItem] = []
     import random
-    rng = random.Random(hash((brief.title_text or "", brief.notes or "", id(brief)) & 0xffffffff))
+    seed = hash((brief.title_text or "", brief.notes or "")) % (2**32)
+    rng = random.Random(seed)
     seen: set[tuple[int, int, int]] = set()
     for n, clip in enumerate(clips):
         section = clip.section if 0 <= clip.section < len(brief.sections) else -1
